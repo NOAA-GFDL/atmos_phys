@@ -375,7 +375,7 @@ integer, dimension(pcnstm1) :: indices, id_prod, id_loss, id_chem_tend, &
 !new diagnostics (f1p)
 integer, dimension(pcnstm1) :: id_prod_mol, id_loss_mol
 integer :: id_pso4_h2o2,id_pso4_o3,id_ghno3_d,id_phno3_d(5), id_phno3_g_d, id_pso4_d(5), &
-           id_pso4_g_d, id_gso2, id_aerosol_pH, id_cloud_pH, id_cloud_pHw, id_cld_amt_chem
+           id_pso4_g_d, id_gso2, id_aerosol_pH, id_cloud_pH, id_cloud_pHw, id_cld_amt_chem, id_sa_aerosol, id_sa_so4, id_sa_bc, id_sa_oa, id_sa_ss, id_sa_dust
 
 integer :: id_so2_emis_cmip, id_nh3_emis_cmip
 integer :: id_co_emis_cmip, id_no_emis_cmip
@@ -1224,6 +1224,27 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
    if (id_gso2>0) then
       used = send_data(id_gso2,trop_diag_array(:,:,:,trop_diag%ind_gso2),Time_next,is_in=is,js_in=js)
    end if
+
+   if (id_sa_aerosol>0) then
+      used = send_data(id_sa_aerosol,trop_diag_array(:,:,:,trop_diag%ind_sa_aerosol),Time_next,is_in=is,js_in=js)
+   end if
+   if (id_sa_so4>0) then
+      used = send_data(id_sa_so4,trop_diag_array(:,:,:,trop_diag%ind_sa_so4),Time_next,is_in=is,js_in=js)
+   end if
+   if (id_sa_bc>0) then
+      used = send_data(id_sa_bc,trop_diag_array(:,:,:,trop_diag%ind_sa_bc),Time_next,is_in=is,js_in=js)
+   end if
+   if (id_sa_oa>0) then
+      used = send_data(id_sa_oa,trop_diag_array(:,:,:,trop_diag%ind_sa_oa),Time_next,is_in=is,js_in=js)
+   end if
+   if (id_sa_dust>0) then
+      used = send_data(id_sa_dust,trop_diag_array(:,:,:,trop_diag%ind_sa_dust),Time_next,is_in=is,js_in=js)
+   end if
+   if (id_sa_ss>0) then
+      used = send_data(id_sa_ss,trop_diag_array(:,:,:,trop_diag%ind_sa_ss),Time_next,is_in=is,js_in=js)
+   end if
+
+
    if (id_aerosol_pH>0) then
       used = send_data(id_aerosol_pH,trop_diag_array(:,:,:,trop_diag%ind_aerosol_pH),Time_next,is_in=is,js_in=js, mask = & 
            ( trop_diag_array(:,:,:,trop_diag%ind_aerosol_pH) .gt. (missing_value + tiny(missing_value))))
@@ -2272,6 +2293,16 @@ end if
 
    id_gso2        = register_diag_field( module_name, 'gamma_so2',axes(1:3), Time, 'gamma_so2','unitless')
 
+   id_sa_aerosol  = register_diag_field( module_name, 'sa_aerosol',axes(1:3), Time, 'sa_aerosol','cm2/cm3')
+   id_sa_so4  = register_diag_field( module_name, 'sa_so4',axes(1:3), Time, 'sa_so4','cm2/cm3')
+   id_sa_bc  = register_diag_field( module_name, 'sa_bc',axes(1:3), Time, 'sa_bc','cm2/cm3')
+   id_sa_oa  = register_diag_field( module_name, 'sa_oa',axes(1:3), Time, 'sa_oa','cm2/cm3')
+   id_sa_ss  = register_diag_field( module_name, 'sa_ss',axes(1:3), Time, 'sa_ss','cm2/cm3')
+   id_sa_dust  = register_diag_field( module_name, 'sa_dust',axes(1:3), Time, 'sa_dust','cm2/cm3')
+
+
+
+
    id_aerosol_pH  = register_diag_field( module_name, 'aerosol_pH',axes(1:3), Time, 'aerosol_ph','unitless', mask_variant = .true.,missing_value=missing_value)
    id_cloud_pH  = register_diag_field( module_name, 'cloud_pH',axes(1:3), Time, 'cloud_ph','unitless', mask_variant = .true.,missing_value=missing_value)
    id_cloud_pHw  = register_diag_field( module_name, 'cloud_pHw',axes(1:3), Time, 'cloud_ph weighted by cloud fraction','unitless', mask_variant = .true.,missing_value=missing_value)
@@ -2430,6 +2461,30 @@ end if
    if ( id_gso2 > 0 ) then
       trop_diag%nb_diag       = trop_diag%nb_diag + 1
       trop_diag%ind_gso2      = trop_diag%nb_diag
+   end if
+   if ( id_sa_aerosol > 0 ) then
+      trop_diag%nb_diag       = trop_diag%nb_diag + 1
+      trop_diag%ind_SA_aerosol= trop_diag%nb_diag
+   end if
+   if ( id_sa_so4 > 0 ) then
+      trop_diag%nb_diag       = trop_diag%nb_diag + 1
+      trop_diag%ind_SA_SO4    = trop_diag%nb_diag
+   end if
+   if ( id_sa_bc > 0 ) then
+      trop_diag%nb_diag       = trop_diag%nb_diag + 1
+      trop_diag%ind_SA_BC     = trop_diag%nb_diag
+   end if
+   if ( id_sa_oa > 0 ) then
+      trop_diag%nb_diag       = trop_diag%nb_diag + 1
+      trop_diag%ind_SA_OA     = trop_diag%nb_diag
+   end if
+   if ( id_sa_ss > 0 ) then
+      trop_diag%nb_diag       = trop_diag%nb_diag + 1
+      trop_diag%ind_SA_SS     = trop_diag%nb_diag
+   end if
+   if ( id_sa_dust > 0 ) then
+      trop_diag%nb_diag       = trop_diag%nb_diag + 1
+      trop_diag%ind_SA_DUST   = trop_diag%nb_diag
    end if
    if ( id_aerosol_pH > 0 ) then
       trop_diag%nb_diag           = trop_diag%nb_diag + 1

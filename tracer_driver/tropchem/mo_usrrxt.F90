@@ -515,8 +515,26 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
 !----------------------------------------------------------------------------------------
             ! calculate surface area for each kind of aerosol (total 18)
             call set_aerosol(r(:,k,:),relhum(:,k),m(:,k),drymass_het(:,:),&
-                 rd_het(:,:),re_het(:,:),sfca_het(:,:),trop_option)            
+                 rd_het(:,:),re_het(:,:),sfca_het(:,:),trop_option)        
 
+            if (trop_diag%ind_SA_aerosol.gt.0) then
+               trop_diag_array(:,k,trop_diag%ind_SA_aerosol) = sum(sfca_het,dim=2)
+            end if
+            if (trop_diag%ind_SA_SO4.gt.0) then
+               trop_diag_array(:,k,trop_diag%ind_SA_SO4) = sfca_het(:,1)
+            end if
+            if (trop_diag%ind_SA_BC.gt.0) then
+               trop_diag_array(:,k,trop_diag%ind_SA_BC) = sum(sfca_het(:,2:3),dim=2)
+            end if
+            if (trop_diag%ind_SA_OA.gt.0) then
+               trop_diag_array(:,k,trop_diag%ind_SA_OA) = sum(sfca_het(:,4:5),dim=2)
+            end if
+            if (trop_diag%ind_SA_SS.gt.0) then
+               trop_diag_array(:,k,trop_diag%ind_SA_SS) = sum(sfca_het(:,6:10),dim=2)
+            end if
+            if (trop_diag%ind_SA_DUST.gt.0) then
+               trop_diag_array(:,k,trop_diag%ind_SA_DUST) = sum(sfca_het(:,11:18),dim=2)
+            end if    
 
             do i=1,ilev
                if( n2o5h_ndx > 0 ) then
