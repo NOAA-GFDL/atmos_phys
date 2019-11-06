@@ -85,14 +85,14 @@ logical :: ulm_ssalt_deposition=.false.  ! Ulm backward compatibility flag
 logical :: do_sst_seasalt = .false. !turn on Jaeglye sst dependence of seasalt emissions
 !Jaegle, L., Quinn, P. K., Bates, T. S., Alexander, B., and Lin, J.-T.: Global distribution of sea salt aerosols: new constraints from in situ and remote sensing observations, Atmos. Chem. Phys., 11, 3137-3157, https://doi.org/10.5194/acp-11-3137-2011, 2011.
 real    :: min_tc_scale = 0.,max_tc_scale=30., t_crit=278.15,frac_crit=0.25
-
+real    :: min_scale_marthenson=0 !to reproduce CM4 set min_scale marthenson to a low number -99999
 logical            :: ssalt_debug = .false.
 integer            :: logunit
 namelist /ssalt_nml/  scheme, coef_emis1, coef_emis2, &
                       coef_emis_fine, coef_emis_coarse, &
                       critical_sea_fraction, ulm_ssalt_deposition, &
                       use_sj_sedimentation_solver, ssalt_debug, do_sst_seasalt,min_tc_scale,max_tc_scale, &
-                      t_crit,frac_crit
+                      t_crit,frac_crit,min_scale_marthenson
 
 !-----------------------------------------------------------------------
 integer, parameter :: nrh= 65   ! number of RH in look-up table
@@ -303,7 +303,7 @@ subroutine atmos_seasalt_sourcesink1 ( &
 ! Martensson et al., JGR-Atm, 2003
                     seasalt_flux = seasalt_flux + &
                        ch_fine*3.84e-4* 4./3.*pi*seasaltden*1e-3*rmid**2.* &
-                       max((param_ak(rmid)*t(i,j,kb)+param_bk(rmid)),0.)*dr/0.4343
+                       max((param_ak(rmid)*t(i,j,kb)+param_bk(rmid)),min_scale_marthenson)*dr/0.4343
                   else
 ! Monahan (1986)
                     Bcoef=(coef1-alog10(betha*rmid*1.e6))/coef2
