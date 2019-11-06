@@ -303,7 +303,7 @@ subroutine atmos_seasalt_sourcesink1 ( &
 ! Martensson et al., JGR-Atm, 2003
                     seasalt_flux = seasalt_flux + &
                        ch_fine*3.84e-4* 4./3.*pi*seasaltden*1e-3*rmid**2.* &
-                       (param_ak(rmid)*t(i,j,kb)+param_bk(rmid))*dr/0.4343
+                       max((param_ak(rmid)*t(i,j,kb)+param_bk(rmid)),0.)*dr/0.4343
                   else
 ! Monahan (1986)
                     Bcoef=(coef1-alog10(betha*rmid*1.e6))/coef2
