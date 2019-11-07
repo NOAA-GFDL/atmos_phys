@@ -184,8 +184,9 @@ module atmos_tracer_utilities_mod
   logical :: drydep_exp = .false.
   real :: T_snow_dep = 263.15
   real :: kbs_val   = 50. ! surface conductance of rough sea (m/s)
+  logical :: use_albedo_for_drydep = .false.
   namelist /wetdep_nml/  scale_aerosol_wetdep,  scale_aerosol_wetdep_snow, file_dry, drydep_exp, T_snow_dep, &
-                         kbs_val
+                         kbs_val, use_albedo_for_drydep
   ! <---h1g,
 contains
 
@@ -626,7 +627,7 @@ end subroutine write_namelist_values
 !<SUBROUTINE NAME = "dry_deposition">
 subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
     u_star, landfrac, frac_open_sea,dsinku, dt, tracer, Time, &
-    Time_next, lon, half_day, drydep_data, con_atm)
+    Time_next, lon, half_day, drydep_data, albedo, con_atm)
   ! When formulation of dry deposition is resolved perhaps use the following?
   !                           landfr, seaice_cn, snow_area, &
   !                           vegn_cover, vegn_lai, &
@@ -732,6 +733,7 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
  real, intent(in), dimension(:,:)    :: u, v, T, pwt, pfull, u_star, tracer, dz
  real, intent(in), dimension(:,:)    :: lon, half_day
  real, intent(in), dimension(:,:)    :: landfrac,frac_open_sea
+ real, intent(in), dimension(:,:)    :: albedo
  real, intent(in), dimension(:,:), optional    :: con_atm
  ! When formulation of dry deposition is resolved perhaps use the following?
  !real, intent(in), dimension(:,:)    :: landfr, z_pbl, b_star, rough_mom
@@ -781,11 +783,19 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
 
  case ('williams_wind_driven')
 
-    where(T.lt.T_snow_dep)
-       landr2=snowr
-    elsewhere
-       landr2=landr
-    endwhere
+    if (use_albedo_for_drydep==.false.) then
+       where(T.lt.T_snow_dep)
+          landr2=snowr
+       elsewhere
+          landr2=landr
+       endwhere
+    else
+       where(albedo.gt.0.5) !use a threshold of 0.5 for snow/ice cover
+          landr2=snowr
+       elsewhere
+          landr2=landr
+       endwhere
+    end if
 
     frictv=u_star
     where (frictv .lt. 0.1) frictv=0.1

@@ -85,14 +85,16 @@ logical :: ulm_ssalt_deposition=.false.  ! Ulm backward compatibility flag
 logical :: do_sst_seasalt = .false. !turn on Jaeglye sst dependence of seasalt emissions
 !Jaegle, L., Quinn, P. K., Bates, T. S., Alexander, B., and Lin, J.-T.: Global distribution of sea salt aerosols: new constraints from in situ and remote sensing observations, Atmos. Chem. Phys., 11, 3137-3157, https://doi.org/10.5194/acp-11-3137-2011, 2011.
 real    :: min_tc_scale = 0.,max_tc_scale=30., t_crit=278.15,frac_crit=0.25
-real    :: min_scale_marthenson=0 !to reproduce CM4 set min_scale marthenson to a low number -99999
+real    :: min_scale_marthenson=-99999 !to reproduce CM4. Should be set to 0 as default
+
+logical :: use_tsurf_for_scaling = .false.
 logical            :: ssalt_debug = .false.
 integer            :: logunit
 namelist /ssalt_nml/  scheme, coef_emis1, coef_emis2, &
                       coef_emis_fine, coef_emis_coarse, &
                       critical_sea_fraction, ulm_ssalt_deposition, &
                       use_sj_sedimentation_solver, ssalt_debug, do_sst_seasalt,min_tc_scale,max_tc_scale, &
-                      t_crit,frac_crit,min_scale_marthenson
+                      t_crit,frac_crit,min_scale_marthenson, use_tsurf_for_scaling
 
 !-----------------------------------------------------------------------
 integer, parameter :: nrh= 65   ! number of RH in look-up table
@@ -130,7 +132,7 @@ contains
 ! this subroutine calculates tendencies for all seasalt tracers, and reports
 ! total fields, like total seasalt emission and settling
 subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
-       zhalf, pfull, w10m, t, rh, tracer, dsinku, rdt, dt, Time, is,ie,js,je, kbot)
+       zhalf, pfull, w10m, t, t_surf, rh, tracer, dsinku, rdt, dt, Time, is,ie,js,je, kbot)
 
   real, intent(in) :: lon(:,:), lat(:,:) ! geographical coordinates, units?
   real, intent(in) :: ocn_flx_fraction(:,:) ! fraction of land in the grid cell
@@ -139,6 +141,7 @@ subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
   real, intent(in) :: zhalf(:,:,:) ! z of half-layers, m(?)
   real, intent(in) :: pfull(:,:,:) ! pressure on layers, Pa
   real, intent(in) :: t(:,:,:) ! temperature of atmosphere, degK
+  real, intent(in) :: t_surf(:,:) ! surface temperature, degK
   real, intent(in) :: rh(:,:,:) ! relative humidity 
   real, intent(in) :: tracer(:,:,:,:) ! tracer concentrations
   real, intent(in) :: dsinku(:,:,:) ! dry deposition flux at the surface, for diag only
@@ -179,7 +182,7 @@ subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
         seasalt_tracers(i)%seasaltden, seasalt_tracers(i)%seasaltref, &
         seasalt_tracers(i)%ra, seasalt_tracers(i)%rb, &
         seasalt_tracers(i)%seasaltscheme, &
-        zhalf, pfull, w10m, t, rh, &
+        zhalf, pfull, w10m, t, t_surf, rh, &
         tracer(:,:,:,nseasalt), seasalt_dt, seasalt_emis, seasalt_setl, dt, &
         is,ie,js,je, kbot,scale_sst_emis)
      ! update seasalt tendencies
@@ -233,7 +236,7 @@ end subroutine atmos_sea_salt_sourcesink
 subroutine atmos_seasalt_sourcesink1 ( &
        ocn_flx_fraction, pwt, &
        seasaltden, seasaltref, seasaltra, seasaltrb,seasalt_scheme, &
-       zhalf, pfull, w10m, t, rh, &
+       zhalf, pfull, w10m, t, t_surf, rh, &
        seasalt, seasalt_dt, seasalt_emis, seasalt_setl, dt, is,ie,js,je,kbot,scale_sst)
 
   real, intent(in),  dimension(:,:)   :: ocn_flx_fraction
@@ -242,6 +245,7 @@ subroutine atmos_seasalt_sourcesink1 ( &
   real, intent(in) :: seasaltrb  ! highest radius
   real, intent(in) :: seasaltden ! density of dry seasalt particles, kg/m3
   real, intent(in),  dimension(:,:)   :: w10m
+  real, intent(in),  dimension(:,:)   :: t_surf
   character(32),intent(in) :: seasalt_scheme 
   real, intent(in),  dimension(:,:,:) :: pwt, seasalt
   real, intent(in) :: dt
@@ -268,7 +272,7 @@ subroutine atmos_seasalt_sourcesink1 ( &
   real :: a1, a2, Bcoef, r, dr, rmid
   real, dimension(size(pfull,3))  :: vdep, seasalt_conc0, seasalt_conc1
   real, dimension(size(pfull,3))  :: dz, air_dens, qn, qn1
-  real :: sst
+  real :: sst,tscale
   integer :: istep, nstep
 
   id=size(seasalt,1); jd=size(seasalt,2); kd=size(seasalt,3)
@@ -301,9 +305,14 @@ subroutine atmos_seasalt_sourcesink1 ( &
                   r=r+dr
                   if (rmid .le. 1.4e-6) then
 ! Martensson et al., JGR-Atm, 2003
+                     if (use_tsurf_for_scaling) then
+                        tscale = t_surf(i,j)
+                     else
+                        tscale = t(i,j,kb)
+                     end if
                     seasalt_flux = seasalt_flux + &
                        ch_fine*3.84e-4* 4./3.*pi*seasaltden*1e-3*rmid**2.* &
-                       max((param_ak(rmid)*t(i,j,kb)+param_bk(rmid)),min_scale_marthenson)*dr/0.4343
+                       max((param_ak(rmid)*tscale+param_bk(rmid)),min_scale_marthenson)*dr/0.4343
                   else
 ! Monahan (1986)
                     Bcoef=(coef1-alog10(betha*rmid*1.e6))/coef2
@@ -368,10 +377,15 @@ subroutine atmos_seasalt_sourcesink1 ( &
                    else
                       kb=kd
                    endif
-                   if (t(i,j,kb).lt.t_crit) then
+                   if (use_tsurf_for_scaling) then
+                      tscale = t_surf(i,j)
+                   else
+                      tscale = t(i,j,kb)
+                   end if
+                   if (tscale.lt.t_crit) then
                       scale_sst(i,j)    = frac_crit
                    else
-                      sst = max(min(t(i,j,kb)-273.15,max_tc_scale),min_tc_scale)
+                      sst = max(min(tscale-273.15,max_tc_scale),min_tc_scale)
                       scale_sst(i,j)    = 0.329+0.0904*sst-0.00717*sst**2 + 0.000207*sst**3
                    end if
                    seasalt_emis(i,j) = seasalt_emis(i,j)*scale_sst(i,j)

@@ -762,7 +762,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
                                  land, frac_open_sea, dsinku(:,:,n), dt, &
                                  tracer(:,:,kd,n), Time, Time_next, &
                                  lon, half_day, &
-                                 drydep_data(n),con_atm)
+                                 drydep_data(n),albedo,con_atm)
             if (do_nh3_atm_ocean_exchange .and. n.eq.nNH3) then 
                !f1p: scale dry deposition of nh3 by the land fraction since ocean exchange is handled separately
                dsinku(:,:,n) = dsinku(:,:,n)*max(1.-frac_open_sea,0.) 
@@ -1436,7 +1436,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
    call mpp_clock_begin (seasalt_clock)
    if (do_seasalt) then
       call atmos_sea_salt_sourcesink(lon,lat,ocn_flx_fraction,pwt, &
-              z_half, pfull, w10m_ocean, t, rh, &
+              z_half, pfull, w10m_ocean, t, t_surf_rad, rh, &
               tracer(:,:,:,:), dsinku(:,:,:), rdt(:,:,:,:), dt, &
               Time, is,ie,js,je, kbot)
    endif

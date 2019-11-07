@@ -787,7 +787,7 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
         real, parameter :: avo   = 6.023e23               ! molecules/mole
         integer   :: i, st1
 
-        rh_het(:) = rh(:) *100.
+        rh_het(:) = min(rh(:) *100.,trop_option%rh_het_max)
         drymass(:,:)=0.
         sfc_area(:,:)=0.
         rd(:,:)=0.
@@ -846,7 +846,12 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
 !     --philic      
         st1 = st1 + nocphob
         irh(:)  = 0
-        call find_indx(so4_rh1(:), rh_het(:), irh(:))
+!f1p bug fix
+        if (trop_option%het_chem_bug1) then
+           call find_indx(so4_rh1(:), rh_het(:), irh(:))
+        else
+           call find_indx(ocphil_rh1(:), rh_het(:), irh(:))
+        end if
         aeroindx(:,5)= st1 + irh(:)
         drymass(:,5)=(r_(:,oc2_ndx) + r_(:,soa_ndx))*airdensity(:)/avo*28.97 !MMR=> g/cm3
         rd(:,5)=RAA_HET(st1)

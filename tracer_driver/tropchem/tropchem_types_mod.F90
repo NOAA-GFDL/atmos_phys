@@ -59,6 +59,8 @@ module tropchem_types_mod
      integer               :: het_chem
      character(len=128)    :: sim_data_flsp
      logical               :: time_varying_solarflux
+     logical               :: het_chem_bug1
+     real                  :: rh_het_max
   end type tropchem_opt
 
   CONTAINS

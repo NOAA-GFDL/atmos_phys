@@ -232,6 +232,8 @@ logical            :: do_h2so4_nucleation   = .false.
 logical            :: cloud_ho2_h2o2        = .true.
 real               :: gNO3                  = 0.1
 real               :: gHO2                  = 1.
+logical            :: het_chem_bug1         = .true. !index error in surface area calculation. affects surface area of organic carbon
+real               :: rh_het_max            = 100. !maximum rh used to calculate surface area.
 
 character(len=128) :: sim_data_filename = 'sim.dat'      ! Input file for chemistry pre-processor
 
@@ -302,7 +304,8 @@ namelist /tropchem_driver_nml/    &
                                cloud_pH, &
                                frac_dust_incloud, frac_aerosol_incloud, &
                                max_rh_aerosol, limit_no3, cloud_ho2_h2o2, &
-                               sim_data_filename,time_varying_solarflux, gso2_dynamic
+                               sim_data_filename,time_varying_solarflux, gso2_dynamic, &
+                               het_chem_bug1, rh_het_max
 
 
 integer                     :: nco2 = 0
@@ -1758,6 +1761,13 @@ elseif ( trim(aerosol_thermo_method)   == 'no_thermo' ) then
    trop_option%aerosol_thermo = NO_AERO
 else
    call error_mesg ('tropchem_driver_init', 'undefined aerosol thermo', FATAL )
+end if
+
+trop_option%het_chem_bug1 = het_chem_bug1
+trop_option%rh_het_max    = rh_het_max
+if (mpp_pe()==mpp_root_pe()) then
+   write(*,*) 'het_chem_bug1',het_chem_bug1
+   write(*,*) 'rh_het_max',rh_het_max
 end if
 
 !-----------------------------------------------------------------------
