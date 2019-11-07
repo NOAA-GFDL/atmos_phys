@@ -599,6 +599,9 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
                elseif ( trop_option%gSO2_dynamic .eq. 2) then
                   !http://www.atmos-chem-phys.net/15/2031/2015/acp-15-2031-2015.pdf
                   gam_SO2 = max(2e-5+(5e-5-2e-5)*(relhum(i,k)-.5)/.5,2.e-5)
+               elseif ( trop_option%gSO2_dynamic .eq. 3) then
+                  !http://www.atmos-chem-phys.net/15/2031/2015/acp-15-2031-2015.pdf
+                  gam_SO2 = max(1e-5+(2e-5-1e-5)*(relhum(i,k)-.5)/.5,1.e-5)
                else
                   gam_SO2 = trop_option%gSO2
                end if

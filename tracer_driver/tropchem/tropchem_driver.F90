@@ -1742,6 +1742,9 @@ else if (trim(gso2_dynamic).eq.'wang2014') then
 else if (trim(gso2_dynamic).eq.'zheng2015') then
    trop_option%gSO2_dynamic             = 2
 !   http://www.atmos-chem-phys.net/15/2031/2015/
+else if (trim(gso2_dynamic).eq.'zheng2015_low') then
+   trop_option%gSO2_dynamic             = 3
+!   http://www.atmos-chem-phys.net/15/2031/2015/
 end if
 if(mpp_pe() == mpp_root_pe()) write(*,*) 'gso2_dynamic case:',trop_option%gSO2_dynamic
 
