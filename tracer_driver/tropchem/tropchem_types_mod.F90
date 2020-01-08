@@ -61,6 +61,7 @@ module tropchem_types_mod
      logical               :: time_varying_solarflux
      logical               :: het_chem_bug1
      real                  :: rh_het_max
+     integer               :: verbose
   end type tropchem_opt
 
   CONTAINS

@@ -1677,6 +1677,8 @@ elseif ( trim(cloud_chem_type) == 'f1p_bug2' ) then
    trop_option%cloud_chem = CLOUD_CHEM_F1P_BUG2
 end if
 
+trop_option%verbose = verbose
+
 !cloud chem pH solver
 
 
@@ -1766,8 +1768,8 @@ end if
 trop_option%het_chem_bug1 = het_chem_bug1
 trop_option%rh_het_max    = rh_het_max
 if (mpp_pe()==mpp_root_pe()) then
-   write(*,*) 'het_chem_bug1',het_chem_bug1
-   write(*,*) 'rh_het_max',rh_het_max
+   write(*,*) 'het_chem_bug1',trop_option%het_chem_bug1
+   write(*,*) 'rh_het_max',trop_option%rh_het_max
 end if
 
 !-----------------------------------------------------------------------

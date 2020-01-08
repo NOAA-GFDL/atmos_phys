@@ -790,7 +790,7 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
           landr2=landr
        endwhere
     else
-       where(albedo.gt.0.5) !use a threshold of 0.5 for snow/ice cover
+       where(albedo.gt.0.4) !use a threshold of 0.4 for snow/ice cover
           landr2=snowr
        elsewhere
           landr2=landr

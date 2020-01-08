@@ -9,7 +9,7 @@
       use tracer_manager_mod, only : get_tracer_index,  query_method
       use field_manager_mod,  only: parse             
       use tropchem_types_mod, only : tropchem_opt, tropchem_diag
-      use fms_mod,    only : open_file, close_file
+      use fms_mod,    only : open_file, close_file, mpp_pe, mpp_root_pe
 
 implicit none
       public :: usrrxt_init, usrrxt
@@ -266,6 +266,9 @@ end if
       INTEGER :: tmp_indexh2o
 
       integer, parameter :: naero_het = 18
+      integer, parameter :: naero_het_fine = 5
+
+      integer  :: naero_het_eff
       real, parameter :: mw_HO2 = 33.
       real, parameter :: mw_n2o5= 108.
       real, parameter :: mw_no3 = 62.
@@ -514,6 +517,14 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
 !usr19: NO2 -> 0.5HNO3 + 0.5HONO
 !----------------------------------------------------------------------------------------
             ! calculate surface area for each kind of aerosol (total 18)
+
+            if (trop_option%het_chem_fine_aerosol_only) then
+               naero_het_eff = naero_het_fine
+            else
+               naero_het_eff = naero_het
+            end if
+
+
             call set_aerosol(r(:,k,:),relhum(:,k),m(:,k),drymass_het(:,:),&
                  rd_het(:,:),re_het(:,:),sfca_het(:,:),trop_option)        
 
@@ -540,7 +551,7 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
                if( n2o5h_ndx > 0 ) then
                   rxt(i,k,n2o5h_ndx)=0.
                  if ( trop_option%gN2O5 .gt. 0. ) then
-                    do n=1, naero_het
+                    do n=1, naero_het_eff
                        uptk_het = 0.
                         call calc_hetrate(sfca_het(i,n),re_het(i,n)*1.D-4,m(i,k),trop_option%gN2O5, &
                           sqrt( temp(i,k)),sqrt(mw_n2o5),uptk_het)
@@ -555,7 +566,7 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
                if( no3h_ndx > 0 ) then
                   rxt(i,k,no3h_ndx)=0.
                   if ( trop_option%gNO3 .gt. 0. ) then
-                     do n=1, naero_het
+                     do n=1, naero_het_eff
                         uptk_het = 0.
                         ! we need to make sure the effective radius unit is cm.
                         call calc_hetrate(sfca_het(i,n),re_het(i,n)*1.D-4,m(i,k),trop_option%gNO3, &
@@ -581,7 +592,7 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
             if ( no2h_ndx > 0) then
                rxt(i,k,no2h_ndx)=0.             
                if ( trop_option%gNO2 .gt. 0. ) then
-                  do n=1, naero_het
+                  do n=1, naero_het_eff
                      uptk_het = 0.
                   ! we need to make sure the effective radius unit is cm.
                      call calc_hetrate(sfca_het(i,n),re_het(i,n)*1.D-4,m(i,k),trop_option%gNO2, &
@@ -606,11 +617,12 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
                   gam_SO2 = trop_option%gSO2
                end if
                if (gam_SO2 .gt. 0.) then
-                 do n=1, naero_het
+                 do n=1, naero_het_eff
                      uptk_het = 0.
-                  ! we need to make sure the effective radius unit is cm.
-                     call calc_hetrate(sfca_het(i,n),re_het(i,n)*1.D-4,m(i,k),gam_SO2, &
-                          sqrt( temp(i,k)),sqrt(mw_so2),uptk_het)
+                     if ( trop_option%gSO2_dynamic ) then
+                        call calc_hetrate(sfca_het(i,n),re_het(i,n)*1.D-4,m(i,k),gam_SO2, &
+                             sqrt( temp(i,k)),sqrt(mw_so2),uptk_het)
+                     end if
                      rxt(i,k,so2h_ndx) = rxt(i,k,so2h_ndx) + uptk_het
                   end do
                end if
@@ -625,7 +637,7 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
             if( nh3h_ndx > 0 ) then
                rxt(i,k,nh3h_ndx)=0.             
                if ( trop_option%gNH3 .gt. 0. ) then
-                  do n=1, naero_het
+                  do n=1, naero_het_eff
                      uptk_het = 0.
                      ! we need to make sure the effective radius unit is cm.
                      call calc_hetrate(sfca_het(i,n),re_het(i,n)*1.D-4,m(i,k),trop_option%gNH3, &
@@ -786,12 +798,18 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
         integer, dimension(size(r_,1),size(r_,2))     ::     aeroindx!to save index
         real, parameter :: avo   = 6.023e23               ! molecules/mole
         integer   :: i, st1
-
+        
+        !add cap for hygroscropic growth
         rh_het(:) = min(rh(:) *100.,trop_option%rh_het_max)
         drymass(:,:)=0.
         sfc_area(:,:)=0.
         rd(:,:)=0.
         re(:,:)=0.
+
+!        if (trop_option%verbose>2) then
+!           if (mpp_pe() == mpp_root_pe()) write(*,*) 'rh_het',minval(rh_het),maxval(rh_het)
+!        end if
+
 !----------------------------------------------------------------
 !     SO4 
 !----------------------------------------------------------------
@@ -813,6 +831,10 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
         aeroindx(:,1) = irh(:)
         rd(:,1)=RAA_HET(1)
         call give_indx(RAA_HET(:), aeroindx(:,1),re(:,1))
+
+!        if (trop_option%verbose>2) then
+!           if (mpp_pe() == mpp_root_pe()) write(*,*) 'rh=',rh_het(1),'re=',re(1,1)
+!        end if
         call calc_sfc(re(:,1)*1.0D-4,rd(:,1)*1.0D-4,denso4,drymass(:,1),sfc_area(:,1))
 !----------------------------------------------------------------
 !     BC 
