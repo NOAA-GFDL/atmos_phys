@@ -62,6 +62,7 @@ module tropchem_types_mod
      logical               :: het_chem_bug1
      real                  :: rh_het_max
      integer               :: verbose
+     logical               :: modulate_frac_ic 
   end type tropchem_opt
 
   CONTAINS

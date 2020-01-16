@@ -239,6 +239,8 @@ character(len=128) :: sim_data_filename = 'sim.dat'      ! Input file for chemis
 
 character(len=64)  :: gso2_dynamic          = 'none'
 
+logical            :: modulate_frac_ic = .false. !modulate the fraction of acids and aerosol in clouds based on frac_liq
+
 type(tropchem_diag),  save :: trop_diag
 type(tropchem_opt),   save :: trop_option
 
@@ -305,7 +307,8 @@ namelist /tropchem_driver_nml/    &
                                frac_dust_incloud, frac_aerosol_incloud, &
                                max_rh_aerosol, limit_no3, cloud_ho2_h2o2, &
                                sim_data_filename,time_varying_solarflux, gso2_dynamic, &
-                               het_chem_bug1, rh_het_max
+                               het_chem_bug1, rh_het_max, &
+                               modulate_frac_ic
 
 
 integer                     :: nco2 = 0
@@ -378,7 +381,7 @@ integer, dimension(pcnstm1) :: indices, id_prod, id_loss, id_chem_tend, &
 !new diagnostics (f1p)
 integer, dimension(pcnstm1) :: id_prod_mol, id_loss_mol
 integer :: id_pso4_h2o2,id_pso4_o3,id_ghno3_d,id_phno3_d(5), id_phno3_g_d, id_pso4_d(5), &
-           id_pso4_g_d, id_gso2, id_aerosol_pH, id_cloud_pH, id_cloud_pHw, id_cld_amt_chem, id_sa_aerosol, id_sa_so4, id_sa_bc, id_sa_oa, id_sa_ss, id_sa_dust
+           id_pso4_g_d, id_gso2, id_aerosol_pH, id_cloud_pH, id_cloud_pHw, id_cloud_pHwl, id_cld_amt_chem, id_cld_liq_chem, id_sa_aerosol, id_sa_so4, id_sa_bc, id_sa_oa, id_sa_ss, id_sa_dust
 
 integer :: id_so2_emis_cmip, id_nh3_emis_cmip
 integer :: id_co_emis_cmip, id_no_emis_cmip
@@ -1264,6 +1267,17 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
       used = send_data(id_cld_amt_chem,max(r(:,:,:,inqa),0.),Time_next,is_in=is,js_in=js, &
                        mask = (trop_diag_array(:,:,:,trop_diag%ind_cloud_pH).gt. (missing_value + tiny(missing_value))))
    end if
+
+   if (id_cld_liq_chem>0) then
+      used = send_data(id_cld_liq_chem,max(r(:,:,:,inql),0.),Time_next,is_in=is,js_in=js, &
+                       mask = (trop_diag_array(:,:,:,trop_diag%ind_cloud_pH).gt. (missing_value + tiny(missing_value))))
+   end if
+
+   if (id_cloud_pHwl>0) then
+      used = send_data(id_cloud_pHwl,trop_diag_array(:,:,:,trop_diag%ind_cloud_pH)*max(r(:,:,:,inql),0.),Time_next,is_in=is,js_in=js, &
+                       mask = (trop_diag_array(:,:,:,trop_diag%ind_cloud_pH).gt. (missing_value + tiny(missing_value))))
+   end if
+
    if (id_phno3_g_d>0) then
       used = send_data(id_phno3_g_d,trop_diag_array(:,:,:,trop_diag%ind_phno3_g_d)*pwt(:,:,:)*1.e3/WTMAIR,Time_next,is_in=is,js_in=js)
    end if
@@ -1752,6 +1766,10 @@ else if (trim(gso2_dynamic).eq.'zheng2015_low') then
 !   http://www.atmos-chem-phys.net/15/2031/2015/
 end if
 if(mpp_pe() == mpp_root_pe()) write(*,*) 'gso2_dynamic case:',trop_option%gSO2_dynamic
+
+
+trop_option%modulate_frac_ic = modulate_frac_ic
+if (mpp_pe()==mpp_root_pe()) write(*,*) 'modulate_frac_ic',modulate_frac_ic
 
 !aerosol thermo
 if    ( trim(aerosol_thermo_method)   == 'legacy' ) then
@@ -2321,11 +2339,17 @@ end if
    id_aerosol_pH  = register_diag_field( module_name, 'aerosol_pH',axes(1:3), Time, 'aerosol_ph','unitless', mask_variant = .true.,missing_value=missing_value)
    id_cloud_pH  = register_diag_field( module_name, 'cloud_pH',axes(1:3), Time, 'cloud_ph','unitless', mask_variant = .true.,missing_value=missing_value)
    id_cloud_pHw  = register_diag_field( module_name, 'cloud_pHw',axes(1:3), Time, 'cloud_ph weighted by cloud fraction','unitless', mask_variant = .true.,missing_value=missing_value)
+   id_cloud_pHwl  = register_diag_field( module_name, 'cloud_pHwl',axes(1:3), Time, 'cloud_ph weighted by cloud water','unitless', mask_variant = .true.,missing_value=missing_value)
    id_cld_amt_chem  = register_diag_field( module_name, 'cld_amt_chem',axes(1:3), Time, 'cloud fraction for chemistry','unitless', mask_variant = .true.,missing_value=missing_value)
+   id_cld_liq_chem  = register_diag_field( module_name, 'cld_liq_chem',axes(1:3), Time, 'cloud liquid water for chemistry','unitless', mask_variant = .true.,missing_value=missing_value)
 
    if (id_cloud_pHw .gt. 0 .and. id_cld_amt_chem.le.0) then
       call error_mesg ('tropchem_driver_init', &
            'cld_amt_chem needs to be archived if cloud_pHw is requested', FATAL)
+   end if
+   if (id_cloud_pHwl .gt. 0 .and. id_cld_liq_chem.le.0) then
+      call error_mesg ('tropchem_driver_init', &
+           'cld_liq_chem needs to be archived if cloud_pHwl is requested', FATAL)
    end if
 
 

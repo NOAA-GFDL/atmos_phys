@@ -141,6 +141,8 @@ CONTAINS
     real    :: xpH
     logical :: converged
 
+    real :: frac_acid_ic !fraction of acid available for cloud chemistry
+
     if ( .not. module_is_initialized ) then
        call error_mesg ('setsox','setsox_init must be called first.', FATAL)
     end if
@@ -243,6 +245,9 @@ CONTAINS
        end if
 
        do i = 1,plonl
+
+          if (trop_option%modulate_frac_ic) then
+
           if ( tfld(i,k) .gt. 258. ) then
              !assume ice is from riming
              if ( frac_ic_so4 .gt. 0. ) frac_ic_so4_eff(i,k) = frac_ic_so4 * frac_liq(i,k)
@@ -254,6 +259,15 @@ CONTAINS
              if ( frac_ic_no3 .gt. 0. ) frac_ic_no3_eff(i,k) = frac_ic_no3
              if ( frac_ic_nh4 .gt. 0. ) frac_ic_nh4_eff(i,k) = frac_ic_nh4
           end if
+
+          else
+
+             frac_ic_so4_eff(i,k) = frac_ic_so4
+             frac_ic_no3_eff(i,k) = frac_ic_no3
+             frac_ic_nh4_eff(i,k) = frac_ic_nh4
+
+          end if
+
        end do
 
     end do
@@ -560,6 +574,14 @@ CONTAINS
                 else
                    patm = pz/1013.25
                 end if
+
+                if (trop_option%modulate_frac_ic) then
+                   frac_acid_ic = frac_liq(i,k)
+                else
+                   frac_acid_ic = 1.
+                end if
+
+
                 if ( cldfr(i,k) .gt. 1.e-10 .and. xso2(i,k) .gt. 0. ) then
                    xl = xl/cldfr(i,k)
 
@@ -571,12 +593,12 @@ CONTAINS
                            + frac_ic_no3_eff(i,k)*xant(i,k)
                    end if
 
-                   thno3= frac_liq(i,k) * xhno3(i,k) &                !for acids partioning between ice and liquid
+                   thno3= frac_acid_ic * xhno3(i,k) &                !for acids partioning between ice and liquid
                         + frac_ic_no3_eff(i,k)*xant(i,k)
                    
 
                    if (trop_option%cloud_H .lt. 0.) then                   
-                      call cloud_pH(thno3, xso2(i,k), tnh3, xhcooh(i,k)*frac_liq(i,k), xch3cooh(i,k)*frac_liq(i,k), &
+                      call cloud_pH(thno3, xso2(i,k), tnh3, xhcooh(i,k)*frac_acid_ic, xch3cooh(i,k)*frac_acid_ic, &
 		                    xso4(i,k)*frac_ic_so4_eff(i,k), xco2(i,k), xalk(i,k), tfld(i,k), patm, xl, xhnm(i,k),&
 				    trop_option%cloud_chem_ph_solver,xH(i,k), ediag)
                    else
@@ -587,6 +609,10 @@ CONTAINS
                    if (trop_option%cloud_chem .eq. CLOUD_CHEM_F1P_BUG) then
                       call cloud_so2_chem(patm, xH(i,k), tfld(i,k), xl, rso2_h2o2, rso2_o3, &
                                           do_am3_bug=.true.)
+
+                      !xl: L(water)/L(air) in cloud
+                      !const0 1e3/6.023e23
+                      !xhnm   air density
                       rso2_h2o2 = rso2_h2o2 * xl / const0 / xhnm(i,k)
                       rso2_o3   = rso2_o3   * xl / const0 / xhnm(i,k)
                    else

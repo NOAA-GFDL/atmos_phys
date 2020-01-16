@@ -119,10 +119,8 @@ module atmos_tracer_utilities_mod
 
   !cmip6 (f1p)
   !
-
-
   integer :: id_tracer_ddep_cmip(max_tracers)
-  integer :: id_w10m, id_delm
+  integer :: id_w10m, id_delm, id_hwind
   integer :: id_u_star, id_b_star, id_rough_mom, id_z_pbl,  &
        id_mo_length_inv, id_vds
   character(len=32),  dimension(max_tracers) :: tracer_names     = ' '
@@ -185,8 +183,9 @@ module atmos_tracer_utilities_mod
   real :: T_snow_dep = 263.15
   real :: kbs_val   = 50. ! surface conductance of rough sea (m/s)
   logical :: use_albedo_for_drydep = .false.
+  real :: snow_albedo_thr = 0.45
   namelist /wetdep_nml/  scale_aerosol_wetdep,  scale_aerosol_wetdep_snow, file_dry, drydep_exp, T_snow_dep, &
-                         kbs_val, use_albedo_for_drydep
+                         kbs_val, use_albedo_for_drydep, snow_albedo_thr
   ! <---h1g,
 contains
 
@@ -456,6 +455,7 @@ contains
          trim(tracer_longnames(n))//' re-evap by conv precip',         &
          trim(units), missing_value=-999.    )
  enddo
+
  ! Register scaling factor to calculate wind speed at 10 meters
  id_delm   = register_diag_field ( mod_name,                &
       'delm', mass_axes(1:2),Time,                   &
@@ -466,7 +466,11 @@ contains
       'w10m', mass_axes(1:2),Time,                   &
       'Wind speed at 10 meters', 'm/s',              &
       missing_value=-999.                           )
-
+ ! Register the wind speed at 10 meters
+ id_hwind   = register_diag_field ( mod_name,                &
+      'hwind', mass_axes(1:2),Time,                   &
+      'Horizontal wind speed', 'm/s',              &
+      missing_value=-999.                           )
  id_u_star = register_diag_field ( mod_name,                    &
       'u_star_atm', mass_axes(1:2), Time,               &
       'u star',                                 &
@@ -491,6 +495,7 @@ contains
       'vds_atm', mass_axes(1:2), Time,               &
       'vds',                                 &
       'm/s', missing_value=-999.     )
+
 ! Register in-cloud SO2 re-evaporation by large scale clouds (CMIP6)
  ID_so2_reevap_ls = register_cmip_diag_field_3d ( mod_name,               &
       'pso4_aq_so2_reevap_ls', Time, 'Sulfate aerosol production by SO2 re-evaporation by lscale clouds', 'kg m-2 s-1', &
@@ -790,7 +795,7 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
           landr2=landr
        endwhere
     else
-       where(albedo.gt.0.4) !use a threshold of 0.4 for snow/ice cover
+       where(albedo.gt.snow_albedo_thr) 
           landr2=snowr
        elsewhere
           landr2=landr
@@ -2434,6 +2439,14 @@ subroutine get_w10m(z_full, u, v, rough_mom,u_star, b_star, q_star, &
  ! Send the 10m wind speed data to the diag_manager for output.
  if (id_w10m > 0 ) then
     used = send_data ( id_w10m, w10m_land, Time_next, is_in=is,js_in=js )
+ endif
+
+ if (id_u_star > 0 ) then
+    used = send_data ( id_u_star, u_star, Time_next, is_in=is,js_in=js )
+ endif
+
+ if (id_hwind > 0 ) then
+    used = send_data ( id_hwind, sqrt(u(:,:)**2 +v(:,:)**2), Time_next, is_in=is,js_in=js )
  endif
 
 end subroutine get_w10m
