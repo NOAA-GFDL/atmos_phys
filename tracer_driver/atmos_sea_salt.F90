@@ -269,7 +269,7 @@ subroutine atmos_seasalt_sourcesink1 ( &
   real :: viscosity, free_path, C_c
   real :: ratio_r, rho_wet_seasalt, seasalt_flux
   real :: rho_air
-  real :: a1, a2, Bcoef, r, dr, rmid
+  real :: a1, a2, Bcoef, r, dr, rmid, Acoef
   real, dimension(size(pfull,3))  :: vdep, seasalt_conc0, seasalt_conc1
   real, dimension(size(pfull,3))  :: dz, air_dens, qn, qn1
   real :: sst,tscale
@@ -356,15 +356,37 @@ subroutine atmos_seasalt_sourcesink1 ( &
           r = seasaltra* 1.e6
           dr= (seasaltrb - seasaltra)/float(nr)* 1.e6
           seasalt_flux=0.
-          do ir=1,nr
-            rmid=r+dr*0.5   ! Dry radius
-            r=r+dr
-            Bcoef=(coef1-alog10(betha*rmid))/coef2
-            seasalt_flux = seasalt_flux + &
-               ch_coarse*1.373*4./3.*pi*seasaltden/betha**2*1.e-18* &
-               (1.+0.057*(betha*rmid)**1.05)*dr*      &
-               10**(1.19*exp(-(Bcoef**2)))
-          enddo
+
+
+          if (seasalt_scheme.eq."Gong") then
+             !variation of Monahan
+             !A parameterization of sea-salt aerosol source function for sub-and super-micron particles Gong GBC (2003) doi:10.1029/2003GB002079
+             do ir=1,nr
+                rmid=r+dr*0.5   ! Dry radius
+                r=r+dr
+                Bcoef=(0.433-alog10(betha*rmid))/0.433
+                Acoef=4.7*(1.+30.*betha*rmid)**(-0.017*(betha*rmid)**(-1.44))
+
+                seasalt_flux = seasalt_flux + &
+                     ch_coarse * 1.373 * (betha*rmid)**(-Acoef) * &
+                     (1+0.057*(betha*rmid)**3.45) * &
+                     10**(1.607*exp(-Bcoef**2))   * &
+                     dr*betha * &
+                     4./3.* pi * 1.e-18 *rmid**3 * seasaltden
+
+                
+             enddo
+          else
+             do ir=1,nr
+                rmid=r+dr*0.5   ! Dry radius
+                r=r+dr
+                Bcoef=(coef1-alog10(betha*rmid))/coef2
+                seasalt_flux = seasalt_flux + &
+                     ch_coarse*1.373*4./3.*pi*seasaltden/betha**2*1.e-18* &
+                     (1.+0.057*(betha*rmid)**1.05)*dr*      &
+                     10**(1.19*exp(-(Bcoef**2)))
+             enddo
+          end if
 
           do j=1,jd
             do i=1,id
@@ -375,7 +397,7 @@ subroutine atmos_seasalt_sourcesink1 ( &
                    if (present(kbot)) then
                       kb=kbot(i,j)
                    else
-                      kb=kd
+                     kb=kd
                    endif
                    if (use_tsurf_for_scaling) then
                       tscale = t_surf(i,j)
@@ -393,7 +415,7 @@ subroutine atmos_seasalt_sourcesink1 ( &
 
               endif
             enddo
-          enddo
+         enddo
     endif
   endif
 
