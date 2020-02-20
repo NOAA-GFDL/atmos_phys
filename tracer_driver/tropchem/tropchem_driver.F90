@@ -239,6 +239,8 @@ character(len=128) :: sim_data_filename = 'sim.dat'      ! Input file for chemis
 
 character(len=64)  :: gso2_dynamic          = 'none'
 
+real               :: min_t_sfc_cld_chem    = -999   !by default, this filter is turned off. A more reasonable choice would be 273.15K
+
 logical            :: modulate_frac_ic = .false. !modulate the fraction of acids and aerosol in clouds based on frac_liq
 
 type(tropchem_diag),  save :: trop_diag
@@ -308,7 +310,8 @@ namelist /tropchem_driver_nml/    &
                                max_rh_aerosol, limit_no3, cloud_ho2_h2o2, &
                                sim_data_filename,time_varying_solarflux, gso2_dynamic, &
                                het_chem_bug1, rh_het_max, &
-                               modulate_frac_ic
+                               modulate_frac_ic, &
+                               min_t_sfc_cld_chem
 
 
 integer                     :: nco2 = 0
@@ -938,6 +941,12 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
       elsewhere
       frac_liq(:,:) = 1.
       endwhere
+
+      !only do cld chemistry at the surface if t is greater than freezing temperature. This is because water saturation vapor pressure over ice is much higher than the saturation vapor pressure of water over liquid water (f1p,sm)
+      where (tsurf(:,j) .lt.min_t_sfc_cld_chem)
+         frac_liq(:,size(r,3)) = 0.
+      endwhere
+
 
       if (repartition_water_tracers) then
          h2o_temp(:,:) = h2o_temp(:,:) + cloud_water(:,:) * WTMAIR/WTMH2O
