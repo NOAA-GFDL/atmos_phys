@@ -81,8 +81,7 @@ logical                       :: module_is_initialized = .false.
 !        ... local variables
 !-----------------------------------------------------------------
       integer :: funit, I, J, K, ndust, n
-      character*6 :: fld1 !no3_d1
-      character*7 :: fld2 !n2o5_d1
+      character*7 :: fld
 
       uo_o2_ndx = get_rxt_ndx( 'uo_o2' )
       uno2_no3_ndx = get_rxt_ndx( 'uno2_no3' )
@@ -131,16 +130,16 @@ logical                       :: module_is_initialized = .false.
       end if
 
       do i=1,ndust
-         write(fld2,'(A6,I1.1)') 'hno3_d',i
-         usr_hno3_dust(i) = get_rxt_ndx(fld2)
-         write(fld1,'(A5,I1.1)') 'so4_d',i
-         usr_so4_dust(i) = get_rxt_ndx(fld1)
-         write(fld1,'(A5,I1.1)') 'so2_d',i
-         usr_so2_dust(i) = get_rxt_ndx(fld1)
-         write(fld2,'(A6,I1.1)') 'n2o5_d',i
-         usr_n2o5_dust(i) = get_rxt_ndx(fld2)
-         write(fld1,'(A5,I1.1)') 'no3_d',i
-         usr_no3_dust(i) = get_rxt_ndx(fld1)
+         write(fld,'(A6,I1.1)') 'hno3_d',i
+         usr_hno3_dust(i) = get_rxt_ndx(trim(fld))
+         write(fld,'(A5,I1.1,1X)') 'so4_d',i
+         usr_so4_dust(i) = get_rxt_ndx(trim(fld))
+         write(fld,'(A5,I1.1,1X)') 'so2_d',i
+         usr_so2_dust(i) = get_rxt_ndx(trim(fld))
+         write(fld,'(A6,I1.1)') 'n2o5_d',i
+         usr_n2o5_dust(i) = get_rxt_ndx(trim(fld))
+         write(fld,'(A5,I1.1,1X)') 'no3_d',i
+         usr_no3_dust(i) = get_rxt_ndx(trim(fld))
       end do
 
       if (mpp_root_pe().eq.mpp_pe()) then
@@ -736,6 +735,8 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
                      scale_alk(n) = 0.
                   end if
                end do
+            else
+               scale_alk(:) = 1.
             end if
 
 

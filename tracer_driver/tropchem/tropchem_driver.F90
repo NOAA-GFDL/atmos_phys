@@ -388,9 +388,13 @@ integer, dimension(pcnstm1) :: indices, id_prod, id_loss, id_chem_tend, &
                                id_emis, id_emis3d, id_xactive_emis, &
                                id_ub, id_lb, id_airc
 !new diagnostics (f1p)
+integer, parameter :: max_dust = 5
 integer, dimension(pcnstm1) :: id_prod_mol, id_loss_mol
-integer :: id_pso4_h2o2,id_pso4_o3,id_ghno3_d,id_phno3_d(5), id_phno3_g_d, id_pso4_d(5), &
+integer :: id_pso4_h2o2,id_pso4_o3,id_ghno3_d,id_phno3_d(max_dust), id_phno3_g_d, id_pso4_d(max_dust), &
            id_pso4_g_d, id_gso2, id_aerosol_pH, id_cloud_pH, id_cloud_pHw, id_cloud_pHwl, id_cld_amt_chem, id_cld_liq_chem, id_sa_aerosol, id_sa_so4, id_sa_bc, id_sa_oa, id_sa_ss, id_sa_dust
+
+integer :: usr_so2_dust(max_dust), usr_so4_dust(max_dust), usr_hno3_dust(max_dust), usr_no3_dust(max_dust), usr_n2o5_dust(max_dust)
+integer :: id_rx_so2_dust(max_dust), id_rx_so4_dust(max_dust), id_rx_hno3_dust(max_dust), id_rx_no3_dust(max_dust), id_rx_n2o5_dust(max_dust)
 
 integer :: id_so2_emis_cmip, id_nh3_emis_cmip
 integer :: id_co_emis_cmip, id_no_emis_cmip
@@ -1512,6 +1516,27 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
       end if
    end do
 
+
+!reaction on dust
+   do n=1,max_dust
+      if (usr_hno3_dust(n)>0 .and. id_rx_hno3_dust(n)>0) then
+         used = send_data(id_rx_hno3_dust(n),rate_constants(:,:,:,usr_hno3_dust(n)),Time_next,is_in=is,js_in=js)
+      end if
+      if (usr_n2o5_dust(n)>0 .and. id_rx_n2o5_dust(n)>0) then
+         used = send_data(id_rx_n2o5_dust(n),rate_constants(:,:,:,usr_n2o5_dust(n)),Time_next,is_in=is,js_in=js)
+      end if
+      if (usr_no3_dust(n)>0 .and. id_rx_no3_dust(n)>0) then
+         used = send_data(id_rx_no3_dust(n),rate_constants(:,:,:,usr_no3_dust(n)),Time_next,is_in=is,js_in=js)
+      end if
+      if (usr_so2_dust(n)>0 .and. id_rx_so2_dust(n)>0) then
+         used = send_data(id_rx_so2_dust(n),rate_constants(:,:,:,usr_so2_dust(n)),Time_next,is_in=is,js_in=js)
+      end if
+      if (usr_so4_dust(n)>0 .and. id_rx_so4_dust(n)>0) then
+         used = send_data(id_rx_so4_dust(n),rate_constants(:,:,:,usr_so4_dust(n)),Time_next,is_in=is,js_in=js)
+      end if
+   end do
+
+
 !-----------------------------------------------------------------------
 !     ... Output diagnostics
 !-----------------------------------------------------------------------
@@ -1762,8 +1787,9 @@ if(mpp_pe() == mpp_root_pe())    write(*,*)     "gNH3:",trop_option%gNH3
 
 trop_option%gHNO3_dust               = gHNO3_dust
 trop_option%gN2O5_dust               = gN2O5_dust
+trop_option%gSO2_dust                = gSO2_dust
 trop_option%gNO3_dust                = gNO3_dust
-
+trop_option%scale_dust_uptake        = scale_dust_uptake
 
 trop_option%retain_cm3_bugs = retain_cm3_bugs
 trop_option%do_fastjx_photo = do_fastjx_photo
@@ -2374,16 +2400,53 @@ end if
          n_hno3d = n_hno3d+1
          id_phno3_d(n_hno3d)    = register_diag_field( module_name, 'P'//trim(dust_tracers(i)%name),axes(1:3), &
               Time,  'P'//trim(dust_tracers(i)%name),'mole/m2/s')         
+
+         write(fld,'(A6,I1.1,9X)') 'hno3_d',n_hno3d
+         usr_hno3_dust(n_hno3d) = get_rxt_ndx(trim(fld))
+         id_rx_hno3_dust(n_hno3d) = register_diag_field( module_name, 'rx_'//TRIM(fld), axes(1:3), Time, 'rx_'//TRIM(fld),'1/s')
+
+         write(fld,'(A6,I1.1,9X)') 'n2o5_d',n_hno3d
+         usr_n2o5_dust(n_hno3d) = get_rxt_ndx(trim(fld))
+         id_rx_n2o5_dust(n_hno3d) = register_diag_field( module_name, 'rx_'//TRIM(fld), axes(1:3), Time, 'rx_'//TRIM(fld),'1/s')
+
+         write(fld,'(A5,I1.1,10X)') 'no3_d',n_hno3d
+         usr_no3_dust(n_hno3d) = get_rxt_ndx(trim(fld))   
+         id_rx_no3_dust(n_hno3d) = register_diag_field( module_name, 'rx_'//TRIM(fld), axes(1:3), Time, 'rx_'//TRIM(fld),'1/s')
+
       end if
       if (dust_tracers(i)%is_so4d) then
          n_so4d = n_so4d+1
          id_pso4_d(n_so4d)    = register_diag_field( module_name, 'P'//trim(dust_tracers(i)%name),axes(1:3), &
               Time,  'P'//trim(dust_tracers(i)%name),'mole/m2/s')         
+
+         write(fld,'(A5,I1.1,10X)') 'so4_d',n_so4d
+         usr_so4_dust(n_so4d) = get_rxt_ndx(trim(fld))
+         id_rx_so4_dust(n_so4d) = register_diag_field( module_name, 'rx_'//TRIM(fld), axes(1:3), Time, 'rx_'//TRIM(fld),'1/s')
+
+         write(fld,'(A5,I1.1,10X)') 'so2_d',n_so4d
+         usr_so2_dust(n_so4d) = get_rxt_ndx(trim(fld))
+         id_rx_so2_dust(n_so4d) = register_diag_field( module_name, 'rx_'//TRIM(fld), axes(1:3), Time, 'rx_'//TRIM(fld),'1/s')
+
       end if
    end do
 
+   if (mpp_root_pe().eq.mpp_pe()) then
+      write(*,*) 'usr_n2o5_dust', usr_n2o5_dust,id_rx_n2o5_dust
+      write(*,*) 'usr_hno3_dust', usr_hno3_dust,id_rx_hno3_dust
+      write(*,*) 'usr_so4_dust', usr_so4_dust,id_rx_so4_dust
+      write(*,*) 'usr_so2_dust', usr_so2_dust,id_rx_so2_dust
+      write(*,*) 'usr_no3_dust', usr_no3_dust,id_rx_no3_dust
+   end if
+
+   
+
    id_phno3_g_d    = register_diag_field( module_name, 'PHNO3_G_D',axes(1:3), &
         Time, 'PHNO3_G_D','mole/m2/s')
+
+   if (max_dust<n_hno3d .or. max_dust<n_so4d) then
+      call error_mesg ('tropchem_driver_init', &
+           'max_dust<n_hno3d .or. max_dust<n_so4d', FATAL)
+   end if
 
 
    id_sa_aerosol  = register_diag_field( module_name, 'sa_aerosol',axes(1:3), Time, 'sa_aerosol','cm2/cm3')
