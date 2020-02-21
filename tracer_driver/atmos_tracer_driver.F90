@@ -817,17 +817,6 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
                           Time_next, is_in=is, js_in=js)
         endif
       endif
-      if (id_dryso4 > 0) then
-        if (nSO4_cmip > 0) then
-          used = send_data (id_dryso4, 0.096*1.e3*pwt(:,:,kd)*dsinku(:,:,nSO4_cmip)/WTMAIR &
-               + 0.096 * so4d_setl, &
-                            Time_next, is_in=is, js_in=js)
-        else if (nSO4 > 0) then ! fast-aerosol simpleSO4
-          used = send_data (id_dryso4, 0.096*1.e3*pwt(:,:,kd)*dsinku(:,:,nSO4)/WTMAIR &
-               + 0.096 * so4d_setl, &
-                            Time_next, is_in=is, js_in=js)
-        endif
-      endif
       if (id_drydms > 0) then
         if (nDMS_cmip > 0) then
           used = send_data (id_drydms, 0.062*1.e3*pwt(:,:,kd)*dsinku(:,:,nDMS_cmip)/WTMAIR, &
@@ -1447,6 +1436,19 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
    !---- cmip variables ----
    if (id_n_ox_ddep > 0) used = send_data (id_n_ox_ddep, sum_n_ox_ddep, Time_next, &
                                               is_in=is, js_in=js)
+
+
+   if (id_dryso4 > 0) then
+      if (nSO4_cmip > 0) then
+         used = send_data (id_dryso4, 0.096*1.e3*pwt(:,:,kd)*dsinku(:,:,nSO4_cmip)/WTMAIR &
+              + 0.096 * so4d_setl, &
+              Time_next, is_in=is, js_in=js)
+      else if (nSO4 > 0) then ! fast-aerosol simpleSO4
+         used = send_data (id_dryso4, 0.096*1.e3*pwt(:,:,kd)*dsinku(:,:,nSO4)/WTMAIR &
+              + 0.096 * so4d_setl, &
+              Time_next, is_in=is, js_in=js)
+      endif
+   endif
 
 
 !------------------------------------------------------------------------

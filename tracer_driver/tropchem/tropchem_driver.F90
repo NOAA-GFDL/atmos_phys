@@ -2402,15 +2402,15 @@ end if
               Time,  'P'//trim(dust_tracers(i)%name),'mole/m2/s')         
 
          write(fld,'(A6,I1.1,9X)') 'hno3_d',n_hno3d
-         usr_hno3_dust(n_hno3d) = get_rxt_ndx(trim(fld))
+         usr_hno3_dust(n_hno3d) = get_rxt_ndx(trim(fld)) - phtcnt
          id_rx_hno3_dust(n_hno3d) = register_diag_field( module_name, 'rx_'//TRIM(fld), axes(1:3), Time, 'rx_'//TRIM(fld),'1/s')
 
-         write(fld,'(A6,I1.1,9X)') 'n2o5_d',n_hno3d
-         usr_n2o5_dust(n_hno3d) = get_rxt_ndx(trim(fld))
+         write(fld,'(A6,I1.1,9X)') 'n2o5_d',n_hno3d 
+         usr_n2o5_dust(n_hno3d) = get_rxt_ndx(trim(fld)) - phtcnt
          id_rx_n2o5_dust(n_hno3d) = register_diag_field( module_name, 'rx_'//TRIM(fld), axes(1:3), Time, 'rx_'//TRIM(fld),'1/s')
 
          write(fld,'(A5,I1.1,10X)') 'no3_d',n_hno3d
-         usr_no3_dust(n_hno3d) = get_rxt_ndx(trim(fld))   
+         usr_no3_dust(n_hno3d) = get_rxt_ndx(trim(fld)) - phtcnt
          id_rx_no3_dust(n_hno3d) = register_diag_field( module_name, 'rx_'//TRIM(fld), axes(1:3), Time, 'rx_'//TRIM(fld),'1/s')
 
       end if
@@ -2420,11 +2420,11 @@ end if
               Time,  'P'//trim(dust_tracers(i)%name),'mole/m2/s')         
 
          write(fld,'(A5,I1.1,10X)') 'so4_d',n_so4d
-         usr_so4_dust(n_so4d) = get_rxt_ndx(trim(fld))
+         usr_so4_dust(n_so4d) = get_rxt_ndx(trim(fld)) - phtcnt
          id_rx_so4_dust(n_so4d) = register_diag_field( module_name, 'rx_'//TRIM(fld), axes(1:3), Time, 'rx_'//TRIM(fld),'1/s')
 
          write(fld,'(A5,I1.1,10X)') 'so2_d',n_so4d
-         usr_so2_dust(n_so4d) = get_rxt_ndx(trim(fld))
+         usr_so2_dust(n_so4d) = get_rxt_ndx(trim(fld)) - phtcnt
          id_rx_so2_dust(n_so4d) = register_diag_field( module_name, 'rx_'//TRIM(fld), axes(1:3), Time, 'rx_'//TRIM(fld),'1/s')
 
       end if

@@ -458,7 +458,7 @@ logical                       :: module_is_initialized = .false.
                          sh, &
                          r, &            
                          Time, & 
-                         trop_option%time_varying_solarflux)
+                         trop_option%time_varying_solarflux,trop_option)
 #else
             call fphoto( reaction_rates(:,:,:phtcnt), &
                          pmid, pdel, &
