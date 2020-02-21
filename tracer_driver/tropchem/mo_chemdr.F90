@@ -2,7 +2,7 @@
       module mo_chemdr_mod
 
 !<f1p
-      use fms_mod,            only : FATAL, error_mesg, mpp_pe, mpp_root_pe
+      use fms_mod,            only : FATAL, error_mesg, mpp_pe, mpp_root_pe, uppercase
       use tropchem_types_mod, only : tropchem_opt,tropchem_diag, small_value
       use mo_chem_utls_mod,   only : get_spc_ndx      
       use tracer_manager_mod, only : get_tracer_index        
@@ -10,15 +10,20 @@
       use mpp_mod,            only : mpp_clock_id,         &
                                      mpp_clock_begin,      &
                                      mpp_clock_end
+      use atmos_dust_mod,     only : is_dust_tracer, dust_tracers, do_dust, n_dust_tracers
+
 !>
       implicit none
 
  !<f1p
+      real, parameter :: max_dust = 5
       integer :: nh4no3_ndx, hno3_ndx
       integer :: nh4_ndx, nh3_ndx
       integer :: so2_ndx, so4_ndx
       integer :: ox_ndx, o3s_ndx
       integer :: o3s_e90_ndx, e90_ndx
+      integer :: hno3_d_ndx(max_dust), dust_ndx(max_dust), so4_d_ndx(max_dust)
+      integer :: nhno3d, nso4d, ndust
       integer :: implicit_clock_id, photo_clock_id, cloud_clock_id
 !>
       private
@@ -287,6 +292,10 @@ logical                       :: module_is_initialized = .false.
       real     ::  extfrc(plonl,SIZE(vmr,2),max(1,extcnt))
       real     ::  reaction_rates(plonl,SIZE(vmr,2),rxntot)
 
+      real     ::  hno3_d_b(plonl,size(vmr,2),max_dust),so4_d_b(plonl,size(vmr,2),max_dust)
+      real     ::  xalk, xalke, delta_hno3, delta_so4
+
+
 
       integer   :: e90_tropk
       real, dimension(plonl,SIZE(vmr,2)) :: &
@@ -308,6 +317,20 @@ logical                       :: module_is_initialized = .false.
       plnplv = plonl*plev
       num_invar = SIZE(invariants,3)
       nstep = 0
+
+
+      !archive the amount of hno3 and so4 on dust before chemistry
+      hno3_d_b = 0.
+      so4_d_b  = 0.
+
+      do n=1,ndust
+         if (hno3_d_ndx(n) .gt. 0) then
+            hno3_d_b(:,:,n) = vmr(:,:,hno3_d_ndx(n))
+         end if
+         if (so4_d_ndx(n) .gt. 0) then
+            so4_d_b(:,:,n)  = vmr(:,:,so4_d_ndx(n))
+         end if
+      end do
       
       
 !-----------------------------------------------------------------------      
@@ -676,6 +699,56 @@ logical                       :: module_is_initialized = .false.
 !-----------------------------------------------------------------------
 !       ... Heterogeneous+cloud chemistry
 !-----------------------------------------------------------------------
+
+!HNO3/SO2 uptake on dust
+     do n=1,ndust
+        if (dust_ndx(n) .gt. 0 .and. hno3_d_ndx(n) .gt. 0 .or. so4_d_ndx(n) .gt. 0 ) then
+           do i = 1,plonl
+              do k = 1,plev
+                 xalk      =  &
+                      2. * (   0.03  * r(i,k,dust_ndx(n))  * 28.97/40.078    &  !3%   as Ca  
+                      + 0.006 * r(i,k,dust_ndx(n))  * 28.97/24.305 )            !0.6% as Mg                                                     
+
+                 xalke = xalk
+
+                 if ( so4_d_ndx(n) .gt. 0 ) then
+                    xalke = xalke - 2 * vmr(i,k,so4_d_ndx(n))
+                 end if
+                 if ( hno3_d_ndx(n) .gt. 0 ) then
+                    xalke = xalke -     vmr(i,k,hno3_d_ndx(n))
+                 end if
+
+!only reevaporate hno3
+                 
+                 if ( xalke .lt. 0. ) then                        
+                    if ( hno3_d_ndx(n) .gt. 0 ) then
+		       !I can at most remove the amount of HNO3 on dust
+                       delta_hno3 = min( -xalke, abs(vmr(i,k,hno3_d_ndx(n))) )
+                       vmr(i,k,hno3_ndx)      = max(vmr(i,k,hno3_ndx)      + delta_hno3 , small_value )                        
+                       vmr(i,k,hno3_d_ndx(n)) = max(hno3_d_b(i,k,n)        - delta_hno3 , small_value )                        
+                       if (trop_diag%ind_phno3_g_d .gt. 0 ) then
+                          trop_diag_array(i,k,trop_diag%ind_phno3_g_d) =  trop_diag_array(i,k,trop_diag%ind_phno3_g_d)  &
+                               + delta_hno3/delt
+                       end if
+                    end if
+                 end if
+
+                 if (trop_diag%ind_phno3_d(n) .gt. 0 ) then
+                    trop_diag_array(i,k,trop_diag%ind_phno3_d(n)) = (vmr(i,k,hno3_d_ndx(n)) - hno3_d_b(i,k,n))/delt
+                 end if
+                 if (trop_diag%ind_pso4_d(n) .gt. 0 ) then
+                    trop_diag_array(i,k,trop_diag%ind_pso4_d(n))  = (vmr(i,k,so4_d_ndx(n)) - so4_d_b(i,k,n))/delt
+                 end if
+
+              end do
+           end do
+
+        end if
+     end do 
+
+
+
+!cloud chemistry
    call mpp_clock_begin(cloud_clock_id)
       if( so2_ndx > 0 .and. so4_ndx > 0 ) then
          call setsox( pmid, plonl, delt, tfld, sh, &
@@ -762,6 +835,41 @@ logical                       :: module_is_initialized = .false.
 
         e90_ndx = get_tracer_index( MODEL_ATMOS,'e90' )
         o3s_e90_ndx = get_spc_ndx( 'O3S_E90' )
+
+        if ( do_dust ) then           
+           do n=1,n_dust_tracers
+              if ( dust_tracers(n)%is_dust)  then
+                 ndust         = ndust+1
+                 dust_ndx(ndust)   = dust_tracers(n)%tr
+              end if
+           end do
+           do n=1,n_dust_tracers
+              if ( dust_tracers(n)%is_hno3d)  then
+                 nhno3d         = nhno3d+1
+                 hno3_d_ndx(nhno3d)   = get_spc_ndx(uppercase(trim(dust_tracers(n)%name)))
+                 if (hno3_d_ndx(nhno3d) .le. 0)  call error_mesg('mo_chemdr_init', 'hno3d index missing: '//trim(dust_tracers(n)%name),FATAL)
+              end if
+           end do
+           do n=1,n_dust_tracers
+              if ( dust_tracers(n)%is_so4d)  then
+                 nso4d         = nso4d+1
+                 so4_d_ndx(nso4d)   = get_spc_ndx(uppercase(trim(dust_tracers(n)%name)))
+                 if (so4_d_ndx(nso4d) .le. 0)  call error_mesg('mo_chemdr_init', 'so4d index missing: '//trim(dust_tracers(n)%name),FATAL)
+              end if
+           end do
+
+	  if ( mpp_root_pe().eq.mpp_pe()) then
+        	  write(*,*) 'so4_d_ndx=',so4_d_ndx(1:nso4d)
+	          write(*,*) 'hno3_d_ndx=',hno3_d_ndx(1:nhno3d)
+        	  write(*,*) 'dust_ndx=',dust_ndx(1:ndust)
+           end if
+
+           if (ndust.gt.max_dust) then
+              call error_mesg('mo_chemdr_init', 'ndust>max_dust',FATAL)
+           end if
+
+        end if
+
 
         implicit_clock_id = mpp_clock_id('Chemistry: Implicit solver')
         photo_clock_id = mpp_clock_id('Chemistry: Photolysis')

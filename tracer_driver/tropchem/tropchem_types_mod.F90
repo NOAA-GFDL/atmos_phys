@@ -63,6 +63,7 @@ module tropchem_types_mod
      real                  :: rh_het_max
      integer               :: verbose
      logical               :: modulate_frac_ic 
+     logical               :: scale_dust_uptake
   end type tropchem_opt
 
   CONTAINS
