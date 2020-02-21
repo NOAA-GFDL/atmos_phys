@@ -256,7 +256,7 @@ integer :: nomphobic =0
 integer :: nomphilic =0
 integer :: nDMS      =0
 integer :: nSO2      =0
-integer :: nSO4      =0
+integer :: nSO4(6)   =0
 integer :: nSOA      =0
 integer :: nNH4NO3   =0
 integer :: nNH4      =0
@@ -473,10 +473,16 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
         nSO2    = get_tracer_index(MODEL_ATMOS,'so2')
       endif
 
-      nSO4      = get_tracer_index(MODEL_ATMOS,'simpleSO4')
-      if (nSO4 == NO_TRACER) then
-        nSO4    = get_tracer_index(MODEL_ATMOS,'so4')
+      nSO4(1)      = get_tracer_index(MODEL_ATMOS,'simpleSO4')
+      if (nSO4(1) == NO_TRACER) then
+        nSO4(1)    = get_tracer_index(MODEL_ATMOS,'so4')
       endif
+
+      nSO4(2)  = get_tracer_index(MODEL_ATMOS,'so4_d1')
+      nSO4(3)  = get_tracer_index(MODEL_ATMOS,'so4_d2')
+      nSO4(4)  = get_tracer_index(MODEL_ATMOS,'so4_d3')
+      nSO4(5)  = get_tracer_index(MODEL_ATMOS,'so4_d4')
+      nSO4(6)  = get_tracer_index(MODEL_ATMOS,'so4_d5')
 
       nSOA      = get_tracer_index(MODEL_ATMOS,'SOA')
       nNH4NO3   = get_tracer_index(MODEL_ATMOS,'nh4no3')
@@ -1184,9 +1190,15 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
 
      if (id_wetdep_so4 > 0 .or. id_wetso4_cmip > 0) then
        temp_2d = 0.0
-       if( do_donner_deep ) temp_2d = temp_2d + (96.0/WTMAIR)*total_wetdep_donner(:,:,nso4)
-       if( do_uw_conv  )    temp_2d = temp_2d + (96.0/WTMAIR)*total_wetdep_uw    (:,:,nso4)
-       if( doing_prog_clouds )       temp_2d = temp_2d - 0.096*Removal_mp%ls_wetdep(:,:,nso4)
+       do n=1,size(nso4)
+          if (nso4(n)>0) then
+             if( do_donner_deep ) temp_2d = temp_2d + (96.0/WTMAIR)*total_wetdep_donner(:,:,nso4(n))
+             if( do_uw_conv  )    temp_2d = temp_2d + (96.0/WTMAIR)*total_wetdep_uw    (:,:,nso4(n))
+             if( doing_prog_clouds )       temp_2d = temp_2d - 0.096*Removal_mp%ls_wetdep(:,:,nso4(n))
+          end if
+       end do
+
+
        if (id_wetdep_so4  > 0) used = send_data (id_wetdep_so4,  temp_2d, Time, is,js)
        if (id_wetso4_cmip > 0) used = send_data (id_wetso4_cmip, temp_2d, Time, is,js)
      endif
