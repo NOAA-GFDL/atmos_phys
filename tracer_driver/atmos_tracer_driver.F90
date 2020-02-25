@@ -545,7 +545,7 @@ real, dimension(size(r,1),size(r,2),size(r,3)) :: rtndbcphob, rtndbcphil
 real, dimension(size(r,1),size(r,2),size(r,3)) :: rtndomphob, rtndomphil
 real, dimension(size(r,1),size(r,2),size(r,3)) :: rtndco2, rtndco2_emis
 real, dimension(size(r,1),size(r,2),size(rdt,4)) :: dsinku
-real, dimension(size(r,1),size(r,2)) :: hno3d_setl, so4d_setl
+real, dimension(size(r,1),size(r,2)) :: hno3d_setl, all_so4d_setl
 real, dimension(size(r,1),size(r,2)) ::  w10m_ocean, w10m_land
 integer :: year,month,day,hour,minute,second
 integer :: jday
@@ -1420,13 +1420,13 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
 !------------------------------------------------------------------------
   call mpp_clock_begin (dust_clock)
   hno3d_setl(:,:) = 0.
-  so4d_setl(:,:) = 0.
+  all_so4d_setl(:,:) = 0.
 
    if (do_dust) then
       call atmos_dust_sourcesink(lon,lat,land,pwt, dt, &
               z_half, pfull, w10m_land, t, rh, &
               tracer(:,:,:,:), dsinku(:,:,:), rdt(:,:,:,:), &
-              hno3d_setl(:,:), so4d_setl, &
+              hno3d_setl(:,:), all_so4d_setl(:,:), &
               Time, is,ie,js,je, kbot)
    endif
    call mpp_clock_end (dust_clock)
@@ -1441,11 +1441,11 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
    if (id_dryso4 > 0) then
       if (nSO4_cmip > 0) then
          used = send_data (id_dryso4, 0.096*1.e3*pwt(:,:,kd)*dsinku(:,:,nSO4_cmip)/WTMAIR &
-              + 0.096 * so4d_setl, &
+              + 0.096 * all_so4d_setl, &
               Time_next, is_in=is, js_in=js)
       else if (nSO4 > 0) then ! fast-aerosol simpleSO4
          used = send_data (id_dryso4, 0.096*1.e3*pwt(:,:,kd)*dsinku(:,:,nSO4)/WTMAIR &
-              + 0.096 * so4d_setl, &
+              + 0.096 * all_so4d_setl, &
               Time_next, is_in=is, js_in=js)
       endif
    endif

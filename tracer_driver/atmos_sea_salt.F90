@@ -890,7 +890,7 @@ subroutine print_table(unit)
 
    write(unit,'(x,121("-"))')
    write(unit,'(3x,99(x,a16))')'seasalt tr. name','emission scheme ','atm. tr. number','ra','rb', &
-       'seasaltref','seasaltden','seasaltscheme'
+       'seasaltref','seasaltden'
    write(unit,'(x,121("-"))')
    do i = 1,n_seasalt_tracers
       write(unit,'(x,i2,x,a16,1x,a16,99(x,g16.6))')&

@@ -121,7 +121,7 @@ contains
 ! this subroutine calculates tendencies for all dust tracers, and reports
 ! total fields, like total dust emission and settling
 subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
-       zhalf, pfull, w10m, t, rh, tracer, dsinku, rdt, hno3d_setl, so4d_setl, Time, is,ie,js,je, kbot)
+       zhalf, pfull, w10m, t, rh, tracer, dsinku, rdt, hno3d_setl, all_so4d_setl, Time, is,ie,js,je, kbot)
 
   real, intent(in) :: lon(:,:), lat(:,:) ! geographical coordinates, units?
   real, intent(in) :: frac_land(:,:) ! fraction of land in the grid cell
@@ -136,7 +136,7 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
   real, intent(in) :: dt ! model timestep
   real, intent(inout) :: rdt(:,:,:,:) ! tendency of tracers, to be updated for dust tracers
   real, intent(out)   :: hno3d_setl(:,:)
-  real, intent(out)   :: so4d_setl(:,:)
+  real, intent(out)   :: all_so4d_setl(:,:)
   type(time_type), intent(in) :: Time ! current model time
   integer, intent(in) :: is, ie, js, je ! boundaries of physical window
   integer, intent(in), optional :: kbot(:,:) ! index of bottom level
@@ -148,7 +148,6 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
      source, &        ! source fraction
      all_dust_setl, & ! total dust sedimentation flux at the bottom of the atmos
      all_hno3d_setl, &    ! total hno3d sedimentation flux at the bottom of the atmos
-     all_so4d_setl, &     ! total so4d  sedimentation flux at the bottom of the atmos
      dust_emis, &     ! dust emission flux at the bottom of the atmos
      dust_conc, &     ! bin   dust concentration at the bottom of the atmos
      all_dust_conc, & ! total dust concentration at the bottom of the atmos
@@ -171,7 +170,6 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
   all_so4d_setl(:,:)   = 0.0
 
   hno3d_setl(:,:) = 0.0
-  so4d_setl(:,:)  = 0.0
 
   !----------- dust sources on local grid
   source(:,:)=0.0
@@ -222,7 +220,6 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
         ! accumulate total dust deposition flux
         all_so4d_setl(:,:) = all_so4d_setl(:,:) &
                + dust_tracers(i)%dust_setl(is:ie,js:je) + 1.e3*pwt(:,:,kd)/WTMAIR*dsinku(:,:,ndust) ! shouldn't kd be kbot?
-        so4d_setl(:,:) = so4d_setl(:,:) + dust_tracers(i)%dust_setl(is:ie,js:je)
      endif
      
 
@@ -593,11 +590,19 @@ subroutine atmos_dust_init (lonb, latb, axes, Time, mask)
                      trim(dust_tracers(i)%name)//'_emis', axes(1:2),Time,  &
                      trim(dust_tracers(i)%name)//'_emis', 'kg/m2/s',       &
                      missing_value=-999.  )
-     ! Register a diagnostic field : total settling of dust
-     dust_tracers(i)%id_dust_setl = register_diag_field ( module_name,     &
-                     trim(dust_tracers(i)%name)//'_setl', axes(1:2),Time,  &
-                     trim(dust_tracers(i)%name)//'_setl', 'kg/m2/s',       &
-                     missing_value=-999.  )
+     
+     if (dust_tracers(i)%is_dust) then
+        ! Register a diagnostic field : total settling of dust
+        dust_tracers(i)%id_dust_setl = register_diag_field ( module_name,     &
+             trim(dust_tracers(i)%name)//'_setl', axes(1:2),Time,  &
+             trim(dust_tracers(i)%name)//'_setl', 'kg/m2/s',       &
+             missing_value=-999.  )
+     else
+        dust_tracers(i)%id_dust_setl = register_diag_field ( module_name,     &
+             trim(dust_tracers(i)%name)//'_setl', axes(1:2),Time,  &
+             trim(dust_tracers(i)%name)//'_setl', 'mole/m2/s',       &
+             missing_value=-999.  )
+     end if
   enddo  
   ! print out information about dust tracers
   if (mpp_pe()==mpp_root_pe()) then
