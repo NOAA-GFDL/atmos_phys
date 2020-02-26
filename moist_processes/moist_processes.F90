@@ -484,6 +484,10 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
       nSO4(5)  = get_tracer_index(MODEL_ATMOS,'so4_d4')
       nSO4(6)  = get_tracer_index(MODEL_ATMOS,'so4_d5')
 
+      if (mpp_root_pe().eq.mpp_pe()) then
+         write(*,*) 'nSO4: ',nSO4
+      end if
+
       nSOA      = get_tracer_index(MODEL_ATMOS,'SOA')
       nNH4NO3   = get_tracer_index(MODEL_ATMOS,'nh4no3')
       nNH4      = get_tracer_index(MODEL_ATMOS,'nh4')
@@ -1198,7 +1202,6 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
           end if
        end do
 
-
        if (id_wetdep_so4  > 0) used = send_data (id_wetdep_so4,  temp_2d, Time, is,js)
        if (id_wetso4_cmip > 0) used = send_data (id_wetso4_cmip, temp_2d, Time, is,js)
      endif
@@ -1243,8 +1246,10 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
 
      if (id_wetdep_dust > 0 .or. id_wetdust_cmip > 0) then
      do n=1, n_dust_tracers
-        nbin_dust=dust_tracers(n)%tr
-        total_wetdep_dust(:,:)=total_wetdep_dust(:,:)+total_wetdep(:,:,nbin_dust)
+        if (dust_tracers(n)%is_dust) then
+           nbin_dust=dust_tracers(n)%tr
+           total_wetdep_dust(:,:)=total_wetdep_dust(:,:)+total_wetdep(:,:,nbin_dust)
+        end if
      enddo
      call atmos_dust_wetdep_flux_set(-total_wetdep_dust, is,ie,js,je)
        if (id_wetdep_dust  > 0) used = send_data (id_wetdep_dust,  total_wetdep_dust, Time, is,js)
