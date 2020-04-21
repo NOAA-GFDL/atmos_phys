@@ -264,8 +264,8 @@
       ! Generic Variables
       !=================================================================
 
-      CHARACTER(LEN=15) :: VERSION
-      COMMON /CGEN/        VERSION
+      CHARACTER(LEN=15) :: version
+      COMMON /CGEN/        version
       ! CGEN is read-only
 
       REAL*8            :: GREAT, TINY, TINY2, ZERO, ONE

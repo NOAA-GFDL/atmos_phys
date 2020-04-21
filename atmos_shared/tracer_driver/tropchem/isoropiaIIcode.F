@@ -491,7 +491,7 @@
 !
       DATA IPROB/0/, METSTBL/0/
 !
-      DATA VERSION /'2.0 (03/19/07)'/
+      DATA version /'2.0 (03/19/07)'/
 !
 ! *** OTHER PARAMETERS ***********************************************
 !
