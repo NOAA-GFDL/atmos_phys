@@ -13,7 +13,7 @@ module atmos_dust_mod
 ! </CONTACT>
 !-----------------------------------------------------------------------
 
-use        constants_mod, only : PI, GRAV, RDGAS, DENS_H2O, PSTD_MKS, WTMAIR
+use        constants_mod, only : PI, GRAV, RDGAS, DENS_H2O, WTMAIR
 use              mpp_mod, only : input_nml_file 
 use              fms_mod, only : write_version_number, mpp_pe,  mpp_root_pe, &
                                  open_namelist_file, close_file, file_exist, &
@@ -27,7 +27,8 @@ use   tracer_manager_mod, only : get_number_tracers, get_tracer_index, &
                                  get_tracer_names, set_tracer_atts, & 
                                  query_method, NO_TRACER
 use    field_manager_mod, only : parse, MODEL_ATMOS, MODEL_LAND
-use atmos_tracer_utilities_mod, only : wet_deposition, dry_deposition
+use atmos_tracer_utilities_mod, only : wet_deposition, dry_deposition, &
+                                 sedimentation_velocity, sedimentation_flux
 use interpolator_mod,      only: interpolate_type, interpolator_init, &
                                  obtain_interpolator_time_slices, &
                                  unset_interpolator_time_flag, &
@@ -295,7 +296,7 @@ subroutine atmos_dust_sourcesink1 ( &
   ! ---- local vars
   integer :: outunit, unit, ierr, io
   integer  i, j, k, id, jd, kd, kb
-  real, dimension(size(dust,3)) :: vdep, setl, dz, air_dens, qn, qn1
+  real, dimension(size(dust,3)) :: vdep, setl, dz, air_dens
 
   real, parameter :: mtcm = 100.  ! meter to cm
   real, parameter :: mtv  = 1.    ! factor conversion for mixing ratio of dust
@@ -347,42 +348,10 @@ subroutine atmos_dust_sourcesink1 ( &
         rho_wet_dust = ratio_r*dustden+(1.-ratio_r)*DENS_H2O ! Density of wet aerosol [kg/m3]
         vdep(k)      = sedimentation_velocity(t(i,j,k),pfull(i,j,k),rwet,rho_wet_dust) ! Settling velocity [m/s]
      enddo
-     if (use_sj_sedimentation_solver) then
-       qn(:)=dust(i,j,:)
-       qn1(1)=qn(1)*dz(1)/(dz(1)+dt*vdep(1))
-       do k=2,kb 
-         qn1(k)=(qn(k)*dz(k)+dt*qn1(k-1)*vdep(k-1)*air_dens(k-1)/air_dens(k))/(dz(k)+dt*vdep(k))
-       enddo
-       dust_dt(i,j,:)=dust_dt(i,j,:)+(qn1(:)-qn(:))/dt
-       setl(kb) = qn1(kb)*air_dens(kb)/mtv*vdep(kb) !! ter, 2016-05-13 vdep(k) is outside of loop, so k > kb.  Switched k to kb 
-
-!---> h1g, 2016-04-05
-       if( dust_debug ) then
-!$OMP CRITICAL
-
-     !  if (mpp_pe()==mpp_root_pe()) then
-     !      write(logunit,'("DUST ",2i5," qn(kb)=",e12.4," qn1(kb)=",e12.4," vdep(kb)=",e12.4," air_dens(kb)=",e12.4," dz(kb)=",e12.4," dt=",e12.4," dust_dt=",e12.4," setl=",e12.4)')  &
-     !               i,j,qn(kb),qn1(kb),vdep(kb),air_dens(kb),dz(kb),dt,dust_dt(i,j,kb),setl(kb)
-     !  endif
-!$OMP END CRITICAL  
-       end if ! dust_debug
-!<--- h1g, 2016-04-05
-
-     else
-       do k=1,kb
-        if (dust(i,j,k) > 0.0) then
-          setl(k)=dust(i,j,k)*air_dens(k)/mtv*vdep(k)    ! settling flux [kg/m2/s]
-        endif
-       enddo
-       dust_dt(i,j,1)=dust_dt(i,j,1)-setl(1)/pwt(i,j,1)*mtv
-       dust_dt(i,j,2:kb)=dust_dt(i,j,2:kb) &
-          + ( setl(1:kb-1) - setl(2:kb) )/pwt(i,j,2:kb)*mtv
-     endif
-     if (in_mmr) then
-        dust_setl(i,j)  = setl(kb)                 ! at the bottom of the atmos
-     else
-        dust_setl(i,j)  = 1000.*setl(kb)/WTMAIR    ! at the bottom of the atmos        
-     end if
+     call sedimentation_flux(use_sj_sedimentation_solver,kb, &
+             dt,mtv,dz,vdep,air_dens,&
+             pwt(i,j,:),dust(i,j,:),dust_dt(i,j,:),setl)
+     dust_setl(i,j)  = setl(kb)          ! at the bottom of the atmos
      rho_air = air_dens(kb)           ! rho_air is not defined
      dsetl_dtr(i,j) = rho_air/mtv*vdep(kb) ! derivative of settling flux w.r.t tracer conc
      if (do_surf_exch) &
@@ -392,23 +361,6 @@ subroutine atmos_dust_sourcesink1 ( &
   enddo
   enddo 
 end subroutine atmos_dust_sourcesink1
-
-
-!#######################################################################
-! calculates the vertical velocity of dust settling
-elemental real function sedimentation_velocity(T,p,rwet,rho_wet_dust) result(vdep)
-   real, intent(in) :: T            ! air temperature, deg K
-   real, intent(in) :: p            ! pressure, Pa
-   real, intent(in) :: rwet         ! radius of dust particles, m
-   real, intent(in) :: rho_wet_dust ! density of dust particles, kg/m3
- 
-   real :: viscosity, free_path, C_c
-   viscosity = 1.458E-6 * T**1.5/(T+110.4)     ! Dynamic viscosity
-   free_path = 6.6e-8*T/293.15*(PSTD_MKS/p)
-   C_c = 1.0 + free_path/rwet * &              ! Slip correction [none]
-               (1.257+0.4*exp(-1.1*rwet/free_path))
-   vdep = 2./9.*C_c*GRAV*rho_wet_dust*rwet**2/viscosity  ! Settling velocity [m/s]
-end function sedimentation_velocity
 
 
 !######################################################################
@@ -843,7 +795,6 @@ subroutine print_table(unit)
    integer, intent(in) :: unit
    
    integer :: i
-
 
    write(unit,'(x,121("-"))')
    write(unit,'(3x,99(x,a16))')'dust tr. name','atm. tr. number','ra','rb', &

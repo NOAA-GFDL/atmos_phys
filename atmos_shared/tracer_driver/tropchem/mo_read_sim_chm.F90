@@ -43,7 +43,7 @@ logical                       :: module_is_initialized = .false.
 !            ... Dummy args
 !--------------------------------------------------------
       integer, intent(out) :: sim_file_cnt
-      character(len=32), intent(in) :: sim_data_flsp
+      character(len=128), intent(in) :: sim_data_flsp
 
 !--------------------------------------------------------
 !            ... Local variables

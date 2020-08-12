@@ -233,10 +233,10 @@ logical                       :: module_is_initialized = .false.
 !                             nrain, &                ! release of strt precip ( 1/s )
 !                             nevapr, &               ! evap precip ( 1/s )
                               cwat, &                 ! total cloud water (kg/kg)
-                              fliq, &                 !liquid fraction
-	                          tfld, &                 ! midpoint temperature
+                              fliq, &                 ! liquid fraction
+                              tfld, &                 ! midpoint temperature
                               sh, &                   ! specific humidity ( kg/kg )
-                              sulfate, &              ! sulfate aerosol
+                              sulfate, &              ! off-line sulfate aerosol VMR (mol/mol)
                               phalf,   &              ! pressure at boundaries (Pa)
                               pwt
       type(psc_type), intent(in) :: &
@@ -722,7 +722,7 @@ logical                       :: module_is_initialized = .false.
                  
                  if ( xalke .lt. 0. ) then                        
                     if ( hno3_d_ndx(n) .gt. 0 ) then
-		       !I can at most remove the amount of HNO3 on dust
+                       !I can at most remove the amount of HNO3 on dust
                        delta_hno3 = min( -xalke, abs(vmr(i,k,hno3_d_ndx(n))) )
                        vmr(i,k,hno3_ndx)      = max(vmr(i,k,hno3_ndx)      + delta_hno3 , small_value )                        
                        vmr(i,k,hno3_d_ndx(n)) = max(hno3_d_b(i,k,n)        - delta_hno3 , small_value )                        
@@ -858,10 +858,10 @@ logical                       :: module_is_initialized = .false.
               end if
            end do
 
-	  if ( mpp_root_pe().eq.mpp_pe()) then
-        	  write(*,*) 'so4_d_ndx=',so4_d_ndx(1:nso4d)
-	          write(*,*) 'hno3_d_ndx=',hno3_d_ndx(1:nhno3d)
-        	  write(*,*) 'dust_ndx=',dust_ndx(1:ndust)
+           if ( mpp_root_pe().eq.mpp_pe()) then
+                  write(*,*) 'so4_d_ndx=',so4_d_ndx(1:nso4d)
+                  write(*,*) 'hno3_d_ndx=',hno3_d_ndx(1:nhno3d)
+                  write(*,*) 'dust_ndx=',dust_ndx(1:ndust)
            end if
 
            if (ndust.gt.max_dust) then

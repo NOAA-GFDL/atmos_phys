@@ -24,7 +24,8 @@ use   tracer_manager_mod, only : get_number_tracers, get_tracer_index, &
                                  get_tracer_names, set_tracer_atts, & 
                                  query_method, NO_TRACER
 use    field_manager_mod, only : parse, MODEL_ATMOS
-use atmos_tracer_utilities_mod, only : wet_deposition, dry_deposition
+use atmos_tracer_utilities_mod, only : wet_deposition, dry_deposition, &
+                                 sedimentation_velocity,sedimentation_flux
 
 implicit none
 private
@@ -50,7 +51,7 @@ type :: seasalt_data_type
    real          :: seasaltref = 2.e-6  ! effective radius of the dry seasalt particles, m
    real          :: seasaltden = 2200.0 ! density of dry seasalt particles, kg/m3
    ! diagnostic IDs
-   integer       :: id_seasalt_emis = -1, id_seasalt_setl = -1, id_vdep = -1
+   integer       :: id_seasalt_emis = -1, id_seasalt_setl = -1
 end type seasalt_data_type
 
 logical :: do_seasalt = .FALSE.
@@ -169,8 +170,6 @@ subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
      scale_sst_emis
   real, dimension(size(tracer,1),size(tracer,2),size(tracer,3)) :: &
      seasalt_dt           ! calculated seasalt tendency
-  real, dimension(size(tracer,1),size(tracer,2),size(tracer,3)) :: &
-     vdep           ! settling velocity
 
   integer :: i
   integer :: kd    ! vertical size of our arrays
@@ -192,15 +191,10 @@ subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
         seasalt_tracers(i)%ra, seasalt_tracers(i)%rb, &
         seasalt_tracers(i)%seasaltscheme, &
         zhalf, pfull, w10m, t, t_surf, rh, &
-        tracer(:,:,:,nseasalt), seasalt_dt, seasalt_emis, seasalt_setl, vdep, dt, &
+        tracer(:,:,:,nseasalt), seasalt_dt, seasalt_emis, seasalt_setl, dt, &
         is,ie,js,je, kbot,scale_sst_emis)
      ! update seasalt tendencies
      rdt(:,:,:,nseasalt)=rdt(:,:,:,nseasalt)+seasalt_dt(:,:,:)
-
-     ! Settling velocity
-     if (seasalt_tracers(i)%id_vdep > 0) then
-        used = send_data ( seasalt_tracers(i)%id_vdep, vdep, Time, is_in=is,js_in=js )
-     end if
      
      ! Send the emission data to the diag_manager for output.
      if (seasalt_tracers(i)%id_seasalt_emis > 0 ) then
@@ -251,7 +245,7 @@ subroutine atmos_seasalt_sourcesink1 ( &
        ocn_flx_fraction, pwt, &
        seasaltden, seasaltref, seasaltra, seasaltrb,seasalt_scheme, &
        zhalf, pfull, w10m, t, t_surf, rh, &
-       seasalt, seasalt_dt, seasalt_emis, seasalt_setl, vdep, dt, is,ie,js,je,kbot,scale_sst)
+       seasalt, seasalt_dt, seasalt_emis, seasalt_setl, dt, is,ie,js,je,kbot,scale_sst)
 
   real, intent(in),  dimension(:,:)   :: ocn_flx_fraction
   real, intent(in) :: seasaltref ! effective radius of the dry seasalt particles, m
@@ -270,7 +264,6 @@ subroutine atmos_seasalt_sourcesink1 ( &
   real, intent(out) :: seasalt_emis(:,:) ! seasalt emission
   real, intent(out) :: scale_sst(:,:) ! seasalt emission
   real, intent(out) :: seasalt_setl(:,:) ! grav. sedimentation flux at the atmos bottom 
-  real, intent(out) :: vdep(:,:,:)
 
   ! ---- local vars
   integer  i, j, k, id, jd, kd, kb, ir, irh
@@ -285,8 +278,8 @@ subroutine atmos_seasalt_sourcesink1 ( &
   real :: ratio_r, rho_wet_seasalt, seasalt_flux
   real :: rho_air
   real :: a1, a2, Bcoef, r, dr, rmid, Acoef
-  real, dimension(size(pfull,3))  :: seasalt_conc0, seasalt_conc1
-  real, dimension(size(pfull,3))  :: dz, air_dens, qn, qn1
+  real, dimension(size(pfull,3))  :: vdep, seasalt_conc0, seasalt_conc1
+  real, dimension(size(pfull,3))  :: dz, air_dens
   real :: sst,tscale
   integer :: istep, nstep
 
@@ -470,10 +463,10 @@ subroutine atmos_seasalt_sourcesink1 ( &
            free_path=6.6e-8*t(i,j,k)/293.15*(PSTD_MKS/pfull(i,j,k))
            C_c=1. + free_path/seasaltref* &            ! Slip correction [none]
              (1.257+0.4*exp(-1.1*seasaltref/free_path))
-           vdep(i,j,k)=2./9.*C_c*GRAV*rho_wet_seasalt*rwet**2./viscosity
+           vdep(k)=2./9.*C_c*GRAV*rho_wet_seasalt*rwet**2./viscosity
         else
           ! New calculation drops effective radius seasaltref in favor of rwet
-          vdep(i,j,k)= sedimentation_velocity(t(i,j,k),pfull(i,j,k),rwet,rho_wet_seasalt) ! Settling velocity [m/s]
+          vdep(k)= sedimentation_velocity(t(i,j,k),pfull(i,j,k),rwet,rho_wet_seasalt) ! Settling velocity [m/s]
         endif
 
         if (vsetl_modulation) then 
@@ -487,41 +480,25 @@ subroutine atmos_seasalt_sourcesink1 ( &
                  dmidw = dmid(iv)*growth_table(irh)
                  !dM/dDw = dV/dln(D) * growth * rho / rw
                  salt_mass  = salt_v(iv) * growth_table(irh) * rho_wet_seasalt / (dmidw*0.5)
-                 vdep_weight = vdep_weight + salt_mass * vdep(i,j,k) * (dmidw/(2*rwet*1e6))**2 * (2*drv*growth_table(irh))
+                 vdep_weight = vdep_weight + salt_mass * vdep(k) * (dmidw/(2*rwet*1e6))**2 * (2*drv*growth_table(irh))
                  salt_mass_total = salt_mass_total + salt_mass * (2*drv*growth_table(irh))
               end if
            end do
 
            !update vts
-           vdep(i,j,k) = vdep_weight/salt_mass_total
+           vdep(k) = vdep_weight/salt_mass_total
 
         end if
 
       enddo
       if (use_sj_sedimentation_solver) then
-        qn(:)=seasalt(i,j,:)
-        qn1(1)=qn(1)*dz(1)/(dz(1)+dt*vdep(i,j,1))
-        do k=2,kb
-          qn1(k)=(qn(k)*dz(k)+dt*qn1(k-1)*vdep(i,j,k-1)*air_dens(k-1)/air_dens(k))/(dz(k)+dt*vdep(i,j,k))
-        enddo
-        seasalt_dt(i,j,:)=seasalt_dt(i,j,:)+(qn1(:)-qn(:))/dt
-        seasalt_setl(i,j) = qn1(kb)*air_dens(kb)/mtv*vdep(i,j,kb)
-
-!---> h1g, 2016-04-05
-       if( ssalt_debug ) then
-!$OMP CRITICAL
-
-!  if (mpp_pe()==mpp_root_pe()) then
-!      write(logunit,'("SALT ",2i5," qn(kb)=",e12.4," qn1(kb)=",e12.4," vdep(i,j,kb)=",e12.4," air_dens(kb)=",e12.4," dz(kb)=",e12.4," dt=",e12.4," dust_dt=",e12.4," setl=",e12.4)')  &
-!                i,j,qn(kb),qn1(kb),vdep(i,j,kb),air_dens(kb),dz(kb),dt,seasalt_dt(i,j,kb),seasalt_setl(i,j)
-!  endif
-!$OMP END CRITICAL  
-       end if ! ssalt_debug
-!<--- h1g, 2016-04-05
-
+        call sedimentation_flux(use_sj_sedimentation_solver,kb, &
+             dt,mtv,dz,vdep,air_dens,&
+             pwt(i,j,:),seasalt(i,j,:),seasalt_dt(i,j,:),setl)
+        seasalt_setl(i,j) = setl(kb)
       else
         do k=1,kb
-          step = (zhalf(i,j,k)-zhalf(i,j,k+1)) / vdep(i,j,k) / 2.
+          step = (zhalf(i,j,k)-zhalf(i,j,k+1)) / vdep(k) / 2.
           nstep = max(nstep, int( dt/ step) )
 !!! To avoid spending too much time on cycling the settling in case
 !!! of very large particles falling through a tiny layer, impose
@@ -531,7 +508,7 @@ subroutine atmos_seasalt_sourcesink1 ( &
 !!! way would be to implement semi-lagrangian technique.
           if (nstep.gt.nstep_max) then
             nstep = nstep_max
-            vdep(i,j,k)=(zhalf(i,j,k)-zhalf(i,j,k+1))*nstep / 2. /dt
+            vdep(k)=(zhalf(i,j,k)-zhalf(i,j,k+1))*nstep / 2. /dt
           endif
         enddo
         step = dt / nstep
@@ -542,7 +519,7 @@ subroutine atmos_seasalt_sourcesink1 ( &
             rho_air = pfull(i,j,k)/t(i,j,k)/RDGAS ! Air density [kg/m3]
             if (seasalt_conc0(k).gt.0.) then
 !!!           settling flux [kg/m2/s]
-              setl(k)=seasalt_conc0(k)*rho_air/mtv*vdep(i,j,k)
+              setl(k)=seasalt_conc0(k)*rho_air/mtv*vdep(k)
             else
               setl(k)=0.
             endif
@@ -555,30 +532,12 @@ subroutine atmos_seasalt_sourcesink1 ( &
         enddo
         seasalt_dt(i,j,:)=seasalt_dt(i,j,:)+ (seasalt_conc1(:)-seasalt(i,j,:))/dt
         seasalt_setl(i,j)=seasalt_setl(i,j)/dt
-     endif
+      endif
     enddo
   enddo
 
 
 end subroutine atmos_seasalt_sourcesink1
-
-
-!#######################################################################
-! calculates the vertical velocity of seasalt settling
-elemental real function sedimentation_velocity(T,p,rwet,rho_wet_seasalt) result(vdep)
-   real, intent(in) :: T            ! air temperature, deg K
-   real, intent(in) :: p            ! pressure, Pa
-   real, intent(in) :: rwet         ! radius of seasalt particles, m
-   real, intent(in) :: rho_wet_seasalt ! density of seasalt particles, kg/m3
- 
-   real :: viscosity, free_path, C_c
-   viscosity = 1.458E-6 * T**1.5/(T+110.4)     ! Dynamic viscosity
-   free_path = 6.6e-8*T/293.15*(PSTD_MKS/p)
-   C_c = 1.0 + free_path/rwet * &              ! Slip correction [none]
-               (1.257+0.4*exp(-1.1*rwet/free_path))
-   vdep = 2./9.*C_c*GRAV*rho_wet_seasalt*rwet**2/viscosity  ! Settling velocity [m/s]
-end function sedimentation_velocity
-
 
 !######################################################################
 ! given a tracer index, returns TRUE if this is one of seasalt tracers
@@ -778,12 +737,6 @@ subroutine atmos_sea_salt_init (lonb, latb, axes, Time, mask)
                      trim(seasalt_tracers(i)%name)//'_setl', axes(1:2),Time,  &
                      trim(seasalt_tracers(i)%name)//'_setl', 'kg/m2/s',       &
                      missing_value=-999.  )
-
-     seasalt_tracers(i)%id_vdep = register_diag_field ( module_name,     &
-                     trim(seasalt_tracers(i)%name)//'_vsetl', axes(1:3),Time,  &
-                     trim(seasalt_tracers(i)%name)//'_vsetl', 'm/s',       &
-                     missing_value=-999.  )
-
   enddo  
 
   !estimate volume size distribution of sea salt (based on Jaegle (2011))

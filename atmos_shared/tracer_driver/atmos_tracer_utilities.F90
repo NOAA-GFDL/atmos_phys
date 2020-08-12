@@ -67,7 +67,8 @@ module atmos_tracer_utilities_mod
        DENS_H2O, & ! Water density [kg/m3]
        WTMH2O, &   ! Water molecular weight [g/mole]
        WTMAIR, &   ! Air molecular weight [g/mole]
-       AVOGNO      ! Avogadro's number
+       AVOGNO, &   ! Avogadro's number
+       PSTD_MKS
   use   interpolator_mod, only : interpolator,  &
        obtain_interpolator_time_slices, &
        unset_interpolator_time_flag, &
@@ -96,7 +97,9 @@ module atmos_tracer_utilities_mod
        get_cldf, &
        sjl_fillz, &
        get_cmip_param, &
-       get_chem_param
+       get_chem_param, &
+       sedimentation_velocity, &
+       sedimentation_flux
 
   !---- version number -----
   character(len=128) :: version = '$Id$'
@@ -2587,6 +2590,58 @@ subroutine sjl_fillz(im, km, nq, q, dp)
     enddo
  enddo
 end subroutine sjl_fillz
+!#######################################################################
+! calculates the vertical velocity of dust settling
+elemental real function sedimentation_velocity(T,p,rwet,rho_wet_dust) result(vdep)
+   real, intent(in) :: T            ! air temperature, deg K
+   real, intent(in) :: p            ! pressure, Pa
+   real, intent(in) :: rwet         ! radius of dust particles, m
+   real, intent(in) :: rho_wet_dust ! density of dust particles, kg/m3
+
+   real :: viscosity, free_path, C_c
+   viscosity = 1.458E-6 * T**1.5/(T+110.4)     ! Dynamic viscosity
+   free_path = 6.6e-8*T/293.15*(PSTD_MKS/p)
+   C_c = 1.0 + free_path/rwet * &              ! Slip correction [none]
+               (1.257+0.4*exp(-1.1*rwet/free_path))
+   vdep = 2./9.*C_c*GRAV*rho_wet_dust*rwet**2/viscosity  ! Settling velocity [m/s]
+end function sedimentation_velocity
+!#######################################################################
+subroutine sedimentation_flux(sj_scheme,kb,dt,mtv,dz,vdep,air_dens,&
+                pwt,tracer,tracer_dt,setl)
+     implicit none
+     integer, intent(in) :: kb !< index for the buttom layer
+     real, intent(in) :: dt, mtv !< model timestep , mixing ratio factor conversion
+     logical, intent(in) :: sj_scheme !< .true. if using SJ's scheme
+     real, intent(in),     dimension(:) :: dz, air_dens, pwt !<layer thickness, density, mass per unit area
+     real, intent(in),     dimension(:) :: vdep      !< Settling velocity [m/s]
+     real, intent(in),     dimension(:) :: tracer    !< tracer concentration
+     real, intent(inout),  dimension(:) :: tracer_dt !< tracer tendency
+     real, intent(inout),  dimension(:) :: setl !< tracer settling flux [kg/m2/s]
+!    local vars
+     real, dimension(size(dz)) :: qn,qn1
+     integer  k
+
+     setl(:)=0.
+     qn(:)=tracer(:)
+     if (sj_scheme) then
+       qn1(1)=qn(1)*dz(1)/(dz(1)+dt*vdep(1))
+       do k=2,kb
+         qn1(k)=(qn(k)*dz(k)+dt*qn1(k-1)*vdep(k-1)*air_dens(k-1)/air_dens(k))/(dz(k)+dt*vdep(k))
+       enddo
+       tracer_dt(:)=tracer_dt(:)+(qn1(:)-qn(:))/dt
+       setl(kb) = qn1(kb)*air_dens(kb)/mtv*vdep(kb)
+     else
+       do k=1,kb
+        if (tracer(k) > 0.0) then
+          setl(k)=tracer(k)*air_dens(k)/mtv*vdep(k)    ! settling flux [kg/m2/s]
+        endif
+       enddo
+       tracer_dt(1)=tracer_dt(1)-setl(1)/pwt(1)*mtv
+       tracer_dt(2:kb)=tracer_dt(2:kb) &
+          + ( setl(1:kb-1) - setl(2:kb) )/pwt(2:kb)*mtv
+     endif
+end subroutine sedimentation_flux
+! ==============================================================================
 
 end module atmos_tracer_utilities_mod
 
