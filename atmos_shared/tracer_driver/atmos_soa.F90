@@ -261,7 +261,7 @@ character(len=7), parameter :: mod_name = 'tracers'
          write (outunit,40) 'NO3',nNO3
          write (logunit,40) 'NO3',nNO3
       end if
-  40  format (A,' was initialized as tracer number ',i2)
+  40  format (A,' was initialized as tracer number ',i3)
       if (use_interactive_tracers) then
          if (mpp_pe() == mpp_root_pe()) then
             write (outunit,*) 'atmos_soa_mod: Using interactive tracers'

@@ -18,6 +18,8 @@
       use field_manager_mod,    only : MODEL_ATMOS       
       use MO_FASTJX_MOD,        only : JVN_, fastjx_init, fastjx_end, fastjx_photo
       use sat_vapor_pres_mod, only : compute_qs      
+      use tropchem_types_mod, only : tropchem_opt
+      use aerosol_thermodynamics, only: AERO_ISORROPIA
          
       implicit none
       private
@@ -49,7 +51,7 @@
                   jtolooh_ndx, jterpooh_ndx, jacet_ndx, jmgly_ndx,jmvk_ndx
       integer ::  jh2o2a_ndx, jhno2_ndx, jo3a_ndx , jo1d_ndx 
       integer ::  so4_ndx, bc1_ndx, bc2_ndx, oc1_ndx, oc2_ndx, soa_ndx, &
-                  ssa_ndx(5), dust_ndx(5)   
+                  ssa_ndx(5), dust_ndx(5),nh4_ndx, nh4no3_ndx   
 !jul--
       integer ::  ox_ndx, o3_ndx, nqa, nqi, nql, nqq
 
@@ -326,6 +328,8 @@
         o3_ndx = get_tracer_index(MODEL_ATMOS,'OX')      
       end if
       so4_ndx     = get_tracer_index(MODEL_ATMOS,'so4')
+      nh4_ndx     = get_tracer_index(MODEL_ATMOS,'nh4')
+      nh4no3_ndx     = get_tracer_index(MODEL_ATMOS,'nh4no3')
       bc1_ndx     = get_tracer_index(MODEL_ATMOS,'bcphob')
       bc2_ndx     = get_tracer_index(MODEL_ATMOS,'bcphil')
       oc1_ndx     = get_tracer_index(MODEL_ATMOS,'omphob')
@@ -459,10 +463,10 @@
                          qfld, &
                          r,    &
                          Time, &
-                         time_varying_solarflux  )
+                         time_varying_solarflux, trop_option  )
 
       use CHEM_MODS_MOD, only : ncol_abs, phtcnt
-      use time_manager_mod, only : time_type      
+      use time_manager_mod, only : time_type     
 
       implicit none
 
@@ -493,6 +497,8 @@
                              r(:,:,:)                  ! tracers' concentrtaions             
       real,   intent(out) :: photos(:,:,:)             ! photodissociation rates (s-1)
       logical, intent(in) :: time_varying_solarflux    ! solar cycle on fastjx?
+      type(tropchem_opt), intent(in) :: trop_option 
+
 !-----------------------------------------------------------------
 !            ... Local variables
 !-----------------------------------------------------------------
@@ -643,7 +649,7 @@
 !-----------------------------------------------------------------
 !        ... Assign aerosols info
 !-----------------------------------------------------------------
-      call set_aerosol_mc(r(:,:,:),pwt(:,:),relhum(:,:), aerop(:,:,:),aeron(:,:,:))  ! aerop: g/m2
+      call set_aerosol_mc(r(:,:,:),pwt(:,:),relhum(:,:), aerop(:,:,:),aeron(:,:,:),trop_option)  ! aerop: g/m2
 !      write(*,*) 'Assigned aerosol info'
       do i = 1,plonl
 !         print*,'STEP ONE',i
@@ -972,7 +978,7 @@
 
 
 
-subroutine set_aerosol_mc(r,pwt,rh,aerop,aeron)
+subroutine set_aerosol_mc(r,pwt,rh,aerop,aeron,trop_option)
 !----------------------------------------------------------------
 !     set aerosol information for fast-jx calculation
 !----------------------------------------------------------------
@@ -982,6 +988,8 @@ subroutine set_aerosol_mc(r,pwt,rh,aerop,aeron)
                                    rh(:,:)      !relative humidity
       real, intent(inout)       :: aerop(:,:,:) !aerosol mass column (g/m2)
       integer, intent(out)      :: aeron(:,:,:) !aerosol category index, see am3_scat.dat
+
+      type(tropchem_opt), intent(in) :: trop_option
 
 !-----------------------------------------------------------------
 !     local parameter variables
@@ -1036,10 +1044,17 @@ subroutine set_aerosol_mc(r,pwt,rh,aerop,aeron)
 !----------------------------------------------------------------
 !     SO4 + BC internal mixing
 !----------------------------------------------------------------
-      so4(:,:) = r(:,:,so4_ndx)*132./28.97     !VMR => MMR
+      if (trop_option%aerosol_thermo == AERO_ISORROPIA .and. trop_option%het_chem_bug1==.false.) then
+!         if (mpp_pe() == mpp_root_pe() ) write(*,*) 'working'
+         so4(:,:) = (r(:,:,so4_ndx)*98. + r(:,:,nh4no3_ndx)*63. + r(:,:,nh4_ndx)*17.)/28.97     !VMR => MMR
+      else
+         !this was the default behaviour in ESM4.1
+         so4(:,:) = r(:,:,so4_ndx)*132./28.97     !VMR => MMR
+      end if
       bc1(:,:) = r(:,:,bc1_ndx)
       bc2(:,:) = r(:,:,bc2_ndx)
-      relhum(:,:) = rh(:,:) *100.
+      !cap hygroscopic growth similar to het chem (f1p)
+      relhum(:,:) = min(rh(:,:) *100.,trop_option%rh_het_max)
 !      if (mpp_pe() == mpp_root_pe() ) then 
 !             write(*,*) 'fphoto: so4=',so4(2,:) 
 !             write(*,*) 'fphoto: bc1=',bc1(2,:) 

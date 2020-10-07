@@ -50,7 +50,7 @@ type :: seasalt_data_type
    real          :: seasaltref = 2.e-6  ! effective radius of the dry seasalt particles, m
    real          :: seasaltden = 2200.0 ! density of dry seasalt particles, kg/m3
    ! diagnostic IDs
-   integer       :: id_seasalt_emis = -1, id_seasalt_setl = -1
+   integer       :: id_seasalt_emis = -1, id_seasalt_setl = -1, id_vdep = -1
 end type seasalt_data_type
 
 logical :: do_seasalt = .FALSE.
@@ -81,18 +81,21 @@ logical :: ulm_ssalt_deposition=.false.  ! Ulm backward compatibility flag
                                          ! to be removed at Verona
 
 
+logical :: vsetl_modulation = .false. !account for impact of volume size distribution on settling velocity within each bin
 
 logical :: do_sst_seasalt = .false. !turn on Jaeglye sst dependence of seasalt emissions
 !Jaegle, L., Quinn, P. K., Bates, T. S., Alexander, B., and Lin, J.-T.: Global distribution of sea salt aerosols: new constraints from in situ and remote sensing observations, Atmos. Chem. Phys., 11, 3137-3157, https://doi.org/10.5194/acp-11-3137-2011, 2011.
 real    :: min_tc_scale = 0.,max_tc_scale=30., t_crit=278.15,frac_crit=0.25
+real    :: min_scale_marthenson=-99999 !to reproduce CM4. Should be set to 0 as default
 
+logical :: use_tsurf_for_scaling = .false.
 logical            :: ssalt_debug = .false.
 integer            :: logunit
 namelist /ssalt_nml/  scheme, coef_emis1, coef_emis2, &
                       coef_emis_fine, coef_emis_coarse, &
                       critical_sea_fraction, ulm_ssalt_deposition, &
                       use_sj_sedimentation_solver, ssalt_debug, do_sst_seasalt,min_tc_scale,max_tc_scale, &
-                      t_crit,frac_crit
+                      t_crit,frac_crit,min_scale_marthenson, use_tsurf_for_scaling, vsetl_modulation
 
 !-----------------------------------------------------------------------
 integer, parameter :: nrh= 65   ! number of RH in look-up table
@@ -123,6 +126,12 @@ data rho_table/2.160, 2.160, 1.490, &
 
 real :: betha
 
+integer, parameter :: nrv_max = 500
+integer            :: nrv
+real, allocatable  :: salt_v(:), dmid(:)
+real, parameter :: rg_a = 0.085, rg_c = 0.4, sig_a = 1.5, sig_c = 1.8
+real, parameter :: drv  = 0.05 !increment for sea salt volume size distribution calculation (in um)
+
 
 contains
 
@@ -130,7 +139,7 @@ contains
 ! this subroutine calculates tendencies for all seasalt tracers, and reports
 ! total fields, like total seasalt emission and settling
 subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
-       zhalf, pfull, w10m, t, rh, tracer, dsinku, rdt, dt, Time, is,ie,js,je, kbot)
+       zhalf, pfull, w10m, t, t_surf, rh, tracer, dsinku, rdt, dt, Time, is,ie,js,je, kbot)
 
   real, intent(in) :: lon(:,:), lat(:,:) ! geographical coordinates, units?
   real, intent(in) :: ocn_flx_fraction(:,:) ! fraction of land in the grid cell
@@ -139,6 +148,7 @@ subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
   real, intent(in) :: zhalf(:,:,:) ! z of half-layers, m(?)
   real, intent(in) :: pfull(:,:,:) ! pressure on layers, Pa
   real, intent(in) :: t(:,:,:) ! temperature of atmosphere, degK
+  real, intent(in) :: t_surf(:,:) ! surface temperature, degK
   real, intent(in) :: rh(:,:,:) ! relative humidity 
   real, intent(in) :: tracer(:,:,:,:) ! tracer concentrations
   real, intent(in) :: dsinku(:,:,:) ! dry deposition flux at the surface, for diag only
@@ -159,6 +169,8 @@ subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
      scale_sst_emis
   real, dimension(size(tracer,1),size(tracer,2),size(tracer,3)) :: &
      seasalt_dt           ! calculated seasalt tendency
+  real, dimension(size(tracer,1),size(tracer,2),size(tracer,3)) :: &
+     vdep           ! settling velocity
 
   integer :: i
   integer :: kd    ! vertical size of our arrays
@@ -179,11 +191,16 @@ subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
         seasalt_tracers(i)%seasaltden, seasalt_tracers(i)%seasaltref, &
         seasalt_tracers(i)%ra, seasalt_tracers(i)%rb, &
         seasalt_tracers(i)%seasaltscheme, &
-        zhalf, pfull, w10m, t, rh, &
-        tracer(:,:,:,nseasalt), seasalt_dt, seasalt_emis, seasalt_setl, dt, &
+        zhalf, pfull, w10m, t, t_surf, rh, &
+        tracer(:,:,:,nseasalt), seasalt_dt, seasalt_emis, seasalt_setl, vdep, dt, &
         is,ie,js,je, kbot,scale_sst_emis)
      ! update seasalt tendencies
      rdt(:,:,:,nseasalt)=rdt(:,:,:,nseasalt)+seasalt_dt(:,:,:)
+
+     ! Settling velocity
+     if (seasalt_tracers(i)%id_vdep > 0) then
+        used = send_data ( seasalt_tracers(i)%id_vdep, vdep, Time, is_in=is,js_in=js )
+     end if
      
      ! Send the emission data to the diag_manager for output.
      if (seasalt_tracers(i)%id_seasalt_emis > 0 ) then
@@ -233,8 +250,8 @@ end subroutine atmos_sea_salt_sourcesink
 subroutine atmos_seasalt_sourcesink1 ( &
        ocn_flx_fraction, pwt, &
        seasaltden, seasaltref, seasaltra, seasaltrb,seasalt_scheme, &
-       zhalf, pfull, w10m, t, rh, &
-       seasalt, seasalt_dt, seasalt_emis, seasalt_setl, dt, is,ie,js,je,kbot,scale_sst)
+       zhalf, pfull, w10m, t, t_surf, rh, &
+       seasalt, seasalt_dt, seasalt_emis, seasalt_setl, vdep, dt, is,ie,js,je,kbot,scale_sst)
 
   real, intent(in),  dimension(:,:)   :: ocn_flx_fraction
   real, intent(in) :: seasaltref ! effective radius of the dry seasalt particles, m
@@ -242,6 +259,7 @@ subroutine atmos_seasalt_sourcesink1 ( &
   real, intent(in) :: seasaltrb  ! highest radius
   real, intent(in) :: seasaltden ! density of dry seasalt particles, kg/m3
   real, intent(in),  dimension(:,:)   :: w10m
+  real, intent(in),  dimension(:,:)   :: t_surf
   character(32),intent(in) :: seasalt_scheme 
   real, intent(in),  dimension(:,:,:) :: pwt, seasalt
   real, intent(in) :: dt
@@ -252,6 +270,7 @@ subroutine atmos_seasalt_sourcesink1 ( &
   real, intent(out) :: seasalt_emis(:,:) ! seasalt emission
   real, intent(out) :: scale_sst(:,:) ! seasalt emission
   real, intent(out) :: seasalt_setl(:,:) ! grav. sedimentation flux at the atmos bottom 
+  real, intent(out) :: vdep(:,:,:)
 
   ! ---- local vars
   integer  i, j, k, id, jd, kd, kb, ir, irh
@@ -265,11 +284,15 @@ subroutine atmos_seasalt_sourcesink1 ( &
   real :: viscosity, free_path, C_c
   real :: ratio_r, rho_wet_seasalt, seasalt_flux
   real :: rho_air
-  real :: a1, a2, Bcoef, r, dr, rmid
-  real, dimension(size(pfull,3))  :: vdep, seasalt_conc0, seasalt_conc1
+  real :: a1, a2, Bcoef, r, dr, rmid, Acoef
+  real, dimension(size(pfull,3))  :: seasalt_conc0, seasalt_conc1
   real, dimension(size(pfull,3))  :: dz, air_dens, qn, qn1
-  real :: sst
+  real :: sst,tscale
   integer :: istep, nstep
+
+  !to modulate vdep within a bin
+  real :: vdep_weight, salt_mass_total, dmidw, salt_mass
+  integer :: iv
 
   id=size(seasalt,1); jd=size(seasalt,2); kd=size(seasalt,3)
 
@@ -301,9 +324,14 @@ subroutine atmos_seasalt_sourcesink1 ( &
                   r=r+dr
                   if (rmid .le. 1.4e-6) then
 ! Martensson et al., JGR-Atm, 2003
+                     if (use_tsurf_for_scaling) then
+                        tscale = t_surf(i,j)
+                     else
+                        tscale = t(i,j,kb)
+                     end if
                     seasalt_flux = seasalt_flux + &
                        ch_fine*3.84e-4* 4./3.*pi*seasaltden*1e-3*rmid**2.* &
-                       (param_ak(rmid)*t(i,j,kb)+param_bk(rmid))*dr/0.4343
+                       max((param_ak(rmid)*tscale+param_bk(rmid)),min_scale_marthenson)*dr/0.4343
                   else
 ! Monahan (1986)
                     Bcoef=(coef1-alog10(betha*rmid*1.e6))/coef2
@@ -347,15 +375,37 @@ subroutine atmos_seasalt_sourcesink1 ( &
           r = seasaltra* 1.e6
           dr= (seasaltrb - seasaltra)/float(nr)* 1.e6
           seasalt_flux=0.
-          do ir=1,nr
-            rmid=r+dr*0.5   ! Dry radius
-            r=r+dr
-            Bcoef=(coef1-alog10(betha*rmid))/coef2
-            seasalt_flux = seasalt_flux + &
-               ch_coarse*1.373*4./3.*pi*seasaltden/betha**2*1.e-18* &
-               (1.+0.057*(betha*rmid)**1.05)*dr*      &
-               10**(1.19*exp(-(Bcoef**2)))
-          enddo
+
+
+          if (seasalt_scheme.eq."Gong") then
+             !variation of Monahan
+             !A parameterization of sea-salt aerosol source function for sub-and super-micron particles Gong GBC (2003) doi:10.1029/2003GB002079
+             do ir=1,nr
+                rmid=r+dr*0.5   ! Dry radius
+                r=r+dr
+                Bcoef=(0.433-alog10(betha*rmid))/0.433
+                Acoef=4.7*(1.+30.*betha*rmid)**(-0.017*(betha*rmid)**(-1.44))
+
+                seasalt_flux = seasalt_flux + &
+                     ch_coarse * 1.373 * (betha*rmid)**(-Acoef) * &
+                     (1+0.057*(betha*rmid)**3.45) * &
+                     10**(1.607*exp(-Bcoef**2))   * &
+                     dr*betha * &
+                     4./3.* pi * 1.e-18 *rmid**3 * seasaltden
+
+                
+             enddo
+          else
+             do ir=1,nr
+                rmid=r+dr*0.5   ! Dry radius
+                r=r+dr
+                Bcoef=(coef1-alog10(betha*rmid))/coef2
+                seasalt_flux = seasalt_flux + &
+                     ch_coarse*1.373*4./3.*pi*seasaltden/betha**2*1.e-18* &
+                     (1.+0.057*(betha*rmid)**1.05)*dr*      &
+                     10**(1.19*exp(-(Bcoef**2)))
+             enddo
+          end if
 
           do j=1,jd
             do i=1,id
@@ -366,12 +416,17 @@ subroutine atmos_seasalt_sourcesink1 ( &
                    if (present(kbot)) then
                       kb=kbot(i,j)
                    else
-                      kb=kd
+                     kb=kd
                    endif
-                   if (t(i,j,kb).lt.t_crit) then
+                   if (use_tsurf_for_scaling) then
+                      tscale = t_surf(i,j)
+                   else
+                      tscale = t(i,j,kb)
+                   end if
+                   if (tscale.lt.t_crit) then
                       scale_sst(i,j)    = frac_crit
                    else
-                      sst = max(min(t(i,j,kb)-273.15,max_tc_scale),min_tc_scale)
+                      sst = max(min(tscale-273.15,max_tc_scale),min_tc_scale)
                       scale_sst(i,j)    = 0.329+0.0904*sst-0.00717*sst**2 + 0.000207*sst**3
                    end if
                    seasalt_emis(i,j) = seasalt_emis(i,j)*scale_sst(i,j)
@@ -379,13 +434,13 @@ subroutine atmos_seasalt_sourcesink1 ( &
 
               endif
             enddo
-          enddo
+         enddo
     endif
   endif
 
   seasalt_dt(:,:,kd)=seasalt_dt(:,:,kd)+seasalt_emis(:,:)/pwt(:,:,kd)*mtv
 
-  rcm=seasaltref*mtcm            ! Particles radius in centimeters
+!  rcm=seasaltref*mtcm            ! Particles radius in centimeters
 !------------------------------------------
 !       Solve at the model TOP (layer plev-10)
 !------------------------------------------
@@ -415,28 +470,50 @@ subroutine atmos_seasalt_sourcesink1 ( &
            free_path=6.6e-8*t(i,j,k)/293.15*(PSTD_MKS/pfull(i,j,k))
            C_c=1. + free_path/seasaltref* &            ! Slip correction [none]
              (1.257+0.4*exp(-1.1*seasaltref/free_path))
-           vdep(k)=2./9.*C_c*GRAV*rho_wet_seasalt*rwet**2./viscosity
+           vdep(i,j,k)=2./9.*C_c*GRAV*rho_wet_seasalt*rwet**2./viscosity
         else
           ! New calculation drops effective radius seasaltref in favor of rwet
-          vdep(k)= sedimentation_velocity(t(i,j,k),pfull(i,j,k),rwet,rho_wet_seasalt) ! Settling velocity [m/s]
+          vdep(i,j,k)= sedimentation_velocity(t(i,j,k),pfull(i,j,k),rwet,rho_wet_seasalt) ! Settling velocity [m/s]
         endif
+
+        if (vsetl_modulation) then 
+
+           !dmid is in um
+           !salt_v is in um3
+           vdep_weight = 0.
+           salt_mass_total = 0.
+           do iv=1,nrv
+              if (dmid(iv) .ge. (seasaltra*2e6) .and. dmid(iv).le. (seasaltrb*2e6)) then                 
+                 dmidw = dmid(iv)*growth_table(irh)
+                 !dM/dDw = dV/dln(D) * growth * rho / rw
+                 salt_mass  = salt_v(iv) * growth_table(irh) * rho_wet_seasalt / (dmidw*0.5)
+                 vdep_weight = vdep_weight + salt_mass * vdep(i,j,k) * (dmidw/(2*rwet*1e6))**2 * (2*drv*growth_table(irh))
+                 salt_mass_total = salt_mass_total + salt_mass * (2*drv*growth_table(irh))
+              end if
+           end do
+
+           !update vts
+           vdep(i,j,k) = vdep_weight/salt_mass_total
+
+        end if
+
       enddo
       if (use_sj_sedimentation_solver) then
         qn(:)=seasalt(i,j,:)
-        qn1(1)=qn(1)*dz(1)/(dz(1)+dt*vdep(1))
+        qn1(1)=qn(1)*dz(1)/(dz(1)+dt*vdep(i,j,1))
         do k=2,kb
-          qn1(k)=(qn(k)*dz(k)+dt*qn1(k-1)*vdep(k-1)*air_dens(k-1)/air_dens(k))/(dz(k)+dt*vdep(k))
+          qn1(k)=(qn(k)*dz(k)+dt*qn1(k-1)*vdep(i,j,k-1)*air_dens(k-1)/air_dens(k))/(dz(k)+dt*vdep(i,j,k))
         enddo
         seasalt_dt(i,j,:)=seasalt_dt(i,j,:)+(qn1(:)-qn(:))/dt
-        seasalt_setl(i,j) = qn1(kb)*air_dens(kb)/mtv*vdep(kb)
+        seasalt_setl(i,j) = qn1(kb)*air_dens(kb)/mtv*vdep(i,j,kb)
 
 !---> h1g, 2016-04-05
        if( ssalt_debug ) then
 !$OMP CRITICAL
 
 !  if (mpp_pe()==mpp_root_pe()) then
-!      write(logunit,'("SALT ",2i5," qn(kb)=",e12.4," qn1(kb)=",e12.4," vdep(kb)=",e12.4," air_dens(kb)=",e12.4," dz(kb)=",e12.4," dt=",e12.4," dust_dt=",e12.4," setl=",e12.4)')  &
-!                i,j,qn(kb),qn1(kb),vdep(kb),air_dens(kb),dz(kb),dt,seasalt_dt(i,j,kb),seasalt_setl(i,j)
+!      write(logunit,'("SALT ",2i5," qn(kb)=",e12.4," qn1(kb)=",e12.4," vdep(i,j,kb)=",e12.4," air_dens(kb)=",e12.4," dz(kb)=",e12.4," dt=",e12.4," dust_dt=",e12.4," setl=",e12.4)')  &
+!                i,j,qn(kb),qn1(kb),vdep(i,j,kb),air_dens(kb),dz(kb),dt,seasalt_dt(i,j,kb),seasalt_setl(i,j)
 !  endif
 !$OMP END CRITICAL  
        end if ! ssalt_debug
@@ -444,7 +521,7 @@ subroutine atmos_seasalt_sourcesink1 ( &
 
       else
         do k=1,kb
-          step = (zhalf(i,j,k)-zhalf(i,j,k+1)) / vdep(k) / 2.
+          step = (zhalf(i,j,k)-zhalf(i,j,k+1)) / vdep(i,j,k) / 2.
           nstep = max(nstep, int( dt/ step) )
 !!! To avoid spending too much time on cycling the settling in case
 !!! of very large particles falling through a tiny layer, impose
@@ -454,7 +531,7 @@ subroutine atmos_seasalt_sourcesink1 ( &
 !!! way would be to implement semi-lagrangian technique.
           if (nstep.gt.nstep_max) then
             nstep = nstep_max
-            vdep(k)=(zhalf(i,j,k)-zhalf(i,j,k+1))*nstep / 2. /dt
+            vdep(i,j,k)=(zhalf(i,j,k)-zhalf(i,j,k+1))*nstep / 2. /dt
           endif
         enddo
         step = dt / nstep
@@ -465,7 +542,7 @@ subroutine atmos_seasalt_sourcesink1 ( &
             rho_air = pfull(i,j,k)/t(i,j,k)/RDGAS ! Air density [kg/m3]
             if (seasalt_conc0(k).gt.0.) then
 !!!           settling flux [kg/m2/s]
-              setl(k)=seasalt_conc0(k)*rho_air/mtv*vdep(k)
+              setl(k)=seasalt_conc0(k)*rho_air/mtv*vdep(i,j,k)
             else
               setl(k)=0.
             endif
@@ -478,9 +555,10 @@ subroutine atmos_seasalt_sourcesink1 ( &
         enddo
         seasalt_dt(i,j,:)=seasalt_dt(i,j,:)+ (seasalt_conc1(:)-seasalt(i,j,:))/dt
         seasalt_setl(i,j)=seasalt_setl(i,j)/dt
-      endif
+     endif
     enddo
   enddo
+
 
 end subroutine atmos_seasalt_sourcesink1
 
@@ -575,6 +653,10 @@ subroutine atmos_sea_salt_init (lonb, latb, axes, Time, mask)
   character(32)  :: method     ! method string for parameter retrieval (not used)
   character(256) :: parameters ! parameter string for seasalt tracer
   real    :: value ! temporary storage for parsing input
+
+  !for sea salt volume size distribution calculation (in um)
+  real :: min_diam, max_diam, dedge
+  integer :: iv
   
   if (module_is_initialized) return
 
@@ -696,7 +778,46 @@ subroutine atmos_sea_salt_init (lonb, latb, axes, Time, mask)
                      trim(seasalt_tracers(i)%name)//'_setl', axes(1:2),Time,  &
                      trim(seasalt_tracers(i)%name)//'_setl', 'kg/m2/s',       &
                      missing_value=-999.  )
+
+     seasalt_tracers(i)%id_vdep = register_diag_field ( module_name,     &
+                     trim(seasalt_tracers(i)%name)//'_vsetl', axes(1:3),Time,  &
+                     trim(seasalt_tracers(i)%name)//'_vsetl', 'm/s',       &
+                     missing_value=-999.  )
+
   enddo  
+
+  !estimate volume size distribution of sea salt (based on Jaegle (2011))
+  if (i.gt.0) then
+     min_diam = seasalt_tracers(1)%ra*2.*1.e6
+     max_diam = seasalt_tracers(i)%rb*2.*1.e6
+
+     nrv = int((max_diam - min_diam) / drv + 0.5)
+     dedge     = min_diam
+
+     allocate(salt_v(nrv_max))
+     allocate(dmid(nrv_max))
+     salt_v = 0.
+
+     if (nrv.gt.nrv_max)  then
+        call error_mesg('atmos_sea_salt_init','nrv>nrv_max', FATAL)
+     end if
+
+     do iv=1,nrv
+        dmid(iv) = dedge + drv
+        !dV/dln(D) in um3
+        salt_v(iv) = pi / 6.* (dmid(iv)**3.) * (                      &
+                       13.*exp(-0.5*( log(dmid(iv))-log(rg_a*2.) )    &
+                       **2./log(sig_a)**2. )                          &
+                       /( sqrt(2 * pi) * log(sig_a) )  +              &
+                       0.8*exp(-0.5*( log(dmid(iv))-log(rg_c*2.) )    &
+                       **2/log(sig_c)**2)                             &
+                       /( sqrt(2. * pi) * log(sig_c) )  )             
+        dedge = dedge + drv*2.
+     end do
+
+  end if
+  
+
   ! print out information about seasalt tracers
   if (mpp_pe()==mpp_root_pe()) then
      call print_table(logunit)
@@ -769,7 +890,7 @@ subroutine print_table(unit)
 
    write(unit,'(x,121("-"))')
    write(unit,'(3x,99(x,a16))')'seasalt tr. name','emission scheme ','atm. tr. number','ra','rb', &
-       'seasaltref','seasaltden','seasaltscheme'
+       'seasaltref','seasaltden'
    write(unit,'(x,121("-"))')
    do i = 1,n_seasalt_tracers
       write(unit,'(x,i2,x,a16,1x,a16,99(x,g16.6))')&
@@ -795,6 +916,10 @@ subroutine atmos_sea_salt_end
     
     do_seasalt = .FALSE.
     deallocate(seasalt_tracers)
+
+    if (allocated(salt_v)) deallocate(salt_v)
+    if (allocated(dmid)) deallocate(dmid)
+
 end subroutine atmos_sea_salt_end
 !</SUBROUTINE>
 

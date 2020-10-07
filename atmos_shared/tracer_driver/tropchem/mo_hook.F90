@@ -4,7 +4,7 @@
       use atmos_cmip_diag_mod, only : register_cmip_diag_field_2d
       use time_manager_mod, only : time_type
       use constants_mod,    only : PI
-
+      use fms_mod, only : mpp_root_pe, mpp_pe
 
       implicit none
 
@@ -60,12 +60,14 @@ logical                       :: module_is_initialized = .false.
       normalize_by_area = normalize_lght_no_prd_area
       min_land_frac = min_land_frac_lght
       if (verbose >= 2) then
-         write(*,*) 'MOZ_HOOK_INIT: Lightning NO production scaling factor = ',factor
-         if (normalize_lght_no_prd_area) then
-            write(*,*) 'MOZ_HOOK_INIT: Normalize lightning NO production by grid cell area'
-	 else
-            write(*,*) 'MOZ_HOOK_INIT: Normalize lightning NO production by grid cell (not area)'
-	 end if
+         if (mpp_root_pe().eq.mpp_pe()) then
+            write(*,*) 'MOZ_HOOK_INIT: Lightning NO production scaling factor = ',factor
+            if (normalize_lght_no_prd_area) then
+               write(*,*) 'MOZ_HOOK_INIT: Normalize lightning NO production by grid cell area'
+            else
+               write(*,*) 'MOZ_HOOK_INIT: Normalize lightning NO production by grid cell (not area)'
+            end if
+         end if
       end if
 
       lat25 = 25. * PI/180.
