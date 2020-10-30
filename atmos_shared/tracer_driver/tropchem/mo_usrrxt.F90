@@ -15,11 +15,14 @@
 
 implicit none
       public :: usrrxt_init, usrrxt
-      public :: HET_CHEM_LEGACY, HET_CHEM_J1M
+      public :: HET_CHEM_LEGACY, HET_CHEM_J1M, &
+                GSO2_WANG2014, GSO2_ZHENG2015, GSO2_ZHENG2015_LOW
 
       private
       integer, parameter     :: HET_CHEM_LEGACY    = 1
       integer, parameter     :: HET_CHEM_J1M       = 2
+      integer, parameter     :: GSO2_WANG2014 = 1, GSO2_ZHENG2015 = 2, &
+                                GSO2_ZHENG2015_LOW = 3
 
       integer, parameter :: ndust_reac           = 5 !maximum number of dust tracers
       integer, parameter :: ndust_het            = 8 !number of tracers in het chem for dust 
@@ -29,8 +32,8 @@ implicit none
                  uco_oha_ndx, uho2_ho2_ndx, upan_f_ndx, upan_b_ndx, umpan_f_ndx, umpan_b_ndx, &
                  n2o5h_ndx, no3h_ndx, ho2h_ndx, no2h_ndx, nh3h_ndx, uoh_xooh_ndx, uoh_acet_ndx, &
                  uoh_dms_ndx, so2h_ndx, &
-                 so4_ndx, bc1_ndx, bc2_ndx, oc1_ndx, oc2_ndx, soa_ndx,nh4_ndx,nh4no3_ndx,&
-                 ssa_ndx(5), dust_ndx(ndust_reac),&
+                 so4_ndx, nh4_ndx, nh4no3_ndx, no2_ndx, &
+                 bc1_ndx, bc2_ndx, oc1_ndx, oc2_ndx, soa_ndx, ssa_ndx(5), dust_ndx(ndust_reac),&
                  h2o_ndx, hcl_ndx, clono2_ndx, hbr_ndx, &
                  strat37_ndx, strat38_ndx, strat72_ndx, strat73_ndx, strat74_ndx, &
                  strat75_ndx, strat76_ndx, strat77_ndx, strat78_ndx, strat79_ndx, &
@@ -160,6 +163,7 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
       so4_ndx     = get_tracer_index(MODEL_ATMOS,'so4')
       nh4_ndx     = get_tracer_index(MODEL_ATMOS,'nh4')
       nh4no3_ndx  = get_tracer_index(MODEL_ATMOS,'nh4no3')
+      no2_ndx     = get_tracer_index(MODEL_ATMOS,'no2')
       bc1_ndx     = get_tracer_index(MODEL_ATMOS,'bcphob')
       bc2_ndx     = get_tracer_index(MODEL_ATMOS,'bcphil')
       oc1_ndx     = get_tracer_index(MODEL_ATMOS,'omphob')
@@ -668,16 +672,20 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
             if ( so2h_ndx > 0) then
                rxt(i,k,so2h_ndx)=0.             
                !http://onlinelibrary.wiley.com/doi/10.1002/2013JD021426/full          
-               if ( trop_option%gSO2_dynamic .eq. 1) then
+               if ( trop_option%gSO2_dynamic .eq. GSO2_WANG2014) then
                   gam_SO2 = max(1e-3+(1e-2-1e-3)*(relhum(i,k)-.5)/.5,0.)
-               elseif ( trop_option%gSO2_dynamic .eq. 2) then
+               elseif ( trop_option%gSO2_dynamic .eq. GSO2_ZHENG2015) then
                   !http://www.atmos-chem-phys.net/15/2031/2015/acp-15-2031-2015.pdf
                   gam_SO2 = max(2e-5+(5e-5-2e-5)*(relhum(i,k)-.5)/.5,2.e-5)
-               elseif ( trop_option%gSO2_dynamic .eq. 3) then
+               elseif ( trop_option%gSO2_dynamic .eq. GSO2_ZHENG2015_LOW) then
                   !http://www.atmos-chem-phys.net/15/2031/2015/acp-15-2031-2015.pdf
                   gam_SO2 = max(1e-5+(2e-5-1e-5)*(relhum(i,k)-.5)/.5,1.e-5)
                else
                   gam_SO2 = trop_option%gSO2
+               end if
+
+               if (trop_option%NO2_SO2_max.gt.0. .and. no2_ndx.gt.0) then
+                  gam_SO2 = gam_SO2 * max(min(qin(i,k,no2_ndx)/trop_option%NO2_SO2_max,1.),0.)
                end if
                if (gam_SO2 .gt. 0.) then
                  do n=1, naero_het_eff

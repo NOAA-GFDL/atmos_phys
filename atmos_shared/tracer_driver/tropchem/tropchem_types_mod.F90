@@ -37,6 +37,7 @@ module tropchem_types_mod
      real                  :: gSO2
      real                  :: gH2SO4_dust
      real                  :: gSO2_dust
+     real                  :: NO2_SO2_max
      real                  :: gNH3
      real                  :: gHNO3_dust
      real                  :: gNO3_dust

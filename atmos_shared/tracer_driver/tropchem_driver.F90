@@ -116,7 +116,9 @@ use cloud_chem, only: CLOUD_CHEM_PH_LEGACY, CLOUD_CHEM_PH_BISECTION, &
                       CLOUD_CHEM_PH_CUBIC, CLOUD_CHEM_F1P,&
                       CLOUD_CHEM_F1P_BUG, CLOUD_CHEM_F1P_BUG2, CLOUD_CHEM_LEGACY
 use aerosol_thermodynamics, only: AERO_ISORROPIA, AERO_LEGACY, NO_AERO
-use mo_usrrxt_mod, only: HET_CHEM_LEGACY, HET_CHEM_J1M
+use mo_usrrxt_mod, only: HET_CHEM_LEGACY, HET_CHEM_J1M, &
+                         GSO2_WANG2014, GSO2_ZHENG2015, &
+                         GSO2_ZHENG2015_LOW
 use mo_chem_utls_mod, only : get_rxt_ndx
 
 use atmos_cmip_diag_mod,   only : register_cmip_diag_field_3d, &
@@ -247,6 +249,9 @@ real               :: min_t_sfc_cld_chem    = -999   !by default, this filter is
 
 logical            :: modulate_frac_ic = .false. !modulate the fraction of acids and aerosol in clouds based on frac_liq
 
+real               :: NO2_SO2_max = -999 !NO2 max concentration below which gso2 is scaled by NO2/NO2_SO2_max
+
+
 type(tropchem_diag),  save :: trop_diag
 type(tropchem_opt),   save :: trop_option
 
@@ -317,7 +322,8 @@ namelist /tropchem_driver_nml/    &
                                sim_data_filename,time_varying_solarflux, gso2_dynamic, &
                                het_chem_bug1, rh_het_max, &
                                modulate_frac_ic, &
-                               min_t_sfc_cld_chem
+                               min_t_sfc_cld_chem, &
+                               NO2_SO2_max
 
 
 integer                     :: nco2 = 0
@@ -1808,15 +1814,18 @@ if(mpp_pe() == mpp_root_pe()) write(*,*) 'gSO2: ',trop_option%gSO2
 if (trim(gso2_dynamic).eq.'none') then
    trop_option%gSO2_dynamic             = -1
 else if (trim(gso2_dynamic).eq.'wang2014') then
-   trop_option%gSO2_dynamic             = 1   
+   trop_option%gSO2_dynamic             = GSO2_WANG2014   
    !http://onlinelibrary.wiley.com/doi/10.1002/2013JD021426/full  
 else if (trim(gso2_dynamic).eq.'zheng2015') then
-   trop_option%gSO2_dynamic             = 2
+   trop_option%gSO2_dynamic             = GSO2_ZHENG2015
 !   http://www.atmos-chem-phys.net/15/2031/2015/
 else if (trim(gso2_dynamic).eq.'zheng2015_low') then
-   trop_option%gSO2_dynamic             = 3
+   trop_option%gSO2_dynamic             = GSO2_ZHENG2015_LOW
 !   http://www.atmos-chem-phys.net/15/2031/2015/
 end if
+
+trop_option%NO2_SO2_max = NO2_SO2_max
+
 if(mpp_pe() == mpp_root_pe()) write(*,*) 'gso2_dynamic case:',trop_option%gSO2_dynamic
 
 if (trim(ghno3_dust_dynamic).eq.'none') then
