@@ -4036,13 +4036,13 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
              diag_4l(:,j,:,diag_pt%snow_sedi)  = qssedten(:,:)
 
 ! ---> rain number mixing ratio
-      if ( diag_id%rain_num2snow + diag_id%rain_num2snow_col )    &
+      if ( diag_id%rain_num2snow + diag_id%rain_num2snow_col > 0 )    &
              diag_4l(:,j,:,diag_pt%rain_num2snow)  =  diag_4l(:,j,:,diag_pt%rain_num2snow) &
                                                      -npracs(:,:)*precip_frac(:,:)
-      if ( diag_id%rain_num_evap + diag_id%rain_num_evap_col )    &
+      if ( diag_id%rain_num_evap + diag_id%rain_num_evap_col > 0 )    &
              diag_4l(:,j,:,diag_pt%rain_num_evap)  =  nsubr( : , : )*precip_frac(:,:)
 
-      if ( diag_id%rain_num_freez + diag_id%rain_num_freez_col )    &
+      if ( diag_id%rain_num_freez + diag_id%rain_num_freez_col > 0 )    &
              diag_4l(:,j,:,diag_pt%rain_num_freez)  =  -nnuccr( : , : )*precip_frac(:,:)
 
 
