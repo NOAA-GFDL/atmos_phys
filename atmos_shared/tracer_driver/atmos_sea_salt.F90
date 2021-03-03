@@ -24,8 +24,7 @@ use   tracer_manager_mod, only : get_number_tracers, get_tracer_index, &
                                  get_tracer_names, set_tracer_atts, & 
                                  query_method, NO_TRACER
 use    field_manager_mod, only : parse, MODEL_ATMOS
-use atmos_tracer_utilities_mod, only : wet_deposition, dry_deposition, &
-                                 sedimentation_velocity,sedimentation_flux
+use atmos_tracer_utilities_mod, only : sedimentation_velocity,sedimentation_flux
 
 implicit none
 private
@@ -70,6 +69,7 @@ real, save :: coef1
 real, save :: coef2
 real, save :: ch_fine, ch_coarse
 logical    :: use_sj_sedimentation_solver = .FALSE.
+logical    :: use_zieger_growth = .FALSE.
 !---------------------------------------------------------------------
 real :: coef_emis1=-999.
 real :: coef_emis2=-999.
@@ -96,18 +96,19 @@ namelist /ssalt_nml/  scheme, coef_emis1, coef_emis2, &
                       coef_emis_fine, coef_emis_coarse, &
                       critical_sea_fraction, ulm_ssalt_deposition, &
                       use_sj_sedimentation_solver, ssalt_debug, do_sst_seasalt,min_tc_scale,max_tc_scale, &
-                      t_crit,frac_crit,min_scale_marthenson, use_tsurf_for_scaling, vsetl_modulation
+                      t_crit,frac_crit,use_zieger_growth,&
+                      min_scale_marthenson, use_tsurf_for_scaling, vsetl_modulation
 
 !-----------------------------------------------------------------------
 integer, parameter :: nrh= 65   ! number of RH in look-up table
 integer, parameter :: nr = 10   ! number of integration points 
                                       ! The difference with nr=100 & nr=5 < 1e-3
-real, dimension(nrh) :: rho_table, growth_table
+real, dimension(nrh) :: rho_table, growth_tang, growth_zieger
 !! Sea salt hygroscopic growth factor from 35 to 99% RH
 !! We start at the deliquescence point of sea-salt for RH=37%
 !! Any lower RH doesn't affect dry properties
 !! Reference: Tang et al., JGR, v102(D19), 23,269-23,275, 1997. 
-data growth_table/1.000, 1.000, 1.396, &
+data growth_tang/1.000, 1.000, 1.396, &
        1.413, 1.428, 1.441, 1.454, 1.466, 1.478, 1.490, 1.501, 1.512, &
        1.523, 1.534, 1.545, 1.555, 1.566, 1.577, 1.588, 1.599, 1.610, &
        1.621, 1.632, 1.644, 1.655, 1.667, 1.679, 1.692, 1.704, 1.717, &
@@ -115,6 +116,15 @@ data growth_table/1.000, 1.000, 1.396, &
        1.866, 1.884, 1.903, 1.923, 1.944, 1.966, 1.990, 2.014, 2.041, &
        2.069, 2.100, 2.134, 2.170, 2.210, 2.255, 2.306, 2.363, 2.430, &
        2.509, 2.605, 2.723, 2.880, 3.087, 3.402, 3.919, 5.048/
+!! Reference: Zieger, P., Väisänen, O., Corbin, J. et al. Revising the hygroscopicity of inorganic sea salt particles. Nat Commun 8, 15883 (2017).
+data growth_zieger/ 1.000, 1.083, 1.086, &
+       1.089, 1.092, 1.095, 1.099, 1.102, 1.105, 1.109, 1.112, 1.116, &
+       1.120, 1.124, 1.127, 1.275, 1.280, 1.286, 1.291, 1.297, 1.303, &
+       1.310, 1.316, 1.323, 1.329, 1.336, 1.344, 1.351, 1.359, 1.367, &
+       1.375, 1.383, 1.392, 1.401, 1.411, 1.421, 1.431, 1.442, 1.453, &
+       1.465, 1.674, 1.690, 1.708, 1.726, 1.745, 1.766, 1.788, 1.811, &
+       1.836, 1.863, 1.892, 1.923, 1.958, 1.996, 2.038, 2.085, 2.138, &
+       2.199, 2.271, 2.356, 2.462, 2.597, 2.782, 3.066, 3.620/
 !! Seal salt density for 65 RH values from 35% to 99% [g/cm3]
 data rho_table/2.160, 2.160, 1.490, &
        1.475, 1.463, 1.452, 1.441, 1.432, 1.422, 1.414, 1.406, 1.398, &
@@ -273,13 +283,14 @@ subroutine atmos_seasalt_sourcesink1 ( &
   real, parameter :: mtv  = 1.    ! factor conversion for mixing ratio of seasalt
   real, parameter :: ptmb = 0.01  ! pascal to mb
   integer, parameter :: nstep_max = 5  !Maximum number of cyles for settling
-  real :: rhb, rcm,step,rwet
+  real :: rhb, step,rwet
   real :: viscosity, free_path, C_c
   real :: ratio_r, rho_wet_seasalt, seasalt_flux
   real :: rho_air
   real :: a1, a2, Bcoef, r, dr, rmid, Acoef
   real, dimension(size(pfull,3))  :: vdep, seasalt_conc0, seasalt_conc1
   real, dimension(size(pfull,3))  :: dz, air_dens
+  real, dimension(nrh) :: growth_table   
   real :: sst,tscale
   integer :: istep, nstep
 
@@ -289,6 +300,13 @@ subroutine atmos_seasalt_sourcesink1 ( &
 
   id=size(seasalt,1); jd=size(seasalt,2); kd=size(seasalt,3)
 
+  growth_table(:)=1.
+  if (use_zieger_growth) then
+    growth_table(:)=growth_zieger(:)
+  else
+    growth_table(:)=growth_tang(:)
+  endif
+  betha = growth_table(46)  ! Growth factor at 80% RH
   scale_sst(:,:) = 1.
   seasalt_emis(:,:) = 0.0
   seasalt_setl(:,:) = 0.0
@@ -376,12 +394,12 @@ subroutine atmos_seasalt_sourcesink1 ( &
              do ir=1,nr
                 rmid=r+dr*0.5   ! Dry radius
                 r=r+dr
-                Bcoef=(0.433-alog10(betha*rmid))/0.433
-                Acoef=4.7*(1.+30.*betha*rmid)**(-0.017*(betha*rmid)**(-1.44))
+                Bcoef=(0.433-log10(betha*rmid))/0.433
+                Acoef=4.7*((1.+30.*betha*rmid)**(-0.017*((betha*rmid)**(-1.44))))
 
                 seasalt_flux = seasalt_flux + &
                      ch_coarse * 1.373 * (betha*rmid)**(-Acoef) * &
-                     (1+0.057*(betha*rmid)**3.45) * &
+                     (1+0.057*((betha*rmid)**3.45)) * &
                      10**(1.607*exp(-Bcoef**2))   * &
                      dr*betha * &
                      4./3.* pi * 1.e-18 *rmid**3 * seasaltden
@@ -433,7 +451,6 @@ subroutine atmos_seasalt_sourcesink1 ( &
 
   seasalt_dt(:,:,kd)=seasalt_dt(:,:,kd)+seasalt_emis(:,:)/pwt(:,:,kd)*mtv
 
-!  rcm=seasaltref*mtcm            ! Particles radius in centimeters
 !------------------------------------------
 !       Solve at the model TOP (layer plev-10)
 !------------------------------------------
@@ -676,7 +693,6 @@ subroutine atmos_sea_salt_init (lonb, latb, axes, Time, mask)
         endif
       endif
 
-      betha = growth_table(46)  ! Growth factor at 80% RH
 
   ! find out if there are any seasalt tracers
   call get_number_tracers(MODEL_ATMOS, num_prog=n_atm_tracers)
