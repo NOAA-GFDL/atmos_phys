@@ -18,6 +18,7 @@
 !----------------------------------------------------------------------
       real :: factor = 1.                    ! user-controlled scaling factor to achieve arbitrary NO prod.
       logical :: normalize_by_area = .false. ! normalize lightning NOx production by grid cell area
+      logical :: allow_small_storms = .false. ! modify area normalization for high-res grids
       real :: min_land_frac = -999.          ! minimum land fraction for flash frequency calculation (default=-999)
       real, parameter :: AREA_PER_STORM = 1.e10 ! m2 (100km x 100km)
       real :: vdist(16,3)                    ! vertical distribution of lightning
@@ -32,7 +33,8 @@ logical                       :: module_is_initialized = .false.
 
       CONTAINS
 
-      subroutine moz_hook_init( lght_no_prd_factor, normalize_lght_no_prd_area, min_land_frac_lght, &
+      subroutine moz_hook_init( lght_no_prd_factor, normalize_lght_no_prd_area, &
+                                allow_small_storms_lght_no_prd, min_land_frac_lght, &
                                 Time, axes, verbose )
 !----------------------------------------------------------------------
 !       ... Initialize the chemistry "hook" routine
@@ -47,6 +49,7 @@ logical                       :: module_is_initialized = .false.
       integer,         intent(in) :: axes(4)
       real,            intent(in) :: lght_no_prd_factor         ! lightning no production factor
       logical,         intent(in) :: normalize_lght_no_prd_area ! normalize lightning NOx production by grid cell area
+      logical,         intent(in) :: allow_small_storms_lght_no_prd ! modify area normalization for high-res grids
       real,            intent(in) :: min_land_frac_lght         ! minimum land fraction for flash frequency calculation (default=-999)
       integer,         intent(in) :: verbose
 
@@ -58,12 +61,15 @@ logical                       :: module_is_initialized = .false.
 
       factor = lght_no_prd_factor
       normalize_by_area = normalize_lght_no_prd_area
+      allow_small_storms = allow_small_storms_lght_no_prd
       min_land_frac = min_land_frac_lght
       if (verbose >= 2) then
          if (mpp_root_pe().eq.mpp_pe()) then
             write(*,*) 'MOZ_HOOK_INIT: Lightning NO production scaling factor = ',factor
             if (normalize_lght_no_prd_area) then
                write(*,*) 'MOZ_HOOK_INIT: Normalize lightning NO production by grid cell area'
+               if (allow_small_storms) &
+                  write(*,*) 'MOZ_HOOK_INIT: ... if grid cell area .GT. AREA_PER_STORM'
             else
                write(*,*) 'MOZ_HOOK_INIT: Normalize lightning NO production by grid cell (not area)'
             end if
@@ -170,9 +176,13 @@ logical                       :: module_is_initialized = .false.
       prod_no_col(:,:)  = 0.
       glob_prod_no_col(:,:) = 0.
       if (normalize_by_area) then 
-         local_area(:,:) = AREA_PER_STORM*1.e4
+         if (allow_small_storms) then
+            local_area(:,:) = MIN(area,AREA_PER_STORM)*1.e4
+         else
+            local_area(:,:) = AREA_PER_STORM*1.e4
+         end if
       else
-	 local_area(:,:) = area(:,:)*1.e4
+         local_area(:,:) = area(:,:)*1.e4
       end if
 
 !----------------------------------------------------------------------
@@ -224,7 +234,7 @@ logical                       :: module_is_initialized = .false.
 !           (flashes storm^-1 min^-1)
 !--------------------------------------------------------------------------------
                   if( ( NINT(oro(i,j))==LAND .and. min_land_frac<0. ) .or. &
-		      ( oro(i,j) > min_land_frac .and. min_land_frac>=0. ) ) then
+                      ( oro(i,j) > min_land_frac .and. min_land_frac>=0. ) ) then
                      flash_freq(i,j) = 3.44e-5 * cldhgt(i,j)**4.9 
                   else
                      flash_freq(i,j) = 6.40e-4 * cldhgt(i,j)**1.7
@@ -253,8 +263,10 @@ logical                       :: module_is_initialized = .false.
 !           and convert to N atoms per second per cm2 and apply fudge factor
 !         ... If (normalize_by_area), then assume storm is fixed area, and scale
 !           flashes to grid cell. Otherwise, assume one storm per grid cell.
+!         ... If (allow_small_storms), then assume storm occupies full grid cell, if
+!           grid cell area .LT. AREA_PER_STORM
 !--------------------------------------------------------------------------------
-		  prod_no_col(i,j) = 1.e17*flash_energy(i,j) / local_area(i,j) * factor
+                  prod_no_col(i,j) = 1.e17*flash_energy(i,j) / local_area(i,j) * factor
 !--------------------------------------------------------------------------------
 !         ... Compute global NO production rate in TgN/yr:
 !           TgN per second: * MW_N * 1.e-12 / AVO

@@ -171,6 +171,7 @@ character(len=10), dimension(maxinv) :: inv_list =''    ! list of invariant (fix
 real               :: aircraft_scale_factor = -999.     ! aircraft emissions scale factor
 real               :: lght_no_prd_factor = 1.           ! lightning NOx scale factor
 logical            :: normalize_lght_no_prd_area = .false. ! normalize lightning NOx production by grid cell area
+logical            :: allow_small_storms_lght_no_prd = .false. ! modify area normalization for high-res grids
 real               :: min_land_frac_lght = -999.        ! minimum land fraction for lightning NOx calculation
 real               :: strat_chem_age_factor = 1.        ! scale factor for age of air
 real               :: strat_chem_dclydt_factor = 1.     ! scale factor for dcly/dt
@@ -196,7 +197,7 @@ logical            :: do_fastjx_photo = .false.         ! use fastjx routine ?
 character(len=32)  :: clouds_in_fastjx = 'lsc_only'     ! nature of clouds seen in fastjx calculation; may currently be 'none' or 'lsc_only' (default)
 logical            :: check_convergence = .false.       ! if T, non-converged chem tendencies will not be used
 real               :: e90_tropopause_vmr = 9.e-8        ! e90 tropopause concentration
-logical            :: time_varying_solarflux = .false.  ! allow sloar cycle on fastjx v7.1
+logical            :: time_varying_solarflux = .false.  ! allow solar cycle on fastjx v7.1
 
 ! namelist to fix solar flux bug
 ! if set to true then solar flux will vary with time
@@ -275,6 +276,7 @@ namelist /tropchem_driver_nml/    &
                                aircraft_scale_factor, &
                                lght_no_prd_factor, &
                                normalize_lght_no_prd_area, &
+                               allow_small_storms_lght_no_prd, &
                                min_land_frac_lght, &
                                strat_chem_age_factor, &
                                strat_chem_dclydt_factor, &
@@ -2301,7 +2303,9 @@ end if
 !-----------------------------------------------------------------------
 !     ... Call the chemistry hook init routine
 !-----------------------------------------------------------------------
-   call moz_hook_init( lght_no_prd_factor, normalize_lght_no_prd_area, min_land_frac_lght, Time, axes, verbose )
+   call moz_hook_init( lght_no_prd_factor, normalize_lght_no_prd_area, &
+                       allow_small_storms_lght_no_prd, min_land_frac_lght, &
+                       Time, axes, verbose )
 
 !-----------------------------------------------------------------------
 !     ... Initializations for stratospheric chemistry
