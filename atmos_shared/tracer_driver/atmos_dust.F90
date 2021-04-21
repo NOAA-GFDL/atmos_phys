@@ -76,11 +76,16 @@ integer, save   :: ind_dry_dep_lith_dust_flux = 0
 integer, save   :: ind_wet_dep_lith_dust_flux = 0
 integer, save   :: ind_dry_dep_solubleFe_flux = 0
 integer, save   :: ind_wet_dep_solubleFe_flux = 0
+integer, save   :: ind_dry_dep_solubleP_flux = 0
+integer, save   :: ind_wet_dep_solubleP_flux = 0
 real, allocatable :: dry_dep_lith_dust_flux(:,:)
 real, allocatable :: wet_dep_lith_dust_flux(:,:)
 real, allocatable :: dry_dep_solubleFe_flux(:,:)
 real, allocatable :: wet_dep_solubleFe_flux(:,:)
-real, allocatable :: atmos_dust_solFe_frac(:,:) ! total dust concentration at the bottom of the atmos
+real, allocatable :: atmos_dust_solFe_frac(:,:)
+real, allocatable :: dry_dep_solubleP_flux(:,:)
+real, allocatable :: wet_dep_solubleP_flux(:,:)
+real, allocatable :: atmos_dust_solP_frac(:,:)
 
 ! ---- module data ----
 logical :: module_is_initialized = .FALSE.
@@ -235,6 +240,7 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
   enddo
 
   call atmos_dust_solFe_frac_set(all_dust_conc, is,ie,js,je) !This must be called before dry and wet dep flux set
+  call atmos_dust_solP_frac_set(all_dust_conc, is,ie,js,je)  
   call atmos_dust_drydep_flux_set(all_dust_setl, is,ie,js,je)
 
   if (id_dust_ddep > 0) then
@@ -623,7 +629,10 @@ subroutine atmos_dust_init (lonb, latb, axes, Time, mask)
   allocate(wet_dep_lith_dust_flux(size(lonb,1)-1,size(latb,2)-1)); wet_dep_lith_dust_flux=0.0
   allocate(dry_dep_solubleFe_flux(size(lonb,1)-1,size(latb,2)-1)); dry_dep_solubleFe_flux=0.0
   allocate(wet_dep_solubleFe_flux(size(lonb,1)-1,size(latb,2)-1)); wet_dep_solubleFe_flux=0.0
+  allocate(dry_dep_solubleP_flux(size(lonb,1)-1,size(latb,2)-1)); dry_dep_solubleP_flux=0.0
+  allocate(wet_dep_solubleP_flux(size(lonb,1)-1,size(latb,2)-1)); wet_dep_solubleP_flux=0.0
   allocate(atmos_dust_solFe_frac( size(lonb,1)-1,size(latb,2)-1)); atmos_dust_solFe_frac=0.0
+  allocate(atmos_dust_solP_frac( size(lonb,1)-1,size(latb,2)-1)); atmos_dust_solP_frac=0.0
 
 
   do_dust = .TRUE.
@@ -723,6 +732,21 @@ subroutine atmos_dust_init (lonb, latb, axes, Time, mask)
            atm_tr_index = ind,                                          &
            mol_wt = 1.0, param = (/ 1.0,1.0 /),                         &
            caller = trim(mod_name) // '(' // trim(sub_name) // ')')
+
+      !Soluble P 
+      ind_dry_dep_solubleP_flux = aof_set_coupler_flux('dry_dep_po4', &
+           flux_type = 'air_sea_deposition', implementation = 'dry',    &
+           atm_tr_index = ind,                                          &
+           mol_wt = 1.0, param = (/ 1.0,1.0 /),                         &
+           caller = trim(mod_name) // '(' // trim(sub_name) // ')')
+
+      ind_wet_dep_solubleP_flux = aof_set_coupler_flux('wet_dep_po4', &
+           flux_type = 'air_sea_deposition', implementation = 'wet',    &
+           atm_tr_index = ind,                                          &
+           mol_wt = 1.0, param = (/ 1.0,1.0 /),                         &
+           caller = trim(mod_name) // '(' // trim(sub_name) // ')')
+
+
    endif
    endif !if(do_esm_dust_flux)
 
@@ -751,13 +775,21 @@ endif
 if (ind_wet_dep_lith_dust_flux .gt. 0) then
   gas_fields%bc(ind_wet_dep_lith_dust_flux)%field(ind_pcair)%values(:,:) = wet_dep_lith_dust_flux(:,:)
 endif
-!soluable iron
+!soluble iron
 if (ind_dry_dep_solubleFe_flux .gt. 0) then
   gas_fields%bc(ind_dry_dep_solubleFe_flux)%field(ind_pcair)%values(:,:) = -dry_dep_solubleFe_flux(:,:)!sign flip
 endif
 
 if (ind_wet_dep_solubleFe_flux .gt. 0) then
   gas_fields%bc(ind_wet_dep_solubleFe_flux)%field(ind_pcair)%values(:,:) = wet_dep_solubleFe_flux(:,:)
+endif
+!soluble iron
+if (ind_dry_dep_solubleP_flux .gt. 0) then
+  gas_fields%bc(ind_dry_dep_solubleP_flux)%field(ind_pcair)%values(:,:) = -dry_dep_solubleP_flux(:,:)!sign flip
+endif
+
+if (ind_wet_dep_solubleP_flux .gt. 0) then
+  gas_fields%bc(ind_wet_dep_solubleP_flux)%field(ind_pcair)%values(:,:) = wet_dep_solubleP_flux(:,:)
 endif
 
 
@@ -837,6 +869,7 @@ subroutine atmos_dust_wetdep_flux_set(array, is,ie,js,je)
   wet_dep_lith_dust_flux(is:ie,js:je) = array(is:ie,js:je)
   !Soluble Iron flux
   wet_dep_solubleFe_flux(is:ie,js:je) = atmos_dust_solFe_frac(is:ie,js:je) * array(is:ie,js:je)
+  wet_dep_solubleP_flux(is:ie,js:je) = atmos_dust_solP_frac(is:ie,js:je) * array(is:ie,js:je)
 end subroutine atmos_dust_wetdep_flux_set
 
 subroutine atmos_dust_drydep_flux_set(array, is,ie,js,je)
@@ -846,6 +879,7 @@ subroutine atmos_dust_drydep_flux_set(array, is,ie,js,je)
   dry_dep_lith_dust_flux(is:ie,js:je) = array(is:ie,js:je)
   !Soluble Iron flux
   dry_dep_solubleFe_flux(is:ie,js:je) = atmos_dust_solFe_frac(is:ie,js:je)  * array(is:ie,js:je)
+  dry_dep_solubleP_flux(is:ie,js:je) = atmos_dust_solP_frac(is:ie,js:je)  * array(is:ie,js:je)
 end subroutine atmos_dust_drydep_flux_set
 
 subroutine atmos_dust_solFe_frac_set(array, is,ie,js,je)
@@ -867,6 +901,16 @@ subroutine atmos_dust_solFe_frac_set(array, is,ie,js,je)
 
   atmos_dust_solFe_frac(is:ie,js:je) = 0.035 * 0.031 / (max(array(is:ie,js:je)*1.E9,epsilon))**0.26
 end subroutine atmos_dust_solFe_frac_set
+
+subroutine atmos_dust_solP_frac_set(array, is,ie,js,je)
+  !This subroutine estimates the amount of soluble phosphorus in dust
+  real, dimension(is:ie,js:je), intent(in) :: array ! total dust concentration at the bottom of the atmosphere
+  integer,                      intent(in) :: is,ie,js,je
+  if (n_dust_tracers == 0) return ! nothing to do
+
+  ! Start with a static value, can make a dynamic function of dust concentration etc., later
+  atmos_dust_solP_frac(is:ie,js:je) = 563.0e-6*0.22/31.0 
+end subroutine atmos_dust_solP_frac_set
 
 
 !#######################################################################
@@ -892,6 +936,9 @@ end subroutine atmos_dust_solFe_frac_set
     deallocate(dry_dep_solubleFe_flux)
     deallocate(wet_dep_solubleFe_flux)
     deallocate(atmos_dust_solFe_frac)
+    deallocate(dry_dep_solubleP_flux)
+    deallocate(wet_dep_solubleP_flux)
+    deallocate(atmos_dust_solP_frac)
  end subroutine atmos_dust_end
 !</SUBROUTINE>
 
