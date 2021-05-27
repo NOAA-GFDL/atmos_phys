@@ -569,6 +569,8 @@ real, dimension(size(r,1),size(r,2),nxactive)  :: rtnd_xactive
 real, dimension(size(r,1),size(r,2),2)         :: xbvoc4soa ! emis isop (1), terp (2)
 real, dimension(size(r,1),size(r,2),size(r,3)+1) :: lphalf
 
+real, dimension(size(r,1),size(r,2)) :: moa_emis !marine organic emissions !kg/m2/s
+
 integer :: isulf, ixact, i, j, k, id, jd, kd, ntcheck
 integer :: nqq  ! index of specific humidity
 integer :: nql  ! index of cloud liquid specific humidity
@@ -1392,6 +1394,19 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
    endif  ! (no diagnostic tracers)
 
 !------------------------------------------------------------------------
+!sea salt
+!------------------------------------------------------------------------
+   call mpp_clock_begin (seasalt_clock)
+   if (do_seasalt) then
+      call atmos_sea_salt_sourcesink(lon,lat,ocn_flx_fraction,pwt, &
+              z_half, pfull, w10m_ocean, t, t_surf_rad, rh, &
+              tracer(:,:,:,:), dsinku(:,:,:), rdt(:,:,:,:), moa_emis, dt, &
+              Time, is,ie,js,je, kbot)
+   endif
+   call mpp_clock_end (seasalt_clock)
+
+   
+!------------------------------------------------------------------------
 !   carbonaceous aerosols
 !------------------------------------------------------------------------
    if (nbcphobic > 0 .and. nbcphilic > 0 .and. &
@@ -1408,6 +1423,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
                                       tracer(:,:,:,nomphobic), rtndomphob, &
                                       tracer(:,:,:,nomphilic), rtndomphil, &
                                       tracer(:,:,:,nOH),    &
+                                      moa_emis,             &
                                       Time_next,is,ie,js,je)
       rdt(:,:,:,nbcphobic)=rdt(:,:,:,nbcphobic)+rtndbcphob(:,:,:)
       rdt(:,:,:,nbcphilic)=rdt(:,:,:,nbcphilic)+rtndbcphil(:,:,:)
@@ -1449,19 +1465,6 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
               Time_next, is_in=is, js_in=js)
       endif
    endif
-
-
-!------------------------------------------------------------------------
-!sea salt
-!------------------------------------------------------------------------
-   call mpp_clock_begin (seasalt_clock)
-   if (do_seasalt) then
-      call atmos_sea_salt_sourcesink(lon,lat,ocn_flx_fraction,pwt, &
-              z_half, pfull, w10m_ocean, t, t_surf_rad, rh, &
-              tracer(:,:,:,:), dsinku(:,:,:), rdt(:,:,:,:), dt, &
-              Time, is,ie,js,je, kbot)
-   endif
-   call mpp_clock_end (seasalt_clock)
 
 
 !------------------------------------------------------------------------

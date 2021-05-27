@@ -25,6 +25,7 @@ use   tracer_manager_mod, only : get_number_tracers, get_tracer_index, &
                                  query_method, NO_TRACER
 use    field_manager_mod, only : parse, MODEL_ATMOS
 use atmos_tracer_utilities_mod, only : sedimentation_velocity,sedimentation_flux
+use atmos_carbon_aerosol_mod, only : atmos_carbon_moa_fine_enrichment, get_moa_modulator
 
 implicit none
 private
@@ -150,7 +151,7 @@ contains
 ! this subroutine calculates tendencies for all seasalt tracers, and reports
 ! total fields, like total seasalt emission and settling
 subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
-       zhalf, pfull, w10m, t, t_surf, rh, tracer, dsinku, rdt, dt, Time, is,ie,js,je, kbot)
+       zhalf, pfull, w10m, t, t_surf, rh, tracer, dsinku, rdt, all_moa_fine_emis, dt, Time, is,ie,js,je, kbot)
 
   real, intent(in) :: lon(:,:), lat(:,:) ! geographical coordinates, units?
   real, intent(in) :: ocn_flx_fraction(:,:) ! fraction of land in the grid cell
@@ -164,6 +165,7 @@ subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
   real, intent(in) :: tracer(:,:,:,:) ! tracer concentrations
   real, intent(in) :: dsinku(:,:,:) ! dry deposition flux at the surface, for diag only
   real, intent(inout) :: rdt(:,:,:,:) ! tendency of tracers, to be updated for seasalt tracers
+  real, intent(out) :: all_moa_fine_emis(:,:) ! dynamic moa emissions
   real, intent(in) :: dt ! time step
   type(time_type), intent(in) :: Time ! current model time
   integer, intent(in) :: is, ie, js, je ! boundaries of physical window
@@ -176,8 +178,11 @@ subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
      seasalt_setl, &     ! seasalt sedimentation at the bottom of the atmos
      all_seasalt_setl, & ! total seasalt sedimentation flux at the bottom of the atmos
      seasalt_emis, &     ! seasalt emission flux at the bottom of the atmos
+     moa_fine_emis, &         ! moa emission flux at the bottom of the atmos
      all_seasalt_emis, &    ! total seasalt emission flux at the bottom of the atmos
      scale_sst_emis
+
+  real, dimension(size(tracer,1),size(tracer,2)) ::  moa_modulator
   real, dimension(size(tracer,1),size(tracer,2),size(tracer,3)) :: &
      seasalt_dt           ! calculated seasalt tendency
 
@@ -191,7 +196,9 @@ subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
   ! initialize accumulated deposition and emission fields
   all_seasalt_emis(:,:) = 0.0
   all_seasalt_setl(:,:) = 0.0
+  all_moa_fine_emis(:,:)     = 0.0
 
+  call get_moa_modulator(time,is,js,moa_modulator)  
 
   do i = 1,n_seasalt_tracers
      nseasalt = seasalt_tracers(i)%tr
@@ -201,8 +208,8 @@ subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
         seasalt_tracers(i)%ra, seasalt_tracers(i)%rb, &
         seasalt_tracers(i)%seasaltscheme, &
         zhalf, pfull, w10m, t, t_surf, rh, &
-        tracer(:,:,:,nseasalt), seasalt_dt, seasalt_emis, seasalt_setl, dt, &
-        is,ie,js,je, kbot,scale_sst_emis)
+        tracer(:,:,:,nseasalt), seasalt_dt, seasalt_emis, moa_fine_emis, seasalt_setl, dt, &
+        is,ie,js,je, kbot,scale_sst_emis,moa_modulator)
      ! update seasalt tendencies
      rdt(:,:,:,nseasalt)=rdt(:,:,:,nseasalt)+seasalt_dt(:,:,:)
      
@@ -225,6 +232,8 @@ subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
         ! accumulate total seasalt emission flux
         all_seasalt_emis(:,:) = all_seasalt_emis(:,:) + seasalt_emis(:,:) 
      endif
+
+     all_moa_fine_emis(:,:) = all_moa_fine_emis(:,:) + moa_fine_emis(:,:)
   enddo
   
   if (id_seasalt_ddep > 0) then
@@ -255,7 +264,7 @@ subroutine atmos_seasalt_sourcesink1 ( &
        ocn_flx_fraction, pwt, &
        seasaltden, seasaltref, seasaltra, seasaltrb,seasalt_scheme, &
        zhalf, pfull, w10m, t, t_surf, rh, &
-       seasalt, seasalt_dt, seasalt_emis, seasalt_setl, dt, is,ie,js,je,kbot,scale_sst)
+       seasalt, seasalt_dt, seasalt_emis, moa_fine_emis, seasalt_setl, dt, is,ie,js,je,kbot,scale_sst,moa_modulator)
 
   real, intent(in),  dimension(:,:)   :: ocn_flx_fraction
   real, intent(in) :: seasaltref ! effective radius of the dry seasalt particles, m
@@ -272,9 +281,10 @@ subroutine atmos_seasalt_sourcesink1 ( &
   integer, intent(in)  :: is, ie, js, je
   real, intent(out), dimension(:,:,:) :: seasalt_dt
   real, intent(out) :: seasalt_emis(:,:) ! seasalt emission
+  real, intent(out) :: moa_fine_emis(:,:) ! seasalt emission
   real, intent(out) :: scale_sst(:,:) ! seasalt emission
   real, intent(out) :: seasalt_setl(:,:) ! grav. sedimentation flux at the atmos bottom 
-
+  real, intent(in),  dimension(:,:) :: moa_modulator
   ! ---- local vars
   integer  i, j, k, id, jd, kd, kb, ir, irh
   real, dimension(size(seasalt,3)) :: setl
@@ -286,6 +296,7 @@ subroutine atmos_seasalt_sourcesink1 ( &
   real :: rhb, step,rwet
   real :: viscosity, free_path, C_c
   real :: ratio_r, rho_wet_seasalt, seasalt_flux
+  real :: moa_fine_flux
   real :: rho_air
   real :: a1, a2, Bcoef, r, dr, rmid, Acoef
   real, dimension(size(pfull,3))  :: vdep, seasalt_conc0, seasalt_conc1
@@ -293,6 +304,8 @@ subroutine atmos_seasalt_sourcesink1 ( &
   real, dimension(nrh) :: growth_table   
   real :: sst,tscale
   integer :: istep, nstep
+
+  real :: ssrc(nr)
 
   !to modulate vdep within a bin
   real :: vdep_weight, salt_mass_total, dmidw, salt_mass
@@ -312,6 +325,9 @@ subroutine atmos_seasalt_sourcesink1 ( &
   seasalt_setl(:,:) = 0.0
   seasalt_dt(:,:,:) = 0.0
 
+  moa_fine_emis(:,:) = 0.0
+  moa_fine_flux = 0.  
+  
 !----------- compute seasalt emission ------------
   if (seasalt_scheme .eq. "Martensson") then !  ie, Martensson et al., JGR-Atm, 2003
           do j=1,jd
@@ -340,19 +356,21 @@ subroutine atmos_seasalt_sourcesink1 ( &
                      else
                         tscale = t(i,j,kb)
                      end if
-                    seasalt_flux = seasalt_flux + &
-                       ch_fine*3.84e-4* 4./3.*pi*seasaltden*1e-3*rmid**2.* &
-                       max((param_ak(rmid)*tscale+param_bk(rmid)),min_scale_marthenson)*dr/0.4343
+
+                     ssrc(ir) = ch_fine*3.84e-4* 4./3.*pi*seasaltden*1e-3*rmid**2.* &
+                          max((param_ak(rmid)*tscale+param_bk(rmid)),min_scale_marthenson)*dr/0.4343
                   else
 ! Monahan (1986)
                     Bcoef=(coef1-alog10(betha*rmid*1.e6))/coef2
-                    seasalt_flux = seasalt_flux + &
-                       ch_coarse*1.373*4./3.*pi*seasaltden/betha**2*1.e-12* &
+                    ssrc(ir) = ch_coarse*1.373*4./3.*pi*seasaltden/betha**2*1.e-12* &
                        (1.+0.057*(betha*rmid*1e6)**1.05)*dr*      &
                        10**(1.19*exp(-(Bcoef**2)))
-                  endif
+                 endif
+                 seasalt_flux  = seasalt_flux   + ssrc(ir)
+                 moa_fine_flux = moa_fine_flux  + ssrc(ir)*atmos_carbon_moa_fine_enrichment(2*rmid*1e6,w10m(i,j),seasaltden,moa_modulator(i,j)) 
                 enddo
                 seasalt_emis(i,j) = seasalt_flux*ocn_flx_fraction (i,j)*w10m(i,j)**3.41
+                moa_fine_emis(i,j)     = moa_fine_flux*ocn_flx_fraction (i,j)*w10m(i,j)**3.41                
               endif
             enddo
           enddo
@@ -372,12 +390,15 @@ subroutine atmos_seasalt_sourcesink1 ( &
                 do ir=1,nr
                   rmid=r+dr*0.5   ! Dry radius
                   r=r+dr
-                  seasalt_flux            = seasalt_flux            + &
-                     ch_coarse*4.188e-18*rmid**3*seasaltden*betha*( &
+                  ssrc(ir) =   ch_coarse*4.188e-18*rmid**3*seasaltden*betha*( &
                     + coef1*a1*exp(-3.1*(alog(betha*rmid/2.1))**2) &
                     + coef2*a2*exp(-3.3*(alog(betha*rmid/9.2))**2) )
+
+                  moa_fine_flux     = moa_fine_flux     + ssrc(ir) * atmos_carbon_moa_fine_enrichment(2*rmid,w10m(i,j),seasaltden,moa_modulator(i,j))
+                  seasalt_flux = seasalt_flux + ssrc(ir)
                 enddo
-                  seasalt_emis(i,j) = seasalt_flux*ocn_flx_fraction (i,j)
+                seasalt_emis(i,j)   = seasalt_flux*ocn_flx_fraction (i,j)
+                moa_fine_emis(i,j)  = moa_fine_flux*ocn_flx_fraction (i,j)                
               endif
             enddo
           enddo
@@ -397,32 +418,48 @@ subroutine atmos_seasalt_sourcesink1 ( &
                 Bcoef=(0.433-log10(betha*rmid))/0.433
                 Acoef=4.7*((1.+30.*betha*rmid)**(-0.017*((betha*rmid)**(-1.44))))
 
-                seasalt_flux = seasalt_flux + &
+                ssrc(ir) = &
                      ch_coarse * 1.373 * (betha*rmid)**(-Acoef) * &
                      (1+0.057*((betha*rmid)**3.45)) * &
                      10**(1.607*exp(-Bcoef**2))   * &
                      dr*betha * &
                      4./3.* pi * 1.e-18 *rmid**3 * seasaltden
 
-                
-             enddo
+                seasalt_flux = seasalt_flux + ssrc(ir)
+             enddo                
           else
              do ir=1,nr
                 rmid=r+dr*0.5   ! Dry radius
                 r=r+dr
                 Bcoef=(coef1-alog10(betha*rmid))/coef2
-                seasalt_flux = seasalt_flux + &
+                ssrc(ir) = &
                      ch_coarse*1.373*4./3.*pi*seasaltden/betha**2*1.e-18* &
                      (1.+0.057*(betha*rmid)**1.05)*dr*      &
                      10**(1.19*exp(-(Bcoef**2)))
+
+                seasalt_flux = seasalt_flux + ssrc(ir)
+
              enddo
           end if
 
           do j=1,jd
             do i=1,id
               if (ocn_flx_fraction (i,j).gt.critical_sea_fraction) then
-                seasalt_emis(i,j) = seasalt_flux*(ocn_flx_fraction (i,j))*   &
-                                                           w10m(i,j)**3.41
+                seasalt_emis(i,j) = seasalt_flux*ocn_flx_fraction (i,j)* w10m(i,j)**3.41
+
+
+                !estimate moa emission
+                r = seasaltra* 1.e6
+                dr= (seasaltrb - seasaltra)/float(nr)* 1.e6
+                moa_fine_flux = 0.
+                do ir=1,nr
+                   rmid=r+dr*0.5   ! Dry radius
+                   r=r+dr
+                   moa_fine_flux     = moa_fine_flux     + ssrc(ir) * atmos_carbon_moa_fine_enrichment(2*rmid,w10m(i,j),seasaltden,moa_modulator(i,j))
+                end do
+                moa_fine_emis(i,j)     = moa_fine_flux*ocn_flx_fraction (i,j)* w10m(i,j)**3.41
+                
+                
                 if (do_sst_seasalt) then
                    if (present(kbot)) then
                       kb=kbot(i,j)
@@ -440,7 +477,8 @@ subroutine atmos_seasalt_sourcesink1 ( &
                       sst = max(min(tscale-273.15,max_tc_scale),min_tc_scale)
                       scale_sst(i,j)    = 0.329+0.0904*sst-0.00717*sst**2 + 0.000207*sst**3
                    end if
-                   seasalt_emis(i,j) = seasalt_emis(i,j)*scale_sst(i,j)
+                   seasalt_emis(i,j)  = seasalt_emis(i,j)*scale_sst(i,j)
+                   moa_fine_emis(i,j) = moa_fine_emis(i,j)*scale_sst(i,j)                   
                 end if
 
               endif
