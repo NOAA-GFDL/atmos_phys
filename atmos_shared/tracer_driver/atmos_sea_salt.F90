@@ -445,7 +445,7 @@ subroutine atmos_seasalt_sourcesink1 ( &
           do j=1,jd
             do i=1,id
               if (ocn_flx_fraction (i,j).gt.critical_sea_fraction) then
-                seasalt_emis(i,j) = seasalt_flux*ocn_flx_fraction (i,j)* w10m(i,j)**3.41
+                seasalt_emis(i,j) = seasalt_flux*(ocn_flx_fraction (i,j))* w10m(i,j)**3.41
 
 
                 !estimate moa emission
