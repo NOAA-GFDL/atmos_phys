@@ -858,9 +858,12 @@ real, dimension(:,:),         intent(in)    :: latb, lonb
           (.not. time_varying_f12) .and. rf12 == 0.0 .and. &
           (.not. time_varying_f113) .and. rf113 == 0.0 .and. &
           (.not. time_varying_f22) .and. rf22 == 0.0 )  then 
-        if (do_cfc_lw) call error_mesg ('radiative_gases_mod', &
-            'value of do_cfc_lw changed from true to false.', WARNING)
-        do_cfc_lw = .false.
+         if (do_cfc_lw) then
+            if (mpp_pe() == mpp_root_pe() ) &
+                 call error_mesg ('radiative_gases_mod', &
+                 'value of do_cfc_lw changed from true to false.', WARNING)
+            do_cfc_lw = .false.
+         end if
       else
         if (.not.do_cfc_lw) call error_mesg ('radiative_gases_mod', &
             'value of do_cfc_lw changed from false to true.', WARNING)
