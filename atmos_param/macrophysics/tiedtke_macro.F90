@@ -770,6 +770,9 @@ type(cloud_state_type),                  intent(in)    :: Cloud_state
       if (diag_id%dcond > 0 )   &
            diag_4d(:,:,:,diag_pt%dcond) = Cloud_processes%dcond_ls(:,:,:)
 
+!--> h1g, this is only for partial activation 
+!--> (i.e., dqa_activation = true  or aerosol_activation_scheme = dqa
+   if ( .not. total_activation ) then 
       do k=1,kdim
         do j=1,jdim
           do i=1,idim
@@ -782,7 +785,7 @@ type(cloud_state_type),                  intent(in)    :: Cloud_state
           end do
         end do
       end do
-
+   endif
 !-----------------------------------------------------------------------
 
 end subroutine tiedtke_macro_diagnostics

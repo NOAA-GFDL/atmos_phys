@@ -1132,7 +1132,7 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
      if (id_wetsoa_cmip > 0) then
        used = send_data (id_wetsoa_cmip, total_wetdep(:,:,nSOA) , Time, is,js)
      endif
-    
+
      if (id_wetoa_cmip > 0) then
        used = send_data (id_wetoa_cmip, &
               total_wetdep(:,:,nomphilic) + total_wetdep(:,:,nomphobic) + &
@@ -1226,8 +1226,7 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
          used = send_data ( id_n_red_wdep, total_wetdep_nred*wtmn/1000., Time, is, js)
      endif
 
-     
-      endif ! (wetdep_diagnostics_desired)
+     endif ! (wetdep_diagnostics_desired)
 
 !---------------------------------------------------------------------
 !    total precipitation (all sources):
@@ -1439,7 +1438,8 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
         do k=1,kx
           tca2(:,:) = tca2(:,:)*(1.0 - total_cloud_area(:,:,k))
         end do
-        tca2 = (1. - tca2) ! cmip6 = Cloud Area Fraction
+        tca2 = (1. - tca2) ! Cloud Area Fraction
+        tca2 = 100.*tca2   ! cmip6 = Cloud Cover Percentage
         used = send_data (id_clt, tca2, Time, is, js)
       endif
 
@@ -1473,11 +1473,24 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
 !---------------------------------------------------------------------
 !    define the total and convective ice and ice water path. 
 !---------------------------------------------------------------------
+
+!--> h1g, 2020-01-07, "ice_amt" in RK microphysics includes both ice and snow.
+!                     "ice_amt" in MG, MG1.5, and MG2 only include ice. 
+!in order to compare orange with orange, I added large-scale snow in "ice_amt".
+         
+!        if (id_tot_ice_amt > 0 ) &
+!          used = send_data (id_tot_ice_amt, &
+!          (Moist_clouds_block%cloud_data(i_lsc)%ice_amt + tot_conv_ice)/   &
+!                              (1.0 + total_conv_cloud), &
+!                                                         Time, is, js, 1)
+
         if (id_tot_ice_amt > 0 ) &
           used = send_data (id_tot_ice_amt, &
-          (Moist_clouds_block%cloud_data(i_lsc)%ice_amt + tot_conv_ice)/   &
+          (Moist_clouds_block%cloud_data(i_lsc)%ice_amt + tot_conv_ice+Moist_clouds_block%cloud_data(i_lsc)%snow)/   &
                               (1.0 + total_conv_cloud), &
                                                          Time, is, js, 1)
+!<-- h1g, 2020-01-07
+
 
         if (query_cmip_diag_id(ID_cli)) then
            used = send_cmip_data_3d (ID_cli, &
@@ -1687,7 +1700,7 @@ type(physics_tendency_block_type),                       &
                           intent(in)    :: Physics_tendency_block
 type(phys_mp_exch_type),  intent(in)    :: Phys_mp_exch
 real,                     intent(in)    :: dt
-real, dimension(:,:),     intent(in)    :: area, lon, lat                
+real, dimension(:,:),     intent(in)    :: area, lon, lat
 real, dimension(:,:),     intent(in)    :: shflx, lhflx                  
 real, dimension(:,:),     intent(in)    :: land, ustar, bstar, qstar
 type(MP_input_type),      intent(inout) :: Input_mp
@@ -1761,14 +1774,14 @@ type(mp2uwconv_type),     intent(inout) :: Mp2uwconv
       Input_mp%radturbten => Phys_mp_exch%radturbten
       Input_mp%diff_t => Phys_mp_exch%diff_t
       allocate (Input_mp%tracer(ix,jx,kx, size(Physics_input_block%q,4) ))  
-      allocate (Input_mp%tracer_orig(ix,jx,kx, size(Physics_input_block%q,4) ))  
-      allocate (Input_mp%area  (ix,jx  ))   ; Input_mp%area   = area 
-      allocate (Input_mp%lon   (ix,jx  ))   ; Input_mp%lon    = lon  
-      allocate (Input_mp%lat   (ix,jx  ))   ; Input_mp%lat    = lat  
-      allocate (Input_mp%land  (ix,jx  ))   ; Input_mp%land   = land 
-      Input_mp%cush  => Phys_mp_exch%cush 
-      Input_mp%cbmf  => Phys_mp_exch%cbmf 
-      Input_mp%pblht => Phys_mp_exch%pbltop                 
+      allocate (Input_mp%tracer_orig(ix,jx,kx, size(Physics_input_block%q,4) ))           
+      allocate (Input_mp%area  (ix,jx  ))   ; Input_mp%area   = area
+      allocate (Input_mp%lon   (ix,jx  ))   ; Input_mp%lon    = lon
+      allocate (Input_mp%lat   (ix,jx  ))   ; Input_mp%lat    = lat
+      allocate (Input_mp%land  (ix,jx  ))   ; Input_mp%land   = land
+      Input_mp%cush  => Phys_mp_exch%cush
+      Input_mp%cbmf  => Phys_mp_exch%cbmf
+      Input_mp%pblht => Phys_mp_exch%pbltop
       allocate (Input_mp%ustar (ix,jx  ))   ; Input_mp%ustar  = ustar
       allocate (Input_mp%bstar (ix,jx  ))   ; Input_mp%bstar  = bstar
       allocate (Input_mp%qstar (ix,jx  ))   ; Input_mp%qstar  = qstar
@@ -1931,16 +1944,17 @@ type(mp2uwconv_type),     intent(inout) :: Mp2uwconv
       Output_mp%tdt  => Physics_tendency_block%t_dt
       Output_mp%udt  => Physics_tendency_block%u_dt
       Output_mp%vdt  => Physics_tendency_block%v_dt
-      Output_mp%rdt  => Physics_tendency_block%q_dt 
+      Output_mp%rdt  => Physics_tendency_block%q_dt
       allocate (Output_mp%rdt_init (ix,jx,kx,nt)) ; Output_mp%rdt_init = 0.
       allocate (Output_mp%rdt_tentative (ix,jx,kx,nt)) ;    &
                                              Output_mp%rdt_tentative = 0.
-      Output_mp%convect  => Phys_mp_exch%convect 
+      Output_mp%convect  => Phys_mp_exch%convect
       Output_mp%convect = .false.
-      allocate ( Output_mp%lprec  (ix,jx))    ; Output_mp%lprec   = 0.       
-      allocate ( Output_mp%fprec  (ix,jx))    ; Output_mp%fprec   = 0.   
+      allocate ( Output_mp%lprec  (ix,jx))    ; Output_mp%lprec   = 0.
+      allocate ( Output_mp%fprec  (ix,jx))    ; Output_mp%fprec   = 0.
       allocate ( Output_mp%precip  (ix,jx))    ; Output_mp%precip   = 0.   
-      allocate ( Output_mp%gust_cv(ix,jx))    ; Output_mp%gust_cv = 0.   
+      allocate ( Output_mp%gust_cv(ix,jx))    ; Output_mp%gust_cv = 0.
+
       Output_mp%diff_t_clubb => Phys_mp_exch%diff_t_clubb
                                               Output_mp%diff_t_clubb =0.  
       Output_mp%diff_cu_mo  => Phys_mp_exch%diff_cu_mo
@@ -2148,7 +2162,6 @@ type(mp2uwconv_type),   intent(inout) :: Mp2uwconv
       deallocate (Mp2uwconv%lhflx  )
       deallocate (Mp2uwconv%tdt_dif)
       deallocate (Mp2uwconv%qdt_dif)
-
 !--------------------------------------------------------------------
 
 end subroutine MP_dealloc
@@ -2373,7 +2386,7 @@ integer                     :: id_wetdep_cmip
 
         id_clivi = register_cmip_diag_field_2d ( mod_name, 'clivi', Time, &
                                       'Ice Water Path', 'kg m-2', &
-                   standard_name='atmosphere_mass_content_of_cloud_ice',  &
+                   standard_name='atmosphere_mass_content_of_cloud_ice', &
                      interp_method='conserve_order1' )
 
       endif
@@ -2622,8 +2635,8 @@ integer                     :: id_wetdep_cmip
 
         conv_wetdep(n) = 1.
         conv_wetdep_kg_m2_s(n) = 1. ! no conversion needed
-        else  
-           write(outunit,'(a)') 'unsupported tracer: '//trim(tracer_name)//'     , units='//trim(tracer_units)
+        else
+           write(outunit,'(a)') 'unsupported tracer: '//trim(tracer_name)//', units='//trim(tracer_units)
           conv_wetdep(n) = 0.
           conv_wetdep_kg_m2_s(n) = 0.
         end if 
