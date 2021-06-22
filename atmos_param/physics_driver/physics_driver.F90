@@ -64,20 +64,20 @@ use atmos_tracer_driver_mod, only: atmos_tracer_driver_init,    &
                                    atmos_tracer_driver_endts, &
                                    atmos_tracer_driver,  &
                                    atmos_tracer_driver_end
-use mpp_mod,                 only: input_nml_file
+use mpp_mod,                 only: input_nml_file, mpp_get_current_pelist
+use mpp_domains_mod,         only: domain2D, mpp_get_ntile_count
 use fms_mod,                 only: mpp_clock_id, mpp_clock_begin,   &
                                    mpp_clock_end, CLOCK_MODULE_DRIVER, &
-                                   fms_init,  &
-                                   open_namelist_file, stdlog, stdout,  &
-                                   write_version_number, field_size, &
-                                   file_exist, error_mesg, FATAL,   &
-                                   WARNING, NOTE, check_nml_error, &
-                                   close_file, mpp_pe, mpp_root_pe, &
-                                   mpp_error, mpp_chksum, string
-use fms_io_mod,              only: restore_state, &
-                                   register_restart_field, restart_file_type, &
-                                   save_restart, get_mosaic_tile_file
-
+                                   fms_init, stdlog, stdout,  &
+                                   write_version_number, &
+                                   error_mesg, FATAL,   &
+                                   NOTE, check_nml_error, mpp_pe, &
+                                   mpp_root_pe, mpp_chksum, string, mpp_npes
+use fms2_io_mod,             only:  FmsNetcdfFile_t, FmsNetcdfDomainFile_t, &
+                                   register_restart_field, register_axis, unlimited, &
+                                   open_file, read_restart, write_restart, close_file, &
+                                   register_field, write_data, get_global_io_domain_indices, &
+                                   register_variable_attribute, variable_exists
 use diag_manager_mod,        only: register_diag_field, send_data
 
 ! shared atmospheric package modules:
@@ -199,7 +199,7 @@ private          &
          check_args, &
 
 !  called from physics_driver_init:
-         physics_driver_register_restart, &
+         physics_driver_register_restart_domain,  physics_driver_register_restart_scalars, &
 
 !  called from physics_driver_restart:
          physics_driver_netcdf, &
@@ -480,10 +480,6 @@ real,    dimension(:,:,:), allocatable,target ::  diff_t_clubb
 
 real,    dimension(:,:,:), allocatable        :: temp_last, q_last
 
-!--- for netcdf restart
-type(restart_file_type), pointer, save :: Phy_restart => NULL()
-type(restart_file_type), pointer, save :: Til_restart => NULL()
-logical                                :: in_different_file = .false.
 integer                                :: vers
 integer                                :: now_doing_strat = 0
 integer                                :: now_doing_entrain = 0
@@ -549,8 +545,8 @@ type (clouds_from_moist_block_type) :: Restart
 
 type(precip_flux_type)              :: Precip_flux
 
-
-
+integer :: i_cell, i_meso, i_shallow
+type (domain2D)               :: physics_domain !< Atmosphere domain
 !--> h1g, 2019-11-25
 integer   ::  itrac
 !<-- h1g, 2019-11-25
@@ -663,7 +659,9 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
                            tracer_init_clock
       real, dimension(:,:,:),   allocatable :: phalf
       real, dimension(:,:,:,:), allocatable :: trs
-
+      type(FmsNetcdfFile_t)       ::  Phy_restart !< Fms2io fileobj
+      type(FmsNetcdfDomainFile_t) ::  Til_restart !< Fms2io domain decomposed fileobj
+      integer, dimension(:),    allocatable :: pes !< Array of pes in the current pelist
 !---------------------------------------------------------------------
 !  local variables:
 !
@@ -699,19 +697,8 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
 !--------------------------------------------------------------------
 !    read namelist.
 !--------------------------------------------------------------------
-#ifdef INTERNAL_FILE_NML
       read (input_nml_file, nml=physics_driver_nml, iostat=io)
       ierr = check_nml_error(io,"physics_driver_nml")
-#else
-      if ( file_exist('input.nml')) then
-        unit = open_namelist_file ()
-        ierr=1; do while (ierr /= 0)
-        read  (unit, nml=physics_driver_nml, iostat=io, end=10)
-        ierr = check_nml_error(io, 'physics_driver_nml')
-        enddo
-10      call close_file (unit)
-      endif
-#endif
 
 !--------------------------------------------------------------------
 !    consistency checks for namelist options
@@ -817,7 +804,7 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       Physics%control%nqg = get_tracer_index (MODEL_ATMOS, 'graupel')
       Physics%control%nqnr = get_tracer_index (MODEL_ATMOS, 'rain_num')
       Physics%control%nqns = get_tracer_index (MODEL_ATMOS, 'snow_num')
-
+      physics_domain = Physics%control%domain
 !-----------------------------------------------------------------------
 !   allocate a logical array to define whether a tracer is a cloud tracer
 !   (one of those defined above), or not.
@@ -954,7 +941,7 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
 
       if (do_moist_processes) then
         call mpp_clock_begin ( moist_processes_init_clock )
-        call moist_processes_init (id, jd, kd, lonb, latb, lon, lat,  &
+        call moist_processes_init (physics_domain, id, jd, kd, lonb, latb, lon, lat,  &
                                    phalf, Physics%glbl_qty%pref(:,1),&
                                    axes, Time, Physics%control, Exch_ctrl) 
 
@@ -968,7 +955,7 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
 !    initialize damping_driver_mod.
 !-----------------------------------------------------------------------
       call mpp_clock_begin ( damping_init_clock )
-      call damping_driver_init (lonb, latb, Physics%glbl_qty%pref(:,1), &
+      call damping_driver_init (physics_domain, lonb, latb, Physics%glbl_qty%pref(:,1), &
                                 axes, Time, sgsmtn)
       call mpp_clock_end ( damping_init_clock )
 
@@ -976,7 +963,7 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
 !    initialize vert_turb_driver_mod.
 !-----------------------------------------------------------------------
       call mpp_clock_begin ( turb_init_clock )
-      call vert_turb_driver_init (lonb, latb, id, jd, kd, axes, Time, &
+      call vert_turb_driver_init (physics_domain, lonb, latb, id, jd, kd, axes, Time, &
                                   Exch_ctrl, Physics%control,  &
                                   doing_edt, doing_entrain, do_clubb)
       call mpp_clock_end ( turb_init_clock )
@@ -1011,7 +998,7 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
 !    initialize atmos_tracer_driver_mod.
 !-----------------------------------------------------------------------
       call mpp_clock_begin ( tracer_init_clock )
-      call atmos_tracer_driver_init (lonb, latb, trs, axes, Time, phalf)
+      call atmos_tracer_driver_init (physics_domain, lonb, latb, trs, axes, Time, phalf)
       call mpp_clock_end ( tracer_init_clock )
 
 !---------------------------------------------------------------------
@@ -1078,6 +1065,13 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
 
      call alloc_clouds_from_moist_type(Moist_clouds, Exch_ctrl, Atm_block)
 
+!------------------------------------------------------------------------
+!    save convective cloud indices to be passed to convection_driver_mod.
+!------------------------------------------------------------------------
+     i_shallow = Moist_clouds(1)%block(1)%index_uw_conv
+     i_cell    = Moist_clouds(1)%block(1)%index_donner_cell
+     i_meso    = Moist_clouds(1)%block(1)%index_donner_meso
+
 !--------------------------------------------------------------------
 !    call physics_driver_read_restart to obtain initial values for the module
 !    variables. Also register restart fields to be ready for intermediate 
@@ -1091,11 +1085,25 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
                                            id, jd, kd, Restart%Cloud_data(nc))
       enddo
 
-      call physics_driver_register_restart (Restart)
-      if(file_exist('INPUT/physics_driver.res.nc')) then
-         call restore_state(Phy_restart)
-         if(in_different_file) call restore_state(Til_restart)
+      !< Get the current pelist
+      allocate(pes(mpp_npes()))
+      call mpp_get_current_pelist(pes)
+
+      !< Open the scalar file with the current pelist, so that only the root pe opens and reads the file and
+      !! distributes the data to the other pes
+      if (open_file(Phy_restart,"INPUT/physics_driver.res.nc","read", is_restart=.true., pelist=pes)) then !scalar file
+         call physics_driver_register_restart_scalars(Restart, Phy_restart)
+         call read_restart(Phy_restart)
+         call close_file(Phy_restart)
       endif
+      deallocate(pes)
+
+      if (open_file(Til_restart,"INPUT/physics_driver.res.nc","read", physics_domain, is_restart=.true.)) then !domain file
+         call physics_driver_register_restart_domain(Restart, Til_restart)
+         call read_restart(Til_restart)
+         call close_file(Til_restart)
+      endif
+
 !---------------------------------------------------------------------
 !    convert the real variable (r_convect) indicating columns with 
 !    convection to a logical variable (convect). this will be used in 
@@ -1470,7 +1478,7 @@ logical,                 intent(in)             :: step_to_call_cosp_in
 !    call moist_processes_time_vary to pass needed time-dependent fields 
 !    to subordinate modules.
 !----------------------------------------------------------------------
-      call moist_processes_time_vary (dt)
+      call moist_processes_time_vary (Time_next, dt, i_cell, i_meso, i_shallow)
     endif
 !----------------------------------------------------------------------
 !    call cosp_driver_time_vary to obtain satellite location at current
@@ -2562,7 +2570,7 @@ real,dimension(:,:),    intent(inout)             :: gust
 !    and processes involving condenstion.
 !-----------------------------------------------------------------------
         call moist_processes (    &
-              is, ie, js, je, npz, Time_next, dt, frac_land, u_star,  &
+              is, ie, js, je, npz, Time_next,     frac_land, u_star,  &
               b_star, q_star, area, lon, lat, Physics_input_block,   &
               Moist_clouds_block, Physics_tendency_block, Phys_mp_exch, &
               Surf_diff, Removal_mp, shflx, lhflx,  &
@@ -2620,8 +2628,8 @@ real,dimension(:,:),    intent(inout)             :: gust
       if (query_cmip_diag_id(ID_tntmp) .or. query_cmip_diag_id(ID_tnhusmp)) then
         lphalf = log(p_half)
       endif
-      if (query_cmip_diag_id(ID_tntmp)) then
-        used = send_cmip_data_3d (ID_tntmp, tdt(:,:,:), Time_next, is, js, 1, phalf=lphalf)
+      if (query_cmip_diag_id(ID_tntmp)) then 
+         used = send_cmip_data_3d (ID_tntmp, tdt(:,:,:), Time_next, is, js,1, phalf=lphalf)
       endif
       if (query_cmip_diag_id(ID_tnhusmp)) then
         used = send_cmip_data_3d (ID_tnhusmp, rdt(:,:,:,nsphum), Time_next, is, js, 1, phalf=lphalf)
@@ -3056,16 +3064,66 @@ end subroutine physics_driver_restart
 !
 subroutine physics_driver_netcdf(timestamp)
   character(len=*), intent(in), optional :: timestamp
+  type(FmsNetcdfFile_t)       ::  Phy_restart !< Fms2io fileobj
+  type(FmsNetcdfDomainFile_t) ::  Til_restart !< Fms2io domain decomposed fileobj
+  logical :: tile_file_exist !< Flag indicating if the file was opened
+  character(len=128) :: filename !< String of filename
+  integer, allocatable, dimension(:)   :: pes !< Array of pes in the current pelist
 
-    r_convect = 0.
-    where(convect)
-       r_convect = 1.0
-    end where
-    call save_restart(Phy_restart, timestamp)
-    if(in_different_file) call save_restart(Til_restart, timestamp)
+  r_convect = 0.
+  where(convect)
+     r_convect = 1.0
+  end where
+
+  if (present(timestamp)) then
+     filename = "RESTART/"//trim(timestamp)//".physics_driver.res.nc"
+  else
+     filename = "RESTART/physics_driver.res.nc"
+  endif
+
+  !< Get the current pelist
+  allocate(pes(mpp_npes()))
+  call mpp_get_current_pelist(pes)
+
+  !< Open the scalar file with the current pelist, so that only the root pe opens and writes the file
+  if (open_file(Phy_restart, trim(filename),"overwrite", is_restart=.true., pelist=pes)) then !scalar file
+     call physics_driver_register_restart_scalars(Restart, Phy_restart)
+     call write_restart(Phy_restart)
+     call close_file(Phy_restart)
+  endif
+  deallocate(pes)
+
+  if (mpp_get_ntile_count(physics_domain) == 1) then
+     tile_file_exist = open_file(Til_restart, trim(filename),  "append", physics_domain, is_restart=.true.)
+  else
+     tile_file_exist = open_file(Til_restart, trim(filename),  "overwrite", physics_domain, is_restart=.true.)
+  endif
+
+  if (tile_file_exist) then !domain file
+      call physics_driver_register_restart_domain(Restart, Til_restart)
+      call write_restart(Til_restart)
+      call add_domain_dimension_data(Til_restart)
+      call close_file(Til_restart)
+  endif
 
 end subroutine physics_driver_netcdf
 ! </SUBROUTINE> NAME="physics_driver_netcdf"
+
+!< Add_dimension_data: Adds dummy data for the domain decomposed axis
+subroutine add_domain_dimension_data(fileobj)
+  type(FmsNetcdfDomainFile_t) :: fileobj !< Fms2io domain decomposed fileobj
+  integer, dimension(:), allocatable :: buffer !< Buffer with axis data
+  integer :: is, ie !< Starting and Ending indices for data
+
+    call get_global_io_domain_indices(fileobj, "xaxis_1", is, ie, indices=buffer)
+    call write_data(fileobj, "xaxis_1", buffer)
+    deallocate(buffer)
+
+    call get_global_io_domain_indices(fileobj, "yaxis_1", is, ie, indices=buffer)
+    call write_data(fileobj, "yaxis_1", buffer)
+    deallocate(buffer)
+
+end subroutine add_domain_dimension_data
 
 !#######################################################################
 ! <FUNCTION NAME="do_moist_in_phys_up">
@@ -3188,139 +3246,176 @@ end subroutine zero_radturbten
                
      
 !#####################################################################
-! <SUBROUTINE NAME="physics_driver_register_restart">
+! <SUBROUTINE NAME="physics_driver_register_restart_scalars">
 !  <OVERVIEW>
-!    physics_driver_register_restart will register restart field when do_netcdf file 
-!    is true. 
+!    physics_driver_register_restart_scalars will register restart field when do_netcdf file
+!    is true.
 !  </OVERVIEW>
-subroutine physics_driver_register_restart (Restart)
+subroutine physics_driver_register_restart_scalars (Restart, Phy_restart)
   type(clouds_from_moist_block_type), intent(inout), target :: Restart
-  character(len=64) :: fname, fname2
-  integer           :: id_restart
-  integer           :: nc
-  logical           :: reproduce_ulm_restart = .true.
-  integer           :: index_strat
+  type(FmsNetcdfFile_t), intent(inout)       ::  Phy_restart !< Fms2io fileobj
 
-  if (do_moist_processes) then  
-    if(doing_prog_clouds) then 
+  character(len=8), dimension(1)       :: dim_names !< Array of dimension names
+
+  if (do_moist_processes) then
+    if(doing_prog_clouds) then
        now_doing_strat = 1
     else
        now_doing_strat = 0
     endif
 
-    if(doing_edt) then 
+    if(doing_edt) then
        now_doing_edt = 1
     else
        now_doing_edt = 0
     endif
 
-    if(doing_entrain) then 
+    if(doing_entrain) then
        now_doing_entrain = 1
     else
        now_doing_entrain = 0
     endif
   endif
 
-  fname = 'physics_driver.res.nc'
-  call get_mosaic_tile_file(fname, fname2, .false. ) 
-  allocate(Phy_restart)
-  if(trim(fname2) == trim(fname)) then
-     Til_restart => Phy_restart
-     in_different_file = .false.
-  else
-     in_different_file = .true.
-     allocate(Til_restart)
+  dim_names(1) = "Time"
+  call register_axis(Phy_restart, dim_names(1), unlimited)
+
+  call register_restart_field(Phy_restart, 'vers',          vers, dim_names)
+  call register_restart_field(Phy_restart, 'doing_strat',   now_doing_strat, dim_names)
+  call register_restart_field(Phy_restart, 'doing_edt',     now_doing_edt, dim_names)
+  call register_restart_field(Phy_restart, 'doing_entrain', now_doing_entrain, dim_names)
+
+  if (.not. Phy_restart%is_readonly) then !If not reading the file,
+    call register_variable_attribute(Phy_restart, "vers", "long_name", "vers", str_len=len_trim("vers"))
+    call register_variable_attribute(Phy_restart, "doing_strat", "long_name", "doing_strat", str_len=len_trim("doing_strat"))
+    call register_variable_attribute(Phy_restart, "doing_edt", "long_name", "doing_edt", str_len=len_trim("doing_edt"))
+    call register_variable_attribute(Phy_restart, "doing_entrain", "long_name", "doing_entrain", str_len=len_trim("doing_entrain"))
+
+    call register_variable_attribute(Phy_restart, "vers", "units", "none", str_len=4)
+    call register_variable_attribute(Phy_restart, "doing_strat", "units", "none", str_len=4)
+    call register_variable_attribute(Phy_restart, "doing_edt", "units", "none", str_len=4)
+    call register_variable_attribute(Phy_restart, "doing_entrain", "units", "none", str_len=4)
   endif
 
-  id_restart = register_restart_field(Phy_restart, fname, 'vers',          vers,              no_domain=.true.)
-  id_restart = register_restart_field(Phy_restart, fname, 'doing_strat',   now_doing_strat,   no_domain=.true.)
-  id_restart = register_restart_field(Phy_restart, fname, 'doing_edt',     now_doing_edt,     no_domain=.true.)
-  id_restart = register_restart_field(Phy_restart, fname, 'doing_entrain', now_doing_entrain, no_domain=.true.)
+end subroutine physics_driver_register_restart_scalars
 
-  id_restart = register_restart_field(Til_restart, fname, 'diff_cu_mo', diff_cu_mo)
-  id_restart = register_restart_field(Til_restart, fname, 'pbltop',     pbltop)
-  id_restart = register_restart_field(Til_restart, fname, 'cush',       cush, mandatory = .false.)
-  id_restart = register_restart_field(Til_restart, fname, 'cbmf',       cbmf, mandatory = .false.)
-  id_restart = register_restart_field(Til_restart, fname, 'hmint',      hmint, mandatory = .false.)
-  id_restart = register_restart_field(Til_restart, fname, 'cgust',      cgust, mandatory = .false.)
-  id_restart = register_restart_field(Til_restart, fname, 'tke',        tke, mandatory = .false.)
-  id_restart = register_restart_field(Til_restart, fname, 'pblhto',     pblhto, mandatory = .false.)
-  id_restart = register_restart_field(Til_restart, fname, 'rkmo',       rkmo, mandatory = .false.)
-  id_restart = register_restart_field(Til_restart, fname, 'taudpo',     taudpo, mandatory = .false.)
-  id_restart = register_restart_field(Til_restart, fname, 'exist_shconv', exist_shconv, mandatory = .false.)
-  id_restart = register_restart_field(Til_restart, fname, 'exist_dpconv', exist_dpconv, mandatory = .false.)
-  id_restart = register_restart_field(Til_restart, fname, 'pblht_prev',   pblht_prev, mandatory = .false.)
-  id_restart = register_restart_field(Til_restart, fname, 'hlsrc_prev',   hlsrc_prev, mandatory = .false.)
-  id_restart = register_restart_field(Til_restart, fname, 'qtsrc_prev',   qtsrc_prev, mandatory = .false.)
-  id_restart = register_restart_field(Til_restart, fname, 'cape_prev',    cape_prev, mandatory = .false.)
-  id_restart = register_restart_field(Til_restart, fname, 'cin_prev',     cin_prev, mandatory = .false.)
-  id_restart = register_restart_field(Til_restart, fname, 'tke_prev',     tke_prev, mandatory = .false.)
-  id_restart = register_restart_field(Til_restart, fname, 'diff_t',     diff_t)
-  id_restart = register_restart_field(Til_restart, fname, 'diff_m',     diff_m)
-  id_restart = register_restart_field(Til_restart, fname, 'convect',    r_convect) 
+!#####################################################################
+! <SUBROUTINE NAME="physics_driver_register_restart_domain">
+!  <OVERVIEW>
+!    physics_driver_register_restart_domain will register restart field when do_netcdf file
+!    is true.
+!  </OVERVIEW>
+subroutine physics_driver_register_restart_domain (Restart, Til_restart)
+  type(clouds_from_moist_block_type), intent(inout), target :: Restart
+  type(FmsNetcdfDomainFile_t), intent(inout) ::  Til_restart !< Fms2io domain decomposed fileobj
+
+  integer           :: nc
+  logical           :: reproduce_ulm_restart = .true.
+  integer           :: index_strat
+  character(len=8), dimension(4)             :: dim_names_4d, dim_names_4d2 !< Array of dimension names
+  character(len=8), dimension(3)             :: dim_names_3d !< Array of dimension names
+
+  dim_names_4d =  (/"xaxis_1", "yaxis_1", "zaxis_1", "Time   "/)
+  dim_names_4d2 =  (/"xaxis_1", "yaxis_1", "zaxis_2", "Time   "/)
+  dim_names_3d =  (/"xaxis_1", "yaxis_1", "Time   "/)
+
+  call register_axis(Til_restart, "xaxis_1", "x")
+  call register_axis(Til_restart, "yaxis_1", "y")
+  call register_axis(Til_restart, "zaxis_1",  size(diff_cu_mo, 3))
+  call register_axis(Til_restart, "zaxis_2", size(exist_shconv, 3))
+  if (.not. Til_restart%mode_is_append) call register_axis(Til_restart, "Time", unlimited)
+
+  !< Register the domain decomposed dimensions as variables so that the combiner can work
+  !! correctly
+  call register_field(Til_restart, "xaxis_1", "double", (/"xaxis_1"/))
+  call register_field(Til_restart, "yaxis_1", "double", (/"yaxis_1"/))
+
+  call register_restart_field(Til_restart, 'diff_cu_mo', diff_cu_mo, dim_names_4d)
+  call register_restart_field(Til_restart, 'pbltop',     pbltop, dim_names_3d)
+  call register_restart_field(Til_restart, 'cush',       cush, dim_names_3d, is_optional = .true.)
+  call register_restart_field(Til_restart, 'cbmf',       cbmf, dim_names_3d, is_optional = .true.)
+  call register_restart_field(Til_restart, 'hmint',      hmint, dim_names_3d, is_optional = .true.)
+  call register_restart_field(Til_restart, 'cgust',      cgust, dim_names_3d, is_optional = .true.)
+  call register_restart_field(Til_restart, 'tke',        tke, dim_names_3d, is_optional = .true.)
+  call register_restart_field(Til_restart, 'pblhto',     pblhto, dim_names_3d, is_optional = .true.)
+  call register_restart_field(Til_restart, 'rkmo',       rkmo, dim_names_3d, is_optional = .true.)
+  call register_restart_field(Til_restart, 'taudpo',     taudpo, dim_names_3d, is_optional = .true.)
+  call register_restart_field(Til_restart, 'exist_shconv', exist_shconv, dim_names_4d2, is_optional = .true.)
+  call register_restart_field(Til_restart, 'exist_dpconv', exist_dpconv, dim_names_4d2, is_optional = .true.)
+  call register_restart_field(Til_restart, 'pblht_prev',   pblht_prev, dim_names_4d2, is_optional = .true.)
+  call register_restart_field(Til_restart, 'hlsrc_prev',   hlsrc_prev, dim_names_4d2, is_optional = .true.)
+  call register_restart_field(Til_restart, 'qtsrc_prev',   qtsrc_prev, dim_names_4d2, is_optional = .true.)
+  call register_restart_field(Til_restart, 'cape_prev',    cape_prev, dim_names_4d2, is_optional = .true.)
+  call register_restart_field(Til_restart, 'cin_prev',     cin_prev, dim_names_4d2, is_optional = .true.)
+  call register_restart_field(Til_restart, 'tke_prev',     tke_prev, dim_names_4d2, is_optional = .true.)
+  call register_restart_field(Til_restart, 'diff_t',     diff_t, dim_names_4d)
+  call register_restart_field(Til_restart, 'diff_m',     diff_m, dim_names_4d)
+  call register_restart_field(Til_restart, 'convect',    r_convect, dim_names_3d)
+
   if (do_clubb > 0) then
-    id_restart = register_restart_field(Til_restart, fname, 'diff_t_clubb', diff_t_clubb, mandatory = .false.)
+    call register_restart_field(Til_restart, 'diff_t_clubb', diff_t_clubb, dim_names_4d, is_optional = .true.)
   end if
   if (doing_prog_clouds) then
-    id_restart = register_restart_field(Til_restart, fname, 'radturbten',       radturbten)
+    call register_restart_field(Til_restart, 'radturbten',       radturbten, dim_names_4d)
   endif
 
   index_strat = 0
   do nc = 1, size(Restart%Cloud_data,1)
     if (trim(Restart%Cloud_data(nc)%scheme_name).eq.'strat_cloud' .and. .not. reproduce_ulm_restart) then
-      id_restart = register_restart_field(Til_restart, fname, 'lsc_cloud_area',     Restart%Cloud_data(nc)%cloud_area,     mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'lsc_liquid',         Restart%Cloud_data(nc)%liquid_amt,     mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'lsc_ice',            Restart%Cloud_data(nc)%ice_amt,        mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'lsc_droplet_number', Restart%Cloud_data(nc)%droplet_number, mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'lsc_ice_number',     Restart%Cloud_data(nc)%ice_number,     mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'lsc_snow',           Restart%Cloud_data(nc)%snow,           mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'lsc_rain',           Restart%Cloud_data(nc)%rain,           mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'lsc_snow_size',      Restart%Cloud_data(nc)%snow_size,      mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'lsc_rain_size',      Restart%Cloud_data(nc)%rain_size,      mandatory = .false.)
+      call register_restart_field(Til_restart, 'lsc_cloud_area',     Restart%Cloud_data(nc)%cloud_area, dim_names_4d,     is_optional = .true.)
+      call register_restart_field(Til_restart, 'lsc_liquid',         Restart%Cloud_data(nc)%liquid_amt, dim_names_4d,     is_optional = .true.)
+      call register_restart_field(Til_restart, 'lsc_ice',            Restart%Cloud_data(nc)%ice_amt, dim_names_4d,        is_optional = .true.)
+      call register_restart_field(Til_restart, 'lsc_droplet_number', Restart%Cloud_data(nc)%droplet_number, dim_names_4d, is_optional = .true.)
+      call register_restart_field(Til_restart, 'lsc_ice_number',     Restart%Cloud_data(nc)%ice_number, dim_names_4d,     is_optional = .true.)
+      call register_restart_field(Til_restart, 'lsc_snow',           Restart%Cloud_data(nc)%snow, dim_names_4d,           is_optional = .true.)
+      call register_restart_field(Til_restart, 'lsc_rain',           Restart%Cloud_data(nc)%rain, dim_names_4d,           is_optional = .true.)
+      call register_restart_field(Til_restart, 'lsc_snow_size',      Restart%Cloud_data(nc)%snow_size, dim_names_4d,      is_optional = .true.)
+      call register_restart_field(Til_restart, 'lsc_rain_size',      Restart%Cloud_data(nc)%rain_size, dim_names_4d,      is_optional = .true.)
     endif
     if (trim(Restart%Cloud_data(nc)%scheme_name).eq.'strat_cloud' .and. reproduce_ulm_restart) index_strat = nc
 
     if (trim(Restart%Cloud_data(nc)%scheme_name).eq.'donner_cell') then
-      id_restart = register_restart_field(Til_restart, fname, 'cell_cloud_frac',  Restart%Cloud_data(nc)%cloud_area,  mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'cell_liquid_amt',  Restart%Cloud_data(nc)%liquid_amt,  mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'cell_liquid_size', Restart%Cloud_data(nc)%liquid_size, mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'cell_ice_amt',     Restart%Cloud_data(nc)%ice_amt,     mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'cell_ice_size',    Restart%Cloud_data(nc)%ice_size,    mandatory = .false.)
+      call register_restart_field(Til_restart, 'cell_cloud_frac',  Restart%Cloud_data(nc)%cloud_area, dim_names_4d,  is_optional = .true.)
+      call register_restart_field(Til_restart, 'cell_liquid_amt',  Restart%Cloud_data(nc)%liquid_amt, dim_names_4d,  is_optional = .true.)
+      call register_restart_field(Til_restart, 'cell_liquid_size', Restart%Cloud_data(nc)%liquid_size, dim_names_4d, is_optional = .true.)
+      call register_restart_field(Til_restart, 'cell_ice_amt',     Restart%Cloud_data(nc)%ice_amt, dim_names_4d,     is_optional = .true.)
+      call register_restart_field(Til_restart, 'cell_ice_size',    Restart%Cloud_data(nc)%ice_size, dim_names_4d,    is_optional = .true.)
     endif
 
     if (trim(Restart%Cloud_data(nc)%scheme_name).eq.'donner_meso') then
-      id_restart = register_restart_field(Til_restart, fname, 'meso_cloud_frac',  Restart%Cloud_data(nc)%cloud_area,  mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'meso_liquid_amt',  Restart%Cloud_data(nc)%liquid_amt,  mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'meso_liquid_size', Restart%Cloud_data(nc)%liquid_size, mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'meso_ice_amt',     Restart%Cloud_data(nc)%ice_amt,     mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'meso_ice_size',    Restart%Cloud_data(nc)%ice_size,    mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'nsum',             Restart%Cloud_data(nc)%nsum_out,    mandatory = .false.)
+      call register_restart_field(Til_restart, 'meso_cloud_frac',  Restart%Cloud_data(nc)%cloud_area, dim_names_4d,  is_optional = .true.)
+      call register_restart_field(Til_restart, 'meso_liquid_amt',  Restart%Cloud_data(nc)%liquid_amt, dim_names_4d,  is_optional = .true.)
+      call register_restart_field(Til_restart, 'meso_liquid_size', Restart%Cloud_data(nc)%liquid_size, dim_names_4d, is_optional = .true.)
+      call register_restart_field(Til_restart, 'meso_ice_amt',     Restart%Cloud_data(nc)%ice_amt, dim_names_4d,     is_optional = .true.)
+      call register_restart_field(Til_restart, 'meso_ice_size',    Restart%Cloud_data(nc)%ice_size, dim_names_4d,    is_optional = .true.)
+      call register_restart_field(Til_restart, 'nsum',             Restart%Cloud_data(nc)%nsum_out, dim_names_3d,    is_optional = .true.)
     endif
 
     if (trim(Restart%Cloud_data(nc)%scheme_name).eq.'uw_conv') then
-      id_restart = register_restart_field(Til_restart, fname, 'shallow_cloud_area',     Restart%Cloud_data(nc)%cloud_area,     mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'shallow_liquid',         Restart%Cloud_data(nc)%liquid_amt,     mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'shallow_ice',            Restart%Cloud_data(nc)%ice_amt,        mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'shallow_droplet_number', Restart%Cloud_data(nc)%droplet_number, mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'shallow_ice_number',     Restart%Cloud_data(nc)%ice_number,     mandatory = .false.)
+      call register_restart_field(Til_restart, 'shallow_cloud_area',     Restart%Cloud_data(nc)%cloud_area, dim_names_4d,     is_optional = .true.)
+      call register_restart_field(Til_restart, 'shallow_liquid',         Restart%Cloud_data(nc)%liquid_amt, dim_names_4d,     is_optional = .true.)
+      call register_restart_field(Til_restart, 'shallow_ice',            Restart%Cloud_data(nc)%ice_amt, dim_names_4d,        is_optional = .true.)
+      call register_restart_field(Til_restart, 'shallow_droplet_number', Restart%Cloud_data(nc)%droplet_number, dim_names_4d, is_optional = .true.)
+      call register_restart_field(Til_restart, 'shallow_ice_number',     Restart%Cloud_data(nc)%ice_number, dim_names_4d,     is_optional = .true.)
     endif
   enddo
 
     ! save large-scale clouds last to reproduce ulm code
     if (index_strat > 0) then
       nc = index_strat
-      id_restart = register_restart_field(Til_restart, fname, 'lsc_cloud_area',     Restart%Cloud_data(nc)%cloud_area,     mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'lsc_liquid',         Restart%Cloud_data(nc)%liquid_amt,     mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'lsc_ice',            Restart%Cloud_data(nc)%ice_amt,        mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'lsc_droplet_number', Restart%Cloud_data(nc)%droplet_number, mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'lsc_ice_number',     Restart%Cloud_data(nc)%ice_number,     mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'lsc_snow',           Restart%Cloud_data(nc)%snow,           mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'lsc_rain',           Restart%Cloud_data(nc)%rain,           mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'lsc_snow_size',      Restart%Cloud_data(nc)%snow_size,      mandatory = .false.)
-      id_restart = register_restart_field(Til_restart, fname, 'lsc_rain_size',      Restart%Cloud_data(nc)%rain_size,      mandatory = .false.)
+      call register_restart_field(Til_restart, 'lsc_cloud_area',     Restart%Cloud_data(nc)%cloud_area, dim_names_4d,     is_optional = .true.)
+      call register_restart_field(Til_restart, 'lsc_liquid',         Restart%Cloud_data(nc)%liquid_amt, dim_names_4d,     is_optional = .true.)
+      call register_restart_field(Til_restart, 'lsc_ice',            Restart%Cloud_data(nc)%ice_amt, dim_names_4d,        is_optional = .true.)
+      call register_restart_field(Til_restart, 'lsc_droplet_number', Restart%Cloud_data(nc)%droplet_number, dim_names_4d, is_optional = .true.)
+      call register_restart_field(Til_restart, 'lsc_ice_number',     Restart%Cloud_data(nc)%ice_number, dim_names_4d,     is_optional = .true.)
+      call register_restart_field(Til_restart, 'lsc_snow',           Restart%Cloud_data(nc)%snow, dim_names_4d,           is_optional = .true.)
+      call register_restart_field(Til_restart, 'lsc_rain',           Restart%Cloud_data(nc)%rain, dim_names_4d,           is_optional = .true.)
+      call register_restart_field(Til_restart, 'lsc_snow_size',      Restart%Cloud_data(nc)%snow_size, dim_names_4d,      is_optional = .true.)
+      call register_restart_field(Til_restart, 'lsc_rain_size',      Restart%Cloud_data(nc)%rain_size, dim_names_4d,      is_optional = .true.)
     endif
 
-end subroutine physics_driver_register_restart
+end subroutine physics_driver_register_restart_domain
+
 ! </SUBROUTINE>    
 !#####################################################################
 ! <SUBROUTINE NAME="check_args">

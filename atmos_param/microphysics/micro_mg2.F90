@@ -3305,7 +3305,9 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
   meltsdttot = meltsdttot/real(iter)
   frzrdttot  = frzrdttot /real(iter)
 
-  qcsinksum_rate1ord = qcsinksum_rate1ord/qc/real(iter)
+  where (qc(i,j) .gt. 0.0)
+    qcsinksum_rate1ord = qcsinksum_rate1ord/qc/real(iter)
+  end where
 
   preo = preo/real(iter)
   prdso = prdso/real(iter)

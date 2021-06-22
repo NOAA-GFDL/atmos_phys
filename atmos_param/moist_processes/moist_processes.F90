@@ -4,7 +4,7 @@ module moist_processes_mod
 !
 !         interface module for moisture processes
 !         ---------------------------------------
-!        1) sets up needed derived-type variables related to
+!        1) sets up needed derived-type variables related to 
 !                             condensation / convection parameterizations
 !        2) calls convection_driver to process model convection
 !        3) calls lscloud_driver to process large-scale clouds
@@ -20,21 +20,22 @@ use diag_manager_mod,      only: register_diag_field, send_data, &
 use diag_axis_mod,         only: get_axis_num
 use diag_data_mod,         only: CMOR_MISSING_VALUE
 
+use mpp_domains_mod,       only: domain2D
 use mpp_mod,               only: input_nml_file
 use fms_mod,               only: error_mesg, FATAL, NOTE,        &
-                                 file_exist, check_nml_error,    &
-                                 open_namelist_file, close_file, &
+                                 check_nml_error,    &
                                  write_version_number, stdout,   &
                                  mpp_pe, mpp_root_pe, stdlog,    &
                                  mpp_clock_id, mpp_clock_begin,  &
                                  mpp_clock_end, CLOCK_MODULE,    &
-                                 MPP_CLOCK_SYNC, read_data, write_data
+                                 MPP_CLOCK_SYNC
+use fms2_io_mod,           only: file_exists
 use field_manager_mod,     only: MODEL_ATMOS
 use tracer_manager_mod,    only: get_tracer_index,&
                                  get_tracer_names, &
                                  NO_TRACER
 use constants_mod,         only: CP_AIR, GRAV, HLV, HLS, HLF, &
-                                 TFREEZE, WTMAIR, SECONDS_PER_DAY,WTMN
+                                 TFREEZE, WTMAIR, SECONDS_PER_DAY, WTMN        
 ! atmos_param modules
 use physics_types_mod,    only : physics_control_type,    &
                                  physics_tendency_block_type, &
@@ -44,7 +45,7 @@ use physics_types_mod,    only : physics_control_type,    &
 use physics_radiation_exch_mod,       &
                           only : clouds_from_moist_block_type, &
                                  exchange_control_type
-use lscloud_driver_mod,   only : lscloud_driver_init, lscloud_driver, &
+use lscloud_driver_mod,   only : lscloud_driver_init, lscloud_driver, & 
                                  lscloud_driver_time_vary,  &
                                  lscloud_driver_endts, &
                                  lscloud_driver_end
@@ -56,6 +57,7 @@ use convection_driver_mod,only : convection_driver_init, &
                                  convection_driver_restart, &
                                  convection_driver_end, &
                                  id_pr_g, id_prc_g, id_prsn_g
+use convection_utilities_mod, only: mp2uwconv_type
 use diag_integral_mod,    only : diag_integral_field_init, &
                                  sum_diag_integral_field
 use atmos_global_diag_mod, only: register_global_diag_field, &
@@ -63,14 +65,16 @@ use atmos_global_diag_mod, only: register_global_diag_field, &
                                  send_global_diag
 use vert_diff_driver_mod, only : surf_diff_type
 use aerosol_types_mod,    only : aerosol_type
+use atmos_tracer_utilities_mod, only : get_cmip_param, get_chem_param
 use moist_proc_utils_mod, only : tempavg, column_diag, rh_calc,  &
                                  MP_input_type, MP_nml_type,  &
                                  mp_tendency_type, mp_removal_type, &
                                  mp_removal_control_type, &
+                                 define_removal_mp_control_type, &
+                                 deallocate_mp_removal_control_type, &
                                  mp_conv2ls_type, mp_output_type
 
 ! atmos_shared modules
-use atmos_tracer_utilities_mod, only : get_cmip_param, get_chem_param
 use atmos_dust_mod,       only : atmos_dust_init, dust_tracers,   &
                                  n_dust_tracers, do_dust,   &
                                  atmos_dust_wetdep_flux_set
@@ -94,7 +98,7 @@ public   moist_processes_init, moist_processes_time_vary, moist_processes,&
          moist_processes_restart, &
          moist_processes_endts, moist_processes_end,   &
          set_cosp_precip_sources, define_cosp_precip_fluxes
-
+  
 !-----------------------------------------------------------------------
 !-------------------- private data -------------------------------------
 
@@ -113,8 +117,8 @@ private combined_MP_diagnostics, MP_alloc, MP_dealloc, create_Nml_mp, &
 
 !---------------- namelist variable definitions ------------------------
 !
-!   do_unified_clouds =
-!              switch to turn on/off a unified (LS + conv) cloud
+!   do_unified_clouds =    
+!              switch to turn on/off a unified (LS + conv) cloud 
 !                scheme (not yet available)
 !                [logical, default: do_unified_clouds=false ]
 !   do_lsc   = switch to turn on/off large scale condensation
@@ -164,9 +168,9 @@ private combined_MP_diagnostics, MP_alloc, MP_dealloc, create_Nml_mp, &
 !   carbon for nucleation
 !  </DATA>
 
-logical :: do_unified_clouds = .false.
+logical :: do_unified_clouds = .false. 
 logical :: do_lsc = .false.
-logical :: do_mca=.false.
+logical :: do_mca=.false. 
 logical :: do_ras=.false.
 logical :: do_uw_conv=.false.
 logical :: do_donner_deep=.false.
@@ -220,14 +224,15 @@ type(cmip_diag_id_type) :: ID_cl, ID_clw, ID_cli, ID_hur
 
 integer, dimension(:), allocatable :: id_wetdep
 integer, dimension(:), allocatable :: id_wetdep_uw, id_wetdep_donner, &
-                                      id_wetdepc_donner, id_wetdepm_donner  !f1p
+                                id_wetdepc_donner, id_wetdepm_donner  !f1p
 integer, dimension(:), allocatable :: id_wetdep_kg_m2_s
 real, dimension(:), allocatable    :: conv_wetdep, conv_wetdep_kg_m2_s, nb_N_ox, nb_N_red, nb_N
 
 real :: missing_value = -999.
 
 ! cmip names, long_names, standard names for wetdep diag fields
-integer :: id_wetpoa_cmip, id_wetsoa_cmip, id_wetoa_cmip, id_wetbc_cmip, id_wetdust_cmip, &
+integer :: id_wetpoa_cmip, id_wetsoa_cmip, id_wetoa_cmip, id_wetbc_cmip, &
+           id_wetdust_cmip, &
            id_wetss_cmip, id_wetso4_cmip, id_wetso2_cmip, id_wetdms_cmip, id_wetnh4_cmip
 integer, parameter :: NCMIP_NAMES = 10
 character(len=8), dimension(NCMIP_NAMES) :: cmip_names = &
@@ -238,12 +243,12 @@ character(len=64), dimension(NCMIP_NAMES) :: cmip_longnames = &
                                     "Dry Aerosol Secondary Organic Matter", &
                                     "Dry Aerosol Total Organic Matter", &
                                     "Black Carbon Aerosol Mass", &
-                                    "Dust", "Seasalt", "SO4", "SO2", "DMS", "NH4+NH3"]
+                                    "Dust", "Seasalt", "SO4", "SO2", "DMS",      "NH4+NH3"]
 character(len=64), dimension(NCMIP_NAMES) :: cmip_stdnames = &
                                   [ character(len=64) :: &
                                     "primary_particulate_organic_matter_dry_aerosol", &
                                     "secondary_particulate_organic_matter_dry_aerosol", &
-                                    "particulate_organic_matter_dry_aerosol", &
+                                    "particulate_organic_matter_dry_aerosol     ",  &
                                     "elemental_carbon_dry_aerosol", "dust_dry_aerosol", &
                                     "seasalt_dry_aerosol", "sulfate_dry_aerosol", &
                                     "sulfur_dioxide", "dimethyl_sulfide", "ammonium_dry_aerosol"]
@@ -295,7 +300,7 @@ logical :: do_cosp
 logical :: use_tau
 integer :: nsphum, nql, nqi, nqa, nqn, nqni, nqr, nqs, nqg
 integer :: num_prog_tracers
-
+real    :: dt
 
 
                              contains
@@ -304,11 +309,12 @@ integer :: num_prog_tracers
 
 !########################################################################
 
-subroutine moist_processes_init ( id, jd, kd, lonb, latb, &
+subroutine moist_processes_init ( domain, id, jd, kd, lonb, latb, &
                                  lon, lat, phalf, pref,  axes, Time, &
                                  Physics_control, Exch_ctrl)
 
 !-----------------------------------------------------------------------
+type(domain2D), target,   intent(in)    :: domain !< Atmosphere domain
 integer,                  intent(in)    :: id, jd, kd, axes(4)
 real, dimension(:,:),     intent(in)    :: lonb, latb
 real,dimension(:,:),      intent(in)    :: lon,  lat    ! h1g
@@ -379,19 +385,9 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
 !-----------------------------------------------------------------------
 !   process the moist_processes_nml.
 !-----------------------------------------------------------------------
-      if ( file_exist('input.nml')) then
-#ifdef INTERNAL_FILE_NML
+      if ( file_exists('input.nml')) then
         read (input_nml_file, nml=moist_processes_nml, iostat=io)
         ierr = check_nml_error(io,'moist_processes_nml')
-#else
-
-        unit = open_namelist_file ( )
-        ierr=1; do while (ierr /= 0)
-          read  (unit, nml=moist_processes_nml, iostat=io, end=10)
-          ierr = check_nml_error(io,'moist_processes_nml')
-        enddo
-  10    call close_file (unit)
-#endif
 
 !--------- write version and namelist to standard log ------------
 
@@ -422,12 +418,12 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
       endif
 
 !----------------------------------------------------------------------
-!   create an mp_nml_type variable (Nml_mp) so that moist_processes_nml
+!   create an mp_nml_type variable (Nml_mp) so that moist_processes_nml 
 !   variables may be made available to other related modules as needed,
-!   obviating the need for the occurrence of the same variable in mutiple
+!   obviating the need for the occurrence of the same variable in mutiple 
 !   namelists.
 !----------------------------------------------------------------------
-      call create_Nml_mp
+      call create_Nml_mp 
 
 !-----------------------------------------------------------------------
 !   consistency checks for thes namelist variables
@@ -436,7 +432,7 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
         call error_mesg ('moist_processes_init', &
        'rh_clouds cannot be active when prognostic clouds are', FATAL)
 
-      if (do_donner_deep .and. do_rh_clouds) &
+      if (do_donner_deep .and. do_rh_clouds) &  
            call error_mesg ('moist_processes_init',  &
             'Cannot currently activate donner_deep_mod with rh_clouds', &
                                                                    FATAL)
@@ -500,43 +496,20 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
 !    the number of tracers being affected by each available convective
 !    scheme.
 !------------------------------------------------------------------------
-!     allocate (Removal_mp%control%tracers_in_donner(num_prog_tracers))
-!     allocate (Removal_mp%control%tracers_in_ras(num_prog_tracers))
-!     allocate (Removal_mp%control%tracers_in_uw(num_prog_tracers))
-!     allocate (Removal_mp%control%tracers_in_mca(num_prog_tracers))
-!     Removal_mp%control%tracers_in_donner = .false.
-!     Removal_mp%control%tracers_in_ras    = .false.
-!     Removal_mp%control%tracers_in_uw     = .false.
-!     Removal_mp%control%tracers_in_mca    = .false.
-!     Removal_mp%control%num_mca_tracers   = 0
-!     Removal_mp%control%num_ras_tracers   = 0
-!     Removal_mp%control%num_donner_tracers   = 0
-!     Removal_mp%control%num_uw_tracers   = 0
-      allocate (Removal_mp_control%tracers_in_donner(num_prog_tracers))
-      allocate (Removal_mp_control%tracers_in_ras(num_prog_tracers))
-      allocate (Removal_mp_control%tracers_in_uw(num_prog_tracers))
-      allocate (Removal_mp_control%tracers_in_mca(num_prog_tracers))
-      Removal_mp_control%tracers_in_donner = .false.
-      Removal_mp_control%tracers_in_ras    = .false.
-      Removal_mp_control%tracers_in_uw     = .false.
-      Removal_mp_control%tracers_in_mca    = .false.
-      Removal_mp_control%num_mca_tracers   = 0
-      Removal_mp_control%num_ras_tracers   = 0
-      Removal_mp_control%num_donner_tracers   = 0
-      Removal_mp_control%num_uw_tracers   = 0
+      call define_removal_mp_control_type (Removal_mp_control,    &
+                                                        num_prog_tracers)
 
 !-----------------------------------------------------------------------
 !    call convection_driver_init to initialize the convection scheme(s).
 !-----------------------------------------------------------------------
-      call convection_driver_init (id, jd, kd, axes, Time, &
+      call convection_driver_init (domain, id, jd, kd, axes, Time, &
                           Physics_control, Exch_ctrl, Nml_mp,   &
-!                         Removal_mp%control, lonb, latb, pref)
                           Removal_mp_control, lonb, latb, pref)
 
 !-----------------------------------------------------------------------
 !    call lscloud_driver_init to initialize the large-scale cloud scheme.
 !-----------------------------------------------------------------------
-      call lscloud_driver_init (id,jd,kd, axes, Time, Exch_ctrl, Nml_mp, &
+      call lscloud_driver_init (domain, id,jd,kd, axes, Time, Exch_ctrl, Nml_mp, &
                                  Physics_control, lon, lat, phalf, pref)
 
 !-----------------------------------------------------------------------
@@ -555,15 +528,18 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
 end subroutine moist_processes_init
 
 !#####################################################################
+ 
+subroutine moist_processes_time_vary (Time_in, dt_in, i_cell, i_meso, i_shallow)
 
-subroutine moist_processes_time_vary (dt)
-
-real, intent(in) :: dt
+real, intent(in) :: dt_in
+type(time_type), intent(in) :: Time_in
+integer, intent(in) :: i_cell, i_meso, i_shallow
 
 !-----------------------------------------------------------------------
 
-      call convection_driver_time_vary (dt)
-      call lscloud_driver_time_vary (dt)
+      dt = dt_in
+      call convection_driver_time_vary (Time_in, dt_in, i_cell, i_meso, i_shallow)
+      call lscloud_driver_time_vary (dt_in)
 
 end subroutine moist_processes_time_vary
 
@@ -571,7 +547,7 @@ end subroutine moist_processes_time_vary
 
 !#######################################################################
 
-subroutine moist_processes ( is, ie, js, je, npz, Time, dt, land, ustar,  &
+subroutine moist_processes ( is, ie, js, je, npz, Time,     land, ustar,  &
                              bstar, qstar, area, lon, lat,   &
                              Physics_input_block, Moist_clouds_block,   &
                              Physics_tendency_block, Phys_mp_exch,  &
@@ -630,7 +606,6 @@ subroutine moist_processes ( is, ie, js, je, npz, Time, dt, land, ustar,  &
 !-----------------------------------------------------------------------
 integer,         intent(in)             :: is,ie,js,je, npz
 type(time_type), intent(in)             :: Time
-real, intent(in)                        :: dt
 real, intent(in) , dimension(:,:)       :: land,        ustar, bstar, qstar
 real, intent(in) , dimension(:,:)       :: area, lon, lat
 type(physics_input_block_type),    &
@@ -655,6 +630,7 @@ type(aerosol_type),intent(in), optional :: Aerosol
       type(MP_output_type)   :: Output_mp
       type(MP_tendency_type) :: Tend_mp
       type(MP_conv2ls_type)  :: C2ls_mp
+      type(mp2uwconv_type)   :: Mp2uwconv
 
       real, dimension(ie-is+1, je-js+1, npz)  :: tdt_init
       real, dimension(ie-is+1, je-js+1, npz)  :: tdt_dif, qdt_dif  !miz
@@ -682,19 +658,15 @@ type(aerosol_type),intent(in), optional :: Aerosol
 !------------------------------------------------------------------------
       tdt_init = Physics_tendency_block%t_dt
       qdt_init = Physics_tendency_block%q_dt
-      tdt_dif  = Physics_tendency_block%t_dt    !miz
-      qdt_dif  = Physics_tendency_block%q_dt(:,:,:,nsphum) +   &    !miz
-                                Physics_tendency_block%q_dt(:,:,:,nql)  + &
-                                   Physics_tendency_block%q_dt(:,:,:,nqi)
 
 !-------------------------------------------------------------------------
-!    call MP_alloc to allocate and initialize  (or associate) elements of
+!    call MP_alloc to allocate and initialize  (or associate) elements of 
 !    the derived type variables used in this subroutine.
 !-------------------------------------------------------------------------
       call MP_alloc (Physics_input_block, Physics_tendency_block, &
                      Phys_mp_exch, dt, area, lon, lat, land, ustar,  &
                      bstar, qstar, Input_mp, Tend_mp, C2ls_mp, Output_mp,&
-                     Removal_mp)
+                     Removal_mp, Mp2uwconv, shflx, lhflx)
 
 !----------------------------------------------------------------------
 !    call routines to process the model clouds. If a unified cloud scheme
@@ -706,14 +678,11 @@ type(aerosol_type),intent(in), optional :: Aerosol
                                'unified clouds not yet available', FATAL)
       else
         call convection_driver    &
-                    (is, ie, js, je,  Time, dt, Input_mp,   &
-                     Tend_mp, C2ls_mp, Output_mp, Removal_mp, &
-                     Removal_mp_control,  &
-                     Surf_diff, Phys_mp_exch, shflx, lhflx, tdt_dif,  &
-                     qdt_dif, Moist_clouds_block, Aerosol=Aerosol)
-
+                   (is, ie, js, je, Surf_diff, Phys_mp_exch, &
+                       Moist_clouds_block, Input_mp, Tend_mp, C2ls_mp, &
+                                  Output_mp, Removal_mp,  Aerosol=Aerosol)
         call lscloud_driver    &
-                    (is, ie, js, je, Time, dt, lon, lat, Input_mp, &
+                    (is, ie, js, je, Time, dt, Input_mp, &
                      Physics_tendency_block%qdiag, Tend_mp, C2ls_mp, &
                      Output_mp, Removal_mp,    &
                      Moist_clouds_block%cloud_data(istrat), &
@@ -746,7 +715,8 @@ type(aerosol_type),intent(in), optional :: Aerosol
 !---------------------------------------------------------------------
 !    deallocate the derived type variables resident in moist_processes_mod.
 !---------------------------------------------------------------------
-      call MP_dealloc (Input_mp, Tend_mp, C2ls_mp, Output_mp, Removal_mp)
+      call MP_dealloc (Input_mp, Tend_mp, C2ls_mp, Output_mp, Removal_mp,&
+                       Mp2uwconv)
 
 !-----------------------------------------------------------------------
 
@@ -805,16 +775,13 @@ subroutine moist_processes_end ( )
       deallocate (max_water_imbal)
       deallocate (max_enthalpy_imbal)
 
-      deallocate (Removal_mp_control%tracers_in_donner )   !---> h1g, 2017-02-02
-      deallocate (Removal_mp_control%tracers_in_ras )      !---> h1g, 2017-02-02
-      deallocate (Removal_mp_control%tracers_in_uw  )      !---> h1g, 2017-02-02
-      deallocate (Removal_mp_control%tracers_in_mca )      !---> h1g, 2017-02-02
+      call deallocate_mp_removal_control_type (Removal_mp_control)
 
       deallocate (prec_intgl)                              !---> h1g, 2017-02-02
-
       if (allocated(id_wetdep_kg_m2_s))   deallocate(id_wetdep_kg_m2_s)
       if (allocated(conv_wetdep_kg_m2_s)) deallocate(conv_wetdep_kg_m2_s)
       if (allocated(conv_wetdep))         deallocate(conv_wetdep)
+
 !--------------------------------------------------------------------
 
       if  (allocated(nb_N))     deallocate(nb_N)
@@ -1165,10 +1132,11 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
      if (id_wetsoa_cmip > 0) then
        used = send_data (id_wetsoa_cmip, total_wetdep(:,:,nSOA) , Time, is,js)
      endif
+
      if (id_wetoa_cmip > 0) then
        used = send_data (id_wetoa_cmip, &
-                         total_wetdep(:,:,nomphilic)+total_wetdep(:,:,nomphobic)+total_wetdep(:,:,nSOA) , &
-                         Time, is,js)
+              total_wetdep(:,:,nomphilic) + total_wetdep(:,:,nomphobic) + &
+                         total_wetdep(:,:,nSOA) , Time, is,js)
      endif
 
      if (id_wetdep_bc > 0) then
@@ -1257,6 +1225,7 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
      if (id_n_red_wdep>0 .and. sum(nb_N_red)>0) then
          used = send_data ( id_n_red_wdep, total_wetdep_nred*wtmn/1000., Time, is, js)
      endif
+
 
       endif ! (wetdep_diagnostics_desired)
 
@@ -1461,7 +1430,7 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
         do k=1,kx
           tca2(:,:) = tca2(:,:)*(1.0 - total_cloud_area(:,:,k))
         end do
-        tca2 = 100.*(1. - tca2)
+        tca2 = 100.*(1. - tca2) ! cmip6 = Cloud Cover Percentage
         used = send_data (id_tot_cld_amt, tca2, Time, is, js)
       endif
 
@@ -1470,13 +1439,14 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
         do k=1,kx
           tca2(:,:) = tca2(:,:)*(1.0 - total_cloud_area(:,:,k))
         end do
-        tca2 = 100.*(1. - tca2) ! cmip6 = Cloud Cover Percentage
+        tca2 = (1. - tca2) ! Cloud Area Fraction
+        tca2 = 100.*tca2   ! cmip6 = Cloud Cover Percentage
         used = send_data (id_clt, tca2, Time, is, js)
       endif
 
       IF (i_lsc > 0) then
 !---------------------------------------------------------------------
-!    define the total and convective liquid and liquid water path.
+!    define the total and convective liquid and liquid water path. 
 !---------------------------------------------------------------------
         if (id_tot_liq_amt > 0 ) &
           used = send_data (id_tot_liq_amt, &
@@ -1723,7 +1693,7 @@ end subroutine combined_MP_diagnostics
 subroutine MP_alloc (Physics_input_block, Physics_tendency_block, &
                      Phys_mp_exch, dt, area, lon, lat, land, ustar, &
                      bstar, qstar, Input_mp,Tend_mp, C2ls_mp, Output_mp, &
-                     Removal_mp)
+                     Removal_mp, Mp2uwconv, shflx, lhflx)
 
 type(physics_input_block_type),                          &
                           intent(in)    :: Physics_input_block
@@ -1732,12 +1702,14 @@ type(physics_tendency_block_type),                       &
 type(phys_mp_exch_type),  intent(in)    :: Phys_mp_exch
 real,                     intent(in)    :: dt
 real, dimension(:,:),     intent(in)    :: area, lon, lat
+real, dimension(:,:),     intent(in)    :: shflx, lhflx                  
 real, dimension(:,:),     intent(in)    :: land, ustar, bstar, qstar
 type(MP_input_type),      intent(inout) :: Input_mp
 type(MP_output_type),     intent(inout) :: Output_mp
 type(MP_tendency_type),   intent(inout) :: Tend_mp
 type(MP_conv2ls_type),    intent(inout) :: C2ls_mp
 type(MP_removal_type),    intent(inout) :: Removal_mp
+type(mp2uwconv_type),     intent(inout) :: Mp2uwconv
 
 
 !------------------------------------------------------------------------
@@ -1768,10 +1740,14 @@ type(MP_removal_type),    intent(inout) :: Removal_mp
       Input_mp%pfull => Physics_input_block%p_full
       Input_mp%zhalf => Physics_input_block%z_half
       Input_mp%zfull => Physics_input_block%z_full
-      allocate (Input_mp%tin   (ix,jx,kx  ))
-      allocate (Input_mp%qin   (ix,jx,kx  ))
-      allocate (Input_mp%uin   (ix,jx,kx  ))
-      allocate (Input_mp%vin   (ix,jx,kx  ))
+      allocate (Input_mp%tin   (ix,jx,kx  ))   
+      allocate (Input_mp%tin_tentative   (ix,jx,kx  ))   
+                                           Input_mp%tin_tentative  = 0.  
+      allocate (Input_mp%qin   (ix,jx,kx  ))    
+      allocate (Input_mp%tin_orig   (ix,jx,kx  ))   
+      allocate (Input_mp%qin_orig   (ix,jx,kx  ))    
+      allocate (Input_mp%uin   (ix,jx,kx  ))    
+      allocate (Input_mp%vin   (ix,jx,kx  ))    
       Input_mp%t => Physics_input_block%t
       Input_mp%q => Physics_input_block%q(:,:,:,1)
       Input_mp%u => Physics_input_block%u
@@ -1798,7 +1774,8 @@ type(MP_removal_type),    intent(inout) :: Removal_mp
 
       Input_mp%radturbten => Phys_mp_exch%radturbten
       Input_mp%diff_t => Phys_mp_exch%diff_t
-      allocate (Input_mp%tracer(ix,jx,kx, size(Physics_input_block%q,4) ))
+      allocate (Input_mp%tracer(ix,jx,kx, size(Physics_input_block%q,4) ))  
+      allocate (Input_mp%tracer_orig(ix,jx,kx, size(Physics_input_block%q,4) ))  
       allocate (Input_mp%area  (ix,jx  ))   ; Input_mp%area   = area
       allocate (Input_mp%lon   (ix,jx  ))   ; Input_mp%lon    = lon
       allocate (Input_mp%lat   (ix,jx  ))   ; Input_mp%lat    = lat
@@ -1969,10 +1946,14 @@ type(MP_removal_type),    intent(inout) :: Removal_mp
       Output_mp%udt  => Physics_tendency_block%u_dt
       Output_mp%vdt  => Physics_tendency_block%v_dt
       Output_mp%rdt  => Physics_tendency_block%q_dt
+      allocate (Output_mp%rdt_init (ix,jx,kx,nt)) ; Output_mp%rdt_init = 0.
+      allocate (Output_mp%rdt_tentative (ix,jx,kx,nt)) ;    &
+                                             Output_mp%rdt_tentative = 0.
       Output_mp%convect  => Phys_mp_exch%convect
       Output_mp%convect = .false.
       allocate ( Output_mp%lprec  (ix,jx))    ; Output_mp%lprec   = 0.
       allocate ( Output_mp%fprec  (ix,jx))    ; Output_mp%fprec   = 0.
+      allocate ( Output_mp%precip  (ix,jx))    ; Output_mp%precip   = 0.   
       allocate ( Output_mp%gust_cv(ix,jx))    ; Output_mp%gust_cv = 0.
       Output_mp%diff_t_clubb => Phys_mp_exch%diff_t_clubb
                                               Output_mp%diff_t_clubb =0.
@@ -2037,6 +2018,20 @@ type(MP_removal_type),    intent(inout) :: Removal_mp
       allocate ( Removal_mp%ls_wetdep   (ix,jx,nt))
                                                Removal_mp%ls_wetdep   = 0.
 
+!-----------------------------------------------------------------------
+!  probably associate the lhflx, shflx
+
+      allocate ( Mp2uwconv%shflx   (ix,jx))
+      allocate ( Mp2uwconv%lhflx   (ix,jx))
+      allocate ( Mp2uwconv%tdt_dif (ix,jx,kx))
+      allocate ( Mp2uwconv%qdt_dif (ix,jx,kx))
+      Mp2uwconv%shflx = shflx
+      Mp2uwconv%lhflx = lhflx
+      Mp2uwconv%tdt_dif  = Physics_tendency_block%t_dt    !miz
+      Mp2uwconv%qdt_dif  = Physics_tendency_block%q_dt(:,:,:,nsphum) +   &    !miz
+                                Physics_tendency_block%q_dt(:,:,:,nql)  + &
+                                   Physics_tendency_block%q_dt(:,:,:,nqi) 
+
 !-------------------------------------------------------------------------
 
 end subroutine MP_alloc
@@ -2044,13 +2039,15 @@ end subroutine MP_alloc
 
 !########################################################################
 
-subroutine MP_dealloc (Input_mp, Tend_mp, C2ls_mp, Output_mp, Removal_mp)
+subroutine MP_dealloc (Input_mp, Tend_mp, C2ls_mp, Output_mp, Removal_mp, &
+                                                               Mp2uwconv)
 
 type(MP_input_type),    intent(inout) :: Input_mp
 type(MP_tendency_type), intent(inout) :: Tend_mp
 type(MP_conv2ls_type),  intent(inout) :: C2ls_mp
 type(MP_output_type),   intent(inout) :: Output_mp
 type(MP_removal_type),  intent(inout) :: Removal_mp
+type(mp2uwconv_type),   intent(inout) :: Mp2uwconv 
 
 !------------------------------------------------------------------------
 !    deallocate the components of the derived type variables defined in
@@ -2063,7 +2060,10 @@ type(MP_removal_type),  intent(inout) :: Removal_mp
       Input_mp%zfull => null()
 
       deallocate (Input_mp%tin   )
+      deallocate (Input_mp%tin_tentative   )
       deallocate (Input_mp%qin   )
+      deallocate (Input_mp%tin_orig   )
+      deallocate (Input_mp%qin_orig   )
       deallocate (Input_mp%uin   )
       deallocate (Input_mp%vin   )
 
@@ -2085,6 +2085,7 @@ type(MP_removal_type),  intent(inout) :: Removal_mp
       deallocate (Input_mp%lon   )
       deallocate (Input_mp%lat   )
       deallocate (Input_mp%tracer)
+      deallocate (Input_mp%tracer_orig)
       deallocate (Input_mp%land  )
       deallocate (Input_mp%ustar )
       deallocate (Input_mp%bstar )
@@ -2146,14 +2147,22 @@ type(MP_removal_type),  intent(inout) :: Removal_mp
       Output_mp%udt => null()
       Output_mp%vdt => null()
       Output_mp%rdt  => null()
+      deallocate (Output_mp%rdt_init)
+      deallocate (Output_mp%rdt_tentative)
       deallocate (Output_mp%lprec  )
       deallocate (Output_mp%fprec  )
+      deallocate (Output_mp%precip  )
       deallocate (Output_mp%gust_cv)
 
       Output_mp%convect => null()
       Output_mp%diff_t_clubb => null()
       Output_mp%diff_cu_mo    => null()
 
+      deallocate (Mp2uwconv%shflx  )
+      deallocate (Mp2uwconv%lhflx  )
+      deallocate (Mp2uwconv%tdt_dif)
+      deallocate (Mp2uwconv%qdt_dif)
+     
 !--------------------------------------------------------------------
 
 end subroutine MP_dealloc
@@ -2162,7 +2171,7 @@ end subroutine MP_dealloc
 
 !########################################################################
 
-subroutine create_Nml_mp
+subroutine create_Nml_mp 
 
 
       Nml_mp%do_mca =  do_mca
@@ -2218,8 +2227,10 @@ integer                     :: id_wetdep_cmip
         'Frozen precip rate from all sources',       'kg(h2o)/m2/s', &
                               interp_method = "conserve_order1" )
 
+
+
       id_prra  = register_cmip_diag_field_2d ( mod_name, 'prra', Time, &
-                                        'Rainfall Rate', 'kg m-2 s-1', &
+                                       'Rainfall Rate', 'kg m-2 s-1', &
                                       standard_name = 'rainfall_flux', &
                                      interp_method = "conserve_order1" )
 
@@ -2227,7 +2238,6 @@ integer                     :: id_wetdep_cmip
                                         'Snowfall Flux', 'kg m-2 s-1', &
                                       standard_name = 'snowfall_flux', &
                                      interp_method = "conserve_order1" )
-
 
       id_max_enthalpy_imbal    = register_diag_field    &
         (mod_name, 'max_enth_imbal', axes(1:2), Time,  &
@@ -2252,6 +2262,7 @@ integer                     :: id_wetdep_cmip
         'Total precipitation rate',                     'kg/m2/s', &
                                       interp_method = "conserve_order1" )
 
+      
       id_pr = register_cmip_diag_field_2d ( mod_name, 'pr', Time, &
                                   'Precipitation',  'kg m-2 s-1', &
                               standard_name='precipitation_flux', &
@@ -2261,8 +2272,9 @@ integer                     :: id_wetdep_cmip
         'WVP', axes(1:2), Time, &
         'Column integrated water vapor',                'kg/m2'  )
 
+
       id_prw = register_cmip_diag_field_2d ( mod_name, 'prw', Time, &
-                                      'Water Vapor Path', 'kg m-2', &
+                                    'Water Vapor Path', 'kg m-2', &
                    standard_name = 'atmosphere_water_vapor_content' )
 
 !-----------------------------------------------------------------------
@@ -2279,6 +2291,7 @@ integer                     :: id_wetdep_cmip
                 'total cloud amount', 'percent', &
                 interp_method = 'conserve_order1' )
 
+
         id_clt = register_cmip_diag_field_2d (mod_name, 'clt', Time, &
                                       'Total Cloud Cover Percentage', '%', &
                                 standard_name= 'cloud_area_fraction', &
@@ -2291,8 +2304,8 @@ integer                     :: id_wetdep_cmip
 
         ID_cl = register_cmip_diag_field_3d ( mod_name, 'cl', Time, &
                                   'Percentage Cloud Cover', '%',    &
-           standard_name='cloud_area_fraction_in_atmosphere_layer', &
-           interp_method='conserve_order1' )
+          standard_name='cloud_area_fraction_in_atmosphere_layer', &
+          interp_method='conserve_order1' )
 
         id_tot_h2o     = register_diag_field ( mod_name, &
           'tot_h2o', axes(1:3), Time, &
@@ -2305,7 +2318,7 @@ integer                     :: id_wetdep_cmip
         id_tot_liq_amt = register_diag_field ( mod_name, &
           'tot_liq_amt', axes(1:3), Time, &
           'Liquid amount -- all clouds', 'kg/kg',    &
-           missing_value=missing_value, interp_method='conserve_order1' )
+          missing_value=missing_value, interp_method='conserve_order1' )
 
         ID_clw = register_cmip_diag_field_3d ( mod_name, 'clw', Time, &
           'Mass Fraction of Cloud Liquid Water', 'kg kg-1',   &
@@ -2315,7 +2328,7 @@ integer                     :: id_wetdep_cmip
         id_tot_ice_amt = register_diag_field ( mod_name, &
           'tot_ice_amt', axes(1:3), Time, &
           'Ice amount -- all clouds', 'kg/kg',  &
-           missing_value=missing_value, interp_method='conserve_order1' )
+          missing_value=missing_value, interp_method='conserve_order1' )
 
         ID_cli = register_cmip_diag_field_3d ( mod_name, 'cli', Time, &
           'Mass Fraction of Cloud Ice', 'kg kg-1',   &
@@ -2374,7 +2387,7 @@ integer                     :: id_wetdep_cmip
 
         id_clivi = register_cmip_diag_field_2d ( mod_name, 'clivi', Time, &
                                       'Ice Water Path', 'kg m-2', &
-                     standard_name='atmosphere_mass_content_of_cloud_ice', &
+                   standard_name='atmosphere_mass_content_of_cloud_ice', &
                      interp_method='conserve_order1' )
 
       endif
@@ -2454,7 +2467,6 @@ integer                     :: id_wetdep_cmip
                                               missing_value=missing_value)
       if (id_wetdep_dust > 0) wetdep_diagnostics_desired = .true.
 
-
       id_n_ox_wdep = register_cmip_diag_field_2d ( mod_name, 'fam_noy_wetdep_kg_m2_s', Time,  &
            'wet deposition of noy incl aerosol nitrate', 'kg m-2 s-1', &
            standard_name='minus_tendency_of_atmosphere_mass_content_of_noy_expressed_as_nitrogen_due_to_wet_deposition' )
@@ -2463,7 +2475,7 @@ integer                     :: id_wetdep_cmip
       id_n_red_wdep = register_cmip_diag_field_2d ( mod_name, 'fam_nhx_wetdep_kg_m2_s', Time,  &
            'wet deposition of nhx', 'kg m-2 s-1', &
            standard_name='minus_tendency_of_atmosphere_mass_content_of_nhx_expressed_as_nitrogen_due_to_wet_deposition' )
- 
+
 
      !-------- cmip wet deposition fields  ---------
       do ic = 1, size(cmip_names,1)
@@ -2624,9 +2636,8 @@ integer                     :: id_wetdep_cmip
 
         conv_wetdep(n) = 1.
         conv_wetdep_kg_m2_s(n) = 1. ! no conversion needed
-
         else
-          write(outunit,'(a)') 'unsupported tracer: '//trim(tracer_name)//', units='//trim(tracer_units)
+           write(outunit,'(a)') 'unsupported tracer: '//trim(tracer_name)//', units='//trim(tracer_units)
           conv_wetdep(n) = 0.
           conv_wetdep_kg_m2_s(n) = 0.
         end if
