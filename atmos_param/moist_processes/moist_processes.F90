@@ -682,7 +682,7 @@ type(aerosol_type),intent(in), optional :: Aerosol
                        Moist_clouds_block, Input_mp, Tend_mp, C2ls_mp, &
                                   Output_mp, Removal_mp,  Aerosol=Aerosol)
         call lscloud_driver    &
-                    (is, ie, js, je, Time, dt, Input_mp, & 
+                    (is, ie, js, je, Time, dt, lon, lat, Input_mp, & 
                      Physics_tendency_block%qdiag, Tend_mp, C2ls_mp, &
                      Output_mp, Removal_mp,    &
                      Moist_clouds_block%cloud_data(istrat), &
