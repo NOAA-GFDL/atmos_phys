@@ -799,6 +799,7 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       Physics%control%nqr = get_tracer_index (MODEL_ATMOS, 'rainwat')
       Physics%control%nqs = get_tracer_index (MODEL_ATMOS, 'snowwat')
       Physics%control%nqg = get_tracer_index (MODEL_ATMOS, 'graupel')
+
       Physics%control%nqnr = get_tracer_index (MODEL_ATMOS, 'rain_num')
       Physics%control%nqns = get_tracer_index (MODEL_ATMOS, 'snow_num')
 
@@ -838,13 +839,14 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       if (Physics%control%nqg    /= NO_TRACER) then
         Physics%control%cloud_tracer(Physics%control%nqg   ) = .TRUE.
       endif
+
       if (Physics%control%nqnr    /= NO_TRACER) then
         Physics%control%cloud_tracer(Physics%control%nqnr   ) = .TRUE.
       endif
       if (Physics%control%nqns    /= NO_TRACER) then
         Physics%control%cloud_tracer(Physics%control%nqns   ) = .TRUE.
       endif
-
+      
 !----------------------------------------------------------------------
 !   define logical variable indicating whether prognostic clouds (using 
 !   tracer fields) are active. 
@@ -3252,6 +3254,7 @@ end subroutine zero_radturbten
 subroutine physics_driver_register_restart_scalars (Restart, Phy_restart)
   type(clouds_from_moist_block_type), intent(inout), target :: Restart
   type(FmsNetcdfFile_t), intent(inout)       ::  Phy_restart !< Fms2io fileobj
+
   character(len=8), dimension(1)       :: dim_names !< Array of dimension names
 
   if (do_moist_processes) then
