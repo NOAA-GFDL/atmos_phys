@@ -253,7 +253,8 @@ logical :: prevent_flux_through_ice = .false.  , step_update_tracer = .false.
 
 logical  :: do_esm_nitrogen_flux = .false. !If set to .true. nitrogen fluxes will be prepared for exchange with Ocean
 logical  :: do_nh3_atm_ocean_exchange = .false.
-namelist /atmos_tracer_driver_nml / prevent_flux_through_ice, step_update_tracer, do_esm_nitrogen_flux,do_nh3_atm_ocean_exchange
+logical  :: do_cmip6_bug_diag         = .true.
+namelist /atmos_tracer_driver_nml / prevent_flux_through_ice, step_update_tracer, do_esm_nitrogen_flux,do_nh3_atm_ocean_exchange, do_cmip6_bug_diag
 
 !-----------------------------------------------------------------------
 !
@@ -373,10 +374,11 @@ integer :: id_nh4no3_cmipv2, id_nh4_cmipv2
 integer :: id_so2_cmip, id_dms_cmip
 integer :: id_so2_cmipv2, id_dms_cmipv2
 integer :: id_n_ddep, id_n_ox_ddep, id_n_red_ddep
+integer :: id_airmass_tracer
 
- type(cmip_diag_id_type) :: ID_concno3, ID_concnh4, ID_concso2, ID_concdms, ID_concdust
- type(cmip_diag_id_type) :: ID_airmass, ID_pm1, ID_pm10, ID_pm25, ID_OM, ID_BC, ID_DUST, ID_SS
- type(cmip_diag_id_type) :: ID_meanage, ID_co2_vmr, ID_aoanh
+type(cmip_diag_id_type) :: ID_concno3, ID_concnh4, ID_concso2, ID_concdms, ID_concdust
+type(cmip_diag_id_type) :: ID_airmass, ID_pm1, ID_pm10, ID_pm25, ID_OM, ID_BC, ID_DUST, ID_SS
+type(cmip_diag_id_type) :: ID_meanage, ID_co2_vmr, ID_aoanh
 
  integer :: id_sconcno3, id_sconcnh4, id_loadno3, id_loadnh4, &
             id_sconcso4, id_sconcss, id_sconcdust, id_co2s
@@ -554,6 +556,7 @@ real, dimension(size(r,1),size(r,2),size(r,3)) :: rtndbcphob, rtndbcphil
 real, dimension(size(r,1),size(r,2),size(r,3)) :: rtndomphob, rtndomphil
 real, dimension(size(r,1),size(r,2),size(r,3)) :: rtndco2, rtndco2_emis
 real, dimension(size(r,1),size(r,2),size(rdt,4)) :: dsinku
+real, dimension(size(r,1),size(r,2)) :: hno3d_setl, all_so4d_setl
 real, dimension(size(r,1),size(r,2)) ::  w10m_ocean, w10m_land
 integer :: year,month,day,hour,minute,second
 integer :: jday
@@ -564,7 +567,7 @@ real, dimension(size(r,1),size(r,2),size(r,3)) :: cldf ! cloud fraction
 real, dimension(size(r,1),size(r,2),size(r,3)) :: rh  ! relative humidity
 real, dimension(size(r,1),size(r,2),size(r,3)) :: lwc ! liq water content
 real, dimension(size(r,1),size(r,2),size(r,3)) :: fliq! liq/lwc (f1p)
-real, dimension(size(r,1),size(r,2),size(r,3),nt) :: tracer, tracer_orig
+real, dimension(size(r,1),size(r,2),size(r,3),nt) :: tracer, tracer_orig, tracer_diag
 real, dimension(size(r,1),size(r,3)) :: dp, temp
 real, dimension(size(r,1),size(r,2)) :: all_salt_settl, all_dust_settl
 real, dimension(size(r,1),size(r,2)) :: suma, ocn_flx_fraction, sum_n_ddep, sum_n_red_ddep, sum_n_ox_ddep, nh3_ddep
@@ -576,6 +579,8 @@ real, dimension(size(r,1),size(r,2),size(r,3)) :: PM1, PM25, PM10
 real, dimension(size(r,1),size(r,2),nxactive)  :: rtnd_xactive
 real, dimension(size(r,1),size(r,2),2)         :: xbvoc4soa ! emis isop (1), terp (2)
 real, dimension(size(r,1),size(r,2),size(r,3)+1) :: lphalf
+
+real, dimension(size(r,1),size(r,2)) :: moa_emis !marine organic emissions !kg/m2/s
 
 integer :: isulf, ixact, i, j, k, id, jd, kd, ntcheck
 integer :: nqq  ! index of specific humidity
@@ -773,7 +778,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
                                  land, frac_open_sea, dsinku(:,:,n), dt, &
                                  tracer(:,:,kd,n), Time, Time_next, &
                                  lon, half_day, &
-                                 drydep_data(n),con_atm)
+                                 drydep_data(n),albedo,con_atm)
             if (do_nh3_atm_ocean_exchange .and. (n.eq.nNH3.or.is_nh3_tag_tracer(n))) then 
                !f1p: scale dry deposition of nh3 by the land fraction since ocean exchange is handled separately
                dsinku(:,:,n) = dsinku(:,:,n)*max(1.-frac_open_sea,0.) 
@@ -789,7 +794,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
             if (nb_n(n).gt.0) &
                  sum_n_ddep     = sum_n_ddep + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n(n)
             if (nb_n_ox(n).gt.0) &
-                 sum_n_ox_ddep  = sum_n_ox_ddep + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n_ox(n)
+                 sum_n_ox_ddep  = sum_n_ox_ddep + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n_ox(n) 
             if (nb_n_red(n).gt.0) &
                  sum_n_red_ddep = sum_n_red_ddep + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n_red(n)
 
@@ -816,13 +821,6 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
                                               Time_next, is_in=is, js_in=js)
       endif
 
-
-      !---- cmip variables ----
-      if (id_n_ox_ddep > 0) used = send_data (id_n_ox_ddep, sum_n_ox_ddep, Time_next, &
-                                              is_in=is, js_in=js)
-      if (id_n_red_ddep > 0) used = send_data (id_n_red_ddep, sum_n_red_ddep, Time_next, &
-                                              is_in=is, js_in=js)
-
       if (id_dryso2 > 0) then
         if (nSO2_cmip > 0) then
           used = send_data (id_dryso2, 0.064*1.e3*pwt(:,:,kd)*dsinku(:,:,nSO2_cmip)/WTMAIR, &
@@ -830,15 +828,6 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
         else if (nSO2 > 0) then ! fast-aerosol simpleSO2
           used = send_data (id_dryso2, 0.064*1.e3*pwt(:,:,kd)*dsinku(:,:,nSO2)/WTMAIR, &
                           Time_next, is_in=is, js_in=js)
-        endif
-      endif
-      if (id_dryso4 > 0) then
-        if (nSO4_cmip > 0) then
-          used = send_data (id_dryso4, 0.096*1.e3*pwt(:,:,kd)*dsinku(:,:,nSO4_cmip)/WTMAIR, &
-                            Time_next, is_in=is, js_in=js)
-        else if (nSO4 > 0) then ! fast-aerosol simpleSO4
-          used = send_data (id_dryso4, 0.096*1.e3*pwt(:,:,kd)*dsinku(:,:,nSO4)/WTMAIR, &
-                            Time_next, is_in=is, js_in=js)
         endif
       endif
       if (id_drydms > 0) then
@@ -879,11 +868,17 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
                                      Time_next, is_in=is, js_in=js)
       endif
 
+      if (do_cmip6_bug_diag) then
+         tracer_diag = tracer
+      else
+         tracer_diag = tracer_orig
+      end if
+
       do n=1,ntp
          if (id_tracer_col_kg_m2(n).gt.0) then
             suma = 0.
             do k=1,kd
-               suma(:,:) = suma(:,:) + pwt(:,:,k)*tracer(:,:,k,n)
+               suma(:,:) = suma(:,:) + pwt(:,:,k)*tracer_diag(:,:,k,n)
             end do
             suma(:,:) = conv_vmr_mmr(n)*suma(:,:)
             used      = send_data (id_tracer_col_kg_m2(n), suma, Time_next, is_in=is, js_in=js)
@@ -893,7 +888,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
       if (id_bc_col_kg_m2.gt.0 .and. nbcphilic.gt.0 .and. nbcphobic.gt.0) then
         suma = 0.
         do k=1,kd
-           suma(:,:) = suma(:,:) + pwt(:,:,k)*(tracer(:,:,k,nbcphilic)+tracer(:,:,k,nbcphobic))
+           suma(:,:) = suma(:,:) + pwt(:,:,k)*(tracer_diag(:,:,k,nbcphilic)+tracer_diag(:,:,k,nbcphobic))
         end do
         used = send_data (id_bc_col_kg_m2, suma, Time_next, is_in=is, js_in=js)
       end if
@@ -902,7 +897,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
         suma = 0.
         do k=1,kd
            suma(:,:) = suma(:,:) + &
-                       pwt(:,:,k)*(tracer(:,:,k,nomphilic)+tracer(:,:,k,nomphobic)+tracer(:,:,k,nSOA))
+                       pwt(:,:,k)*(tracer_diag(:,:,k,nomphilic)+tracer_diag(:,:,k,nomphobic)+tracer(:,:,k,nSOA))
         end do
         used = send_data (id_oa_col_kg_m2, suma, Time_next, is_in=is, js_in=js)
       end if
@@ -910,7 +905,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
       if (id_poa_col_kg_m2.gt.0 .and. nomphilic.gt.0 .and. nomphobic.gt.0) then
         suma = 0.
         do k=1,kd
-           suma(:,:) = suma(:,:) + pwt(:,:,k)*(tracer(:,:,k,nomphilic)+tracer(:,:,k,nomphobic))
+           suma(:,:) = suma(:,:) + pwt(:,:,k)*(tracer_diag(:,:,k,nomphilic)+tracer_diag(:,:,k,nomphobic))
         end do
         used = send_data (id_poa_col_kg_m2, suma, Time_next, is_in=is, js_in=js)
       end if
@@ -920,7 +915,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
         do n=1,ntp
           if (is_dust_tracer(n)) then
              do k=1,kd
-                suma(:,:) = suma(:,:) + pwt(:,:,k)*tracer(:,:,k,n)
+                suma(:,:) = suma(:,:) + pwt(:,:,k)*tracer_diag(:,:,k,n)
              end do
           end if
         end do
@@ -932,7 +927,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
         do n=1,ntp
           if (is_seasalt_tracer(n)) then
              do k=1,kd
-                suma(:,:) = suma(:,:) + pwt(:,:,k)*tracer(:,:,k,n)
+                suma(:,:) = suma(:,:) + pwt(:,:,k)*tracer_diag(:,:,k,n)
              end do
           end if
         end do
@@ -947,8 +942,8 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
         if (id_nh4_col > 0 .or. id_loadnh4 > 0) then
           suma = 0.
           do k=1,kd
-            suma(:,:) = suma(:,:) + pwt(:,:,k)*(tracer(:,:,k,nNH4) + &
-                             tracer(:,:,k,nNH4NO3))
+            suma(:,:) = suma(:,:) + pwt(:,:,k)*(tracer_diag(:,:,k,nNH4) + &
+                             tracer_diag(:,:,k,nNH4NO3))
           end do
           suma(:,:) = 0.018*1.0e03*suma(:,:)/WTMAIR
           if (id_nh4_col > 0) then
@@ -965,7 +960,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
         if (id_nh4no3_col > 0 .or. id_loadno3 > 0) then
           suma = 0.
           do k=1,kd
-            suma(:,:) = suma(:,:) + pwt(:,:,k)*tracer(:,:,k,nNH4NO3)
+            suma(:,:) = suma(:,:) + pwt(:,:,k)*tracer_diag(:,:,k,nNH4NO3)
           end do
           suma(:,:) = 0.062*1.0e03*suma(:,:)/WTMAIR
           if (id_nh4no3_col > 0) then
@@ -983,44 +978,44 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
 !----------------------------------------------------------------------
       if (id_nh4_cmip > 0) then
         used  = send_data (id_nh4_cmip,  &
-               0.018*1.0e03* (tracer(:,:,:,nNH4NO3) + &
-                              tracer(:,:,:,nNH4)) /WTMAIR,  &
+               0.018*1.0e03* (tracer_diag(:,:,:,nNH4NO3) + &
+                              tracer_diag(:,:,:,nNH4)) /WTMAIR,  &
                                           Time_next, is_in=is, js_in=js, ks_in=1)
       endif
       if (id_nh4_cmipv2 > 0) then
         used  = send_data (id_nh4_cmipv2,  &
-               0.018*1.0e03*rho(:,:,:)* (tracer(:,:,:,nNH4NO3) + &
-                              tracer(:,:,:,nNH4)) /WTMAIR,  &
+               0.018*1.0e03*rho(:,:,:)* (tracer_diag(:,:,:,nNH4NO3) + &
+                              tracer_diag(:,:,:,nNH4)) /WTMAIR,  &
                                           Time_next, is_in=is, js_in=js, ks_in=1)
       endif
       if(id_nh4no3_cmip > 0) then
         used  = send_data (id_nh4no3_cmip,  &
-                0.062*1.0e03*tracer(:,:,:,nNH4NO3)/WTMAIR,  &
+                0.062*1.0e03*tracer_diag(:,:,:,nNH4NO3)/WTMAIR,  &
                                          Time_next, is_in=is, js_in=js, ks_in=1)
      endif
       if(id_nh4no3_cmipv2 > 0) then
         used  = send_data (id_nh4no3_cmipv2,  &
-                0.062*1.0e03*rho(:,:,:)*tracer(:,:,:,nNH4NO3)/WTMAIR,  &
+                0.062*1.0e03*rho(:,:,:)*tracer_diag(:,:,:,nNH4NO3)/WTMAIR,  &
                                          Time_next, is_in=is, js_in=js, ks_in=1)
      endif
      if(id_so2_cmip > 0) then
        used  = send_data (id_so2_cmip,  &
-                 0.064*1.0e03*tracer(:,:,:,nSO2_cmip)/WTMAIR,  &
+                 0.064*1.0e03*tracer_diag(:,:,:,nSO2_cmip)/WTMAIR,  &
                                          Time_next, is_in=is, js_in=js, ks_in=1)
      endif
      if(id_so2_cmipv2 > 0) then
        used  = send_data (id_so2_cmipv2,  &
-               0.064*1.0e03*rho(:,:,:)*tracer(:,:,:,nSO2_cmip)/WTMAIR,  &
+               0.064*1.0e03*rho(:,:,:)*tracer_diag(:,:,:,nSO2_cmip)/WTMAIR,  &
                                          Time_next, is_in=is, js_in=js, ks_in=1)
      endif
      if(id_dms_cmip > 0) then
        used  = send_data (id_dms_cmip,  &
-                0.062*1.0e03*tracer(:,:,:,nDMS_cmip)/WTMAIR,  &
+                0.062*1.0e03*tracer_diag(:,:,:,nDMS_cmip)/WTMAIR,  &
                                          Time_next, is_in=is, js_in=js, ks_in=1)
      endif
      if(id_dms_cmipv2 > 0) then
        used  = send_data (id_dms_cmipv2,  &
-                0.062*1.0e03*rho(:,:,:)*tracer(:,:,:,nDMS_cmip)/WTMAIR,  &
+                0.062*1.0e03*rho(:,:,:)*tracer_diag(:,:,:,nDMS_cmip)/WTMAIR,  &
                                          Time_next, is_in=is, js_in=js, ks_in=1)
      endif
 
@@ -1035,20 +1030,22 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
                  pwt, Time_next, is_in=is, js_in=js, ks_in=1)
      endif
 
+     if (id_airmass_tracer>0) then
+        used = send_data(id_airmass_tracer, pwt, Time_next, is_in=is, js_in=js,ks_in=1)
+     end if
 
-
-
+     !this is wrong in AM4
      if (nNH4NO3 > 0 .and. nNH4 > 0) then
        ! concentration
        if (query_cmip_diag_id(ID_concnh4)) then
          used = send_cmip_data_3d (ID_concnh4,  &
-                 0.018*1.0e03*rho(:,:,:)*(tracer(:,:,:,nNH4NO3) + tracer(:,:,:,nNH4)) /WTMAIR,  &
+                 0.018*1.0e03*rho(:,:,:)*(tracer_diag(:,:,:,nNH4NO3) + tracer_diag(:,:,:,nNH4)) /WTMAIR,  &
                                    Time_next, is_in=is, js_in=js, ks_in=1)
        endif
        ! surface concentration (lowest level)
        if (id_sconcnh4 > 0) then
          used = send_data (id_sconcnh4, &
-             0.018*1.0e03*rho(:,:,kd)*(tracer(:,:,kd,nNH4NO3) + tracer(:,:,kd,nNH4)) /WTMAIR,  &
+             0.018*1.0e03*rho(:,:,kd)*(tracer_diag(:,:,kd,nNH4NO3) + tracer_diag(:,:,kd,nNH4)) /WTMAIR,  &
                                  Time_next, is_in=is, js_in=js)
        endif
      endif
@@ -1056,13 +1053,13 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
      if (nNH4NO3 > 0) then
        if (query_cmip_diag_id(ID_concno3)) then
          used = send_cmip_data_3d ( ID_concno3,  &
-                0.062*1.0e03*rho(:,:,:)*tracer(:,:,:,nNH4NO3)/WTMAIR,  &
+                0.062*1.0e03*rho(:,:,:)*tracer_diag(:,:,:,nNH4NO3)/WTMAIR,  &
                                  Time_next, is_in=is, js_in=js, ks_in=1)
        endif
        ! cmip surface concentration (lowest level)
        if (id_sconcno3 > 0) then
          used = send_data (id_sconcno3, &
-                0.062*1.0e03*rho(:,:,kd)*tracer(:,:,kd,nNH4NO3)/WTMAIR,  &
+                0.062*1.0e03*rho(:,:,kd)*tracer_diag(:,:,kd,nNH4NO3)/WTMAIR,  &
                                  Time_next, is_in=is, js_in=js)
        endif
      endif
@@ -1071,30 +1068,30 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
      if (id_sconcso4 > 0) then
        if (nSO4_cmip > 0) then
          used = send_data (id_sconcso4, &
-             0.096*1.0e03*rho(:,:,kd)*tracer(:,:,kd,nSO4_cmip) /WTMAIR,  &
+             0.096*1.0e03*rho(:,:,kd)*tracer_diag(:,:,kd,nSO4_cmip) /WTMAIR,  &
                                  Time_next, is_in=is, js_in=js)
        else if (nSO4 > 0) then
          used = send_data (id_sconcso4, &
-             0.096*1.0e03*rho(:,:,kd)*tracer(:,:,kd,nSO4) /WTMAIR,  &
+             0.096*1.0e03*rho(:,:,kd)*tracer_diag(:,:,kd,nSO4) /WTMAIR,  &
                                  Time_next, is_in=is, js_in=js)
        endif
      endif
 
      if (query_cmip_diag_id(ID_concso2)) then
        if (nSO2_cmip > 0) then
-         used = send_cmip_data_3d ( ID_concso2, tracer(:,:,:,nSO2_cmip), &
+         used = send_cmip_data_3d ( ID_concso2, tracer_diag(:,:,:,nSO2_cmip), &
                                     Time_next, is_in=is, js_in=js, ks_in=1)
        else if (nSO2 > 0) then ! fast-aerosol simpleSO2
-         used = send_cmip_data_3d ( ID_concso2, tracer(:,:,:,nSO2), &
+         used = send_cmip_data_3d ( ID_concso2, tracer_diag(:,:,:,nSO2), &
                                     Time_next, is_in=is, js_in=js, ks_in=1)
        endif
      endif
      if (query_cmip_diag_id(ID_concdms)) then
        if (nDMS_cmip > 0) then
-         used = send_cmip_data_3d ( ID_concdms, tracer(:,:,:,nDMS_cmip), &
+         used = send_cmip_data_3d ( ID_concdms, tracer_diag(:,:,:,nDMS_cmip), &
                                 Time_next, is_in=is, js_in=js, ks_in=1)
        else if (nDMS > 0) then ! fast-aerosol simpleDMS
-         used = send_cmip_data_3d ( ID_concdms, tracer(:,:,:,nDMS), &
+         used = send_cmip_data_3d ( ID_concdms, tracer_diag(:,:,:,nDMS), &
                                 Time_next, is_in=is, js_in=js, ks_in=1)
        endif
      endif
@@ -1103,7 +1100,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
        suma = 0.
        do n=1,ntp
          if (is_seasalt_tracer(n)) then
-            suma(:,:) = suma(:,:) + rho(:,:,kd)*tracer(:,:,kd,n)
+            suma(:,:) = suma(:,:) + rho(:,:,kd)*tracer_diag(:,:,kd,n)
          end if
        end do
        used = send_data (id_sconcss, suma, Time_next, is_in=is, js_in=js)
@@ -1113,7 +1110,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
        suma = 0.
        do n=1,ntp
          if (is_dust_tracer(n)) then
-            suma(:,:) = suma(:,:) + rho(:,:,kd)*tracer(:,:,kd,n)
+            suma(:,:) = suma(:,:) + rho(:,:,kd)*tracer_diag(:,:,kd,n)
          end if
        end do
        used = send_data (id_sconcdust, suma, Time_next, is_in=is, js_in=js)
@@ -1123,7 +1120,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
         sumb = 0.
         do n=1,ntp
           if (is_dust_tracer(n)) then
-             sumb(:,:,:) = sumb(:,:,:) + rho(:,:,:)*tracer(:,:,:,n)
+             sumb(:,:,:) = sumb(:,:,:) + rho(:,:,:)*tracer_diag(:,:,:,n)
           end if
         end do
         used = send_cmip_data_3d ( ID_concdust, sumb(:,:,:), &
@@ -1131,12 +1128,12 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
      end if
 
      if ( query_cmip_diag_id(ID_co2_vmr) .and. nco2 > 0) then
-        used = send_cmip_data_3d ( ID_co2_vmr, tracer(:,:,:,nco2)*WTMAIR/WTMCO2, &
+        used = send_cmip_data_3d ( ID_co2_vmr, tracer_diag(:,:,:,nco2)*WTMAIR/WTMCO2, &
              Time_next, is_in=is, js_in=js, ks_in=1, phalf=lphalf)
      end if
 
      if (id_co2s > 0 .and. nco2 > 0) then
-        used = send_data (id_co2s, tracer(:,:,kd,nco2)*WTMAIR/WTMCO2*1.e6,  &
+        used = send_data (id_co2s, tracer_diag(:,:,kd,nco2)*WTMAIR/WTMCO2*1.e6,  &
              Time_next, is_in=is, js_in=js)
      end if
 
@@ -1147,24 +1144,24 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
 
      do n=1,nt
 
-        if (frac_pm25(n).gt.0.)  PM25 = PM25+conv_vmr_mmr(n)*tracer(:,:,:,n)*frac_pm25(n)
-        if (frac_pm1(n).gt.0.)   PM1  = PM1+conv_vmr_mmr(n)*tracer(:,:,:,n)*frac_pm1(n)
-        if (frac_pm10(n).gt.0.)  PM10 = PM10+conv_vmr_mmr(n)*tracer(:,:,:,n)*frac_pm10(n)
+        if (frac_pm25(n).gt.0.)  PM25 = PM25+conv_vmr_mmr(n)*tracer_diag(:,:,:,n)*frac_pm25(n)
+        if (frac_pm1(n).gt.0.)   PM1  = PM1+conv_vmr_mmr(n)*tracer_diag(:,:,:,n)*frac_pm1(n)
+        if (frac_pm10(n).gt.0.)  PM10 = PM10+conv_vmr_mmr(n)*tracer_diag(:,:,:,n)*frac_pm10(n)
 
         if ( query_cmip_diag_id(ID_tracer_mol_mol(n)) ) then
-           used = send_cmip_data_3d ( ID_tracer_mol_mol(n), tracer(:,:,:,n), &
+           used = send_cmip_data_3d ( ID_tracer_mol_mol(n), tracer_diag(:,:,:,n), &
                 Time_next, is_in=is, js_in=js, ks_in=1, phalf=lphalf)
         end if
         if ( id_tracer_surf_mol_mol(n) .gt. 0 ) then
-           used = send_data ( id_tracer_surf_mol_mol(n), tracer(:,:,kd,n), &
+           used = send_data ( id_tracer_surf_mol_mol(n), tracer_diag(:,:,kd,n), &
                 Time_next, is_in=is, js_in=js)
         end if
         if ( query_cmip_diag_id(ID_tracer_kg_kg(n)) ) then
-           used = send_cmip_data_3d ( ID_tracer_kg_kg(n), conv_vmr_mmr(n)*tracer(:,:,:,n), &
+           used = send_cmip_data_3d ( ID_tracer_kg_kg(n), conv_vmr_mmr(n)*tracer_diag(:,:,:,n), &
                 Time_next, is_in=is, js_in=js, ks_in=1, phalf=lphalf)
         end if
         if ( id_tracer_surf_kg_kg(n) .gt. 0 ) then
-           used = send_data ( id_tracer_surf_kg_kg(n), conv_vmr_mmr(n)*tracer(:,:,kd,n), &
+           used = send_data ( id_tracer_surf_kg_kg(n), conv_vmr_mmr(n)*tracer_diag(:,:,kd,n), &
                 Time_next, is_in=is, js_in=js)
         end if
 
@@ -1176,12 +1173,12 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
      end if
 
      if ( query_cmip_diag_id(ID_OM) .and. nomphilic > 0 .and. nomphobic > 0) then
-        used = send_cmip_data_3d ( ID_OM, tracer(:,:,:,nomphilic)+tracer(:,:,:,nomphobic), &
+        used = send_cmip_data_3d ( ID_OM, tracer_diag(:,:,:,nomphilic)+tracer_diag(:,:,:,nomphobic), &
              Time_next, is_in=is, js_in=js, ks_in=1)
      end if
 
      if ( query_cmip_diag_id(ID_BC) .and. nbcphilic > 0 .and. nbcphobic > 0) then
-        used = send_cmip_data_3d ( ID_BC, tracer(:,:,:,nbcphilic)+tracer(:,:,:,nbcphobic), &
+        used = send_cmip_data_3d ( ID_BC, tracer_diag(:,:,:,nbcphilic)+tracer_diag(:,:,:,nbcphobic), &
              Time_next, is_in=is, js_in=js, ks_in=1)
      end if
 
@@ -1189,7 +1186,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
         sumb = 0.
         do n=1,ntp
           if (is_dust_tracer(n)) then
-             sumb(:,:,:) = sumb(:,:,:) + tracer(:,:,:,n)
+             sumb(:,:,:) = sumb(:,:,:) + tracer_diag(:,:,:,n)
           end if
         end do
         used = send_cmip_data_3d ( ID_DUST, sumb(:,:,:), &
@@ -1200,7 +1197,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
         sumb = 0.
         do n=1,ntp
           if (is_seasalt_tracer(n)) then
-             sumb(:,:,:) = sumb(:,:,:) + tracer(:,:,:,n)
+             sumb(:,:,:) = sumb(:,:,:) + tracer_diag(:,:,:,n)
           end if
         end do
         used = send_cmip_data_3d ( ID_SS, sumb(:,:,:), &
@@ -1223,12 +1220,12 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
      end if
 
      if ( query_cmip_diag_id(ID_meanage)) then
-        used = send_cmip_data_3d ( ID_meanage, tracer(:,:,:,nage), &
+        used = send_cmip_data_3d ( ID_meanage, tracer_diag(:,:,:,nage), &
              Time_next, is_in=is, js_in=js, ks_in=1, phalf=lphalf)
      end if
 
      if ( query_cmip_diag_id(ID_aoanh)) then
-        used = send_cmip_data_3d ( ID_aoanh, tracer(:,:,:,naoanh), &
+        used = send_cmip_data_3d ( ID_aoanh, tracer_diag(:,:,:,naoanh), &
              Time_next, is_in=is, js_in=js, ks_in=1, phalf=lphalf)
      end if
 
@@ -1244,7 +1241,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
       if (id_toz > 0 .and. no3 > 0) then
         suma = 0.
         do k=1,kd
-           suma(:,:) = suma(:,:) + pwt(:,:,k)*tracer(:,:,k,no3)
+           suma(:,:) = suma(:,:) + pwt(:,:,k)*tracer_diag(:,:,k,no3)
         end do
 	suma = suma * AVOGNO / (WTMAIR*1.e-3 * o3_column_factor)
         used = send_data (id_toz, suma, Time_next, is_in=is, js_in=js)
@@ -1255,7 +1252,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
 	do i = 1,id
 	do j = 1,jd
            do k=tropopause_ind(i,j),kd
-              suma(i,j) = suma(i,j) + pwt(i,j,k)*tracer(i,j,k,no3)
+              suma(i,j) = suma(i,j) + pwt(i,j,k)*tracer_diag(i,j,k,no3)
            end do
         end do
         end do
@@ -1408,6 +1405,19 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
    endif  ! (no diagnostic tracers)
 
 !------------------------------------------------------------------------
+!sea salt
+!------------------------------------------------------------------------
+   call mpp_clock_begin (seasalt_clock)
+   if (do_seasalt) then
+      call atmos_sea_salt_sourcesink(lon,lat,ocn_flx_fraction,pwt, &
+              z_half, pfull, w10m_ocean, t, t_surf_rad, rh, &
+              tracer(:,:,:,:), dsinku(:,:,:), rdt(:,:,:,:), moa_emis, dt, &
+              Time, is,ie,js,je, kbot)
+   endif
+   call mpp_clock_end (seasalt_clock)
+
+   
+!------------------------------------------------------------------------
 !   carbonaceous aerosols
 !------------------------------------------------------------------------
    if (nbcphobic > 0 .and. nbcphilic > 0 .and. &
@@ -1424,6 +1434,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
                                       tracer(:,:,:,nomphobic), rtndomphob, &
                                       tracer(:,:,:,nomphilic), rtndomphil, &
                                       tracer(:,:,:,nOH),    &
+                                      moa_emis,             &
                                       Time_next,is,ie,js,je)
       rdt(:,:,:,nbcphobic)=rdt(:,:,:,nbcphobic)+rtndbcphob(:,:,:)
       rdt(:,:,:,nbcphilic)=rdt(:,:,:,nbcphilic)+rtndbcphil(:,:,:)
@@ -1435,25 +1446,36 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
 ! Mineral Dust
 !------------------------------------------------------------------------
   call mpp_clock_begin (dust_clock)
+  hno3d_setl(:,:) = 0.
+  all_so4d_setl(:,:) = 0.
+
    if (do_dust) then
       call atmos_dust_sourcesink(lon,lat,land,pwt, dt, &
               z_half, pfull, w10m_land, t, rh, &
               tracer(:,:,:,:), dsinku(:,:,:), rdt(:,:,:,:), &
+              hno3d_setl(:,:), all_so4d_setl(:,:), &
               Time, is,ie,js,je, kbot)
    endif
    call mpp_clock_end (dust_clock)
 
-!------------------------------------------------------------------------
-!sea salt
-!------------------------------------------------------------------------
-   call mpp_clock_begin (seasalt_clock)
-   if (do_seasalt) then
-      call atmos_sea_salt_sourcesink(lon,lat,ocn_flx_fraction,pwt, &
-              z_half, pfull, w10m_ocean, t, rh, &
-              tracer(:,:,:,:), dsinku(:,:,:), rdt(:,:,:,:), dt, &
-              Time, is,ie,js,je, kbot)
+   !from mol/m2/s to kgN/m2/s
+   sum_n_ox_ddep  = sum_n_ox_ddep + hno3d_setl(:,:) * WTMN/1000.
+   !---- cmip variables ----
+   if (id_n_ox_ddep > 0) used = send_data (id_n_ox_ddep, sum_n_ox_ddep, Time_next, &
+                                              is_in=is, js_in=js)
+
+
+   if (id_dryso4 > 0) then
+      if (nSO4_cmip > 0) then
+         used = send_data (id_dryso4, 0.096*1.e3*pwt(:,:,kd)*dsinku(:,:,nSO4_cmip)/WTMAIR &
+              + 0.096 * all_so4d_setl, &
+              Time_next, is_in=is, js_in=js)
+      else if (nSO4 > 0) then ! fast-aerosol simpleSO4
+         used = send_data (id_dryso4, 0.096*1.e3*pwt(:,:,kd)*dsinku(:,:,nSO4)/WTMAIR &
+              + 0.096 * all_so4d_setl, &
+              Time_next, is_in=is, js_in=js)
+      endif
    endif
-   call mpp_clock_end (seasalt_clock)
 
 
 !------------------------------------------------------------------------
@@ -1647,7 +1669,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
       do hh=1,24
          mask_local_hour = (local_hour_3d.ge.(hh-1) .and. local_hour_3d.lt.hh)
          if (id_tracer_diag_hour(n,hh) .gt. 0 ) then
-            used = send_data (id_tracer_diag_hour(n,hh),tracer_orig(:,:,:,n),Time,is,js,1,mask=mask_local_hour)
+            used = send_data (id_tracer_diag_hour(n,hh),tracer_diag(:,:,:,n),Time,is,js,1,mask=mask_local_hour)
          end if
       end do
 
@@ -2391,6 +2413,10 @@ type(time_type), intent(in)                                :: Time
               'ps'//hstr, axes(1:2), Time, &
               'ps'//hstr, 'Pa', missing_value=-999.,mask_variant = .true.)
       end do
+
+      id_airmass_tracer = register_diag_field(mod_name, &
+           'airmass_tracer',axes(1:3), Time, &
+           'Vertically integrated mass content of air in layer', 'kg m-2')
 
       id_n_ox_ddep = 0
       id_n_ddep = 0
