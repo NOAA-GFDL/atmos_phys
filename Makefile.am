@@ -1671,6 +1671,8 @@ morrison_gettelman_microp_mod.mod: ${top_srcdir}/atmos_param/microphysics/morris
 gamma_mg_mod.mod: ${top_srcdir}/atmos_param/microphysics/gamma_mg.lo
 micro_mg_mod.mod: ${top_srcdir}/atmos_param/microphysics/micro_mg.lo
 micro_mg1_5.mod: ${top_srcdir}/atmos_param/microphysics/micro_mg.lo
+micro_mg2_mod.mod: ${top_srcdir}/atmos_param/microphysics/micro_mg2.lo
+micro_mg2_utils.mod: ${top_srcdir}/atmos_param/microphysics/micro_mg2_utils.lo
 rotstayn_klein_mp_mod.mod: ${top_srcdir}/atmos_param/microphysics/rotstayn_klein_mp.lo
 ls_cloud_microphysics_mod.mod: ${top_srcdir}/atmos_param/microphysics/ls_cloud_microphysics.lo
 simple_pdf_mod.mod: ${top_srcdir}/atmos_param/microphysics/simple_pdf.lo
@@ -1983,6 +1985,8 @@ include_HEADERS = atmos_nudge_mod.mod \
     gamma_mg_mod.mod \
     micro_mg_mod.mod \
     micro_mg1_5.mod \
+    micro_mg2_mod.mod \
+    micro_mg2_utils.mod \
     rotstayn_klein_mp_mod.mod \
     ls_cloud_microphysics_mod.mod \
     simple_pdf_mod.mod \
