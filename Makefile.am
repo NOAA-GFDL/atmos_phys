@@ -134,6 +134,8 @@ libatmos_phys_la_SOURCES = ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.F9
     ${top_srcdir}/atmos_param/microphysics/morrison_gettelman_microp.F90 \
     ${top_srcdir}/atmos_param/microphysics/gamma_mg.F90 \
     ${top_srcdir}/atmos_param/microphysics/micro_mg.F90 \
+    ${top_srcdir}/atmos_param/microphysics/micro_mg2.F90 \
+    ${top_srcdir}/atmos_param/microphysics/micro_mg2_utils.F90 \
     ${top_srcdir}/atmos_param/microphysics/rotstayn_klein_mp.F90 \
     ${top_srcdir}/atmos_param/microphysics/ls_cloud_microphysics.F90 \
     ${top_srcdir}/atmos_param/microphysics/simple_pdf.F90 \
@@ -783,6 +785,13 @@ ${top_builddir}/atmos_param/microphysics/micro_mg.lo: ${top_srcdir}/atmos_param/
      ${top_srcdir}/atmos_param/lscloud_driver/lscloud_types.lo \
      ${top_srcdir}/atmos_param/microphysics/simple_pdf.lo \
      ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo
+${top_builddir}/atmos_param/microphysics/micro_mg2.lo: ${top_srcdir}/atmos_param/microphysics/micro_mg2.F90 \
+     ${top_srcdir}/atmos_param/microphysics/micro_mg2_utils.lo \
+     ${top_srcdir}/atmos_param/microphysics/gamma_mg.lo \
+     ${top_srcdir}/atmos_param/lscloud_driver/lscloud_types.lo \
+     ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo
+${top_builddir}/atmos_param/microphysics/micro_mg2_utils.lo: ${top_srcdir}/atmos_param/microphysics/micro_mg2_utils.F90 \
+     ${top_srcdir}/atmos_param/microphysics/gamma_mg.lo
 ${top_builddir}/atmos_param/microphysics/rotstayn_klein_mp.lo: ${top_srcdir}/atmos_param/microphysics/rotstayn_klein_mp.F90 \
      ${top_srcdir}/atmos_param/cloud_generator/cloud_generator.lo \
      ${top_srcdir}/atmos_shared/tracer_driver/aer_ccn_act/aer_in_act.lo \
@@ -801,7 +810,8 @@ ${top_builddir}/atmos_param/microphysics/ls_cloud_microphysics.lo: ${top_srcdir}
      ${top_srcdir}/atmos_param/microphysics/rotstayn_klein_mp.lo \
      ${top_srcdir}/atmos_param/microphysics/morrison_gettelman_microp.lo \
      ${top_srcdir}/atmos_param/microphysics/cldwat2m_micro.lo \
-     ${top_srcdir}/atmos_param/microphysics/micro_mg.lo
+     ${top_srcdir}/atmos_param/microphysics/micro_mg.lo \
+     ${top_srcdir}/atmos_param/microphysics/micro_mg2.lo
 ${top_builddir}/atmos_param/microphysics/simple_pdf.lo: ${top_srcdir}/atmos_param/microphysics/simple_pdf.F90 \
      ${top_srcdir}/atmos_param/cloud_generator/betaDistribution.lo \
      ${top_srcdir}/atmos_param/lscloud_driver/lscloud_types.lo
