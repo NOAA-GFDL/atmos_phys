@@ -688,10 +688,8 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
                if (gam_SO2 .gt. 0.) then
                  do n=1, naero_het_eff
                      uptk_het = 0.
-                     if ( trop_option%gSO2_dynamic ) then
-                        call calc_hetrate(sfca_het(i,n),re_het(i,n)*1.D-4,m(i,k),gam_SO2, &
-                             sqrt( temp(i,k)),sqrt(mw_so2),uptk_het)
-                     end if
+                     call calc_hetrate(sfca_het(i,n),re_het(i,n)*1.D-4,m(i,k),gam_SO2, &
+                          sqrt( temp(i,k)),sqrt(mw_so2),uptk_het)
                      rxt(i,k,so2h_ndx) = rxt(i,k,so2h_ndx) + uptk_het
                   end do
                end if

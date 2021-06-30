@@ -231,11 +231,15 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
 
 !     all_dust_setl(:,:) = 1.0-frac_land(:,:)  !The exchanged flux of this becomes >1 at some points within ocean near shore!!
      ! accumulate total dust concentration at the bottom of the atmos for Fe solubility calculaion
-     all_dust_conc(:,:) = all_dust_conc(:,:) + dust_conc(:,:)
-    
+     if (dust_tracers(i)%is_dust) then     
+        all_dust_conc(:,:) = all_dust_conc(:,:) + dust_conc(:,:)
+     end if
+     
      if (id_dust_emis > 0 .or. id_emidust > 0) then
-        ! accumulate total dust emission flux
-        all_dust_emis(:,:) = all_dust_emis(:,:) + dust_emis(:,:) 
+        if (dust_tracers(i)%is_dust) then        
+           ! accumulate total dust emission flux
+           all_dust_emis(:,:) = all_dust_emis(:,:) + dust_emis(:,:)
+        end if
      endif
   enddo
 

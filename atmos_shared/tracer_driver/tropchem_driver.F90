@@ -235,7 +235,7 @@ real               :: gNO3                  = 0.1
 real               :: gHO2                  = 1.
 
 logical            :: het_chem_bug1         = .true. !index error in surface area calculation. affects surface area of organic carbon
-real               :: rh_het_max            = 100. !maximum rh used to calculate surface area.
+real               :: rh_het_max            = 9999. !maximum rh used to calculate surface area.
 
 character(len=128) :: sim_data_filename = 'sim.dat'      ! Input file for chemistry pre-processor
 
