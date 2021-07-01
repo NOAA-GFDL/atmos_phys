@@ -41,103 +41,103 @@
       ( 11)  N2O5    
       ( 12)  CH4     
       ( 13)  CH3O2   
-      ( 14)  HNO3_D1 
-      ( 15)  HNO3_D2 
-      ( 16)  HNO3_D3 
-      ( 17)  HNO3_D4 
-      ( 18)  HNO3_D5 
-      ( 19)  SO4_D1  
-      ( 20)  SO4_D2  
-      ( 21)  SO4_D3  
-      ( 22)  SO4_D4  
-      ( 23)  SO4_D5  
-      ( 24)  CH3OOH  
-      ( 25)  CH2O    
-      ( 26)  CO      
-      ( 27)  OH      
-      ( 28)  HO2     
-      ( 29)  H2O2    
-      ( 30)  C3H6    
-      ( 31)  ISOP       (C5H8)
-      ( 32)  PO2        (C3H6OHO2)
-      ( 33)  CH3CHO  
-      ( 34)  POOH       (C3H6OHOOH)
-      ( 35)  CH3CO3  
-      ( 36)  CH3COOOH
-      ( 37)  PAN        (CH3CO3NO2)
-      ( 38)  C2H6    
-      ( 39)  C2H4    
-      ( 40)  C4H10   
-      ( 41)  MPAN       (CH2CCH3CO3NO2)
-      ( 42)  ISOPO2     (HOCH2COOCH3CHCH2)
-      ( 43)  MVK        (CH2CHCOCH3)
-      ( 44)  MACR       (CH2CCH3CHO)
-      ( 45)  MACRO2     (CH3COCHO2CH2OH)
-      ( 46)  MACROOH    (CH3COCHOOHCH2OH)
-      ( 47)  C2H5O2  
-      ( 48)  C2H5OOH 
-      ( 49)  C10H16  
-      ( 50)  C3H8    
-      ( 51)  C3H7O2  
-      ( 52)  C3H7OOH 
-      ( 53)  CH3COCH3
-      ( 54)  CH3OH   
-      ( 55)  C2H5OH  
-      ( 56)  GLYALD     (HOCH2CHO)
-      ( 57)  HYAC       (CH3COCH2OH)
-      ( 58)  EO2        (HOCH2CH2O2)
-      ( 59)  EO         (HOCH2CH2O)
-      ( 60)  ISOPOOH    (HOCH2COOHCH3CHCH2)
-      ( 61)  H2      
-      ( 62)  SO2     
-      ( 63)  SO4     
-      ( 64)  DMS        (CH3SCH3)
-      ( 65)  NH3     
-      ( 66)  NH4NO3  
-      ( 67)  NH4     
-      ( 68)  HCl     
-      ( 69)  HOCl    
-      ( 70)  ClONO2  
-      ( 71)  Cl      
-      ( 72)  ClO     
-      ( 73)  Cl2O2   
-      ( 74)  Cl2     
-      ( 75)  HOBr    
-      ( 76)  HBr     
-      ( 77)  BrONO2  
-      ( 78)  Br      
-      ( 79)  BrO     
-      ( 80)  BrCl    
-      ( 81)  LCH4       (CH4)
-      ( 82)  H       
-      ( 83)  H2O     
-      ( 84)  ROH        (C3H7OH)
-      ( 85)  RCHO       (C2H5CHO)
-      ( 86)  ISOPNB     (HOCH2C(CH3)=CHCH2ONO2)
-      ( 87)  ISOPNBO2
-      ( 88)  MACRN      (HC(O)C(CH3)=CHCOOH)
-      ( 89)  MVKN       (HC(O)C(CH3)=CHCOOH)
-      ( 90)  R4N2    
-      ( 91)  MEK     
-      ( 92)  R4N1    
-      ( 93)  IEPOX   
-      ( 94)  IEPOXOO 
-      ( 95)  GLYX    
-      ( 96)  MGLY       (CH3COCHO)
-      ( 97)  MVKO2   
-      ( 98)  MVKOOH  
-      ( 99)  MACRNO2 
-      (100)  MAO3    
-      (101)  MAOP    
-      (102)  MAOPO2  
-      (103)  ATO2    
-      (104)  ATOOH   
-      (105)  INO2    
-      (106)  INPN    
-      (107)  ISNOOA  
-      (108)  ISN1    
-      (109)  O3S        (O3)
-      (110)  O3S_E90    (O3)
+      ( 14)  CH3OOH  
+      ( 15)  CH2O    
+      ( 16)  CO      
+      ( 17)  OH      
+      ( 18)  HO2     
+      ( 19)  H2O2    
+      ( 20)  C3H6    
+      ( 21)  ISOP       (C5H8)
+      ( 22)  PO2        (C3H6OHO2)
+      ( 23)  CH3CHO  
+      ( 24)  POOH       (C3H6OHOOH)
+      ( 25)  CH3CO3  
+      ( 26)  CH3COOOH
+      ( 27)  PAN        (CH3CO3NO2)
+      ( 28)  C2H6    
+      ( 29)  C2H4    
+      ( 30)  C4H10   
+      ( 31)  MPAN       (CH2CCH3CO3NO2)
+      ( 32)  ISOPO2     (HOCH2COOCH3CHCH2)
+      ( 33)  MVK        (CH2CHCOCH3)
+      ( 34)  MACR       (CH2CCH3CHO)
+      ( 35)  MACRO2     (CH3COCHO2CH2OH)
+      ( 36)  MACROOH    (CH3COCHOOHCH2OH)
+      ( 37)  C2H5O2  
+      ( 38)  C2H5OOH 
+      ( 39)  C10H16  
+      ( 40)  C3H8    
+      ( 41)  C3H7O2  
+      ( 42)  C3H7OOH 
+      ( 43)  CH3COCH3
+      ( 44)  CH3OH   
+      ( 45)  C2H5OH  
+      ( 46)  GLYALD     (HOCH2CHO)
+      ( 47)  HYAC       (CH3COCH2OH)
+      ( 48)  EO2        (HOCH2CH2O2)
+      ( 49)  EO         (HOCH2CH2O)
+      ( 50)  ISOPOOH    (HOCH2COOHCH3CHCH2)
+      ( 51)  H2      
+      ( 52)  SO2     
+      ( 53)  SO4     
+      ( 54)  DMS        (CH3SCH3)
+      ( 55)  NH3     
+      ( 56)  NH4NO3  
+      ( 57)  NH4     
+      ( 58)  HCl     
+      ( 59)  HOCl    
+      ( 60)  ClONO2  
+      ( 61)  Cl      
+      ( 62)  ClO     
+      ( 63)  Cl2O2   
+      ( 64)  Cl2     
+      ( 65)  HOBr    
+      ( 66)  HBr     
+      ( 67)  BrONO2  
+      ( 68)  Br      
+      ( 69)  BrO     
+      ( 70)  BrCl    
+      ( 71)  LCH4       (CH4)
+      ( 72)  H       
+      ( 73)  H2O     
+      ( 74)  ROH        (C3H7OH)
+      ( 75)  RCHO       (C2H5CHO)
+      ( 76)  ISOPNB     (HOCH2C(CH3)=CHCH2ONO2)
+      ( 77)  ISOPNBO2
+      ( 78)  MACRN      (HC(O)C(CH3)=CHCOOH)
+      ( 79)  MVKN       (HC(O)C(CH3)=CHCOOH)
+      ( 80)  R4N2    
+      ( 81)  MEK     
+      ( 82)  R4N1    
+      ( 83)  IEPOX   
+      ( 84)  IEPOXOO 
+      ( 85)  GLYX    
+      ( 86)  MGLY       (CH3COCHO)
+      ( 87)  MVKO2   
+      ( 88)  MVKOOH  
+      ( 89)  MACRNO2 
+      ( 90)  MAO3    
+      ( 91)  MAOP    
+      ( 92)  MAOPO2  
+      ( 93)  ATO2    
+      ( 94)  ATOOH   
+      ( 95)  INO2    
+      ( 96)  INPN    
+      ( 97)  ISNOOA  
+      ( 98)  ISN1    
+      ( 99)  O3S        (O3)
+      (100)  O3S_E90    (O3)
+      (101)  HNO3_D1 
+      (102)  HNO3_D2 
+      (103)  HNO3_D3 
+      (104)  HNO3_D4 
+      (105)  HNO3_D5 
+      (106)  SO4_D1  
+      (107)  SO4_D2  
+      (108)  SO4_D3  
+      (109)  SO4_D4  
+      (110)  SO4_D5  
   
   
      Invariant species
@@ -163,6 +163,16 @@ Class List
       (  7)  H2O     
       (  8)  O3S     
       (  9)  O3S_E90 
+      ( 10)  HNO3_D1 
+      ( 11)  HNO3_D2 
+      ( 12)  HNO3_D3 
+      ( 13)  HNO3_D4 
+      ( 14)  HNO3_D5 
+      ( 15)  SO4_D1  
+      ( 16)  SO4_D2  
+      ( 17)  SO4_D3  
+      ( 18)  SO4_D4  
+      ( 19)  SO4_D5  
   
  Implicit  
  --------
@@ -177,96 +187,86 @@ Class List
       (  9)  HO2NO2  
       ( 10)  N2O5    
       ( 11)  CH3O2   
-      ( 12)  HNO3_D1 
-      ( 13)  HNO3_D2 
-      ( 14)  HNO3_D3 
-      ( 15)  HNO3_D4 
-      ( 16)  HNO3_D5 
-      ( 17)  SO4_D1  
-      ( 18)  SO4_D2  
-      ( 19)  SO4_D3  
-      ( 20)  SO4_D4  
-      ( 21)  SO4_D5  
-      ( 22)  CH3OOH  
-      ( 23)  CH2O    
-      ( 24)  OH      
-      ( 25)  HO2     
-      ( 26)  H2O2    
-      ( 27)  C3H6    
-      ( 28)  ISOP    
-      ( 29)  PO2     
-      ( 30)  CH3CHO  
-      ( 31)  POOH    
-      ( 32)  CH3CO3  
-      ( 33)  CH3COOOH
-      ( 34)  PAN     
-      ( 35)  C2H4    
-      ( 36)  C4H10   
-      ( 37)  MPAN    
-      ( 38)  ISOPO2  
-      ( 39)  MVK     
-      ( 40)  MACR    
-      ( 41)  MACRO2  
-      ( 42)  MACROOH 
-      ( 43)  C2H5O2  
-      ( 44)  C2H5OOH 
-      ( 45)  C10H16  
-      ( 46)  C3H7O2  
-      ( 47)  C3H7OOH 
-      ( 48)  CH3COCH3
-      ( 49)  CH3OH   
-      ( 50)  C2H5OH  
-      ( 51)  GLYALD  
-      ( 52)  HYAC    
-      ( 53)  EO      
-      ( 54)  EO2     
-      ( 55)  INO2    
-      ( 56)  INPN    
-      ( 57)  ISNOOA  
-      ( 58)  ISN1    
-      ( 59)  ISOPOOH 
-      ( 60)  SO2     
-      ( 61)  SO4     
-      ( 62)  DMS     
-      ( 63)  NH3     
-      ( 64)  NH4NO3  
-      ( 65)  NH4     
-      ( 66)  HCl     
-      ( 67)  HOCl    
-      ( 68)  ClONO2  
-      ( 69)  Cl      
-      ( 70)  ClO     
-      ( 71)  Cl2O2   
-      ( 72)  Cl2     
-      ( 73)  HOBr    
-      ( 74)  HBr     
-      ( 75)  BrONO2  
-      ( 76)  Br      
-      ( 77)  BrO     
-      ( 78)  BrCl    
-      ( 79)  LCH4    
-      ( 80)  H       
-      ( 81)  ROH     
-      ( 82)  RCHO    
-      ( 83)  ISOPNB  
-      ( 84)  ISOPNBO2
-      ( 85)  MACRN   
-      ( 86)  MVKN    
-      ( 87)  R4N2    
-      ( 88)  MEK     
-      ( 89)  R4N1    
-      ( 90)  IEPOX   
-      ( 91)  IEPOXOO 
-      ( 92)  GLYX    
-      ( 93)  MGLY    
-      ( 94)  MVKO2   
-      ( 95)  MVKOOH  
-      ( 96)  MACRNO2 
-      ( 97)  MAO3    
-      ( 98)  MAOP    
-      ( 99)  MAOPO2  
-      (100)  ATO2    
-      (101)  ATOOH   
+      ( 12)  CH3OOH  
+      ( 13)  CH2O    
+      ( 14)  OH      
+      ( 15)  HO2     
+      ( 16)  H2O2    
+      ( 17)  C3H6    
+      ( 18)  ISOP    
+      ( 19)  PO2     
+      ( 20)  CH3CHO  
+      ( 21)  POOH    
+      ( 22)  CH3CO3  
+      ( 23)  CH3COOOH
+      ( 24)  PAN     
+      ( 25)  C2H4    
+      ( 26)  C4H10   
+      ( 27)  MPAN    
+      ( 28)  ISOPO2  
+      ( 29)  MVK     
+      ( 30)  MACR    
+      ( 31)  MACRO2  
+      ( 32)  MACROOH 
+      ( 33)  C2H5O2  
+      ( 34)  C2H5OOH 
+      ( 35)  C10H16  
+      ( 36)  C3H7O2  
+      ( 37)  C3H7OOH 
+      ( 38)  CH3COCH3
+      ( 39)  CH3OH   
+      ( 40)  C2H5OH  
+      ( 41)  GLYALD  
+      ( 42)  HYAC    
+      ( 43)  EO      
+      ( 44)  EO2     
+      ( 45)  INO2    
+      ( 46)  INPN    
+      ( 47)  ISNOOA  
+      ( 48)  ISN1    
+      ( 49)  ISOPOOH 
+      ( 50)  SO2     
+      ( 51)  SO4     
+      ( 52)  DMS     
+      ( 53)  NH3     
+      ( 54)  NH4NO3  
+      ( 55)  NH4     
+      ( 56)  HCl     
+      ( 57)  HOCl    
+      ( 58)  ClONO2  
+      ( 59)  Cl      
+      ( 60)  ClO     
+      ( 61)  Cl2O2   
+      ( 62)  Cl2     
+      ( 63)  HOBr    
+      ( 64)  HBr     
+      ( 65)  BrONO2  
+      ( 66)  Br      
+      ( 67)  BrO     
+      ( 68)  BrCl    
+      ( 69)  LCH4    
+      ( 70)  H       
+      ( 71)  ROH     
+      ( 72)  RCHO    
+      ( 73)  ISOPNB  
+      ( 74)  ISOPNBO2
+      ( 75)  MACRN   
+      ( 76)  MVKN    
+      ( 77)  R4N2    
+      ( 78)  MEK     
+      ( 79)  R4N1    
+      ( 80)  IEPOX   
+      ( 81)  IEPOXOO 
+      ( 82)  GLYX    
+      ( 83)  MGLY    
+      ( 84)  MVKO2   
+      ( 85)  MVKOOH  
+      ( 86)  MACRNO2 
+      ( 87)  MAO3    
+      ( 88)  MAOP    
+      ( 89)  MAOPO2  
+      ( 90)  ATO2    
+      ( 91)  ATOOH   
   
      Photolysis
   jo2              (  1)   O2 + hv ->  2*O                                                      rate = ** User defined **         (  1)
@@ -660,16 +660,6 @@ Extraneous prod/loss species
                    - r38*NO*CH3O2  - 2*r39*CH3O2*CH3O2  - 2*r40*CH3O2*CH3O2  - r41*HO2*CH3O2  - r61*CH3CO3*CH3O2        
                    - r68*C2H5O2*CH3O2  - r75*C3H7O2*CH3O2  - r85*ISOPO2*CH3O2  - r100*MVKO2*CH3O2  - r109*MACRO2*CH3O2  
                    - r117*MAO3*CH3O2  - r118*MAO3*CH3O2  - r124*MAOPO2*CH3O2                                            
-    d(HNO3_D1)/dt = r163*HNO3  + r168*NO3  + 2*r173*N2O5                                                                
-    d(HNO3_D2)/dt = r164*HNO3  + r169*NO3  + 2*r174*N2O5                                                                
-    d(HNO3_D3)/dt = r165*HNO3  + r170*NO3  + 2*r175*N2O5                                                                
-    d(HNO3_D4)/dt = r166*HNO3  + r171*NO3  + 2*r176*N2O5                                                                
-    d(HNO3_D5)/dt = r167*HNO3  + r172*NO3  + 2*r177*N2O5                                                                
-    d(SO4_D1)/dt = r178*SO2                                                                                             
-    d(SO4_D2)/dt = r179*SO2                                                                                             
-    d(SO4_D3)/dt = r180*SO2                                                                                             
-    d(SO4_D4)/dt = r181*SO2                                                                                             
-    d(SO4_D5)/dt = r182*SO2                                                                                             
     d(CH3OOH)/dt = r41*CH3O2*HO2                                                                                        
                     - j11*CH3OOH  - r42*OH*CH3OOH                                                                       
     d(CH2O)/dt = j11*CH3OOH  + j17*POOH  + 1.34*j21*MACR  + .69*j29*ISOPOOH  + j30*HYAC  + j31*GLYALD  + .5*j33*MACRN   
@@ -909,3 +899,13 @@ Extraneous prod/loss species
                   - r144*NO3*ISN1  - r148*O3*ISN1  - r149*OH*ISN1                                                       
     d(O3S)/dt = 0                                                                                                       
     d(O3S_E90)/dt = 0                                                                                                   
+    d(HNO3_D1)/dt = r163*HNO3  + r168*NO3  + 2*r173*N2O5                                                                
+    d(HNO3_D2)/dt = r164*HNO3  + r169*NO3  + 2*r174*N2O5                                                                
+    d(HNO3_D3)/dt = r165*HNO3  + r170*NO3  + 2*r175*N2O5                                                                
+    d(HNO3_D4)/dt = r166*HNO3  + r171*NO3  + 2*r176*N2O5                                                                
+    d(HNO3_D5)/dt = r167*HNO3  + r172*NO3  + 2*r177*N2O5                                                                
+    d(SO4_D1)/dt = r178*SO2                                                                                             
+    d(SO4_D2)/dt = r179*SO2                                                                                             
+    d(SO4_D3)/dt = r180*SO2                                                                                             
+    d(SO4_D4)/dt = r181*SO2                                                                                             
+    d(SO4_D5)/dt = r182*SO2                                                                                             
