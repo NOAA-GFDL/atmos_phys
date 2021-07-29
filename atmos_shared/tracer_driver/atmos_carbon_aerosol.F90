@@ -2491,8 +2491,11 @@ integer ::  ierr, io, logunit
      else
        omss_emission_name(1)=trim(omss_input_name(1))
      endif
+     !Uriel: Add data_names=(/omss_emission_name(1)/). Without it the code thinks that the "*_bnd" variables in 
+     !INPUT/regrid_ocn_Chl_globcolor_stock_fill0.nc are "climatology data" because the variables are 2d in the file:
+     !https://github.com/NOAA-GFDL/FMS/blob/main/interpolator/interpolator.F90#L569-L571, so it is trying to interpolate them.
      call interpolator_init (omss_aerosol_interp,           &
-       trim(omss_filename), lonb, latb, data_out_of_bounds=(/CONSTANT/), &
+       trim(omss_filename), lonb, latb, data_names=(/omss_emission_name(1)/), data_out_of_bounds=(/CONSTANT/), &
        vert_interp=(/INTERP_WEIGHTED_P/))
      if (omss_coef .le. -990) then
        coef_omss_emis = 1.

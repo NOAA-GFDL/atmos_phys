@@ -9,9 +9,9 @@
       use tracer_manager_mod, only : get_tracer_index,  query_method
       use field_manager_mod,  only: parse             
       use tropchem_types_mod, only : tropchem_opt, tropchem_diag
-      use fms_mod,    only : open_file, close_file, mpp_pe, mpp_root_pe, FATAL, error_mesg
+      use mpp_mod, only: mpp_root_pe, mpp_pe
+      use fms_mod, only: FATAL, error_mesg
       use atmos_dust_mod,     only : is_dust_tracer, n_dust_tracers, dust_tracers, do_dust
-
 
 implicit none
       public :: usrrxt_init, usrrxt
