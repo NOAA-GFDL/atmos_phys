@@ -87,10 +87,10 @@ use gamma_mg_mod,              only: gamma =>gamma_mg
 use lscloud_types_mod,         only: diag_id_type, diag_pt_type
 
 use mpp_mod,                   only: input_nml_file
-use fms_mod,                   only: mpp_pe, file_exist, error_mesg,  &
-                                     open_namelist_file, FATAL, &
+use fms_mod,                   only: mpp_pe, error_mesg,  &
+                                     FATAL, &
                                      stdlog, write_version_number, &
-                                     check_nml_error, close_file, &
+                                     check_nml_error, &
                                      mpp_root_pe,  mpp_chksum 
 !use simple_pdf_mod,            only: simple_pdf
 use sat_vapor_pres_mod,         only: lookup_es2, lookup_es3, compute_qs
@@ -378,7 +378,7 @@ subroutine micro_mg2_init( &
 
   character(128), intent(out) :: errstring    ! Output status (non-blank for error return)
  
-  INTEGER   :: unit, io, ierr, logunit
+  INTEGER   :: io, ierr, logunit
 
   !-----------------------------------------------------------------------
 
@@ -409,19 +409,8 @@ subroutine micro_mg2_init( &
 !---------------------------------------------------------------
 !     process namelist
 !---------------------------------------------------------------
-#ifdef INTERNAL_FILE_NML
   read (input_nml_file, nml=micro_mg2_nml, iostat=io)
   ierr = check_nml_error(io,'micro_mg2_nml')
-#else
-  if ( file_exist('input.nml')) then
-    unit = open_namelist_file ()
-    ierr=1; do while (ierr /= 0)
-    read  (unit, nml=micro_mg2_nml, iostat=io, end=10)
-    ierr = check_nml_error(io,'micro_mg2_nml')
-    enddo
-10  call close_file (unit)
-  endif
-#endif
 
 !-----------------------------------------------------------------------
 !    write version and namelist to stdlog.
