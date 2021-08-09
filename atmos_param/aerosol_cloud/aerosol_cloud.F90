@@ -384,8 +384,6 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
 !    downward, the rotstayn-klein microphysics is active, and pdf_clouds
 !    are not activated; in such a case, no particles are activated. 
 !-------------------------------------------------------------------------
-         if (mpp_pe() == mpp_root_pe()) &
-          print*, ' total_activation = ', total_activation
 
         call mpp_clock_begin (aero_loop2)
         if (var_limit_opt == 1) then   ! cjg
