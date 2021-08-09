@@ -780,7 +780,7 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
 
  case ('williams_wind_driven')
 
-    if (use_albedo_for_drydep==.false.) then
+    if (.not. use_albedo_for_drydep) then
        where(T.lt.T_snow_dep)
           landr2=snowr
        elsewhere
