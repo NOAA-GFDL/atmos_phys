@@ -16,7 +16,7 @@
       implicit none
 
  !<f1p
-      real, parameter :: max_dust = 5
+      integer, parameter :: max_dust = 5
       integer :: nh4no3_ndx, hno3_ndx
       integer :: nh4_ndx, nh3_ndx
       integer :: so2_ndx, so4_ndx

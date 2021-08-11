@@ -1044,7 +1044,7 @@ subroutine set_aerosol_mc(r,pwt,rh,aerop,aeron,trop_option)
 !----------------------------------------------------------------
 !     SO4 + BC internal mixing
 !----------------------------------------------------------------
-      if (trop_option%aerosol_thermo == AERO_ISORROPIA .and. trop_option%het_chem_bug1==.false.) then
+      if (trop_option%aerosol_thermo == AERO_ISORROPIA .and. .not. trop_option%het_chem_bug1) then
 !         if (mpp_pe() == mpp_root_pe() ) write(*,*) 'working'
          so4(:,:) = (r(:,:,so4_ndx)*98. + r(:,:,nh4no3_ndx)*63. + r(:,:,nh4_ndx)*17.)/28.97     !VMR => MMR
       else
