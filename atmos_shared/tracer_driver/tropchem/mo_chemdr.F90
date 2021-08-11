@@ -712,20 +712,20 @@ logical                       :: module_is_initialized = .false.
                  xalke = xalk
 
                  if ( so4_d_ndx(n) .gt. 0 ) then
-                    xalke = xalke - 2 * vmr(i,k,so4_d_ndx(n))
+                    xalke = xalke - 2 * max( vmr(i,k,so4_d_ndx(n)), 0. )
                  end if
                  if ( hno3_d_ndx(n) .gt. 0 ) then
-                    xalke = xalke -     vmr(i,k,hno3_d_ndx(n))
+                    xalke = xalke -     max( vmr(i,k,hno3_d_ndx(n)), 0. )
                  end if
 
 !only reevaporate hno3
                  
-                 if ( xalke .lt. 0. ) then                        
-                    if ( hno3_d_ndx(n) .gt. 0 ) then
+                 if ( xalke .lt. 0. .and. hno3_d_ndx(n) .gt. 0 ) then
+                    if ( vmr(i,k,hno3_d_ndx(n)) .gt. 0. ) then
                        !I can at most remove the amount of HNO3 on dust
-                       delta_hno3 = min( -xalke, abs(vmr(i,k,hno3_d_ndx(n))) )
-                       vmr(i,k,hno3_ndx)      = max(vmr(i,k,hno3_ndx)      + delta_hno3 , small_value )                        
-                       vmr(i,k,hno3_d_ndx(n)) = max(hno3_d_b(i,k,n)        - delta_hno3 , small_value )                        
+                       delta_hno3 = min( -xalke, vmr(i,k,hno3_d_ndx(n)) )
+                       vmr(i,k,hno3_ndx)      = vmr(i,k,hno3_ndx)      + delta_hno3
+                       vmr(i,k,hno3_d_ndx(n)) = vmr(i,k,hno3_d_ndx(n)) - delta_hno3
                        if (trop_diag%ind_phno3_g_d .gt. 0 ) then
                           trop_diag_array(i,k,trop_diag%ind_phno3_g_d) =  trop_diag_array(i,k,trop_diag%ind_phno3_g_d)  &
                                + delta_hno3/delt
