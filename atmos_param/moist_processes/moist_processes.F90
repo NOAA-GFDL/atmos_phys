@@ -682,7 +682,7 @@ type(aerosol_type),intent(in), optional :: Aerosol
                        Moist_clouds_block, Input_mp, Tend_mp, C2ls_mp, &
                                   Output_mp, Removal_mp,  Aerosol=Aerosol)
         call lscloud_driver    &
-                    (is, ie, js, je, Time, dt, Input_mp, & 
+                    (is, ie, js, je, Time, dt, lon, lat, Input_mp, & 
                      Physics_tendency_block%qdiag, Tend_mp, C2ls_mp, &
                      Output_mp, Removal_mp,    &
                      Moist_clouds_block%cloud_data(istrat), &
@@ -1473,11 +1473,22 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
 !---------------------------------------------------------------------
 !    define the total and convective ice and ice water path. 
 !---------------------------------------------------------------------
+!--> h1g, 2020-01-07, "ice_amt" in RK microphysics includes both ice and snow.
+!                     "ice_amt" in MG, MG1.5, and MG2 only include ice. 
+!in order to compare orange with orange, I added large-scale snow in "ice_amt".
+         
+!        if (id_tot_ice_amt > 0 ) &
+!          used = send_data (id_tot_ice_amt, &
+!          (Moist_clouds_block%cloud_data(i_lsc)%ice_amt + tot_conv_ice)/   &
+!                              (1.0 + total_conv_cloud), &
+!                                                         Time, is, js, 1)
+
         if (id_tot_ice_amt > 0 ) &
           used = send_data (id_tot_ice_amt, &
-          (Moist_clouds_block%cloud_data(i_lsc)%ice_amt + tot_conv_ice)/   &
+          (Moist_clouds_block%cloud_data(i_lsc)%ice_amt + tot_conv_ice+Moist_clouds_block%cloud_data(i_lsc)%snow)/   &
                               (1.0 + total_conv_cloud), &
                                                          Time, is, js, 1)
+!<-- h1g, 2020-01-07
 
         if (query_cmip_diag_id(ID_cli)) then
            used = send_cmip_data_3d (ID_cli, &

@@ -10,6 +10,7 @@
 !             MG microphysics (as developed by M. Salzmann)
 !             MG-NCAR microphysics (an early version of NCAR microphysics)
 !             NCAR microphysics version 1.5 (became available in 2012)
+!             NCAR microphysics version 2.0 (became available? )
 !
 !-----------------------------------------------------------------------
 
@@ -70,6 +71,9 @@ use cldwat2m_micro_mod,    only: ini_micro, mmicro_pcond, mmicro_end
 use micro_mg_mod,          only: micro_mg_init, micro_mg_get_cols,&
                                  micro_mg_tend
 
+use micro_mg2_mod,         only: micro_mg2_init, micro_mg2_get_cols,&
+                                 micro_mg2_tend
+
 implicit none
 private
 
@@ -108,7 +112,7 @@ logical :: use_Meyers = .false.       ! use Meyers formula when overriding
                                       ! model ice particle number ?
 logical :: use_Cooper = .false.       ! use Cooper formula when overriding
                                       ! model ice particle number ?
-integer, dimension(6) :: init_date = (/ 1980, 1, 1, 0, 0, 0 /)  
+integer, dimension(6) :: init_date = (/ 1, 1, 1, 0, 0, 0 /)  
                                       ! date to use as base for  
                                       ! defining microphysics start time
 real    :: micro_begin_sec  = 0.0     ! begin microphysics this many 
@@ -117,17 +121,21 @@ integer :: top_lev = 1                ! topmost level for ncar microphysics
 real    :: min_precip_needing_adjustment     = 0.0      
 real    :: lowest_allowed_precip = 0.0
 logical :: use_ndust = .false.
+real    :: accretion_scale = 1.0
+real    :: liq_num_eros_fac = 1.0
+real    :: ice_num_eros_fac = 1.0
 
 
+logical :: do_cleanup = .true.
 namelist / ls_cloud_microphysics_nml /   &
                                lin_microphys_top_press, mass_cons, &
                                override_liq_num, override_ice_num, &
                                use_Meyers, use_Cooper, init_date, &
                                micro_begin_sec, top_lev, &
                                min_precip_needing_adjustment, &
-                               lowest_allowed_precip, use_ndust
-
-
+                               lowest_allowed_precip, use_ndust, accretion_scale, &
+                               do_cleanup, liq_num_eros_fac, ice_num_eros_fac   !h1g, 2020-06-22
+                               
 !-------------------- clock definitions --------------------------------
 
 integer  :: rk_micro_clock, lin_micro_clock, ncar_micro_clock
@@ -144,10 +152,10 @@ logical :: do_pdf_clouds
 logical :: doing_prog_clouds
 real    :: dtcloud, inv_dtcloud
 logical :: do_rk_microphys, do_mg_microphys, do_mg_ncar_microphys, &
-           do_ncar_microphys
+           do_ncar_microphys, do_ncar_MG2
 logical :: tiedtke_macrophysics
 logical :: dqa_activation, total_activation
-integer :: nsphum, nql, nqi, nqa, nqn, nqni, nqr, nqs, nqg
+integer :: nsphum, nql, nqi, nqa, nqn, nqni, nqr, nqs, nqg, nqnr, nqns
 
 !--------------------------------------------------------------------
 !    other module variables
@@ -218,6 +226,9 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
       do_mg_microphys = Constants_lsc%do_mg_microphys
       do_mg_ncar_microphys = Constants_lsc%do_mg_ncar_microphys
       do_ncar_microphys = Constants_lsc%do_ncar_microphys
+
+      do_ncar_MG2       = Constants_lsc%do_ncar_MG2
+
       tiedtke_macrophysics = Constants_lsc%tiedtke_macrophysics
       dqa_activation = Constants_lsc%dqa_activation
       total_activation = Constants_lsc%total_activation
@@ -229,6 +240,9 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
       nqg = Physics_control%nqg
       nqr = Physics_control%nqr
       nqs = Physics_control%nqs
+
+      nqnr = Physics_control%nqnr
+      nqns = Physics_control%nqns
 
 !------------------------------------------------------------------------
 !    define clocks for large-scale cloud schemes initialization (local
@@ -254,6 +268,10 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
         ncar_micro_init_clock = mpp_clock_id(    &
                '   Ls_cld_micro: ncar_micro:Initialization' , &
                                                 grain=CLOCK_MODULE_DRIVER)
+      else if (do_ncar_MG2) then
+        ncar_micro_init_clock = mpp_clock_id(    &
+               '   Ls_cld_micro: ncar_MG2:Initialization' , &
+                                                grain=CLOCK_MODULE_DRIVER)
       endif
 
       if (do_rk_microphys) then
@@ -275,6 +293,10 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
       else if (do_ncar_microphys) then
         ncar_micro_clock = mpp_clock_id(    &
                '   Ls_cld_micro: ncar_micro' , &
+                                                grain=CLOCK_MODULE_DRIVER )
+      else if (do_ncar_MG2) then
+        ncar_micro_clock = mpp_clock_id(    &
+               '   Ls_cld_micro: ncar_MG2' , &
                                                 grain=CLOCK_MODULE_DRIVER )
       endif
 
@@ -388,6 +410,20 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
           call mpp_clock_end (ncar_micro_init_clock)
 
 !-----------------------------------------------------------------------
+!  ncar microphysics  (ncar v2.0)
+!-----------------------------------------------------------------------
+        else if (do_ncar_MG2) then
+          call mpp_clock_begin (ncar_micro_init_clock)
+          call micro_mg2_init (r8, GRAV,  RDGAS, RVGAS, CP_AIR, TFREEZE, &
+                               HLV, HLF, Nml_lsc%do_ice_nucl_wpdf,   &
+                              errstring, Exch_ctrl)
+          if (trim(errstring) /= '') then
+            call error_mesg ('ls_cloud_microphysics/micro_mg2_init', &
+                                                         errstring, FATAL)
+          endif
+          call mpp_clock_end (ncar_micro_init_clock)
+
+!-----------------------------------------------------------------------
 !  no valid microphys scheme chosen
 !-----------------------------------------------------------------------
         else
@@ -446,7 +482,7 @@ end subroutine ls_cloud_microphysics_time_vary
 !########################################################################
 
 subroutine ls_cloud_microphysics (    &
-                 is, ie, js, je, Time, dt, Input_mp, Output_mp, C2ls_mp,&
+                 is, ie, js, je, Time, dt, lon, lat, Input_mp, Output_mp, C2ls_mp,&
                  Tend_mp, Lsdiag_mp, Lsdiag_mp_control, Atmos_state,   &
                  Cloud_state, Particles, Precip_state, Cloud_processes, &
                                                       Removal_mp, Aerosol)
@@ -469,6 +505,8 @@ type(time_type),            intent(in)           :: Time
 integer,                    intent(in)           :: is, ie, js, je
 real,                       intent(in)           :: dt
 type(aerosol_type),         intent(in), optional :: Aerosol
+real,                        intent(in), dimension(:,:) :: lon, lat
+
 
 !------------------------------------------------------------------------
 !   local variables:
@@ -482,7 +520,9 @@ type(aerosol_type),         intent(in), optional :: Aerosol
                             size(Input_mp%tin,3))   ::   &
                                delp, delz, &
                                ST_micro, SQ_micro, SL_micro, SI_micro, &
-                               SN_micro, SNI_micro, D_eros_l, D_eros_i,  &
+                               SN_micro, SNI_micro,                    &
+                               SR_micro, SS_micro, SNR_micro,SNS_micro,& 
+                               D_eros_l, D_eros_i,  &
                                nerosc, nerosi, dqcdt, dqidt, qa_new, &
                                ssat_disposal, ql_new,  qi_new,           &
                                nctend, nitend, qn_new, qni_new, &
@@ -490,7 +530,7 @@ type(aerosol_type),         intent(in), optional :: Aerosol
                                accre_enhann, tnd_qsnown, &
                                tnd_nsnown, re_icen, relvarn, &           
                                crystal1, rho_air,  &
-                               aerosols_concen, droplets_concen
+                               aerosols_concen, droplets_concen, test_bqx, dte3d
 
       real, dimension( size(Input_mp%tin,1), size(Input_mp%tin,2),   &
                             size(Input_mp%tin,3),4) ::  &
@@ -566,106 +606,29 @@ type(aerosol_type),         intent(in), optional :: Aerosol
         call mpp_clock_end   (rk_micro_clock)
 
 !-----------------------------------------------------------------------
-!   lin cld microphysics is activated
-!-----------------------------------------------------------------------
-      else if (do_lin_cld_microphys ) then
-        call mpp_clock_begin (lin_micro_clock)
-        do k=1,kx
-          delp(:,:,k) =  &
-                   Input_mp%phalf(:,:,k+1) - Input_mp%phalf(:,:,k)
-          delz(:,:,k) =  &
-                  (Input_mp%zhalf(:,:,k+1) - Input_mp%zhalf(:,:,k))*&
-                                  Input_mp%tin(:,:,k)/Input_mp%tm(:,:,k)
-        end do
-
-!------------------------------------------------------------------------
-!   droplet number concentration in #/cc following Boucher and Lohmann 1995
-!   the lin microphysics uses #/cc                                        
-!------------------------------------------------------------------------
-        do k=1,kx
-          do j=1,jx
-            do i=1,ix
-              depth = (Input_mp%phalf(i,j,k+1) - Input_mp%phalf(i,j,k)) / &
-                     ( 9.8*0.029*Input_mp%pfull(i,j,k     )/(8.314*  &
-                                                   Input_mp%tin(i,j,k)))
-!sulfate concentration in ug/m3 
-              aerosols_concen(i,j,k)=(Aerosol%aerosol(i,j,k,1))/depth*1.e9
-              if ( Input_mp%lat(i,j) < -1.0472 ) then    ! South of ~60S are treated as ocean
-                droplets_concen(i,j,k)= 10.**2.06*  &
-                                     (0.7273*aerosols_concen(i,j,k))**0.48
-              else
-                droplets_concen(i,j,k)= Input_mp%land(i,j) *(10.**2.24*   &
-                                 (0.7273*aerosols_concen(i,j,k))**0.257)+ &
-                                    (1.-Input_mp%land(i,j))* (10.**2.06*  &
-                                     (0.7273*aerosols_concen(i,j,k))**0.48)
-              endif
-            enddo
-          enddo
-        end do
-
-        call lin_cld_microphys_driver(       &
-                Input_mp%qin,  Input_mp%tracer(:,:,:,nql),   &
-                Input_mp%tracer(:,:,:,nqr), Input_mp%tracer(:,:,:,nqi), &
-                Input_mp%tracer(:,:,:,nqs), Input_mp%tracer(:,:,:,nqg), &
-                Input_mp%tracer(:,:,:,nqa), droplets_concen,Tend_mp%qtnd, &
-                Tend_mp%q_tnd(:,:,:,nql), Tend_mp%q_tnd(:,:,:,nqr), &
-                Tend_mp%q_tnd(:,:,:,nqi), Tend_mp%q_tnd(:,:,:,nqs), &
-                Tend_mp%q_tnd(:,:,:,nqg), tend_mp%q_tnd(:,:,:,nqa),    &
-                Tend_mp%ttnd, Input_mp%tin,  Input_mp%w, Input_mp%uin, &
-                Input_mp%vin, Output_mp%udt, Output_mp%vdt, delz, delp, &
-                Input_mp%area, dt, Input_mp%land, Precip_state%surfrain, &
-                Precip_state%surfsnow, ice_lin, graupel_lin, &
-                is, ie, js, je, 1, kx, ktop, kx, Time)
-
-!-----------------------------------------------------------------------
-! Add all "solid" form of precipitation into surf_snow
-!-----------------------------------------------------------------------
-        Precip_state%surfsnow = (Precip_state%surfsnow + ice_lin +   &
-                                                 graupel_lin) * dt/86400.
-        Precip_state%surfrain =  Precip_state%surfrain * dt/86400.
-
-!-----------------------------------------------------------------------
-! Update tendencies:
-!-----------------------------------------------------------------------
-        Output_mp%rdt(:,:,:,nqr) = Output_mp%rdt(:,:,:,nqr) +    &
-                                               Tend_mp%q_tnd(:,:,:,nqr)
-        Output_mp%rdt(:,:,:,nqs) = Output_mp%rdt(:,:,:,nqs) +   &
-                                               Tend_mp%q_tnd(:,:,:,nqs)
-        Output_mp%rdt(:,:,:,nqg) = Output_mp%rdt(:,:,:,nqg) +   &
-                                               Tend_mp%q_tnd(:,:,:,nqg)
-        Tend_mp%ttnd             = Tend_mp%ttnd * dt
-        Tend_mp%qtnd             = Tend_mp%qtnd * dt
-        Tend_mp%q_tnd(:,:,:,nql) = Tend_mp%q_tnd(:,:,:,nql) * dt
-        Tend_mp%q_tnd(:,:,:,nqi) = Tend_mp%q_tnd(:,:,:,nqi) * dt
-        Tend_mp%q_tnd(:,:,:,nqa) = Tend_mp%q_tnd(:,:,:,nqa) * dt
-
-!-----------------------------------------------------------------------
-! Update rain_wat, snow_wat, graupel_wat
-!-----------------------------------------------------------------------
-        Input_mp%tracer(:,:,:,nqr) = Input_mp%tracer(:,:,:,nqr) +   &
-                                              Tend_mp%q_tnd(:,:,:,nqr)*dt
-        Input_mp%tracer(:,:,:,nqs) = Input_mp%tracer(:,:,:,nqs) +   &
-                                              Tend_mp%q_tnd(:,:,:,nqs)*dt
-        Input_mp%tracer(:,:,:,nqg) = Input_mp%tracer(:,:,:,nqg) +   &
-                                              Tend_mp%q_tnd(:,:,:,nqg)*dt
-        call mpp_clock_end   (lin_micro_clock)
-
-!-----------------------------------------------------------------------
 !  NCAR microphysics (currently 3 flavors)
 !-----------------------------------------------------------------------
       else if (do_mg_microphys   .or. &    
                do_mg_ncar_microphys   .or. &    
-               do_ncar_microphys) then      
+               do_ncar_microphys      .or. &
+               do_ncar_MG2         ) then      
         call mpp_clock_begin (ncar_micro_clock)
+
+        ST_micro(:,:,:)  = 0.0
+        SQ_micro(:,:,:)  = 0.0 
+        SL_micro(:,:,:)  = 0.0
+        SI_micro(:,:,:)  = 0.0
+        SN_micro(:,:,:)  = 0.0
+        SNI_micro(:,:,:) = 0.0
+
+        SR_micro(:,:,:)  = 0.0
+        SNR_micro(:,:,:) = 0.0
+        SS_micro(:,:,:)  = 0.0 
+        SNS_micro(:,:,:) = 0.0
 
 !-----------------------------------------------------------------------
 !   determine whether NCAR microphysics are active at the current time
 !-----------------------------------------------------------------------
-        call get_time( time, current_sec, current_days)
-        current_total_sec = real(current_sec - current_sec0) +   &
-                                    86400.0*(current_days - current_days0)
-   
-        if (current_total_sec >= micro_begin_sec) then
           Atmos_state%tn = Input_mp%tin + Tend_mp%ttnd
           Atmos_state%qvn = Input_mp%qin + Tend_mp%qtnd
 
@@ -692,7 +655,7 @@ type(aerosol_type),         intent(in), optional :: Aerosol
                                         Cloud_processes%D_eros(i,j,k)/ &
                                                                   dtcloud
                   if (Cloud_state%ql_upd(i,j,k) >= qmin) then
-                    nerosc(i,j,k) = D_eros_l(i,j,k)/  &
+                    nerosc(i,j,k) = liq_num_eros_fac * D_eros_l(i,j,k)/  &
                                       Cloud_state%ql_upd(i,j,k)* &
                                Cloud_state%qn_upd(i,j,k)/MAX(0.0001, &
                                                Cloud_state%qa_upd(i,j,k))
@@ -700,7 +663,7 @@ type(aerosol_type),         intent(in), optional :: Aerosol
                     nerosc(i,j,k) = 0.
                   endif
                   if (Cloud_state%qi_upd(i,j,k) >= qmin) then
-                    nerosi(i,j,k) = D_eros_i(i,j,k)/   &
+                    nerosi(i,j,k) = ice_num_eros_fac * D_eros_i(i,j,k)/   &
                                           Cloud_state%qi_upd(i,j,k)* &
                                Cloud_state%qni_upd(i,j,k)/MAX(0.0001, &
                                               Cloud_state%qa_upd(i,j,k))
@@ -755,7 +718,7 @@ type(aerosol_type),         intent(in), optional :: Aerosol
           if (do_mg_microphys) then
 
 !-----------------------------------------------------------------------
-!   define activated droplets in units of #/kg (drop1 is #/cc).
+!   define activated droplets in units of #/kg (drop1 is in-cloud #/cc).
 !-----------------------------------------------------------------------
             Particles%drop2 = Particles%drop1*1.e6/Atmos_state%airdens
 
@@ -817,7 +780,8 @@ type(aerosol_type),         intent(in), optional :: Aerosol
 !-------------------------------------------------------------------------
 !    executed for mg_ncar or ncar microphysics:
 !-------------------------------------------------------------------------
-          else if (do_mg_ncar_microphys .or. do_ncar_microphys) then   
+          else if (do_mg_ncar_microphys .or. do_ncar_microphys &
+                   .or. do_ncar_MG2 ) then   
           
             rho = Input_mp%pfull/(RDGAS*Atmos_state%tn)
 
@@ -1038,6 +1002,7 @@ type(aerosol_type),         intent(in), optional :: Aerosol
                 call write_debug_output (" ST samp bef mg ",   &
                                                       Tend_mp%ttnd, j=j)
 
+
 !-------------------------------------------------------------------------
 !    call the ncar microphysics routine micro_mg_tend.
 !-------------------------------------------------------------------------
@@ -1132,36 +1097,176 @@ type(aerosol_type),         intent(in), optional :: Aerosol
                                        Precip_state%surfrain(i,j) *1000.0
                 enddo
               enddo
-            endif ! (do_mg)
-          endif  ! (do_mg)
+
+            else if (do_ncar_MG2) then
+              nlev = kx
+              top_lev = 1
+              mgncol = ix
+              accre_enhann(:,:,:) = accretion_scale  ! accretion enhancement factor
+             
+              call get_time( time, current_sec, current_days)
+            !  if ( mpp_pe() == mpp_root_pe() ) &
+            !   write(*,*)  'current_sec =',   current_sec
+
+              do k=1,kx
+                do j=1,jx
+                  do i=1,ix
+                    if ( Atmos_state%tn(i,j,k) .lt.-150.0+273.15 .or. &
+                         Atmos_state%tn(i,j,k) .gt.90+273.15)         &
+            write(*,'(a,3i5, 5f12.5, 15e12.3)') 'before MG2: bad temperature@1213',   &
+              i,j,k, current_sec/3600.0, Atmos_state%tn(i,j,k), Atmos_state%qvn(i,j,k), Input_mp%pfull(i,j,k), dtcloud
+  
+                  enddo
+                enddo
+              enddo  
+ 
+              do j=1,jx
+               call  micro_mg2_tend (  lon(:,j), lat(:,j), &
+                   dqa_activation, total_activation, &
+                   tiedtke_macrophysics, j, jx,      &
+                   mgncol,     nlev,     dtcloud,  &
+                   Particles%concen_dust_sub(:,j,:),  &
+                   Atmos_state%tn(:,j,:),     &
+                   Atmos_state%qvn(:,j,:),   &
+                   Cloud_state%ql_upd(:,j,:), Cloud_state%qi_upd(:,j,:), &
+                   Cloud_state%qn_upd(:,j,:), Cloud_state%qni_upd(:,j,:), &
+                   Cloud_state%qr_upd(:,j,:), Cloud_state%qs_upd(:,j,:), &
+                   Cloud_state%qnr_upd(:,j,:), Cloud_state%qns_upd(:,j,:), &
+                   relvarn(:,j,:), accre_enhann(:,j,:),                   &
+                   Input_mp%pfull(:,j,:),  &
+                   Atmos_state%delp(:,j,:),   &
+                   Input_mp%zhalf(:,j,:),  &
+                   Cloud_state%qa_upd(:,j,:),  &
+                   liqcldf(:,j,:)       , icecldf(:,j,:),   & 
+                   Cloud_processes%delta_cf(:,j,:), &
+                   D_eros_l(:,j,:), nerosc(:,j,:), &
+                   D_eros_i(:,j,:), nerosi(:,j,:), &
+                   dqcdt(:,j,:),    dqidt(:,j,:), &
+                   crystal1(:,j,:), &
+                   Particles%drop2(:,j,:),   &
+                   rbar_dust_4bin(:,j,:,:), ndust_4bin(:,j,:,:), &
+                   ST_micro(:,j,:), SQ_micro(:,j,:), SL_micro(:,j,:), &
+                   SI_micro(:,j,:), SN_micro(:,j,:), SNI_micro(:,j,:), &
+                   SR_micro(:,j,:), SS_micro(:,j,:), SNR_micro(:,j,:), SNS_micro(:,j,:),&
+                   Precip_state%surfrain(:,j),   &
+                   Precip_state%surfsnow(:,j),   &
+                   Precip_state%lsc_snow(:,j,:), &
+                   Removal_mp%rain3d(:,j,:),   &
+                   Removal_mp%snow3d(:,j,:),   &
+                   Precip_state%lsc_rain(:,j,:),   &
+                   Precip_state%lsc_rain_size(:,j,:),  &
+                   Precip_state%lsc_snow_size(:,j,:),   &
+                   errstring, Cloud_processes%f_snow_berg(:,j,:), &
+                   ssat_disposal (:,j,:), &
+                   Lsdiag_mp_control%n_diag_4d, Lsdiag_mp%diag_4d,  &
+                       Lsdiag_mp_control%diag_id,    &
+                                                 Lsdiag_mp_control%diag_pt)
+!Convert from effective radius to diameter for use in radiation.
+! in old NCAR, diameter was returned from mmicro_pcond routine.
+                   Precip_state%lsc_rain_size(:,j,:) =     &
+                                   2.0*Precip_state%lsc_rain_size(:,j,:)
+                   Precip_state%lsc_snow_size(:,j,:) =      &
+                                  2.0*Precip_state%lsc_snow_size(:,j,:)
+                   
+                   if(maxval(Removal_mp%snow3d(:,j,:)) > 1.e-2) write(*,*) 'max snow3d',maxval(Removal_mp%snow3d(:,j,:))
+                   if(minval(Removal_mp%snow3d(:,j,:)) <-1.e-2) write(*,*) 'min snow3d',minval(Removal_mp%snow3d(:,j,:))
+
+                do i=1,ix
+                  do k=1,kx
+                    if( Cloud_state%qn_upd(i,j,k) + dtcloud * SN_micro(i,j,k) < -1.e-3 ) then
+                      print*, 'negative drop number @1281', lon(i,j), lat(i,j), k, Cloud_state%qn_upd(i,j,k),  & 
+                               SN_micro(i,j,k), Cloud_state%qn_upd(i,j,k) + dtcloud * SN_micro(i,j,k) 
+                    endif
+
+                    if( Cloud_state%qr_upd(i,j,k) + dtcloud * SR_micro(i,j,k) < -1.e-3 ) then
+                      print*, 'negative rain mass @1281', lon(i,j), lat(i,j), k, Cloud_state%qr_upd(i,j,k),  & 
+                               SR_micro(i,j,k), Cloud_state%qr_upd(i,j,k) + dtcloud * SR_micro(i,j,k) 
+                    endif
+
+                    if( Cloud_state%qnr_upd(i,j,k) + dtcloud * SNR_micro(i,j,k) < -1.e-3 ) then
+                      print*, 'negative rain number @1281', lon(i,j), lat(i,j), k, Cloud_state%qnr_upd(i,j,k),  & 
+                               SNR_micro(i,j,k), Cloud_state%qnr_upd(i,j,k) + dtcloud * SNR_micro(i,j,k) 
+                    endif
+
+                    if( Cloud_state%qs_upd(i,j,k) + dtcloud * SS_micro(i,j,k) < -1.e-3 ) then
+                      print*, 'negative snow mass @1281', lon(i,j), lat(i,j), k, Cloud_state%qs_upd(i,j,k),  & 
+                               SS_micro(i,j,k), Cloud_state%qs_upd(i,j,k) + dtcloud * SS_micro(i,j,k) 
+                    endif
+
+                    if( Cloud_state%qns_upd(i,j,k) + dtcloud * SNS_micro(i,j,k) < -1.e-3 ) then
+                      print*, 'negative snow number @1281', lon(i,j), lat(i,j), k, Cloud_state%qns_upd(i,j,k),  & 
+                               SNS_micro(i,j,k), Cloud_state%qns_upd(i,j,k) + dtcloud * SNS_micro(i,j,k) 
+                    endif
+                  enddo
+                enddo  
+      
+              enddo  ! end of j loop
+     
+!------------------------------------------------------------------------
+!    calculate column enthalpy and total water changes
+!    Note: in MG2, temperature tendency is multiplied by Cp_air.
+!------------------------------------------------------------------------
+              enth_micro_col(:,:) = 0.0
+              wat_micro_col(:,:)  = 0.0
+              do j=1,jx
+                do i=1,ix
+                  do k=1,kx
+                    enth_micro_col(i,j) = enth_micro_col(i,j)   +         &
+                        ( ST_micro(i,j,k) - HLV*SL_micro(i,j,k) -   &
+                                         HLS*SI_micro(i,j,k) )*    &
+                                             Atmos_state%delp(i,j,k)/grav
+
+                    wat_micro_col(i,j) = wat_micro_col(i,j)  +            &
+                         ( SQ_micro(i,j,k) + SL_micro(i,j,k) +  &
+                                        SI_micro(i,j,k) )*   &
+                                             Atmos_state%delp(i,j,k)/grav
+                  enddo
+  
+                  enth_micro_col(i,j) = enth_micro_col(i,j) +   &
+                                                 (-HLV*1000.0* &
+                                        (Precip_state%surfrain(i,j) -  &
+                                         Precip_state%surfsnow(i,j)) -  &
+                                 HLS*1000.0 * Precip_state%surfsnow(i,j) )
+
+                  wat_micro_col(i,j) = wat_micro_col(i,j) +   &
+                                       Precip_state%surfrain(i,j) *1000.0
+                enddo
+              enddo
+
+            endif ! do_mg_ncar_microphys
+          endif  ! if do_mg_microphys, elseif do_mg_ncar_microphys .or. do_ncar_microphys & .or. do_ncar_MG2
 
 !------------------------------------------------------------------------
 !    adjust precip fields to assure mass conservation and realizable
 !    values.
 !------------------------------------------------------------------------
           call adjust_precip_fields (   &
-                              ix, jx, kx, SQ_micro, SL_micro, SI_micro,  &
+                              ix, jx, kx, SQ_micro, SL_micro, SI_micro,  SR_micro, SS_micro, &
                                   Atmos_state, Precip_state, Lsdiag_mp, &
                                                        Lsdiag_mp_control ) 
 
 !-----------------------------------------------------------------------
 !    update prognostic tendencies due to microphysics terms.
 !-----------------------------------------------------------------------
-            Tend_mp%qtnd = Tend_mp%qtnd + SQ_micro*dtcloud
-            Tend_mp%ttnd = Tend_mp%ttnd + ST_micro/cp_air*dtcloud
-            Tend_mp%q_tnd(:,:,:,nql) = Tend_mp%q_tnd(:,:,:,nql) +   &
-                                                SL_micro(:,:,:)*dtcloud
-            Tend_mp%q_tnd(:,:,:,nqi) = Tend_mp%q_tnd(:,:,:,nqi) +   &
-                                                SI_micro(:,:,:)*dtcloud
-            Tend_mp%q_tnd(:,:,:,nqn) = Tend_mp%q_tnd(:,:,:,nqn) +   &
-                                                SN_micro(:,:,:)*dtcloud
-            Tend_mp%q_tnd(:,:,:,nqni)= Tend_mp%q_tnd(:,:,:,nqni) +  &
-                                                SNI_micro(:,:,:)*dtcloud
+          Tend_mp%qtnd = Tend_mp%qtnd + SQ_micro*dtcloud
+          Tend_mp%ttnd = Tend_mp%ttnd + ST_micro/cp_air*dtcloud
+          Cloud_state%SL_out = Cloud_state%SL_out + SL_micro*dtcloud
+          Cloud_state%SI_out = Cloud_state%SI_out + SI_micro*dtcloud
+          Cloud_state%SN_out = Cloud_state%SN_out + SN_micro*dtcloud
+          Cloud_state%SNI_out = Cloud_state%SNI_out + SNI_micro*dtcloud
 
-            Cloud_state%SL_out = Cloud_state%SL_out + SL_micro*dtcloud
-            Cloud_state%SI_out = Cloud_state%SI_out + SI_micro*dtcloud
-            Cloud_state%SN_out = Cloud_state%SN_out + SN_micro*dtcloud
-            Cloud_state%SNI_out = Cloud_state%SNI_out + SNI_micro*dtcloud
+          if (nqr /= NO_TRACER) then
+            Cloud_state%SR_out = Cloud_state%SR_out + SR_micro*dtcloud
+          endif
+          if (nqs /= NO_TRACER) then
+            Cloud_state%SS_out = Cloud_state%SS_out + SS_micro*dtcloud
+          endif
+          if (nqnr /= NO_TRACER) then
+            Cloud_state%SNR_out = Cloud_state%SNR_out + SNR_micro*dtcloud 
+          endif
+          if (nqns /= NO_TRACER) then
+            Cloud_state%SNS_out = Cloud_state%SNS_out + SNS_micro*dtcloud
+          endif
 
 !------------------------------------------------------------------------
 !    adjustment to fields needed after removing supersaturation (only
@@ -1234,6 +1339,14 @@ type(aerosol_type),         intent(in), optional :: Aerosol
                      Tend_mp%q_tnd(:,:,:,nqn) = Cloud_state%SN_out(:,:,:)
             if (nqni /= NO_TRACER) &
                      Tend_mp%q_tnd(:,:,:,nqni) = Cloud_state%SNI_out(:,:,:)
+            if (nqr /= NO_TRACER) &
+                     Tend_mp%q_tnd(:,:,:,nqr)  = Cloud_state%SR_out(:,:,:)
+            if (nqs /= NO_TRACER) &
+                     Tend_mp%q_tnd(:,:,:,nqs)  = Cloud_state%SS_out(:,:,:)
+            if (nqnr /= NO_TRACER) &
+                     Tend_mp%q_tnd(:,:,:,nqnr) = Cloud_state%SNR_out(:,:,:)
+            if (nqns /= NO_TRACER) &
+                     Tend_mp%q_tnd(:,:,:,nqns) = Cloud_state%SNS_out(:,:,:)
 
 !-----------------------------------------------------------------------
 !    define the total precipitating ice field for use in COSP (stored in
@@ -1244,7 +1357,6 @@ type(aerosol_type),         intent(in), optional :: Aerosol
             Removal_mp%snowclr3d = Removal_mp%snow3d
 
           endif !  do_clubb
-        endif !   current_total_sec >= micro_begin_sec
 
         call mpp_clock_end   (ncar_micro_clock)
 !-------------------------------------------------------------------------
@@ -1332,7 +1444,7 @@ end subroutine ls_cloud_microphysics_end
 !########################################################################
 
 subroutine adjust_precip_fields (    &
-              ix, jx, kx, SQ_micro, SL_micro, SI_micro,     &
+              ix, jx, kx, SQ_micro, SL_micro, SI_micro,  SR_micro, SS_micro,   &
                                    Atmos_state, Precip_state, Lsdiag_mp, &
                                                  Lsdiag_mp_control )
 
@@ -1348,7 +1460,7 @@ type(mp_lsdiag_type),       intent(inout) :: Lsdiag_mp
 type(mp_lsdiag_control_type), intent(inout) :: Lsdiag_mp_control
 type(atmos_state_type),     intent(inout) :: Atmos_state
 type(precip_state_type),    intent(inout) :: Precip_state
-real, dimension (:,:,:),    intent(in)    :: SL_micro, SI_micro, SQ_micro
+real, dimension (:,:,:),    intent(in)    :: SL_micro, SI_micro, SQ_micro, SR_micro, SS_micro
 
 
 !----------------------------------------------------------------------
@@ -1368,7 +1480,7 @@ real, dimension (:,:,:),    intent(in)    :: SL_micro, SI_micro, SQ_micro
             m1(i,j) = 0.
             do k=1,kx
               m1(i,j) = m1(i,j) +   &
-                   (SQ_micro(i,j,k) + SL_micro(i,j,k) + SI_micro(i,j,k))* &
+                   (SQ_micro(i,j,k) + SL_micro(i,j,k) + SI_micro(i,j,k) + SR_micro(i,j,k) + SS_micro(i,j,k) )* &
                                     dtcloud*Atmos_state%delp(i,j,k)/grav
             end do
             m2(i,j) = 1.e3*Precip_state%surfrain(i,j)*dtcloud
@@ -1452,9 +1564,7 @@ real, dimension (:,:,:),    intent(in)    :: SL_micro, SI_micro, SQ_micro
 
 end subroutine adjust_precip_fields
 
-
-
-!#########################################################################
+!########################################################################
 
 subroutine adjust_for_supersaturation_removal (  &
                       ix, jx, kx, C2ls_mp, Input_mp, Atmos_state, &
@@ -1522,7 +1632,7 @@ real, dimension(:,:,:),     intent(in)    :: ssat_disposal
 !    proportional to the cloud area increase. save the incremental 
 !    increase due to removing superstauration as diagnostics.
 !-----------------------------------------------------------------------
-                if (dqa_activation) then
+             !   if (dqa_activation) then    ! h1g, 2020-03-19
                   if (ssat_disposal(i,j,k) == 2.) then
                     Cloud_state%SNi_out(i,j,k) =     &
                         Cloud_state%SNi_out(i,j,k) + &
@@ -1551,7 +1661,7 @@ real, dimension(:,:,:),     intent(in)    :: ssat_disposal
                      (1. - Cloud_state%qa_upd(i,j,k) - tmp2s(i,j,k))/  &
                                                                   dtcloud  
                   endif
-                end if ! dqa_activation
+             !   end if ! dqa_activation ! h1g, 2020-03-19
                 if (max(Lsdiag_mp_control%diag_id%qadt_super,  &
                             Lsdiag_mp_control%diag_id%qa_super_col) > 0) then
                   Lsdiag_mp%diag_4d(i,j,k,  &
@@ -1606,7 +1716,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       real, dimension (ix,jx,kx)   :: ql_new, qi_new, qn_new, qni_new, &
                                       qa_new
       integer :: i,j,k
-
+      real, dimension (ix,jx,kx)   :: qr_new, qnr_new, qs_new, qns_new
 
 !-----------------------------------------------------------------------
 !    define current cloud and particle values.
@@ -1616,6 +1726,10 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       qn_new  = Cloud_state%qn_in  + Cloud_state%SN_out         
       qni_new = Cloud_state%qni_in + Cloud_state%SNi_out         
 
+      qr_new  = Cloud_state%qr_in  + Cloud_state%SR_out
+      qnr_new = Cloud_state%qnr_in + Cloud_state%SNR_out
+      qs_new  = Cloud_state%qs_in  + Cloud_state%SS_out
+      qns_new = Cloud_state%qns_in + Cloud_state%SNS_out
 !-----------------------------------------------------------------------
 !    if these values are lower than acceptable, or if the new cloud area
 !    is lower than acceptable, set the tendency to balance the input value,
@@ -1685,6 +1799,8 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
 !-----------------------------------------------------------------------
 !    redefine the new cloud tracer values.
 !-----------------------------------------------------------------------
+
+    if ( do_cleanup ) then  ! --> h1g, 20200317
       ql_new  =  Cloud_state%ql_in  + Cloud_state%SL_out 
       qi_new  =  Cloud_state%qi_in  + Cloud_state%SI_out
       qn_new  =  Cloud_state%qn_in  + Cloud_state%SN_out
@@ -1828,6 +1944,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
         end do
       end do
 
+     endif ! do_cleanup  --> h1g 20200317
 !----------------------------------------------------------------------
 !    make sure the new cloud area is not smaller than the minimum 
 !    allowable. if not set the tendency so that cloud area is reduced to 
@@ -1861,7 +1978,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
 !    microphysics, as part of the destruction diagnostic.
 !------------------------------------------------------------------------
       if (do_mg_ncar_microphys .or. do_ncar_microphys .or. &
-                                                  do_mg_microphys) then
+          do_mg_microphys .or. do_ncar_MG2 ) then
         if (Lsdiag_mp_control%diag_id%qadt_limits +    &
                          Lsdiag_mp_control%diag_id%qa_limits_col > 0)    &
        Lsdiag_mp%diag_4d(:,:,:,Lsdiag_mp_control%diag_pt%qadt_limits) =   &
@@ -1879,9 +1996,69 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
                                                                inv_dtcloud
       endif
 
+! rain destruction
+      if ( do_ncar_MG2  ) then
+        do k=1,kx
+          do j=1,jx
+            do i=1,ix
+              if ( qr_new(i,j,k) <= qmin .or. qnr_new(i,j,k) <= qmin ) then
+                Cloud_state%SR_out(i,j,k) = Cloud_state%SR_out(i,j,k) -  &
+                                                              qr_new(i,j,k)
+                Cloud_state%SNR_out(i,j,k) = Cloud_state%SNR_out(i,j,k) -  &
+                                                              qnr_new(i,j,k)
+
+                Tend_mp%qtnd(i,j,k) = Tend_mp%qtnd(i,j,k) + qr_new(i,j,k)
+                Tend_mp%ttnd(i,j,k) = Tend_mp%ttnd(i,j,k) - (hlv*qr_new(i,j,k))/cp_air
+
+                if (Lsdiag_mp_control%diag_id%qrdt_destr > 0 .or. & 
+                    Lsdiag_mp_control%diag_id%qr_destr_col > 0) &
+                    Lsdiag_mp%diag_4d(i,j,k,Lsdiag_mp_control%diag_pt%qrdt_destr) =    &
+                                          - qr_new(i,j,k)/dtcloud
+                if (Lsdiag_mp_control%diag_id%qnrdt_destr > 0 .or. &
+                    Lsdiag_mp_control%diag_id%qnr_destr_col > 0) &
+                    Lsdiag_mp%diag_4d(i,j,k,Lsdiag_mp_control%diag_pt%qnrdt_destr) =    &
+                                          - qnr_new(i,j,k)/dtcloud
+                if (Lsdiag_mp_control%diag_id%qdt_destr +    &
+                              Lsdiag_mp_control%diag_id%q_destr_col > 0) &
+                     Lsdiag_mp%diag_4d(i,j,k,Lsdiag_mp_control%diag_pt%qdt_destr) = &
+                     Lsdiag_mp%diag_4d(i,j,k,Lsdiag_mp_control%diag_pt%qdt_destr) + &
+                        qr_new(i,j,k)/dtcloud
+              endif
+            enddo
+          enddo
+        enddo
+
+! snow destruction
+        do k=1,kx
+          do j=1,jx
+            do i=1,ix
+              if ( qs_new(i,j,k) <= qmin .or. qns_new(i,j,k) <= qmin) then
+                Cloud_state%SS_out(i,j,k) = Cloud_state%SS_out(i,j,k) -  &
+                                                              qs_new(i,j,k)
+                Cloud_state%SNS_out(i,j,k) = Cloud_state%SNS_out(i,j,k) -  &
+                                                              qns_new(i,j,k)
+                Tend_mp%qtnd(i,j,k) = Tend_mp%qtnd(i,j,k) + qs_new(i,j,k)
+                Tend_mp%ttnd(i,j,k) = Tend_mp%ttnd(i,j,k) - (hls*qs_new(i,j,k))/cp_air
+
+                if (Lsdiag_mp_control%diag_id%qsdt_destr > 0 .or. &
+                    Lsdiag_mp_control%diag_id%qs_destr_col > 0) &
+                    Lsdiag_mp%diag_4d(i,j,k,Lsdiag_mp_control%diag_pt%qsdt_destr) =    &
+                                          - qs_new(i,j,k)/dtcloud
+                if (Lsdiag_mp_control%diag_id%qnsdt_destr > 0 .or. &
+                    Lsdiag_mp_control%diag_id%qns_destr_col > 0) &
+                    Lsdiag_mp%diag_4d(i,j,k,Lsdiag_mp_control%diag_pt%qnsdt_destr) =    &
+                                          - qns_new(i,j,k)/dtcloud
+                if (Lsdiag_mp_control%diag_id%qdt_destr +      &
+                    Lsdiag_mp_control%diag_id%q_destr_col > 0) &
+                    Lsdiag_mp%diag_4d(i,j,k,Lsdiag_mp_control%diag_pt%qdt_destr) = &
+                    Lsdiag_mp%diag_4d(i,j,k,Lsdiag_mp_control%diag_pt%qdt_destr) + &
+                         qs_new(i,j,k)/dtcloud
+              endif
+            enddo
+          enddo
+        enddo
+      endif   ! do_ncar_MG2
 !-----------------------------------------------------------------------
-
-
 end subroutine destroy_tiny_clouds
 
 

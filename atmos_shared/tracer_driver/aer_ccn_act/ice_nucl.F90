@@ -25,6 +25,7 @@ private
 !--interfaces-------------------------------------------------------------
 
 public ice_nucl_wpdf, ice_nucl_wpdf_init, ice_nucl_wpdf_end
+public ice_nucl_wpdf_Fan  ! Gaussian integration over Fan'shomogeneous nucleation h1g, 2020-05-17
 private ice_nucl_k, fast, slow, bc_het
 
 !------------------------------------------------------------------------
@@ -74,6 +75,8 @@ real        :: d_bc = 0.0236e-6         ! mean diameter of black carbon
 !              d_bc = 0.07e-6           !Pueschel et al., GRL,1992 
 !              d_bc = 0.04e-6 
 
+real        :: nbc_max = 100.0  ! maximum BC particle number concentration (/cm3) h1g, 2020-07-03
+
 real        :: rh_crit_het = 1.2        !
 real        :: dust_surf = 0.5          ! 
 real        :: dust_frac_min = 0.0      ! 
@@ -83,13 +86,20 @@ real        :: dust_frac =1.0           ! fraction of total available dust
 !RSH: Should this be 150. or 1.5 (150 %) ????
 real        :: rh_dust_max = 150.       ! maximum ice supersaturation in the
                                         ! presence of dust
+! h1g, 2020-02-20
+real        :: Nimax = 1.e8             ! maximum nucleated ice number concentration (#/m3)
 
+! h1g, 2020-05-24
+real        :: Nimax_heteo = 40.0e3     ! Songmiao Fan's maximum heterogeneous nucleated ice number concentration (#/m3)
+real        :: Nice_het_fac = 1.0
 
 namelist / ice_nucl_nml /  dust_opt, do_het, use_dust_instead_of_bc, &
                            limit_immersion_frz, limit_rhil, &
                            do_ice_nucl_ss_wpdf, d_sulf, &
                            d_bc, rh_crit_het, dust_surf, dust_frac_min, &
-                           dust_frac_max, dust_frac, rh_dust_max, retain_ice_nucl_bug
+                           dust_frac_max, dust_frac, rh_dust_max, retain_ice_nucl_bug, &
+                           Nimax, Nimax_heteo, Nice_het_fac, nbc_max    ! h1g, 2020-05-24
+
 
 integer, parameter :: npoints = 64     ! # for Gauss-Hermite quadrature
 real, parameter    :: wp2_eps = 0.0001 ! w variance threshold
@@ -378,7 +388,7 @@ real,                 intent(out)   :: Ni, rh_crit_1d, ni_sulf,  &
 !    black carbon is activated. 1.e-6 is conversion from from m^-3 to cm^-3.
 !-------------------------------------------------------------------------
             nbc = MIN(imass(6)*1.e-6*6./(rho_bc*pi*d_bc**3)* &
-                       exp(-9./2. * (log(sigma_bc))**2), 1.e10)
+                       exp(-9./2. * (log(sigma_bc))**2), nbc_max)
           ENDIF
 
 !-------------------------------------------------------------------------
@@ -420,7 +430,7 @@ real,                 intent(out)   :: Ni, rh_crit_1d, ni_sulf,  &
 !-------------------------------------------------------------------------
             else
               do_hom = .TRUE.
-            endif  
+            endif  !   nbc .GT. nbccrit
 
 !-------------------------------------------------------------------------
 !    if insufficient humidty for heterogenous nucleation, 
@@ -428,7 +438,7 @@ real,                 intent(out)   :: Ni, rh_crit_1d, ni_sulf,  &
 !-------------------------------------------------------------------------
           else
             do_hom = .TRUE.
-          endif  
+          endif  !1.e2*rhl .GE. rhl_thresh
 
 !-------------------------------------------------------------------------
 !    if heterogeneous nucleation was not requested, or the vertical velocity
@@ -437,7 +447,7 @@ real,                 intent(out)   :: Ni, rh_crit_1d, ni_sulf,  &
 !-------------------------------------------------------------------------
         else
           do_hom = .TRUE.
-        endif 
+        endif  ! do_het .and. w1 .GE. w_het_thresh
 
 !-------------------------------------------------------------------------
 !     calculate homogeneous nucleation.
@@ -516,8 +526,8 @@ real,                 intent(out)   :: Ni, rh_crit_1d, ni_sulf,  &
 !    convert the activated number to  m-3.
 !------------------------------------------------------------------------
             Ni_sulf = MAX(1.e6 * Ni_sulf, 0.)
-          END IF 
-        END IF 
+          END IF ! 1.e2*rhl .GE. rhl_thresh
+        END IF  ! do_hom .and. w1 .GE. w_hom_thresh
 
 !-------------------------------------------------------------------------
 !    calculate activated ice nuclei when temperature is between -5C and
@@ -633,7 +643,8 @@ real,                 intent(out)   :: Ni, rh_crit_1d, ni_sulf,  &
 !    sum the total available ice nulei. limit the number to be between 0 
 !    and 1.0e8.
 !-------------------------------------------------------------------------
-      Ni = MIN( MAX(Ni_sulf + Ni_dust + Ni_bc, 0.), 1.e8) 
+ 
+      Ni = MIN( MAX(Ni_sulf + Ni_dust + Ni_bc, 0.), Nimax) 
 
 !-------------------------------------------------------------------------
 !    define output variable hom to be 1 when homogeneous nucleation has 
@@ -770,6 +781,162 @@ real                  ::  A,  B,   C,   &
 
 END SUBROUTINE  S_max
 !------------------------------------------------------------------------
+
+
+SUBROUTINE ice_nucl_wpdf_Fan (T, p, wm, wp2, concen_dust_sub, crystal, Nidust) 
+! ---------------------------------------------------------------------
+!    subroutine ice_nucl_wpdf computes ice nucleation assuming a normal 
+!    distribution of w given by its mean (wm) and second moment (wp2)
+!------------------------------------------------------------------------
+real,    intent(in)    ::  P, T, wm, wp2, concen_dust_sub
+real,    intent(out)   ::  crystal        ! homegeneously nucleated ice number (#/m3)
+real,    intent(out)   ::  Nidust        ! heteorogeously nucleated ice number (#/m3)
+
+
+!--------------------------------------------------------------------------
+!---local variables
+
+      logical lintegrate
+      integer ia, ib
+      real wtmp
+      real(kind=8) :: tmp, a, b, sum1, sum2 
+      integer iw
+
+!-------------------------------------------------------------------------
+!    determine whether integration is needed to compute number of nucleated
+!    crystals. lintegrate = .true. indicates that numerical integration is 
+!    to be performed.
+!-------------------------------------------------------------------------
+      if (wp2 .gt. wp2_eps) then
+
+!-------------------------------------------------------------------------
+!    integration bounds: from wmin to wmax (0 to 10 m/s)
+!-------------------------------------------------------------------------
+        tmp = 1.0d0/sqrt(2.0*wp2) 
+        a = (wmin - wm)*tmp
+        b = (wmax - wm)*tmp
+
+!-------------------------------------------------------------------------
+!    locate indices within integration bounds
+!-------------------------------------------------------------------------
+        call dlocate( x, npoints, a, ia )
+        call dlocate( x, npoints, b, ib )
+
+!-------------------------------------------------------------------------
+!    ia (ib) is zero if a (b) is smaller than the lowest abscissa.
+!    in that case, start the integration with the first abscissa.
+!-------------------------------------------------------------------------
+        ia = ia +1 
+        ia = min(max(ia,1),size(x))
+        ib = min(max(ib,1),size(x))
+        if (ib .gt. ia) then
+          lintegrate = .true.
+        else
+          lintegrate = .false.
+        endif
+      else
+        lintegrate = .false.
+      endif
+
+!-------------------------------------------------------------------------
+!    compute number of nucleated crystals.
+!-------------------------------------------------------------------------
+      if (lintegrate ) then
+        sum1 = 0.0d0
+        sum2 = 0.0d0
+        tmp = sqrt(2.0*wp2)
+        do iw=ia,ib
+          wtmp = tmp * x(iw) + wm
+          call Nice_cirrus ( T, P, wtmp, concen_dust_sub,  crystal)
+          sum1 = sum1 + w(iw)*crystal
+          sum2 = sum2 + w(iw)
+        enddo
+
+!-------------------------------------------------------------------------
+!    normalize over the distribution.
+!-------------------------------------------------------------------------
+        crystal = sum1 / sum2
+      else
+      ! otherwise no need to integrate, use single point (wm)
+        call Nice_cirrus ( T, P, wm, concen_dust_sub, crystal) 
+      endif
+
+! heteogeneous nucleation
+      call Nice_sc_dust ( T, P, concen_dust_sub, Nidust)
+
+end subroutine ice_nucl_wpdf_Fan
+
+
+
+subroutine Nice_cirrus (temp, p, wmps, concen_dust, nice)
+   real, intent(in) ::  temp, p, wmps, concen_dust ! Pa, K, m/s, ug/m3
+   real, intent(out) :: nice ! (#/m3)
+
+   real fact ! active fraction
+   real dust, delt, wcmps, sech
+   real tmp0, tmp1, tmp2, tmp3, tmp4
+
+   
+   fact = 1.0
+   nice = 0.
+   dust = concen_dust * fact
+   nice = 0.0
+   wcmps = 100. * wmps
+   if (wcmps .lt. 0.01) return
+   tmp0 = log(wcmps)
+   tmp1 = 0.
+   tmp2 = 0.
+   tmp3 = 0.
+   tmp4 = 0.
+
+   if (temp .gt. 180. .and. temp .le. 210.) then
+     delt = temp - 197.
+     sech = 2. / (exp(0.19 * delt) + exp(-0.19 * delt))
+     tmp1 = wcmps * (0.075 + 0.0062 * tmp0)
+     tmp2 = dust**0.3 * sech * tmp1
+     nice = min(tmp2, 4.1 * dust)
+   else if (temp .gt. 210. .and. temp .le. 220.) then
+     delt = temp - 197.
+     sech = 2. / (exp(0.19 * delt) + exp(-0.19 * delt))
+     tmp1 = wcmps * (0.075 + 0.0062 * tmp0)
+     tmp2 = dust**0.3 * sech * tmp1
+
+     delt = temp - 227.
+     tmp3 = -5.67+1.04*tmp0 &
+          + (0.0424 - 0.0626*tmp0 + 0.00865*tmp0*tmp0)*delt
+     tmp4 = dust**0.3 * exp(tmp3)
+
+     nice = max(min(tmp2, 4.1 * dust), min(tmp4, 4.1 * dust))
+   else if (temp .gt. 220. .and. temp .le. 240.) then
+     delt = temp - 227.
+     tmp3 = -5.67+1.04*tmp0 &
+          + (0.0424 - 0.0626*tmp0 + 0.00865*tmp0*tmp0)*delt
+     tmp4 = dust**0.3 * exp(tmp3)
+     nice = min(tmp4, 4.1 * dust)
+   else
+     nice = 0.
+!       print *, ' Temperature out of range 180 K to 240 K '
+   end if
+
+   nice = nice * 1.e6      ! convert from #/cm3 to #/m3
+
+   nice = nice * p / 30000.0
+end subroutine Nice_cirrus
+!-------------------------------------------------------------------------
+
+
+subroutine Nice_sc_dust (temp, p, concen_dust, nice)
+   real, intent(in) :: temp, p, concen_dust ! K, Pa, microg/m3
+   real, intent(out) :: nice ! (#/m3)
+
+   nice = Nice_het_fac * 0.00274 * concen_dust * &
+           exp(0.412*(273.16 - temp))  ! nice #/L
+   nice = nice * 1.e3                  ! from /L to /m3
+   nice = min(Nimax_heteo, nice)
+
+   nice = nice * p/95000.0
+end subroutine Nice_sc_dust
+
 
 
 END MODULE ice_nucl_mod

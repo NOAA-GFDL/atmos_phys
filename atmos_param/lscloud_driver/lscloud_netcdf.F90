@@ -229,7 +229,7 @@ integer,                         intent(in) :: is, js, kdim
                Time, is, js, 1)
       used = send_data   &
                (diag_id%a_snow_clr, diag_4d_kp1(:,:,:,diag_pt%a_snow_clr),&
-               Time, is, js, 1)
+                Time, is, js, 1)
       used = send_data   &
               (diag_id%snow_cld, diag_4d_kp1(:,:,:,diag_pt%snow_cld), &
                Time, is, js, 1)
@@ -278,6 +278,9 @@ integer,                         intent(in) :: is, js, kdim
       used = send_data   &
               (diag_id%qldt_fill, diag_4d(:,:,:,diag_pt%qldt_fill), &
                Time, is, js, 1)
+      used = send_data   &
+              (diag_id%qldt_tiny, diag_4d(:,:,:,diag_pt%qldt_tiny), &
+               Time, is, js, 1)
       used = send_data  &
               (diag_id%qldt_berg, diag_4d(:,:,:,diag_pt%qldt_berg), &
                Time, is, js, 1)
@@ -314,6 +317,9 @@ integer,                         intent(in) :: is, js, kdim
                Time, is, js, 1)
       used = send_data   &
               (diag_id%qndt_fill, diag_4d(:,:,:,diag_pt%qndt_fill), &
+               Time, is, js, 1)
+      used = send_data   &
+              (diag_id%qndt_tiny, diag_4d(:,:,:,diag_pt%qndt_tiny), &
                Time, is, js, 1)
       used = send_data   &
               (diag_id%qndt_destr, diag_4d(:,:,:,diag_pt%qndt_destr), &
@@ -370,6 +376,9 @@ integer,                         intent(in) :: is, js, kdim
       used = send_data   &
               (diag_id%qnidt_fill, diag_4d(:,:,:,diag_pt%qnidt_fill), &
                Time, is, js, 1)
+      used = send_data   &
+              (diag_id%qnidt_tiny, diag_4d(:,:,:,diag_pt%qnidt_tiny), &
+               Time, is, js, 1)
       used = send_data  &
               (diag_id%qnidt_nnuccd, diag_4d(:,:,:,diag_pt%qnidt_nnuccd), &
                Time, is, js, 1)
@@ -378,6 +387,12 @@ integer,                         intent(in) :: is, js, kdim
                Time, is, js, 1)
       used = send_data  & 
               (diag_id%qnidt_nerosi, diag_4d(:,:,:,diag_pt%qnidt_nerosi), &
+               Time, is, js, 1)
+      used = send_data   &
+              (diag_id%qnidt_auto, diag_4d(:,:,:,diag_pt%qnidt_auto), &
+               Time, is, js, 1)
+      used = send_data   &
+              (diag_id%qnidt_accr, diag_4d(:,:,:,diag_pt%qnidt_accr), &
                Time, is, js, 1)
       used = send_data   &
               (diag_id%qnidt_nprci, diag_4d(:,:,:,diag_pt%qnidt_nprci), &
@@ -411,6 +426,9 @@ integer,                         intent(in) :: is, js, kdim
                Time, is, js, 1)
       used = send_data   &
               (diag_id%qnidt_ihom, diag_4d(:,:,:,diag_pt%qnidt_ihom), &
+               Time, is, js, 1)
+      used = send_data   &
+              (diag_id%qnidt_rain2ice, diag_4d(:,:,:,diag_pt%qnidt_rain2ice), &
                Time, is, js, 1)
       used = send_data   &
               (diag_id%qnidt_destr, diag_4d(:,:,:,diag_pt%qnidt_destr), &
@@ -526,6 +544,9 @@ integer,                         intent(in) :: is, js, kdim
               (diag_id%qidt_fill, diag_4d(:,:,:,diag_pt%qidt_fill), &
                Time, is, js, 1)
       used = send_data   &
+              (diag_id%qidt_tiny, diag_4d(:,:,:,diag_pt%qidt_tiny), &
+               Time, is, js, 1)
+      used = send_data   &
               (diag_id%qidt_auto, diag_4d(:,:,:,diag_pt%qidt_auto), &
                Time, is, js, 1)
       used = send_data   &
@@ -533,6 +554,9 @@ integer,                         intent(in) :: is, js, kdim
                Time, is, js, 1)
       used = send_data   &
               (diag_id%qidt_accrs, diag_4d(:,:,:,diag_pt%qidt_accrs), &
+               Time, is, js, 1)
+      used = send_data   &
+              (diag_id%qidt_rain2ice, diag_4d(:,:,:,diag_pt%qidt_rain2ice), &
                Time, is, js, 1)
 
 !-----------------------------------------------------------------------
@@ -668,6 +692,53 @@ integer,                         intent(in) :: is, js, kdim
                          diag_4d(:,:,:,diag_pt%qldt_HM_splinter), &
                          Time, is, js, 1)
 
+!------------------------------------------------------------------------
+!   variables with MG2
+!------------------------------------------------------------------------
+      used = send_data ( diag_id%SR3d, diag_4d(:,:,:,diag_pt%SR3d),  &
+                          Time, is, js, 1)
+      used = send_data ( diag_id%SNR3d, diag_4d(:,:,:,diag_pt%SNR3d),  &
+                          Time, is, js, 1)
+      used = send_data ( diag_id%SS3d, diag_4d(:,:,:,diag_pt%SS3d),  &
+                          Time, is, js, 1)
+      used = send_data ( diag_id%SNS3d, diag_4d(:,:,:,diag_pt%SNS3d),  &
+                          Time, is, js, 1)
+
+
+      used = send_data ( diag_id%rain_inst, diag_4d(:,:,:,diag_pt%rain_inst),  &
+                          Time, is, js, 1)
+      used = send_data ( diag_id%rain_sedi, diag_4d(:,:,:,diag_pt%rain_sedi),  &
+                          Time, is, js, 1)
+      used = send_data ( diag_id%rain_num_inst, diag_4d(:,:,:,diag_pt%rain_num_inst),  &
+                          Time, is, js, 1)
+      used = send_data ( diag_id%rain_num_sedi, diag_4d(:,:,:,diag_pt%rain_num_sedi),  &
+                          Time, is, js, 1)
+      used = send_data ( diag_id%rain_num_adj, diag_4d(:,:,:,diag_pt%rain_num_adj),  &
+                          Time, is, js, 1)
+      used = send_data ( diag_id%rain_num2snow, diag_4d(:,:,:,diag_pt%rain_num2snow),  &
+                          Time, is, js, 1)
+      used = send_data ( diag_id%rain_num_evap, diag_4d(:,:,:,diag_pt%rain_num_evap),  &
+                          Time, is, js, 1)
+      used = send_data ( diag_id%rain_num_freez, diag_4d(:,:,:,diag_pt%rain_num_freez),  &
+                          Time, is, js, 1)
+      used = send_data ( diag_id%rain_num_selfcoll, diag_4d(:,:,:,diag_pt%rain_num_selfcoll),  &
+                          Time, is, js, 1)
+
+
+      used = send_data ( diag_id%snow_inst, diag_4d(:,:,:,diag_pt%snow_inst),  &
+                          Time, is, js, 1)
+      used = send_data ( diag_id%snow_sedi, diag_4d(:,:,:,diag_pt%snow_sedi),  &
+                          Time, is, js, 1)
+      used = send_data ( diag_id%snow_num_inst, diag_4d(:,:,:,diag_pt%snow_num_inst),  &
+                          Time, is, js, 1)
+      used = send_data ( diag_id%snow_num_sedi, diag_4d(:,:,:,diag_pt%snow_num_sedi),  &
+                          Time, is, js, 1)
+      used = send_data ( diag_id%snow_num_melt, diag_4d(:,:,:,diag_pt%snow_num_melt),  &
+                          Time, is, js, 1)
+      used = send_data ( diag_id%snow_num_adj, diag_4d(:,:,:,diag_pt%snow_num_adj),  &
+                          Time, is, js, 1)
+
+
 !-----------------------------------------------------------------------
 !    17) variables associated with budget verification:
 !-----------------------------------------------------------------------
@@ -685,24 +756,50 @@ integer,                         intent(in) :: is, js, kdim
                                Time, is, js, 1)
      used = send_data ( diag_id%SNi_imb, diag_4d(:,:,:,diag_pt%SNi_imb), &
                                Time, is, js, 1)
+     used = send_data ( diag_id%rain_imb, diag_4d(:,:,:,diag_pt%rain_imb),&
+                               Time, is, js, 1)
      used = send_data ( diag_id%cld_liq_imb,   &
                          diag_4d(:,:,:,diag_pt%cld_liq_imb), &
+                         Time, is, js, 1)
+     used = send_data ( diag_id%snow_imb,    &
+                         diag_4d(:,:,:,diag_pt%snow_imb), &
                          Time, is, js, 1)
      used = send_data ( diag_id%cld_ice_imb,     &
                          diag_4d(:,:,:,diag_pt%cld_ice_imb), &
                          Time, is, js, 1)
 
 !-----------------------------------------------------------------------
-!    18) variables associated CMIP diagnostics
+!    18) variables associated prognostic precipitation
 !-----------------------------------------------------------------------
-     if (query_cmip_diag_id(diag_id%cdnc)) then
-       used = send_cmip_data_3d ( diag_id%cdnc, &
-                1.e06*diag_4d(:,:,:,diag_pt%droplets), &
-                Time, is, js, 1, mask=diag_4d(:,:,:,diag_pt%droplets) > 0.0)
-     endif
+      used = send_data   &
+              (diag_id%qrdt_fill, diag_4d(:,:,:,diag_pt%qrdt_fill), &
+               Time, is, js, 1)
+      used = send_data   &
+              (diag_id%qnrdt_fill, diag_4d(:,:,:,diag_pt%qnrdt_fill), &
+               Time, is, js, 1)
+      used = send_data   &
+              (diag_id%qrdt_tiny, diag_4d(:,:,:,diag_pt%qrdt_tiny), &
+               Time, is, js, 1)
+      used = send_data   &
+              (diag_id%qnrdt_tiny, diag_4d(:,:,:,diag_pt%qnrdt_tiny), &
+               Time, is, js, 1)
+
+      used = send_data   &
+              (diag_id%qsdt_fill, diag_4d(:,:,:,diag_pt%qsdt_fill), &
+               Time, is, js, 1)
+      used = send_data   &
+              (diag_id%qnsdt_fill, diag_4d(:,:,:,diag_pt%qnsdt_fill), &
+               Time, is, js, 1)
+      used = send_data   &
+              (diag_id%qsdt_tiny, diag_4d(:,:,:,diag_pt%qsdt_tiny), &
+               Time, is, js, 1)
+      used = send_data   &
+              (diag_id%qnsdt_tiny, diag_4d(:,:,:,diag_pt%qnsdt_tiny), &
+               Time, is, js, 1)
+
 
 !-----------------------------------------------------------------------
-!    18) variables associated CMIP diagnostics
+!    19) variables associated CMIP diagnostics
 !-----------------------------------------------------------------------
      if (query_cmip_diag_id(diag_id%cdnc)) then
        used = send_cmip_data_3d ( diag_id%cdnc, &
@@ -807,6 +904,9 @@ integer,                         intent(in) :: is, js, kdim
               (diag_id%ql_fill_col, diag_3d(:,:, diag_pt%qldt_fill), &
                Time, is, js)
       used = send_data   &
+              (diag_id%ql_tiny_col, diag_3d(:,:, diag_pt%qldt_tiny), &
+               Time, is, js)
+      used = send_data   &
               (diag_id%liq_adj_col, diag_3d(:,:, diag_pt%liq_adj), &
                Time, is, js)
       used = send_data   &
@@ -833,6 +933,9 @@ integer,                         intent(in) :: is, js, kdim
                Time, is, js)
       used = send_data   &
               (diag_id%qn_fill_col, diag_3d(:,:, diag_pt%qndt_fill), &
+               Time, is, js)
+      used = send_data   &
+              (diag_id%qn_tiny_col, diag_3d(:,:, diag_pt%qndt_tiny), &
                Time, is, js)
       used = send_data   &
               (diag_id%qn_berg_col, diag_3d(:,:, diag_pt%qndt_berg), &
@@ -913,6 +1016,9 @@ integer,                         intent(in) :: is, js, kdim
               (diag_id%qi_fill_col, diag_3d(:,:, diag_pt%qidt_fill), &
                Time, is, js)
       used = send_data   &
+              (diag_id%qi_tiny_col, diag_3d(:,:, diag_pt%qidt_tiny), &
+               Time, is, js)
+      used = send_data   &
               (diag_id%qi_dep_col, diag_3d(:,:, diag_pt%qidt_dep),     &
                Time, is, js)
       used = send_data   &
@@ -944,6 +1050,9 @@ integer,                         intent(in) :: is, js, kdim
                Time, is, js)
       used = send_data   &
               (diag_id%qi_accrs_col, diag_3d(:,:, diag_pt%qidt_accrs), &
+               Time, is, js)
+      used = send_data   &
+              (diag_id%qi_rain2ice_col, diag_3d(:,:, diag_pt%qidt_rain2ice), &
                Time, is, js)
 
 !-----------------------------------------------------------------------
@@ -1033,6 +1142,18 @@ integer,                         intent(in) :: is, js, kdim
       used = send_data (diag_id%ql_HM_splinter_col,  &
                   diag_3d(:,:,diag_pt%qldt_HM_splinter), Time, is, js )
 
+!------------------------------------------------------------------------
+!   variables with MG2
+!------------------------------------------------------------------------
+      used = send_data ( diag_id%SR2d, diag_3d(:,:,diag_pt%SR3d),  &
+                          Time, is, js )
+      used = send_data ( diag_id%SNR2d, diag_3d(:,:,diag_pt%SNR3d),  &
+                          Time, is, js )
+      used = send_data ( diag_id%SS2d, diag_3d(:,:,diag_pt%SS3d),  &
+                          Time, is, js )
+      used = send_data ( diag_id%SNS2d, diag_3d(:,:,diag_pt%SNS3d),  &
+                          Time, is, js )
+
 !-----------------------------------------------------------------------
 !    17) variables associated with budget verification:
 !-----------------------------------------------------------------------
@@ -1069,6 +1190,9 @@ integer,                         intent(in) :: is, js, kdim
       used = send_data   &
               (diag_id%qni_fill_col, diag_3d(:,:,diag_pt%qnidt_fill), &
                Time, is, js)
+      used = send_data   &
+              (diag_id%qni_tiny_col, diag_3d(:,:,diag_pt%qnidt_tiny), &
+               Time, is, js)
       used = send_data  &
               (diag_id%qni_nnuccd_col, diag_3d(:,:,diag_pt%qnidt_nnuccd), &
                Time, is, js)
@@ -1077,6 +1201,12 @@ integer,                         intent(in) :: is, js, kdim
                Time, is, js)
       used = send_data  & 
               (diag_id%qni_nerosi_col, diag_3d(:,:,diag_pt%qnidt_nerosi), &
+               Time, is, js)
+      used = send_data   &
+              (diag_id%qni_auto_col, diag_3d(:,:,diag_pt%qnidt_auto), &
+               Time, is, js)
+      used = send_data   &
+              (diag_id%qni_accr_col, diag_3d(:,:,diag_pt%qnidt_accr), &
                Time, is, js)
       used = send_data   &
               (diag_id%qni_nprci_col, diag_3d(:,:,diag_pt%qnidt_nprci), &
@@ -1112,6 +1242,9 @@ integer,                         intent(in) :: is, js, kdim
               (diag_id%qni_ihom_col, diag_3d(:,:,diag_pt%qnidt_ihom), &
                Time, is, js)
       used = send_data   &
+              (diag_id%qni_rain2ice_col, diag_3d(:,:,diag_pt%qnidt_rain2ice), &
+               Time, is, js)
+      used = send_data   &
               (diag_id%qni_destr_col, diag_3d(:,:,diag_pt%qnidt_destr), &
                Time, is, js)
       used = send_data    &
@@ -1127,6 +1260,69 @@ integer,                         intent(in) :: is, js, kdim
                                   diag_3d(:,:,diag_pt%qnidt_cleanup2), &
                Time, is, js)
 
+
+!-----------------------------------------------------------------------
+!    18) variables associated with prognostic precipitation:
+!-----------------------------------------------------------------------
+      used = send_data   &
+              (diag_id%qr_fill_col, diag_3d(:,:,diag_pt%qrdt_fill), &
+               Time, is, js )
+      used = send_data   &
+              (diag_id%qnr_fill_col, diag_3d(:,:,diag_pt%qnrdt_fill), &
+               Time, is, js )
+      used = send_data   &
+              (diag_id%qr_tiny_col, diag_3d(:,:,diag_pt%qrdt_tiny), &
+               Time, is, js )
+      used = send_data   &
+              (diag_id%qnr_tiny_col, diag_3d(:,:,diag_pt%qnrdt_tiny), &
+               Time, is, js )
+
+      used = send_data   &
+              (diag_id%qs_fill_col, diag_3d(:,:,diag_pt%qsdt_fill), &
+               Time, is, js )
+      used = send_data   &
+              (diag_id%qns_fill_col, diag_3d(:,:,diag_pt%qnsdt_fill), &
+               Time, is, js )
+      used = send_data   &
+              (diag_id%qs_tiny_col, diag_3d(:,:,diag_pt%qsdt_tiny), &
+               Time, is, js )
+      used = send_data   &
+              (diag_id%qns_tiny_col, diag_3d(:,:,diag_pt%qnsdt_tiny), &
+               Time, is, js )
+
+
+      used = send_data ( diag_id%rain_inst_col, diag_3d(:,:,diag_pt%rain_inst),  &
+                          Time, is, js )
+      used = send_data ( diag_id%rain_sedi_col, diag_3d(:,:,diag_pt%rain_sedi),  &
+                          Time, is, js )
+      used = send_data ( diag_id%rain_num_inst_col, diag_3d(:,:,diag_pt%rain_num_inst),  &
+                          Time, is, js )
+      used = send_data ( diag_id%rain_num_sedi_col, diag_3d(:,:,diag_pt%rain_num_sedi),  &
+                          Time, is, js )
+      used = send_data ( diag_id%rain_num_adj_col, diag_3d(:,:,diag_pt%rain_num_adj),  &
+                          Time, is, js )
+      used = send_data ( diag_id%rain_num2snow_col, diag_3d(:,:,diag_pt%rain_num2snow),  &
+                          Time, is, js )
+      used = send_data ( diag_id%rain_num_evap_col, diag_3d(:,:,diag_pt%rain_num_evap),  &
+                          Time, is, js )
+      used = send_data ( diag_id%rain_num_freez_col, diag_3d(:,:,diag_pt%rain_num_freez),  &
+                          Time, is, js )
+      used = send_data ( diag_id%rain_num_selfcoll_col, diag_3d(:,:,diag_pt%rain_num_selfcoll),  &
+                          Time, is, js )
+
+
+      used = send_data ( diag_id%snow_inst_col, diag_3d(:,:,diag_pt%snow_inst),  &
+                          Time, is, js )
+      used = send_data ( diag_id%snow_sedi_col, diag_3d(:,:,diag_pt%snow_sedi),  &
+                          Time, is, js )
+      used = send_data ( diag_id%snow_num_inst_col, diag_3d(:,:,diag_pt%snow_num_inst),  &
+                          Time, is, js )
+      used = send_data ( diag_id%snow_num_sedi_col, diag_3d(:,:,diag_pt%snow_num_sedi),  &
+                          Time, is, js )
+      used = send_data ( diag_id%snow_num_melt_col, diag_3d(:,:,diag_pt%snow_num_melt),  &
+                          Time, is, js )
+      used = send_data ( diag_id%snow_num_adj_col, diag_3d(:,:,diag_pt%snow_num_adj),  &
+                          Time, is, js )
 !------------------------------------------------------------------------
 
 
@@ -1414,6 +1610,12 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
            'Liquid water specific humidity tendency -- &      
                                        &pre-microphysics filler', &
              'kg/kg/sec',  missing_value=missing_value)
+      diag_id%qldt_tiny = register_diag_field (mod_name, &
+             'qldt_tiny', axes(1:3), Time, &
+           'Liquid water specific humidity tendency -- &      
+                                       & in-microphysics substep (tiny or negative) liquid water filler', &
+             'kg/kg/sec',  missing_value=missing_value)
+
       diag_id%qldt_berg = register_diag_field (mod_name, &
              'qldt_berg', axes(1:3), Time, &
              'Liq water specific humidity tendency from Bergeron process',&
@@ -1476,6 +1678,10 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
       diag_id%qndt_fill = register_diag_field (mod_name, &
              'qndt_fill', axes(1:3), Time, &
              'Cloud droplet number tendency from filler', '#/kg/sec',   &
+             missing_value=missing_value)
+      diag_id%qndt_tiny = register_diag_field (mod_name, &
+             'qndt_tiny', axes(1:3), Time, &
+             'Cloud droplet number tendency from microphysics sub-step filler', '#/kg/sec',   &
              missing_value=missing_value)
       diag_id%qndt_destr = register_diag_field (mod_name, &
              'qndt_destr', axes(1:3), Time, &
@@ -1559,7 +1765,11 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
       diag_id%qnidt_fill = register_diag_field (mod_name, &
              'qnidt_fill', axes(1:3), Time, &
              'Ice particle number tendency from filler', '#/kg/sec',   &
-             missing_value=missing_value)  
+             missing_value=missing_value)
+      diag_id%qnidt_tiny = register_diag_field (mod_name, &
+             'qnidt_tiny', axes(1:3), Time, &
+             'Ice particle number tendency from microphysics substep filler', '#/kg/sec',   &
+             missing_value=missing_value)
       diag_id%qnidt_nnuccd = register_diag_field (mod_name, &
              'qnidt_nnuccd', axes(1:3), Time, &
              'Ice particle number tendency from nucleation', '#/kg/sec',  &
@@ -1572,6 +1782,14 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
              'qnidt_nerosi', axes(1:3), Time, &
              'Ice particle number tendency from erosion', '#/kg/sec',   &
              missing_value=missing_value) 
+      diag_id%qnidt_auto = register_diag_field (mod_name, &
+             'qnidt_auto', axes(1:3), Time, &
+             'Ice particle number tendency from autoconversion', &
+             '#/kg/sec', missing_value=missing_value) 
+      diag_id%qnidt_accr = register_diag_field (mod_name, &
+             'qnidt_accr', axes(1:3), Time, &
+             'Ice particle number tendency from accretion by snow',   &
+             '#/kg/sec', missing_value=missing_value) 
       diag_id%qnidt_nprci = register_diag_field (mod_name, &
              'qnidt_nprci', axes(1:3), Time, &
              'Ice particle number tendency from autoconversion', &
@@ -1611,7 +1829,11 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
       diag_id%qnidt_ihom = register_diag_field (mod_name, &
              'qnidt_ihom', axes(1:3), Time, &
              'Ice particle number tendency from homogeneous freezing', &
-             '#/kg/sec', missing_value=missing_value)  
+             '#/kg/sec', missing_value=missing_value)
+      diag_id%qnidt_rain2ice = register_diag_field (mod_name, &
+             'qnidt_rain2ice', axes(1:3), Time, &
+             'Ice particle number tendency from converting rain to ice', &
+             '#/kg/sec', missing_value=missing_value) 
       diag_id%qnidt_destr = register_diag_field (mod_name, &
              'qnidt_destr', axes(1:3), Time, &
              'Ice particle number tendency from cloud destruction', &
@@ -1754,6 +1976,10 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
              'qidt_fill', axes(1:3), Time, &
              'Ice water specific humidity tendency -- pre-microphysics &
              & filler', 'kg/kg/sec', missing_value=missing_value)
+      diag_id%qidt_tiny = register_diag_field (mod_name, &
+             'qidt_tiny', axes(1:3), Time, &
+             'Ice water specific humidity tendency -- in microphysics substep &
+             & filler', 'kg/kg/sec', missing_value=missing_value)
       diag_id%qidt_auto = register_diag_field (mod_name, &
              'qidt_auto', axes(1:3), Time, &
              'Ice water specific humidity tendency from autoconversion &
@@ -1766,6 +1992,11 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
              'qidt_accrs', axes(1:3), Time, &
              'Ice wat spec hum tend from selfcollection (1 class scheme)',&
              'kg/kg/sec', missing_value=missing_value)
+      diag_id%qidt_rain2ice = register_diag_field (mod_name, &
+             'qidt_rain2ice', axes(1:3), Time, &
+             'Ice wat spec hum tend from freezing rain to form ice ',&
+             'kg/kg/sec', missing_value=missing_value)
+
 
   !-----------------------------------------------------------------------
   !    15) variables associated with cloud area time tendency:
@@ -1935,9 +2166,96 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
              'srfrain_freez', axes(1:3), Time, &
              'rain water sink from freezing', &
              'kg/kg/sec', missing_value=missing_value)
+
+      diag_id%rain_inst=  register_diag_field ( mod_name, &
+             'rain_inst', axes(1:3), Time, &
+             'rain water instantaneous freezing/melting ', &
+             'kg/kg/sec', missing_value=missing_value)
+
+      diag_id%rain_sedi=  register_diag_field ( mod_name, &
+             'rain_sedi', axes(1:3), Time, &
+             'rain water sedimentation ', &
+             'kg/kg/sec', missing_value=missing_value)
+
+      diag_id%rain_num_inst=  register_diag_field ( mod_name, &
+             'rain_num_inst', axes(1:3), Time, &
+             'rain number instantaneous freezing/melting ', &
+             '#/kg/sec', missing_value=missing_value)
+
+      diag_id%rain_num_sedi=  register_diag_field ( mod_name, &
+             'rain_num_sedi', axes(1:3), Time, &
+             'rain number sedimentation ', &
+             '#/kg/sec', missing_value=missing_value)
+      diag_id%rain_num_adj=  register_diag_field ( mod_name, &
+             'rain_num_adj', axes(1:3), Time, &
+             'rain number change due to rain size adjustment ', &
+             '#/kg/sec', missing_value=missing_value)
+      diag_id%rain_num2snow=  register_diag_field ( mod_name, &
+             'rain_num2snow', axes(1:3), Time, &
+             'rain number change due to rain freezing to snow ', &
+             '#/kg/sec', missing_value=missing_value)
+      diag_id%rain_num_evap=  register_diag_field ( mod_name, &
+             'rain_num_evap', axes(1:3), Time, &
+             'rain number change due to rain evaporation ', &
+             '#/kg/sec', missing_value=missing_value)
+      diag_id%rain_num_freez=  register_diag_field ( mod_name, &
+             'rain_num_freez', axes(1:3), Time, &
+             'rain number change due to rain homogeneous freezing ', &
+             '#/kg/sec', missing_value=missing_value)
+      diag_id%rain_num_selfcoll=  register_diag_field ( mod_name, &
+             'rain_num_selfcoll', axes(1:3), Time, &
+             'rain number change due to rain self collection ', &
+             '#/kg/sec', missing_value=missing_value)
+
+
+      diag_id%snow_inst=  register_diag_field ( mod_name, &
+             'snow_inst', axes(1:3), Time, &
+             'snow instantaneous freezing/melting ', &
+             'kg/kg/sec', missing_value=missing_value)
+      diag_id%snow_sedi=  register_diag_field ( mod_name, &
+             'snow_sedi', axes(1:3), Time, &
+             'snow sedimentation ', &
+             'kg/kg/sec', missing_value=missing_value)
+      diag_id%snow_num_inst=  register_diag_field ( mod_name, &
+             'snow_num_inst', axes(1:3), Time, &
+             'snow number instantaneous freezing/melting ', &
+             '#/kg/sec', missing_value=missing_value)
+      diag_id%snow_num_sedi=  register_diag_field ( mod_name, &
+             'snow_num_sedi', axes(1:3), Time, &
+             'snow number sedimentation ', &
+             '#/kg/sec', missing_value=missing_value)
+      diag_id%snow_num_melt=  register_diag_field ( mod_name, &
+             'snow_num_melt', axes(1:3), Time, &
+             'snow number melt ', &
+             '#/kg/sec', missing_value=missing_value)
+      diag_id%snow_num_adj=  register_diag_field ( mod_name, &
+             'snow_num_adj', axes(1:3), Time, &
+             'snow number change due to snow size adjustment ', &
+             '#/kg/sec', missing_value=missing_value)
+
       diag_id%SI3d =    register_diag_field ( mod_name, &
              'SI3d',  axes(1:3), Time, &
              'Total Ice water specific humidity tendency ', &
+             'kg/kg/sec', missing_value=missing_value)
+
+      diag_id%SR3d = register_diag_field ( mod_name, &
+             'SR3d',  axes(1:3), Time, &
+             'Total Rain Water specific humidity tendency ', &
+             'kg/kg/sec', missing_value=missing_value)
+
+      diag_id%SNR3d = register_diag_field ( mod_name, &
+             'SNR3d',  axes(1:3), Time, &
+             'Total Rain drop number specific humidity tendency ', &
+             '#/kg/sec', missing_value=missing_value)
+
+      diag_id%SS3d = register_diag_field ( mod_name, &
+             'SS3d',  axes(1:3), Time, &
+             'Total Snow Water specific humidity tendency ', &
+             'kg/kg/sec', missing_value=missing_value)
+
+      diag_id%SNS3d = register_diag_field ( mod_name, &
+             'SNS3d',  axes(1:3), Time, &
+             'Total Snow particle number specific humidity tendency ', &
              'kg/kg/sec', missing_value=missing_value)
 
   !------------------------------------------------------------------------
@@ -1971,9 +2289,17 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
              'SNi_imb',  axes(1:3), Time, &
              'difference between qni tendency and sum of individ terms', &
              '#/kg/sec', missing_value=missing_value)
+      diag_id%rain_imb =    register_diag_field ( mod_name, &
+             'rain_imb',  axes(1:3), Time, &
+             'difference between rain rate at sfc and sum of &
+             &individ terms', 'kg/kg/sec', missing_value=missing_value)
       diag_id%cld_liq_imb =    register_diag_field ( mod_name, &
              'cld_liq_imb',  axes(1:3), Time, &
              'difference between ql fallout rate at sfc and sum of &
+             &individ terms', 'kg/kg/sec', missing_value=missing_value)
+      diag_id%snow_imb =    register_diag_field ( mod_name, &
+             'snow_imb',  axes(1:3), Time, &
+             'difference between snow rate at sfc and sum of &
              &individ terms', 'kg/kg/sec', missing_value=missing_value)
       diag_id%cld_ice_imb =    register_diag_field ( mod_name, &
              'cld_ice_imb',  axes(1:3), Time, &
@@ -1981,7 +2307,84 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
              &individ terms', 'kg/kg/sec', missing_value=missing_value)
 
   !------------------------------------------------------------------------
-  !   18)  variables associated CMIP diagnostics
+  !   18)  variables associated prognostic precipitation
+  !------------------------------------------------------------------------
+      diag_id%qrdt_fill = register_diag_field (mod_name, &
+             'qrdt_fill', axes(1:3), Time, &
+           'Rain water specific humidity tendency -- &      
+                                       &pre-microphysics filler', &
+             'kg/kg/sec',  missing_value=missing_value)
+
+      diag_id%qnrdt_fill = register_diag_field (mod_name, &
+             'qnrdt_fill', axes(1:3), Time, &
+           'Rain drop number concentration tendency -- &      
+                                       &pre-microphysics filler', &
+             '#/kg/sec',  missing_value=missing_value)
+
+      diag_id%qrdt_tiny = register_diag_field (mod_name, &
+             'qrdt_tiny', axes(1:3), Time, &
+           'Rain water specific humidity tendency -- &      
+                                       &in-microphysics sub-step filler', &
+             'kg/kg/sec',  missing_value=missing_value)
+
+      diag_id%qnrdt_tiny = register_diag_field (mod_name, &
+             'qnrdt_tiny', axes(1:3), Time, &
+           'Rain drop number concentration tendency -- &      
+                                       &in-microphysics sub-step filler', &
+             '#/kg/sec',  missing_value=missing_value)
+
+      diag_id%qsdt_fill = register_diag_field (mod_name, &
+             'qsdt_fill', axes(1:3), Time, &
+           'Snow specific humidity tendency -- &      
+                                       &pre-microphysics filler', &
+             'kg/kg/sec',  missing_value=missing_value)
+
+      diag_id%qnsdt_fill = register_diag_field (mod_name, &
+             'qnsdt_fill', axes(1:3), Time, &
+           'Snow number concentration tendency -- &      
+                                       &pre-microphysics filler', &
+             '#/kg/sec',  missing_value=missing_value)
+
+      diag_id%qsdt_tiny = register_diag_field (mod_name, &
+             'qsdt_tiny', axes(1:3), Time, &
+           'Snow specific humidity tendency -- &      
+                                       &in-microphysics substep filler', &
+             'kg/kg/sec',  missing_value=missing_value)
+
+      diag_id%qnsdt_tiny = register_diag_field (mod_name, &
+             'qnsdt_tiny', axes(1:3), Time, &
+           'Snow number concentration tendency -- &      
+                                       &in-microphysics substep filler', &
+             '#/kg/sec',  missing_value=missing_value)
+
+      diag_id%qrdt_destr = register_diag_field (mod_name, &
+             'qrdt_destr', axes(1:3), Time, &
+           'Rain water specific humidity tendency -- &      
+                                       &after microphysics destruction', &
+             'kg/kg/sec',  missing_value=missing_value)
+
+      diag_id%qnrdt_destr = register_diag_field (mod_name, &
+             'qnrdt_destr', axes(1:3), Time, &
+           'Rain drop number concentration tendency -- &      
+                                       &after microphysics destruction', &
+             '#/kg/sec',  missing_value=missing_value)
+
+      diag_id%qsdt_destr = register_diag_field (mod_name, &
+             'qsdt_destr', axes(1:3), Time, &
+           'Snow specific humidity tendency -- &      
+                                       &after microphysics destruction', &
+             'kg/kg/sec',  missing_value=missing_value)
+
+      diag_id%qnsdt_destr = register_diag_field (mod_name, &
+             'qnsdt_destr', axes(1:3), Time, &
+           'Snow number concentration tendency -- &      
+                                       &after microphysics destruction', &
+             '#/kg/sec',  missing_value=missing_value)
+
+
+
+  !------------------------------------------------------------------------
+  !   19)  variables associated CMIP diagnostics
   !------------------------------------------------------------------------
        diag_id%cdnc = register_cmip_diag_field_3d ( mod_name, 'cdnc', Time, &
                       'Cloud Droplet Number Concentration', 'm-3', mask_variant=.true., &
@@ -2092,6 +2495,10 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
              'ql_fill_col', axes(1:2), Time, &
              'Column integrated pre-microphysics liquid filler',  &
              'kg/m2/sec', missing_value=missing_value)
+      diag_id%ql_tiny_col = register_diag_field (mod_name, &
+             'ql_tiny_col', axes(1:2), Time, &
+             'Column integrated in-microphysics substep (tiny or negative) liquid filler',  &
+             'kg/m2/sec', missing_value=missing_value)
       diag_id%liq_adj_col = register_diag_field (mod_name, &
              'liq_adj_col', axes(1:2), Time, &
              'Column integrated liquid water specific humidity  &
@@ -2138,6 +2545,10 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
       diag_id%qn_fill_col = register_diag_field (mod_name, &
              'qn_fill_col', axes(1:2), Time, &
              'Column integrated drop number filler', '#/m2/sec',   &
+             missing_value=missing_value)
+      diag_id%qn_tiny_col = register_diag_field (mod_name, &
+             'qn_tiny_col', axes(1:2), Time, &
+             'Column integrated drop number in-microphysics substep filler', '#/m2/sec',   &
              missing_value=missing_value)
       diag_id%qn_destr_col = register_diag_field (mod_name, &
              'qn_destr_col', axes(1:2), Time, &
@@ -2233,6 +2644,10 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
              'qi_fill_col', axes(1:2), Time, &
              'Column integrated pre-microphysics ice filler', 'kg/m2/sec',&
              missing_value=missing_value)
+      diag_id%qi_tiny_col = register_diag_field (mod_name, &
+             'qi_tiny_col', axes(1:2), Time, &
+             'Column integrated in microphysics substep ice filler', 'kg/m2/sec',&
+             missing_value=missing_value)
       diag_id%qi_dep_col = register_diag_field (mod_name, &
              'qi_dep_col', axes(1:2), Time, &
              'Column integrated large-scale deposition', 'kg/m2/sec',   &
@@ -2277,6 +2692,10 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
       diag_id%qi_accrs_col = register_diag_field (mod_name, &
              'qi_accrs_col', axes(1:2), Time, &
              'Column integrated self collection (one class scheme)',   &
+             'kg/m2/sec', missing_value=missing_value)
+      diag_id%qi_rain2ice_col = register_diag_field (mod_name, &
+             'qi_rain2ice_col', axes(1:2), Time, &
+             'Column integrated ice from freezing rain ',   &
              'kg/m2/sec', missing_value=missing_value)
 
 !-----------------------------------------------------------------------
@@ -2353,6 +2772,24 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
              'SNI2d',  axes(1:2), Time, &
              'Column integrated total ice crystal number tendency', &
              '#/m2/sec', missing_value=missing_value)
+
+      diag_id%SR2d = register_diag_field ( mod_name, &
+             'SR2d',  axes(1:2), Time, &
+             'Column integrated total Rain Water specific humidity', &
+             'kg/m2/sec', missing_value=missing_value)
+      diag_id%SNR2d = register_diag_field ( mod_name, &
+             'SNR2d',  axes(1:2), Time, &
+             'Column integrated total Rain drop number specific humidity', &
+             '#/m2/sec', missing_value=missing_value)
+      diag_id%SS2d = register_diag_field ( mod_name, &
+             'SS2d',  axes(1:2), Time, &
+             'Column integrated total snow specific humidity', &
+             'kg/m2/sec', missing_value=missing_value)
+      diag_id%SNS2d = register_diag_field ( mod_name, &
+             'SNS2d',  axes(1:2), Time, &
+             'Column integrated total snow particle number specific humidity', &
+             '#/m2/sec', missing_value=missing_value)
+
       diag_id%srfrain_accrs_col=  register_diag_field ( mod_name, &
              'srfrain_accrs_col', axes(1:2), Time, &
              'Column integrated rain water sink from collection by snow', &
@@ -2534,7 +2971,11 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
       diag_id%qni_fill_col = register_diag_field (mod_name, &
              'qni_fill_col', axes(1:2), Time, &
              'Column integrated ice particle number tendency from filler',&
-             '#/m2/sec', missing_value=missing_value)  
+             '#/m2/sec', missing_value=missing_value) 
+      diag_id%qni_tiny_col = register_diag_field (mod_name, &
+             'qni_tiny_col', axes(1:2), Time, &
+             'Column integrated ice particle number tendency from microphysics substep filler',&
+             '#/m2/sec', missing_value=missing_value) 
       diag_id%qni_nnuccd_col = register_diag_field (mod_name, &
              'qni_nnuccd_col', axes(1:2), Time, &
              'Column integrated ice particle number tendency from &
@@ -2547,6 +2988,14 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
              'qni_nerosi_col', axes(1:2), Time, &
              'Column integrated ice particle number tendency from &
              &erosion', '#/m2/sec', missing_value=missing_value) 
+      diag_id%qni_auto_col = register_diag_field (mod_name, &
+             'qni_auto_col', axes(1:2), Time, &
+             'Column integrated ice particle number tendency from &
+             &autoconversion', '#/m2/sec', missing_value=missing_value) 
+      diag_id%qni_accr_col = register_diag_field (mod_name, &
+             'qni_accr_col', axes(1:2), Time, &
+             'Column integrated ice particle number tendency from &
+             &accretion by snow', '#/m2/sec', missing_value=missing_value) 
       diag_id%qni_nprci_col = register_diag_field (mod_name, &
              'qni_nprci_col', axes(1:2), Time, &
              'Column integrated ice particle number tendency from &
@@ -2588,7 +3037,11 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
              'qni_ihom_col', axes(1:2), Time, &
              'Column integrated ice particle number tendency from &
              &homogeneous freezing', '#/m2/sec', &
-             missing_value=missing_value)  
+             missing_value=missing_value) 
+      diag_id%qni_rain2ice_col = register_diag_field (mod_name, &
+             'qni_rain2ice_col', axes(1:2), Time, &
+             'Column integrated ice particle number tendency from &
+              &converting rain to ice', '#/m2/sec', missing_value=missing_value)  
       diag_id%qni_destr_col = register_diag_field (mod_name, &
              'qni_destr_col', axes(1:2), Time, &
              'Column integrated ice particle number tendency from cloud &
@@ -2605,6 +3058,144 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
              'qni_nsacwi_col', axes(1:2), Time, &
              'Column integrated ice particle number tendency from HM &
              &ice multiplication', '#/m2/sec', missing_value=missing_value)
+
+!------------------------------------------------------------------------
+!    18) variables associated with prognostic precipitation:
+!------------------------------------------------------------------------
+      diag_id%rain_inst_col=  register_diag_field ( mod_name, &
+             'rain_inst_col', axes(1:2), Time, &
+             'Column integrated rain water instantaneous freezing/melting ', &
+             'kg/m2/sec', missing_value=missing_value)
+
+      diag_id%rain_sedi_col=  register_diag_field ( mod_name, &
+             'rain_sedi_col', axes(1:2), Time, &
+             'Column integrated rain water sedimentation ', &
+             'kg/m2/sec', missing_value=missing_value)
+
+      diag_id%rain_num_inst_col=  register_diag_field ( mod_name, &
+             'rain_num_inst_col', axes(1:2), Time, &
+             'Column integrated rain number instantaneous freezing/melting ', &
+             '#/m2/sec', missing_value=missing_value)
+
+      diag_id%rain_num_sedi_col=  register_diag_field ( mod_name, &
+             'rain_num_sedi_col', axes(1:2), Time, &
+             'Column integrated rain number sedimentation ', &
+             '#/m2/sec', missing_value=missing_value)
+
+      diag_id%rain_num_adj_col=  register_diag_field ( mod_name, &
+             'rain_num_adj_col', axes(1:2), Time, &
+             'Column integrated rain number changes due to rain size adjustment ', &
+             '#/m2/sec', missing_value=missing_value)
+
+      diag_id%rain_num2snow_col=  register_diag_field ( mod_name, &
+             'rain_num2snow_col', axes(1:2), Time, &
+             'Column integrated rain number changes due to rain freezing to snow', &
+             '#/m2/sec', missing_value=missing_value)
+      diag_id%rain_num_evap_col=  register_diag_field ( mod_name, &
+             'rain_num_evap_col', axes(1:2), Time, &
+             'Column integrated rain number changes due to rain evaporation', &
+             '#/m2/sec', missing_value=missing_value)
+
+      diag_id%rain_num_freez_col=  register_diag_field ( mod_name, &
+             'rain_num_freez_col', axes(1:2), Time, &
+             'Column integrated rain number changes due to rain homogeneous freezing', &
+             '#/m2/sec', missing_value=missing_value)
+      diag_id%rain_num_selfcoll_col=  register_diag_field ( mod_name, &
+             'rain_num_selfcoll_col', axes(1:2), Time, &
+             'Column integrated rain number changes due to rain number self-collection', &
+             '#/m2/sec', missing_value=missing_value)
+
+
+
+      diag_id%snow_inst_col=  register_diag_field ( mod_name, &
+             'snow_inst_col', axes(1:2), Time, &
+             'Column integrated snow instantaneous freezing/melting ', &
+             'kg/m2/sec', missing_value=missing_value)
+
+      diag_id%snow_sedi_col=  register_diag_field ( mod_name, &
+             'snow_sedi_col', axes(1:2), Time, &
+             'Column integrated snow sedimentation ', &
+             'kg/m2/sec', missing_value=missing_value)
+
+      diag_id%snow_num_inst_col=  register_diag_field ( mod_name, &
+             'snow_num_inst_col', axes(1:2), Time, &
+             'Column integrated snow number instantaneous freezing/melting ', &
+             '#/m2/sec', missing_value=missing_value)
+
+      diag_id%snow_num_sedi_col=  register_diag_field ( mod_name, &
+             'snow_num_sedi_col', axes(1:2), Time, &
+             'Column integrated snow number sedimentation ', &
+             '#/m2/sec', missing_value=missing_value)
+      diag_id%snow_num_melt_col=  register_diag_field ( mod_name, &
+             'snow_num_melt_col', axes(1:2), Time, &
+             'Column integrated snow number melting ', &
+             '#/m2/sec', missing_value=missing_value)
+
+      diag_id%snow_num_adj_col=  register_diag_field ( mod_name, &
+             'snow_num_adj_col', axes(1:2), Time, &
+             'Column integrated snow number changes due to snow size adjustment ', &
+             '#/m2/sec', missing_value=missing_value)
+
+      diag_id%qr_fill_col = register_diag_field (mod_name, &
+             'qr_fill_col', axes(1:2), Time, &
+             'Column integrated pre-microphysics rain filler',  &
+             'kg/m2/sec', missing_value=missing_value)
+
+      diag_id%qnr_fill_col = register_diag_field (mod_name, &
+             'qnr_fill_col', axes(1:2), Time, &
+             'Column integrated pre-microphysics rain drop number filler',  &
+             '#/m2/sec', missing_value=missing_value)
+
+      diag_id%qr_tiny_col = register_diag_field (mod_name, &
+             'qr_tiny_col', axes(1:2), Time, &
+             'Column integrated in-microphysics substep rain filler',  &
+             'kg/m2/sec', missing_value=missing_value)
+
+      diag_id%qnr_tiny_col = register_diag_field (mod_name, &
+             'qnr_tiny_col', axes(1:2), Time, &
+             'Column integrated in-microphysics substep rain drop number filler',  &
+             '#/m2/sec', missing_value=missing_value)
+
+      diag_id%qs_fill_col = register_diag_field (mod_name, &
+             'qs_fill_col', axes(1:2), Time, &
+             'Column integrated pre-microphysics snow filler',  &
+             'kg/m2/sec', missing_value=missing_value)
+
+      diag_id%qns_fill_col = register_diag_field (mod_name, &
+             'qns_fill_col', axes(1:2), Time, &
+             'Column integrated pre-microphysics snow particle number filler',  &
+             '#/m2/sec', missing_value=missing_value)
+
+      diag_id%qs_tiny_col = register_diag_field (mod_name, &
+             'qs_tiny_col', axes(1:2), Time, &
+             'Column integrated in-microphysics substep snow filler',  &
+             'kg/m2/sec', missing_value=missing_value)
+
+      diag_id%qns_tiny_col = register_diag_field (mod_name, &
+             'qns_tiny_col', axes(1:2), Time, &
+             'Column integrated in-microphysics substep snow particle number filler',  &
+             '#/m2/sec', missing_value=missing_value)
+
+      diag_id%qr_destr_col = register_diag_field (mod_name, &
+             'qr_destr_col', axes(1:2), Time, &
+             'Column integrated after microphysics rain destruction',  &
+             'kg/m2/sec', missing_value=missing_value)
+
+      diag_id%qnr_destr_col = register_diag_field (mod_name, &
+             'qnr_destr_col', axes(1:2), Time, &
+             'Column integrated after microphysics rain drop number destruction',  &
+             '#/m2/sec', missing_value=missing_value)
+
+      diag_id%qs_destr_col = register_diag_field (mod_name, &
+             'qs_destr_col', axes(1:2), Time, &
+             'Column integrated after microphysics snow destruction',  &
+             'kg/m2/sec', missing_value=missing_value)
+
+      diag_id%qns_destr_col = register_diag_field (mod_name, &
+             'qns_destr_col', axes(1:2), Time, &
+             'Column integrated after microphysics snow particle number destruction',  &
+             '#/m2/sec', missing_value=missing_value)
+
 
 !------------------------------------------------------------------------
 !    determine the number of activated diagnostic variables on both
@@ -2848,6 +3439,11 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
         diag_pt%qldt_fill = n_diag_4d
         n_diag_4d = n_diag_4d + 1 
       end if
+      if (diag_id%qldt_tiny  + diag_id%ql_tiny_col > 0) then
+        diag_pt%qldt_tiny = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
       if (diag_id%qldt_berg  + diag_id%ql_berg_col > 0) then
         diag_pt%qldt_berg = n_diag_4d
         n_diag_4d = n_diag_4d + 1 
@@ -2899,6 +3495,10 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
       if (diag_id%qndt_fill + diag_id%qn_fill_col +    &
           diag_id%qldt_fill + diag_id%ql_fill_col > 0) then
         diag_pt%qndt_fill = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+      if (diag_id%qndt_tiny + diag_id%qn_tiny_col > 0) then
+        diag_pt%qndt_tiny = n_diag_4d
         n_diag_4d = n_diag_4d + 1 
       end if
       if (diag_id%qndt_destr + diag_id%qn_destr_col > 0) then
@@ -2978,6 +3578,11 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
         diag_pt%qnidt_fill = n_diag_4d
         n_diag_4d = n_diag_4d + 1 
       end if
+      if (diag_id%qnidt_tiny + diag_id%qni_tiny_col > 0) then
+        diag_pt%qnidt_tiny = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
       if (diag_id%qnidt_nnuccd + diag_id%qni_nnuccd_col > 0) then
         diag_pt%qnidt_nnuccd = n_diag_4d
         n_diag_4d = n_diag_4d + 1 
@@ -2988,6 +3593,14 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
       end if
       if (diag_id%qnidt_nerosi + diag_id%qni_nerosi_col > 0) then
         diag_pt%qnidt_nerosi = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+      if (diag_id%qnidt_auto + diag_id%qni_auto_col > 0) then
+        diag_pt%qnidt_auto = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+      if (diag_id%qnidt_accr + diag_id%qni_accr_col > 0) then
+        diag_pt%qnidt_accr = n_diag_4d
         n_diag_4d = n_diag_4d + 1 
       end if
       if (diag_id%qnidt_nprci + diag_id%qni_nprci_col > 0) then
@@ -3028,6 +3641,10 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
       end if
       if (diag_id%qnidt_ihom + diag_id%qni_ihom_col > 0) then
         diag_pt%qnidt_ihom = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+      if (diag_id%qnidt_rain2ice + diag_id%qni_rain2ice_col > 0) then
+        diag_pt%qnidt_rain2ice = n_diag_4d
         n_diag_4d = n_diag_4d + 1 
       end if
       if (diag_id%qnidt_destr + diag_id%qni_destr_col > 0) then
@@ -3170,6 +3787,10 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
         diag_pt%qidt_fill = n_diag_4d
         n_diag_4d = n_diag_4d + 1 
       end if
+      if (diag_id%qidt_tiny + diag_id%qi_tiny_col > 0) then
+        diag_pt%qidt_tiny = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
       if (diag_id%qidt_auto + diag_id%qi_auto_col > 0) then
         diag_pt%qidt_auto = n_diag_4d
         n_diag_4d = n_diag_4d + 1 
@@ -3180,6 +3801,10 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
       end if
       if (diag_id%qidt_accrs + diag_id%qi_accrs_col > 0) then
         diag_pt%qidt_accrs = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+      if (diag_id%qidt_rain2ice + diag_id%qi_rain2ice_col > 0) then
+        diag_pt%qidt_rain2ice = n_diag_4d
         n_diag_4d = n_diag_4d + 1 
       end if
 
@@ -3255,6 +3880,25 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
         diag_pt%SNI3d = n_diag_4d
         n_diag_4d = n_diag_4d + 1 
       end if
+
+      if (diag_id%SR3d  + diag_id%SR2d  > 0) then
+        diag_pt%SR3d = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+      if (diag_id%SNR3d  + diag_id%SNR2d  > 0) then
+        diag_pt%SNR3d = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+      if (diag_id%SS3d  + diag_id%SS2d  > 0) then
+        diag_pt%SS3d = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+      if (diag_id%SNS3d  + diag_id%SNS2d  > 0) then
+        diag_pt%SNS3d = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+
       if (diag_id%qndt_contact_frz + diag_id%qn_contact_frz_col > 0) then
         diag_pt%qndt_contact_frz = n_diag_4d
         n_diag_4d = n_diag_4d + 1 
@@ -3418,6 +4062,144 @@ integer,            intent(out)   :: n_diag_4d, n_diag_4d_kp1
         n_diag_4d = n_diag_4d + 1 
       end if
 
+!------------------------------------------------------------------------
+!   18)  variables associated with prognostic precipitation 
+!------------------------------------------------------------------------
+      if (diag_id%qrdt_fill  + diag_id%qr_fill_col > 0) then
+        diag_pt%qrdt_fill     = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%qnrdt_fill  + diag_id%qnr_fill_col > 0) then
+        diag_pt%qnrdt_fill    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%qrdt_tiny  + diag_id%qr_tiny_col > 0) then
+        diag_pt%qrdt_tiny     = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%qnrdt_tiny  + diag_id%qnr_tiny_col > 0) then
+        diag_pt%qnrdt_tiny    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%qsdt_fill  + diag_id%qs_fill_col > 0) then
+        diag_pt%qsdt_fill     = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%qnsdt_fill  + diag_id%qns_fill_col > 0) then
+        diag_pt%qnsdt_fill    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%qsdt_tiny  + diag_id%qs_tiny_col > 0) then
+        diag_pt%qsdt_tiny     = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%qnsdt_tiny  + diag_id%qns_tiny_col > 0) then
+        diag_pt%qnsdt_tiny    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%qrdt_destr  + diag_id%qr_destr_col > 0) then
+        diag_pt%qrdt_destr     = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%qnrdt_destr  + diag_id%qnr_destr_col > 0) then
+        diag_pt%qnrdt_destr    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%qsdt_destr  + diag_id%qs_destr_col > 0) then
+        diag_pt%qsdt_destr     = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%qnsdt_destr  + diag_id%qns_destr_col > 0) then
+        diag_pt%qnsdt_destr    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%rain_inst  + diag_id%rain_inst_col > 0) then
+        diag_pt%rain_inst    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%rain_sedi  + diag_id%rain_sedi_col > 0) then
+        diag_pt%rain_sedi    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%rain_num_inst  + diag_id%rain_num_inst_col > 0) then
+        diag_pt%rain_num_inst    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%rain_num_sedi  + diag_id%rain_num_sedi_col > 0) then
+        diag_pt%rain_num_sedi    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%rain_num_adj  + diag_id%rain_num_adj_col > 0) then
+        diag_pt%rain_num_adj    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%rain_num2snow  + diag_id%rain_num2snow_col > 0) then
+        diag_pt%rain_num2snow    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%rain_num_evap  + diag_id%rain_num_evap_col > 0) then
+        diag_pt%rain_num_evap    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%rain_num_freez  + diag_id%rain_num_freez_col > 0) then
+        diag_pt%rain_num_freez    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%rain_num_selfcoll  + diag_id%rain_num_selfcoll_col > 0) then
+        diag_pt%rain_num_selfcoll    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+
+      if (diag_id%snow_inst  + diag_id%snow_inst_col > 0) then
+        diag_pt%snow_inst    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%snow_sedi  + diag_id%snow_sedi_col > 0) then
+        diag_pt%snow_sedi    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%snow_num_inst  + diag_id%snow_num_inst_col > 0) then
+        diag_pt%snow_num_inst    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%snow_num_sedi  + diag_id%snow_num_sedi_col > 0) then
+        diag_pt%snow_num_sedi    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%snow_num_melt  + diag_id%snow_num_melt_col > 0) then
+        diag_pt%snow_num_melt    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
+
+      if (diag_id%snow_num_adj  + diag_id%snow_num_adj_col > 0) then
+        diag_pt%snow_num_adj    = n_diag_4d
+        n_diag_4d = n_diag_4d + 1 
+      end if
 !----------------------------------------------------------------------
 
 

@@ -27,7 +27,8 @@ use aerosol_params_mod,        only :  aerosol_params_init, Nfact_du1,  &
 USE  aer_ccn_act_mod,          ONLY :  aer_ccn_act_wpdf_m, &
                                        aer_ccn_act_init,  aer_ccn_act_end
 USE  ice_nucl_mod,             ONLY :  ice_nucl_wpdf, ice_nucl_wpdf_init, &
-                                       ice_nucl_wpdf_end
+                                       ice_nucl_wpdf_end, ice_nucl_wpdf_Fan
+
 USE lscloud_types_mod,         ONLY :  lscloud_types_init, &
                                        diag_id_type, diag_pt_type, &
                                        atmos_state_type, lscloud_nml_type,&
@@ -90,13 +91,19 @@ real    :: var_limit = 0.0
 integer :: var_limit_opt = 1
 integer :: up_strat_opt = 1
 
+logical ::  use_Fan2019_ice_nucl = .false.
+logical ::  do_sum_homo_het_Fan = .true.     ! h1g, 2020-06-01
+
+logical ::  include_all_dust_bins = .false.  ! h1g, 2020-06-01 
+logical ::  include_Ni_bc         = .false.  ! h1g, 2020-07-03
+logical ::  include_Ni_sulf       = .false.  ! h1g, 2020-07-03
+
 namelist / aerosol_cloud_nml / rh_act_opt, sea_salt_scale_onl, &
                                reproduce_rk, var_limit_ice, &
-                               var_limit,  var_limit_opt, up_strat_opt, &
-                               cf_thresh_nucl, treat_nitrate_as_sulfate
-
-
-
+                               var_limit,  var_limit_opt, up_strat_opt,  &
+                               cf_thresh_nucl, treat_nitrate_as_sulfate, &
+                               use_Fan2019_ice_nucl, do_sum_homo_het_Fan,&  ! h1g, 2020-06-01
+                               include_all_dust_bins, include_Ni_bc, include_Ni_sulf   ! h1g, 2020-07-03
 !-------------------------------------------------------------------------
 
 real, parameter    :: d622 = rdgas / rvgas
@@ -123,7 +130,7 @@ logical :: use_sub_seasalt
 real    :: sea_salt_scale
 real    :: om_to_oc
 logical :: do_pdf_clouds
-logical :: do_mg_microphys, do_mg_ncar_microphys, do_ncar_microphys
+logical :: do_mg_microphys, do_mg_ncar_microphys, do_ncar_microphys, do_ncar_MG2
 logical :: total_activation
 
 logical :: debug
@@ -166,6 +173,9 @@ type(exchange_control_type), intent(in) :: Exch_ctrl
       do_mg_microphys = Constants_lsc%do_mg_microphys
       do_mg_ncar_microphys = Constants_lsc%do_mg_ncar_microphys
       do_ncar_microphys = Constants_lsc%do_ncar_microphys
+
+      do_ncar_MG2 =Constants_lsc%do_ncar_MG2
+
       total_activation = Constants_lsc%total_activation
 
 !-------------------------------------------------------------------------
@@ -330,6 +340,8 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
                                  eslt, esit, qvsl, qvsi, qs_d, qvt
       INTEGER :: i, j, k
 
+      real    :: crystal_tmp, ni_dust_tmp
+
 
 !-------------------------------------------------------------------------
 !    do the following calculations if droplet number is being predicted:
@@ -372,6 +384,7 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
 !    downward, the rotstayn-klein microphysics is active, and pdf_clouds
 !    are not activated; in such a case, no particles are activated. 
 !-------------------------------------------------------------------------
+
         call mpp_clock_begin (aero_loop2)
         if (var_limit_opt == 1) then   ! cjg
           do k = 1,kdim
@@ -381,6 +394,7 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
                    (do_mg_microphys)  .or.  &
                    (do_ncar_microphys)  .or.  &
                    (do_mg_ncar_microphys)  .or.  &
+                   ( do_ncar_MG2 ) .or. &
 ! cjg: total activation for RK
                    (total_activation) .or.  &  
                    (up_strat(i,j,k) >= 0.0) )  then
@@ -434,6 +448,34 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
 !-------------------------------------------------------------------------
         call mpp_clock_begin (aero_loop3)
         if (do_ice_num) then
+
+!---> h1g, 2020-06-01
+        if ( .not. do_ice_nucl_wpdf ) then
+          do k = 1,kdim
+            do j = 1,jdim
+              do i = 1,idim
+                wp2i(i,j,k) = 0.0
+                if (use_Fan2019_ice_nucl) then
+!-------------------------------------------------------------------------
+!    call ice_nucl_wpdf to obtain number of activated ice crystals.
+!-------------------------------------------------------------------------
+                  call ice_nucl_wpdf_Fan (   &
+                          Input_mp%tin(i,j,k), &
+                          Input_mp%pfull(i,j,k), &
+                          up_strat(i,j,k), wp2i(i,j,k),  & 
+                          Particles%concen_dust_sub(i,j,k), &                   
+                          Particles%crystal1(i,j,k),        & !Particles%crystal1(i,j,k): homogeneous nucleated ice
+                          Ni_dust(i,j,k) )
+                  if ( do_sum_homo_het_Fan ) & 
+                      Particles%crystal1(i,j,k) = Particles%crystal1(i,j,k) + Ni_dust(i,j,k)
+                endif
+              enddo
+            enddo
+          enddo  
+        endif
+!<--- h1g, 2020-06-01
+
+
         if (do_ice_nucl_wpdf) THEN
           do k = 1,kdim
             do j = 1,jdim
@@ -453,64 +495,140 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
                     wp2i(i,j,k) = wp2(i,j,k)
                   END IF
 
+
+                  if (use_Fan2019_ice_nucl) then
+!-------------------------------------------------------------------------
+!    call ice_nucl_wpdf to obtain number of activated ice crystals.
+!-------------------------------------------------------------------------
+                    call ice_nucl_wpdf_Fan (   &
+                          Input_mp%tin(i,j,k), &
+                          Input_mp%pfull(i,j,k), &
+                          up_strat(i,j,k), wp2i(i,j,k),  & 
+                          Particles%concen_dust_sub(i,j,k), &                   
+                          Particles%crystal1(i,j,k),        &!Particles%crystal1(i,j,k): homogeneous nucleated ice
+                          Ni_dust(i,j,k) )
+                    if ( do_sum_homo_het_Fan ) & 
+                      Particles%crystal1(i,j,k) = Particles%crystal1(i,j,k) + Ni_dust(i,j,k)
+
 !------------------------------------------------------------------------
 !    define the saturation specific humidities over liquid and ice.
 !------------------------------------------------------------------------
-                  eslt(i,j,k) = polysvp_l(Input_mp%tin(i,j,k))
-                  qs_d(i,j,k) = Input_mp%pfull(i,j,k) - d378*eslt(i,j,k)
-                  qs_d(i,j,k) = max(qs_d(i,j,k),eslt(i,j,k))
-                  qvsl(i,j,k) = 0.622 *eslt(i,j,k)/qs_d(i,j,k)
+                    eslt(i,j,k) = polysvp_l(Input_mp%tin(i,j,k))
+                    qs_d(i,j,k) = Input_mp%pfull(i,j,k) - d378*eslt(i,j,k)
+                    qs_d(i,j,k) = max(qs_d(i,j,k),eslt(i,j,k))
+                    qvsl(i,j,k) = 0.622 *eslt(i,j,k)/qs_d(i,j,k)
 
-                  esit(i,j,k) = polysvp_i(Input_mp%tin(i,j,k))
-                  qs_d(i,j,k) = Input_mp%pfull(i,j,k) - d378*esit(i,j,k)
-                  qs_d(i,j,k) = max(qs_d(i,j,k),esit(i,j,k))
-                  qvsi(i,j,k) = 0.622 *esit(i,j,k)/qs_d(i,j,k)
+                    esit(i,j,k) = polysvp_i(Input_mp%tin(i,j,k))
+                    qs_d(i,j,k) = Input_mp%pfull(i,j,k) - d378*esit(i,j,k)
+                    qs_d(i,j,k) = max(qs_d(i,j,k),esit(i,j,k))
+                    qvsi(i,j,k) = 0.622 *esit(i,j,k)/qs_d(i,j,k)
 
 !------------------------------------------------------------------------
 !    define the relative humidities wrt ice and liquid to be used in the 
 !    calculation of ice nuclei activation. it may vary based on the nml 
 !    variable rh_act_opt.
 !------------------------------------------------------------------------
-                  IF (rh_act_opt .EQ. 1) THEN
-                    qvt(i,j,k) = Input_mp%qin(i,j,k)
-                    cf(i,j,k) = 0.
-                  ELSE
-                    cf(i,j,k) = qa_upd(i,j,k) +     &
+                    IF (rh_act_opt .EQ. 1) THEN
+                      qvt(i,j,k) = Input_mp%qin(i,j,k)
+                      cf(i,j,k) = 0.
+                    ELSE
+                      cf(i,j,k) = qa_upd(i,j,k) +     &
                                     C2ls_mp%convective_humidity_area(i,j,k)
-                    IF (cf(i,j,k) .LT. cf_thresh_nucl) THEN
-                      qvt(i,j,k) =  (Input_mp%qin(i,j,k) -   &
+                      IF (cf(i,j,k) .LT. cf_thresh_nucl) THEN
+                        qvt(i,j,k) =  (Input_mp%qin(i,j,k) -   &
                                       cf(i,j,k)*Atmos_State%qs(i,j,k))/ &
                                                            (1. - cf(i,j,k))
-                    ELSE
-                      qvt(i,j,k) =  Input_mp%qin(i,j,k)
-                    ENDIF
-                  END IF
+                      ELSE
+                        qvt(i,j,k) =  Input_mp%qin(i,j,k)
+                      ENDIF
+                    END IF
 
-                  if (qvt(i,j,k) .LE. 0.0) then
-                     qvt(i,j,k) =  MAX(Input_mp%qin(i,j,k), qmin)
-                  endif
-                  u_i(i,j,k) =  qvt(i,j,k)/qvsi(i,j,k)
-                  u_l(i,j,k) =  qvt(i,j,k)/qvsl(i,j,k)
+                    if (qvt(i,j,k) .LE. 0.0) then
+                       qvt(i,j,k) =  MAX(Input_mp%qin(i,j,k), qmin)
+                    endif
+                    u_i(i,j,k) =  qvt(i,j,k)/qvsi(i,j,k)
+                    u_l(i,j,k) =  qvt(i,j,k)/qvsl(i,j,k)
+
+!-------------------------------------------------------------------------
+!    call ice_nucl_wpdf to obtain number of activated ice crystals.
+!-------------------------------------------------------------------------
+                    call ice_nucl_wpdf (    &
+                          Input_mp%tin(i,j,k), u_i(i,j,k), u_l(i,j,k),&
+                          up_strat(i,j,k), wp2i(i,j,k),  & 
+                          Input_mp%zfull(i,j,k),    &
+                          Particles%totalmass1(i,j,k,:), &
+                          Particles%imass1(i,j,k,:), n_totmass, n_imass, &
+                          crystal_tmp, &
+                          Particles%drop1(i,j,k), Particles%hom(i,j,k), &
+                          Atmos_state%rh_crit(i,j,k),  &
+                          Atmos_state%rh_crit_min(i,j,k), ni_sulf(i,j,k), &
+                          ni_dust_tmp, ni_bc(i,j,k))
+
+
+                    if ( include_Ni_bc ) &      
+                      Particles%crystal1(i,j,k) = Particles%crystal1(i,j,k) + ni_bc(i,j,k)
+                    if ( include_Ni_sulf ) &      
+                      Particles%crystal1(i,j,k) = Particles%crystal1(i,j,k) + ni_sulf(i,j,k)
+
+                  else
+!------------------------------------------------------------------------
+!    define the saturation specific humidities over liquid and ice.
+!------------------------------------------------------------------------
+                    eslt(i,j,k) = polysvp_l(Input_mp%tin(i,j,k))
+                    qs_d(i,j,k) = Input_mp%pfull(i,j,k) - d378*eslt(i,j,k)
+                    qs_d(i,j,k) = max(qs_d(i,j,k),eslt(i,j,k))
+                    qvsl(i,j,k) = 0.622 *eslt(i,j,k)/qs_d(i,j,k)
+
+                    esit(i,j,k) = polysvp_i(Input_mp%tin(i,j,k))
+                    qs_d(i,j,k) = Input_mp%pfull(i,j,k) - d378*esit(i,j,k)
+                    qs_d(i,j,k) = max(qs_d(i,j,k),esit(i,j,k))
+                    qvsi(i,j,k) = 0.622 *esit(i,j,k)/qs_d(i,j,k)
+
+!------------------------------------------------------------------------
+!    define the relative humidities wrt ice and liquid to be used in the 
+!    calculation of ice nuclei activation. it may vary based on the nml 
+!    variable rh_act_opt.
+!------------------------------------------------------------------------
+                    IF (rh_act_opt .EQ. 1) THEN
+                      qvt(i,j,k) = Input_mp%qin(i,j,k)
+                      cf(i,j,k) = 0.
+                    ELSE
+                      cf(i,j,k) = qa_upd(i,j,k) +     &
+                                    C2ls_mp%convective_humidity_area(i,j,k)
+                      IF (cf(i,j,k) .LT. cf_thresh_nucl) THEN
+                        qvt(i,j,k) =  (Input_mp%qin(i,j,k) -   &
+                                      cf(i,j,k)*Atmos_State%qs(i,j,k))/ &
+                                                           (1. - cf(i,j,k))
+                      ELSE
+                        qvt(i,j,k) =  Input_mp%qin(i,j,k)
+                      ENDIF
+                    END IF
+
+                    if (qvt(i,j,k) .LE. 0.0) then
+                       qvt(i,j,k) =  MAX(Input_mp%qin(i,j,k), qmin)
+                    endif
+                    u_i(i,j,k) =  qvt(i,j,k)/qvsi(i,j,k)
+                    u_l(i,j,k) =  qvt(i,j,k)/qvsl(i,j,k)
 
 !--------------------------------------------------------------------------
 !    if debugging is active and the relative humidity exceeds 200%, output
 !    relevant variables.
 !--------------------------------------------------------------------------
-                  if (debug .and. Input_mp%tin(i,j,k) .lt. 260. .and.  &
+                    if (debug .and. Input_mp%tin(i,j,k) .lt. 260. .and.  &
                                             u_i(i,j,k) .gt. 200. ) then
-                     call aerosol_cloud_debug1 (    &
-                           i, j, k, u_i(i,j,k), Atmos_state%qs(i,j,k),   &
-                           qvsi(i,j,k), qvt(i,j,k), Input_mp%qin(i,j,k), &
-                           cf(i,j,k),                                   &
-                           C2ls_mp%convective_humidity_area(i,j,k),   &
-                           qa_upd(i,j,k),   &
-                           C2ls_mp%convective_humidity_ratio(i,j,k) )
-                  endif
+                       call aerosol_cloud_debug1 (    &
+                             i, j, k, u_i(i,j,k), Atmos_state%qs(i,j,k),   &
+                             qvsi(i,j,k), qvt(i,j,k), Input_mp%qin(i,j,k), &
+                             cf(i,j,k),                                   &
+                             C2ls_mp%convective_humidity_area(i,j,k),   &
+                             qa_upd(i,j,k),   &
+                             C2ls_mp%convective_humidity_ratio(i,j,k) )
+                    endif
 
 !-------------------------------------------------------------------------
 !    call ice_nucl_wpdf to obtain number of activated ice crystals.
 !-------------------------------------------------------------------------
-                  call ice_nucl_wpdf (    &
+                    call ice_nucl_wpdf (    &
                           Input_mp%tin(i,j,k), u_i(i,j,k), u_l(i,j,k),&
                           up_strat(i,j,k), wp2i(i,j,k),  & 
                           Input_mp%zfull(i,j,k),    &
@@ -521,14 +639,16 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
                           Atmos_state%rh_crit(i,j,k),  &
                           Atmos_state%rh_crit_min(i,j,k), ni_sulf(i,j,k), &
                           ni_dust(i,j,k), ni_bc(i,j,k))
-                else
-                  ni_sulf(i,j,k) = 0.
-                  ni_dust(i,j,k) = 0.
-                  ni_bc  (i,j,k) = 0.
-                  cf(i,j,k) = missing_value
-                  u_i(i,j,k) =  missing_value            
-                  u_l(i,j,k) =  missing_value
-                endif
+                    endif   !use_Fan2019_ice_nucl
+
+                  else
+                    ni_sulf(i,j,k) = 0.
+                    ni_dust(i,j,k) = 0.
+                    ni_bc  (i,j,k) = 0.
+                    cf(i,j,k) = missing_value
+                    u_i(i,j,k) =  missing_value            
+                    u_l(i,j,k) =  missing_value
+                  endif  ! Input_mp%tin(i,j,k) .LT. tfreeze - 5. 
 
 !-------------------------------------------------------------------------
 !    define the critical relative humidity that was used for ice nuclei 
@@ -562,6 +682,7 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
               end do
             end do
           end do
+        END IF ! do_ice_nucl_wpdf
 
 !-------------------------------------------------------------------------
 !    define various desired diagnostics.
@@ -617,7 +738,6 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
 
           if ( diag_id%rhlin > 0 ) diag_4d(:,:,:,diag_pt%rhlin) = u_l
 
-        END IF ! do_ice_nucl_wpdf
         END IF ! do_ice_num
 
         if(diag_id%potential_droplets > 0)   &
@@ -879,6 +999,13 @@ TYPE(diag_pt_type),                        intent(in)    :: diag_pt
                   do i=1,idim
                     imass1(i,j,k,11) = Aerosol%aerosol(i,j,k,na)/   &   
                                                          pthickness(i,j,k)
+!--> h1g, 2020-06-01
+                    if ( do_dust_berg .and. include_all_dust_bins ) then
+                      concen_dust_sub(i,j,k) =   concen_dust_sub(i,j,k) + &
+                                                 Aerosol%aerosol(i,j,k,na)
+                    endif
+!<-- h1g, 2020-06-01
+
                   end do
                 end do
               end do
@@ -889,6 +1016,14 @@ TYPE(diag_pt_type),                        intent(in)    :: diag_pt
                   do i=1,idim
                     imass1(i,j,k,12) = Aerosol%aerosol(i,j,k,na)/ &      
                                                          pthickness(i,j,k)
+
+!--> h1g, 2020-06-01
+                    if ( do_dust_berg .and. include_all_dust_bins ) then
+                      concen_dust_sub(i,j,k) =   concen_dust_sub(i,j,k) + &
+                                                 Aerosol%aerosol(i,j,k,na)
+                    endif
+!<-- h1g, 2020-06-01
+
                   end do
                 end do
               end do
@@ -1027,12 +1162,8 @@ TYPE(diag_pt_type),                        intent(in)    :: diag_pt
       endif  ! (do_liq_num)
 
 !----------------------------------------------------------------------
-
-
 end subroutine aerosol_effects
-
 !#########################################################################
-
 
 
                     END MODULE aerosol_cloud_mod
