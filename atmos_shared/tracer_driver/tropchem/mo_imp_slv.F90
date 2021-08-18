@@ -8,6 +8,8 @@
 #endif
       use constants_mod,    only : PI
 
+      use fms_mod,            only : FATAL, error_mesg, mpp_pe, mpp_root_pe, uppercase
+
       implicit none
 
       private
@@ -646,6 +648,17 @@ iter_loop : &
                         if (verbose >= 3) then
                         write(*,105) lon(i)*r2d,lat(i)*r2d,lev,dt
  105                    format('imp_sol: failed to converge @ (lon,lat,lev,dt) = ', 2f8.2,i5,1p,f12.4)
+
+                        if (mpp_root_pe().eq.mpp_pe()) then
+                           do m=1,rxntot
+                              write(*,*) m,'rx',lrxt(m)
+                           end do
+                           do m=1,hetcnt
+                              write(*,*) m,'het_rx',lhet(m)
+                           end do
+                        end if
+
+
                         end if
                         if (verbose >= 4) then
                            do m = 1,clscnt4

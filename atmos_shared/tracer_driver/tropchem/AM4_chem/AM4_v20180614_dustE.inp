@@ -1,10 +1,10 @@
 BEGSIM
 output_unit_number = 7
-output_file        = AM4_v20180614.doc
+output_file        = AM4_v20180614_dustE.doc
 procout_path       = ../output/
 src_path           = ../bkend/
 sim_dat_path       = ../output/
-sim_dat_filename   = sim.AM4_v20180614.dat
+sim_dat_filename   = sim.AM4_v20180614_dustE.dat
 
 Comments
      "This is a mozart2 chemical solver with :"
@@ -55,6 +55,8 @@ End Comments
  MVKO2, MVKOOH, MACRNO2
  MAO3, MAOP, MAOPO2, ATO2
  ATOOH,INO2, INPN, ISNOOA, ISN1,O3S -> O3, O3S_E90 -> O3
+ HNO3_D1, HNO3_D2, HNO3_D3, HNO3_D4, HNO3_D5 
+ SO4_D1, SO4_D2, SO4_D3, SO4_D4, SO4_D5  
       End Solution
 
       Fixed
@@ -72,6 +74,8 @@ End Comments
       Explicit
        N2O, CH4, CO, C2H6, C3H8, H2
        H2O, O3S, O3S_E90
+       HNO3_D1, HNO3_D2, HNO3_D3, HNO3_D4, HNO3_D5
+       SO4_D1, SO4_D2, SO4_D3, SO4_D4, SO4_D5
       End Explicit
       Implicit
        O3, O1D, O, N, NO, NO2, NO3, HNO3, HO2NO2, N2O5, CH3O2
@@ -350,7 +354,27 @@ End Comments
           DMS + OH -> SO2 + CH2O                 ; 1.2e-11,-280
 [uoh_dms] DMS + OH -> 0.75*SO2 + CH2O
           DMS + NO3 -> SO2 + HNO3 + CH2O         ; 1.90e-13,530
-[nh3h]    NH3 -> NH4 
+[hno3_d1] HNO3 -> HNO3_D1
+[hno3_d2] HNO3 -> HNO3_D2
+[hno3_d3] HNO3 -> HNO3_D3
+[hno3_d4] HNO3 -> HNO3_D4
+[hno3_d5] HNO3 -> HNO3_D5
+[no3_d1]  NO3 -> HNO3_D1
+[no3_d2]  NO3 -> HNO3_D2
+[no3_d3]  NO3 -> HNO3_D3
+[no3_d4]  NO3 -> HNO3_D4
+[no3_d5]  NO3 -> HNO3_D5
+[n2o5_d1] N2O5 -> 2*HNO3_D1
+[n2o5_d2] N2O5 -> 2*HNO3_D2
+[n2o5_d3] N2O5 -> 2*HNO3_D3
+[n2o5_d4] N2O5 -> 2*HNO3_D4
+[n2o5_d5] N2O5 -> 2*HNO3_D5
+[so2_d1]  SO2 -> SO4_D1
+[so2_d2]  SO2 -> SO4_D2
+[so2_d3]  SO2 -> SO4_D3
+[so2_d4]  SO2 -> SO4_D4
+[so2_d5]  SO2 -> SO4_D5
+[nh3h]    NH3 -> NH4	
           NH3 + OH -> H2O + HNO3                 ; 1.7e-12,-710
  [strat13] H + O3 -> OH + O2                     ; 1.4e-10,-470
  [strat14] H + O2 + M -> HO2 + M                 ; 4.4e-32,1.3, 4.7e-11,0.2, 0.6

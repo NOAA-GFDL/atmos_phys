@@ -122,10 +122,8 @@ module atmos_tracer_utilities_mod
 
   !cmip6 (f1p)
   !
-
-
   integer :: id_tracer_ddep_cmip(max_tracers)
-  integer :: id_w10m, id_delm
+  integer :: id_w10m, id_delm, id_hwind
   integer :: id_u_star, id_b_star, id_rough_mom, id_z_pbl,  &
        id_mo_length_inv, id_vds
   character(len=32),  dimension(max_tracers) :: tracer_names     = ' '
@@ -187,8 +185,10 @@ module atmos_tracer_utilities_mod
   logical :: drydep_exp = .false.
   real :: T_snow_dep = 263.15
   real :: kbs_val   = 50. ! surface conductance of rough sea (m/s)
+  logical :: use_albedo_for_drydep = .false.
+  real :: snow_albedo_thr = 0.45
   namelist /atmos_tracer_utilities_nml/  scale_aerosol_wetdep,  scale_aerosol_wetdep_snow, file_dry, drydep_exp, T_snow_dep, &
-                         kbs_val
+                         kbs_val, use_albedo_for_drydep, snow_albedo_thr
   ! <---h1g,
 contains
 
@@ -447,6 +447,7 @@ contains
          trim(tracer_longnames(n))//' re-evap by conv precip',         &
          trim(units), missing_value=-999.    )
  enddo
+
  ! Register scaling factor to calculate wind speed at 10 meters
  id_delm   = register_diag_field ( mod_name,                &
       'delm', mass_axes(1:2),Time,                   &
@@ -457,7 +458,11 @@ contains
       'w10m', mass_axes(1:2),Time,                   &
       'Wind speed at 10 meters', 'm/s',              &
       missing_value=-999.                           )
-
+ ! Register the wind speed at 10 meters
+ id_hwind   = register_diag_field ( mod_name,                &
+      'hwind', mass_axes(1:2),Time,                   &
+      'Horizontal wind speed', 'm/s',              &
+      missing_value=-999.                           )
  id_u_star = register_diag_field ( mod_name,                    &
       'u_star_atm', mass_axes(1:2), Time,               &
       'u star',                                 &
@@ -482,6 +487,7 @@ contains
       'vds_atm', mass_axes(1:2), Time,               &
       'vds',                                 &
       'm/s', missing_value=-999.     )
+
 ! Register in-cloud SO2 re-evaporation by large scale clouds (CMIP6)
  ID_so2_reevap_ls = register_cmip_diag_field_3d ( mod_name,               &
       'pso4_aq_so2_reevap_ls', Time, 'Sulfate aerosol production by SO2 re-evaporation by lscale clouds', 'kg m-2 s-1', &
@@ -618,7 +624,7 @@ end subroutine write_namelist_values
 !<SUBROUTINE NAME = "dry_deposition">
 subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
     u_star, landfrac, frac_open_sea,dsinku, dt, tracer, Time, &
-    Time_next, lon, half_day, drydep_data, con_atm)
+    Time_next, lon, half_day, drydep_data, albedo, con_atm)
   ! When formulation of dry deposition is resolved perhaps use the following?
   !                           landfr, seaice_cn, snow_area, &
   !                           vegn_cover, vegn_lai, &
@@ -724,6 +730,7 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
  real, intent(in), dimension(:,:)    :: u, v, T, pwt, pfull, u_star, tracer, dz
  real, intent(in), dimension(:,:)    :: lon, half_day
  real, intent(in), dimension(:,:)    :: landfrac,frac_open_sea
+ real, intent(in), dimension(:,:)    :: albedo
  real, intent(in), dimension(:,:), optional    :: con_atm
  ! When formulation of dry deposition is resolved perhaps use the following?
  !real, intent(in), dimension(:,:)    :: landfr, z_pbl, b_star, rough_mom
@@ -773,11 +780,19 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
 
  case ('williams_wind_driven')
 
-    where(T.lt.T_snow_dep)
-       landr2=snowr
-    elsewhere
-       landr2=landr
-    endwhere
+    if (.not. use_albedo_for_drydep) then
+       where(T.lt.T_snow_dep)
+          landr2=snowr
+       elsewhere
+          landr2=landr
+       endwhere
+    else
+       where(albedo.gt.snow_albedo_thr) 
+          landr2=snowr
+       elsewhere
+          landr2=landr
+       endwhere
+    end if
 
     frictv=u_star
     where (frictv .lt. 0.1) frictv=0.1
@@ -2416,6 +2431,14 @@ subroutine get_w10m(z_full, u, v, rough_mom,u_star, b_star, q_star, &
  ! Send the 10m wind speed data to the diag_manager for output.
  if (id_w10m > 0 ) then
     used = send_data ( id_w10m, w10m_land, Time_next, is_in=is,js_in=js )
+ endif
+
+ if (id_u_star > 0 ) then
+    used = send_data ( id_u_star, u_star, Time_next, is_in=is,js_in=js )
+ endif
+
+ if (id_hwind > 0 ) then
+    used = send_data ( id_hwind, sqrt(u(:,:)**2 +v(:,:)**2), Time_next, is_in=is,js_in=js )
  endif
 
 end subroutine get_w10m

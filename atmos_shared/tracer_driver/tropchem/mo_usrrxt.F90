@@ -10,25 +10,41 @@
       use field_manager_mod,  only: parse             
       use tropchem_types_mod, only : tropchem_opt, tropchem_diag
       use mpp_mod, only: mpp_root_pe, mpp_pe
+      use fms_mod, only: FATAL, error_mesg
+      use atmos_dust_mod,     only : is_dust_tracer, n_dust_tracers, dust_tracers, do_dust
 
 implicit none
       public :: usrrxt_init, usrrxt
-      public :: HET_CHEM_LEGACY, HET_CHEM_J1M
+      public :: HET_CHEM_LEGACY, HET_CHEM_J1M, &
+                GSO2_WANG2014, GSO2_ZHENG2015, GSO2_ZHENG2015_LOW
 
       private
       integer, parameter     :: HET_CHEM_LEGACY    = 1
       integer, parameter     :: HET_CHEM_J1M       = 2
+      integer, parameter     :: GSO2_WANG2014 = 1, GSO2_ZHENG2015 = 2, &
+                                GSO2_ZHENG2015_LOW = 3
+
+      integer, parameter :: ndust_reac           = 5 !maximum number of dust tracers
+      integer, parameter :: ndust_het            = 8 !number of tracers in het chem for dust 
+
 
       integer :: uo_o2_ndx, uno2_no3_ndx, un2o5_ndx, uoh_hno3_ndx, uho2_no2_ndx, uhno4_ndx,&
                  uco_oha_ndx, uho2_ho2_ndx, upan_f_ndx, upan_b_ndx, umpan_f_ndx, umpan_b_ndx, &
                  n2o5h_ndx, no3h_ndx, ho2h_ndx, no2h_ndx, nh3h_ndx, uoh_xooh_ndx, uoh_acet_ndx, &
                  uoh_dms_ndx, so2h_ndx, &
-                 so4_ndx, bc1_ndx, bc2_ndx, oc1_ndx, oc2_ndx, soa_ndx,nh4_ndx,nh4no3_ndx,&
-                 ssa_ndx(5), dust_ndx(5),&
+                 so4_ndx, nh4_ndx, nh4no3_ndx, no2_ndx, &
+                 bc1_ndx, bc2_ndx, oc1_ndx, oc2_ndx, soa_ndx, ssa_ndx(5), dust_ndx(ndust_reac),&
                  h2o_ndx, hcl_ndx, clono2_ndx, hbr_ndx, &
                  strat37_ndx, strat38_ndx, strat72_ndx, strat73_ndx, strat74_ndx, &
                  strat75_ndx, strat76_ndx, strat77_ndx, strat78_ndx, strat79_ndx, &
                  strat80_ndx
+
+      integer :: usr_hno3_dust(ndust_reac), usr_n2o5_dust(ndust_reac), usr_no3_dust(ndust_reac), usr_so4_dust(ndust_reac),usr_so2_dust(ndust_reac)
+      integer :: hno3_d_ndx(ndust_reac), so4_d_ndx(ndust_reac)
+
+
+      integer, parameter :: ndust_ind(ndust_het)     = (/ 11,12,13,14,15,16,17,18/)
+      integer, parameter :: ndust_tracer(ndust_het)  = (/  1, 1, 1, 1, 2, 3, 4, 5/)
 
       real, parameter :: d622 = rdgas/rvgas
       real, parameter :: d378 = 1. - d622
@@ -67,7 +83,8 @@ logical                       :: module_is_initialized = .false.
 !-----------------------------------------------------------------
 !        ... local variables
 !-----------------------------------------------------------------
-      integer :: funit, I, J, K
+      integer :: funit, I, J, K, ndust, n
+      character*7 :: fld
 
       uo_o2_ndx = get_rxt_ndx( 'uo_o2' )
       uno2_no3_ndx = get_rxt_ndx( 'uno2_no3' )
@@ -103,6 +120,39 @@ logical                       :: module_is_initialized = .false.
       strat79_ndx = get_rxt_ndx( 'strat79' )
       strat80_ndx = get_rxt_ndx( 'strat80' )
 
+      !dust reaction
+      ndust = 0
+      do i=1,n_dust_tracers
+         if  (dust_tracers(i)%is_dust)  then
+            ndust = ndust+1
+         end if
+      end do
+
+      if (ndust.gt.ndust_reac) then
+         call error_mesg('mo_setsox_init', 'ndust > max_dust',FATAL)
+      end if
+
+      do i=1,ndust
+         write(fld,'(A6,I1.1)') 'hno3_d',i
+         usr_hno3_dust(i) = get_rxt_ndx(trim(fld))
+         write(fld,'(A5,I1.1,1X)') 'so4_d',i
+         usr_so4_dust(i) = get_rxt_ndx(trim(fld))
+         write(fld,'(A5,I1.1,1X)') 'so2_d',i
+         usr_so2_dust(i) = get_rxt_ndx(trim(fld))
+         write(fld,'(A6,I1.1)') 'n2o5_d',i
+         usr_n2o5_dust(i) = get_rxt_ndx(trim(fld))
+         write(fld,'(A5,I1.1,1X)') 'no3_d',i
+         usr_no3_dust(i) = get_rxt_ndx(trim(fld))
+      end do
+
+      if (mpp_root_pe().eq.mpp_pe()) then
+         write(*,*) 'usr_n2o5_dust', usr_n2o5_dust
+         write(*,*) 'usr_hno3_dust', usr_hno3_dust
+         write(*,*) 'usr_so4_dust', usr_so4_dust
+         write(*,*) 'usr_so2_dust', usr_so2_dust
+         write(*,*) 'usr_no3_dust', usr_no3_dust
+      end if
+
       !Note here we cannot use get_spc_ndx, because aerosols are not
       !tracnam, which is for get_spc_ndx in mo_chem_utls.F90. (jmao, 03/16/2012)
 !      so4_ndx     = get_tracer_index(MODEL_ATMOS,'so4')
@@ -113,6 +163,7 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
       so4_ndx     = get_tracer_index(MODEL_ATMOS,'so4')
       nh4_ndx     = get_tracer_index(MODEL_ATMOS,'nh4')
       nh4no3_ndx  = get_tracer_index(MODEL_ATMOS,'nh4no3')
+      no2_ndx     = get_tracer_index(MODEL_ATMOS,'no2')
       bc1_ndx     = get_tracer_index(MODEL_ATMOS,'bcphob')
       bc2_ndx     = get_tracer_index(MODEL_ATMOS,'bcphil')
       oc1_ndx     = get_tracer_index(MODEL_ATMOS,'omphob')
@@ -128,6 +179,18 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
       dust_ndx(3)   = get_tracer_index(MODEL_ATMOS,'dust3')
       dust_ndx(4)   = get_tracer_index(MODEL_ATMOS,'dust4')
       dust_ndx(5)   = get_tracer_index(MODEL_ATMOS,'dust5')
+
+      hno3_d_ndx(1) = get_spc_ndx('HNO3_D1')
+      hno3_d_ndx(2) = get_spc_ndx('HNO3_D2')
+      hno3_d_ndx(3) = get_spc_ndx('HNO3_D3')
+      hno3_d_ndx(4) = get_spc_ndx('HNO3_D4')
+      hno3_d_ndx(5) = get_spc_ndx('HNO3_D5')
+      
+      so4_d_ndx(1) = get_spc_ndx( 'SO4_D1')
+      so4_d_ndx(2) = get_spc_ndx( 'SO4_D2')
+      so4_d_ndx(3) = get_spc_ndx( 'SO4_D3')
+      so4_d_ndx(4) = get_spc_ndx( 'SO4_D4')
+      so4_d_ndx(5) = get_spc_ndx( 'SO4_D5')
 end if      
       h2o_ndx = get_spc_ndx( 'H2O' )
       hcl_ndx = get_spc_ndx( 'HCl' )
@@ -264,16 +327,23 @@ end if
       INTEGER :: tmp_indexh2o
 
       integer, parameter :: naero_het = 18
+      integer, parameter :: naero_het_fine = 5
+
+      integer  :: naero_het_eff
       real, parameter :: mw_HO2 = 33.
       real, parameter :: mw_n2o5= 108.
       real, parameter :: mw_no3 = 62.
       real, parameter :: mw_no2 = 46.
       real, parameter :: mw_nh3 = 17.
       real, parameter :: mw_so2 = 64.
+      real, parameter :: mw_hno3 = 63.
       real, dimension(size(qin,1), naero_het)::drymass_het,&
                                         rd_het,re_het,sfca_het
       real :: uptk_het
       real :: gam_n2o5, gam_no3, gam_nh3, gam_so2
+      real :: gam_hno3_dust
+
+      real   :: scale_alk(ndust_reac), xalk, xalke
 
       plev = SIZE(temp,2)
       ilev = SIZE(temp,1)
@@ -512,15 +582,41 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
 !usr19: NO2 -> 0.5HNO3 + 0.5HONO
 !----------------------------------------------------------------------------------------
             ! calculate surface area for each kind of aerosol (total 18)
-            call set_aerosol(r(:,k,:),relhum(:,k),m(:,k),drymass_het(:,:),&
-                 rd_het(:,:),re_het(:,:),sfca_het(:,:),trop_option)            
 
+            if (trop_option%het_chem_fine_aerosol_only) then
+               naero_het_eff = naero_het_fine
+            else
+               naero_het_eff = naero_het
+            end if
+
+
+            call set_aerosol(r(:,k,:),relhum(:,k),m(:,k),drymass_het(:,:),&
+                 rd_het(:,:),re_het(:,:),sfca_het(:,:),trop_option)        
+
+            if (trop_diag%ind_SA_aerosol.gt.0) then
+               trop_diag_array(:,k,trop_diag%ind_SA_aerosol) = sum(sfca_het,dim=2)
+            end if
+            if (trop_diag%ind_SA_SO4.gt.0) then
+               trop_diag_array(:,k,trop_diag%ind_SA_SO4) = sfca_het(:,1)
+            end if
+            if (trop_diag%ind_SA_BC.gt.0) then
+               trop_diag_array(:,k,trop_diag%ind_SA_BC) = sum(sfca_het(:,2:3),dim=2)
+            end if
+            if (trop_diag%ind_SA_OA.gt.0) then
+               trop_diag_array(:,k,trop_diag%ind_SA_OA) = sum(sfca_het(:,4:5),dim=2)
+            end if
+            if (trop_diag%ind_SA_SS.gt.0) then
+               trop_diag_array(:,k,trop_diag%ind_SA_SS) = sum(sfca_het(:,6:10),dim=2)
+            end if
+            if (trop_diag%ind_SA_DUST.gt.0) then
+               trop_diag_array(:,k,trop_diag%ind_SA_DUST) = sum(sfca_het(:,11:18),dim=2)
+            end if    
 
             do i=1,ilev
                if( n2o5h_ndx > 0 ) then
                   rxt(i,k,n2o5h_ndx)=0.
                  if ( trop_option%gN2O5 .gt. 0. ) then
-                    do n=1, naero_het
+                    do n=1, naero_het_eff
                        uptk_het = 0.
                         call calc_hetrate(sfca_het(i,n),re_het(i,n)*1.D-4,m(i,k),trop_option%gN2O5, &
                           sqrt( temp(i,k)),sqrt(mw_n2o5),uptk_het)
@@ -535,7 +631,7 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
                if( no3h_ndx > 0 ) then
                   rxt(i,k,no3h_ndx)=0.
                   if ( trop_option%gNO3 .gt. 0. ) then
-                     do n=1, naero_het
+                     do n=1, naero_het_eff
                         uptk_het = 0.
                         ! we need to make sure the effective radius unit is cm.
                         call calc_hetrate(sfca_het(i,n),re_het(i,n)*1.D-4,m(i,k),trop_option%gNO3, &
@@ -561,7 +657,7 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
             if ( no2h_ndx > 0) then
                rxt(i,k,no2h_ndx)=0.             
                if ( trop_option%gNO2 .gt. 0. ) then
-                  do n=1, naero_het
+                  do n=1, naero_het_eff
                      uptk_het = 0.
                   ! we need to make sure the effective radius unit is cm.
                      call calc_hetrate(sfca_het(i,n),re_het(i,n)*1.D-4,m(i,k),trop_option%gNO2, &
@@ -574,18 +670,24 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
             if ( so2h_ndx > 0) then
                rxt(i,k,so2h_ndx)=0.             
                !http://onlinelibrary.wiley.com/doi/10.1002/2013JD021426/full          
-               if ( trop_option%gSO2_dynamic .eq. 1) then
+               if ( trop_option%gSO2_dynamic .eq. GSO2_WANG2014) then
                   gam_SO2 = max(1e-3+(1e-2-1e-3)*(relhum(i,k)-.5)/.5,0.)
-               elseif ( trop_option%gSO2_dynamic .eq. 2) then
+               elseif ( trop_option%gSO2_dynamic .eq. GSO2_ZHENG2015) then
                   !http://www.atmos-chem-phys.net/15/2031/2015/acp-15-2031-2015.pdf
                   gam_SO2 = max(2e-5+(5e-5-2e-5)*(relhum(i,k)-.5)/.5,2.e-5)
+               elseif ( trop_option%gSO2_dynamic .eq. GSO2_ZHENG2015_LOW) then
+                  !http://www.atmos-chem-phys.net/15/2031/2015/acp-15-2031-2015.pdf
+                  gam_SO2 = max(1e-5+(2e-5-1e-5)*(relhum(i,k)-.5)/.5,1.e-5)
                else
                   gam_SO2 = trop_option%gSO2
                end if
+
+               if (trop_option%NO2_SO2_max.gt.0. .and. no2_ndx.gt.0) then
+                  gam_SO2 = gam_SO2 * max(min(qin(i,k,no2_ndx)/trop_option%NO2_SO2_max,1.),0.)
+               end if
                if (gam_SO2 .gt. 0.) then
-                 do n=1, naero_het
+                 do n=1, naero_het_eff
                      uptk_het = 0.
-                  ! we need to make sure the effective radius unit is cm.
                      call calc_hetrate(sfca_het(i,n),re_het(i,n)*1.D-4,m(i,k),gam_SO2, &
                           sqrt( temp(i,k)),sqrt(mw_so2),uptk_het)
                      rxt(i,k,so2h_ndx) = rxt(i,k,so2h_ndx) + uptk_het
@@ -602,7 +704,7 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
             if( nh3h_ndx > 0 ) then
                rxt(i,k,nh3h_ndx)=0.             
                if ( trop_option%gNH3 .gt. 0. ) then
-                  do n=1, naero_het
+                  do n=1, naero_het_eff
                      uptk_het = 0.
                      ! we need to make sure the effective radius unit is cm.
                      call calc_hetrate(sfca_het(i,n),re_het(i,n)*1.D-4,m(i,k),trop_option%gNH3, &
@@ -611,11 +713,136 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
                   end do
                end if
             end if
+
+            !dust uptake 
+!scale reactions by available alkalinity/alkalinity
+            if ( trop_option%scale_dust_uptake ) then
+               do n=1,ndust_reac
+                  if (dust_ndx(n) .gt. 0) then
+                     xalk      = &
+                          2. * (   0.03  * r(i,k,dust_ndx(n))  * 28.97/40.078    &  !3%   as Ca  
+                          + 0.006 * r(i,k,dust_ndx(n))  * 28.97/24.305 )            !0.6% as Mg     
+                  end if
+
+                  xalke = xalk
+
+                  if ( so4_d_ndx(n) .gt. 0 ) then
+                     xalke = xalke - 2 * qin(i,k,so4_d_ndx(n))
+                  end if
+                  if ( hno3_d_ndx(n) .gt. 0 ) then
+                     xalke = xalke -     qin(i,k,hno3_d_ndx(n))
+                  end if
+
+                  if ( xalk .gt. 0. ) then
+                     scale_alk(n) = min( max( xalke / xalk, 0. ), 1. )
+                  else
+                     scale_alk(n) = 0.
+                  end if
+               end do
+            else
+               scale_alk(:) = 1.
+            end if
+
+
+            !hno3 dust
+            do n=1,ndust_reac
+               if (usr_hno3_dust(n) .gt. 0 ) then
+                  rxt(i,k,usr_hno3_dust(n)) = 0.
+               end if
+            end do
+
+            if ( any(usr_hno3_dust .gt. 0)) then
+               if ( trop_option%gHNO3_dust_dynamic .eq. 1 ) then
+                  gam_HNO3_dust = 8./30.*relhum(i,k)/((1.-relhum(i,k))*(1.+7.*relhum(i,k)))
+                  gam_HNO3_dust = max(min(gam_HNO3_dust,0.118),0.)
+               else
+                  gam_HNO3_dust = trop_option%gHNO3_dust
+               end if
+
+               if (trop_diag%ind_ghno3_d .gt. 0) then
+                  trop_diag_array(i,k,trop_diag%ind_ghno3_d) = gam_HNO3_dust
+               end if
+               
+               if (gam_HNO3_dust .gt. 0.) then
+                  do n=1,ndust_het
+                     if (usr_hno3_dust(ndust_tracer(n)) .gt. 0 ) then
+                        uptk_het = 0.
+                        !we need to make sure the effective radius unit is cm.
+                        call calc_hetrate(sfca_het(i,ndust_ind(n)),re_het(i,ndust_ind(n))*1.D-4,m(i,k),gam_HNO3_dust, &
+                             sqrt(temp(i,k)),sqrt(mw_hno3),uptk_het)
+                        rxt(i,k,usr_hno3_dust(ndust_tracer(n))) = rxt(i,k,usr_hno3_dust(ndust_tracer(n))) + uptk_het * scale_alk(ndust_tracer(n))
+                     end if
+                  end do
+               end if
+            end if
+
+            !so2 dust [DO NOT SCALE BY ALKALINITY]
+            do n=1,ndust_reac
+               if (usr_so2_dust(n) .gt. 0 ) then
+                  rxt(i,k,usr_so2_dust(n)) = 0.
+               end if
+            end do
+
+            if ( any(usr_so2_dust .gt. 0) .and. (trop_option%gSO2_dust .gt. 0.)) then
+               do n=1,ndust_het
+                  if (usr_so2_dust(ndust_tracer(n)) .gt. 0 ) then
+                     uptk_het = 0.
+                     !we need to make sure the effective radius unit is cm.
+                     call calc_hetrate(sfca_het(i,ndust_ind(n)),re_het(i,ndust_ind(n))*1.D-4,m(i,k),trop_option%gSO2_dust, &
+                          sqrt(temp(i,k)),sqrt(mw_so2),uptk_het)
+                     rxt(i,k,usr_so2_dust(ndust_tracer(n))) = rxt(i,k,usr_so2_dust(ndust_tracer(n))) + uptk_het 
+                  end if
+               end do
+            end if
+
+            !n2o5 dust
+            do n=1,ndust_reac
+               if (usr_n2o5_dust(n) .gt. 0 ) then
+                  rxt(i,k,usr_n2o5_dust(n)) = 0.
+               end if
+            end do
+
+            if ( any(usr_n2o5_dust .gt. 0)) then               
+               if (trop_option%gn2o5_dust .gt. 0.) then
+                  do n=1,ndust_het
+                     if (usr_n2o5_dust(ndust_tracer(n)) .gt. 0 ) then
+                        uptk_het = 0.
+                        !we need to make sure the effective radius unit is cm.
+                        call calc_hetrate(sfca_het(i,ndust_ind(n)),re_het(i,ndust_ind(n))*1.D-4,m(i,k),trop_option%gn2o5_dust, &
+                             sqrt(temp(i,k)),sqrt(mw_n2o5),uptk_het)
+                        rxt(i,k,usr_n2o5_dust(ndust_tracer(n))) = rxt(i,k,usr_n2o5_dust(ndust_tracer(n))) + uptk_het* scale_alk(ndust_tracer(n))
+                     end if
+                  end do
+               end if
+            end if
+
+
+            !no3 dust
+            do n=1,ndust_reac
+               if (usr_no3_dust(n) .gt. 0 ) then
+                  rxt(i,k,usr_no3_dust(n)) = 0.
+               end if
+            end do
+
+            if ( any(usr_no3_dust .gt. 0)) then
+               
+               if (trop_option%gno3_dust .gt. 0.) then
+                  do n=1,ndust_het
+                     if (usr_no3_dust(ndust_tracer(n)) .gt. 0 ) then
+                        uptk_het = 0.
+                        !we need to make sure the effective radius unit is cm.
+                        call calc_hetrate(sfca_het(i,ndust_ind(n)),re_het(i,ndust_ind(n))*1.D-4,m(i,k),trop_option%gno3_dust, &
+                             sqrt(temp(i,k)),sqrt(mw_no3),uptk_het)
+                        rxt(i,k,usr_no3_dust(ndust_tracer(n))) = rxt(i,k,usr_no3_dust(ndust_tracer(n))) + uptk_het* scale_alk(ndust_tracer(n))
+                     end if
+                  end do
+               end if
+            end if
             
          end do ! (ilev)
       end if ! (trop_option%het_chem)
 
-         if( strat72_ndx > 0 .or. strat73_ndx > 0 .or. strat74_ndx > 0 .or. &
+      if( strat72_ndx > 0 .or. strat73_ndx > 0 .or. strat74_ndx > 0 .or. &
              strat75_ndx > 0 .or. strat76_ndx > 0 .or. strat77_ndx > 0 .or. &
              strat78_ndx > 0 .or. strat79_ndx > 0 .or. strat80_ndx > 0 ) then
 
@@ -763,12 +990,15 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
         integer, dimension(size(r_,1),size(r_,2))     ::     aeroindx!to save index
         real, parameter :: avo   = 6.023e23               ! molecules/mole
         integer   :: i, st1
-
-        rh_het(:) = rh(:) *100.
+        
+        !add cap for hygroscropic growth
+        rh_het(:) = min(rh(:) *100.,trop_option%rh_het_max)
         drymass(:,:)=0.
         sfc_area(:,:)=0.
         rd(:,:)=0.
         re(:,:)=0.
+
+
 !----------------------------------------------------------------
 !     SO4 
 !----------------------------------------------------------------
@@ -790,6 +1020,10 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
         aeroindx(:,1) = irh(:)
         rd(:,1)=RAA_HET(1)
         call give_indx(RAA_HET(:), aeroindx(:,1),re(:,1))
+
+!        if (trop_option%verbose>2) then
+!           if (mpp_pe() == mpp_root_pe()) write(*,*) 'rh=',rh_het(1),'re=',re(1,1)
+!        end if
         call calc_sfc(re(:,1)*1.0D-4,rd(:,1)*1.0D-4,denso4,drymass(:,1),sfc_area(:,1))
 !----------------------------------------------------------------
 !     BC 
@@ -823,7 +1057,12 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
 !     --philic      
         st1 = st1 + nocphob
         irh(:)  = 0
-        call find_indx(so4_rh1(:), rh_het(:), irh(:))
+!f1p bug fix
+        if (trop_option%het_chem_bug1) then
+           call find_indx(so4_rh1(:), rh_het(:), irh(:))
+        else
+           call find_indx(ocphil_rh1(:), rh_het(:), irh(:))
+        end if
         aeroindx(:,5)= st1 + irh(:)
         drymass(:,5)=(r_(:,oc2_ndx) + r_(:,soa_ndx))*airdensity(:)/avo*28.97 !MMR=> g/cm3
         rd(:,5)=RAA_HET(st1)

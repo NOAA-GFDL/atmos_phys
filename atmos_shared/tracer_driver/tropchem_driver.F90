@@ -113,7 +113,9 @@ use cloud_chem, only: CLOUD_CHEM_PH_LEGACY, CLOUD_CHEM_PH_BISECTION, &
                       CLOUD_CHEM_PH_CUBIC, CLOUD_CHEM_F1P,&
                       CLOUD_CHEM_F1P_BUG, CLOUD_CHEM_F1P_BUG2, CLOUD_CHEM_LEGACY
 use aerosol_thermodynamics, only: AERO_ISORROPIA, AERO_LEGACY, NO_AERO
-use mo_usrrxt_mod, only: HET_CHEM_LEGACY, HET_CHEM_J1M
+use mo_usrrxt_mod, only: HET_CHEM_LEGACY, HET_CHEM_J1M, &
+                         GSO2_WANG2014, GSO2_ZHENG2015, &
+                         GSO2_ZHENG2015_LOW
 use mo_chem_utls_mod, only : get_rxt_ndx
 
 use atmos_cmip_diag_mod,   only : register_cmip_diag_field_3d, &
@@ -121,6 +123,8 @@ use atmos_cmip_diag_mod,   only : register_cmip_diag_field_3d, &
                                   send_cmip_data_3d, &
                                   cmip_diag_id_type, &
                                   query_cmip_diag_id
+
+use atmos_dust_mod, only: n_dust_tracers, dust_tracers
 
 implicit none
 
@@ -163,6 +167,7 @@ character(len=10), dimension(maxinv) :: inv_list =''    ! list of invariant (fix
 real               :: aircraft_scale_factor = -999.     ! aircraft emissions scale factor
 real               :: lght_no_prd_factor = 1.           ! lightning NOx scale factor
 logical            :: normalize_lght_no_prd_area = .false. ! normalize lightning NOx production by grid cell area
+logical            :: allow_small_storms_lght_no_prd = .false. ! modify area normalization for high-res grids
 real               :: min_land_frac_lght = -999.        ! minimum land fraction for lightning NOx calculation
 real               :: strat_chem_age_factor = 1.        ! scale factor for age of air
 real               :: strat_chem_dclydt_factor = 1.     ! scale factor for dcly/dt
@@ -188,7 +193,7 @@ logical            :: do_fastjx_photo = .false.         ! use fastjx routine ?
 character(len=32)  :: clouds_in_fastjx = 'lsc_only'     ! nature of clouds seen in fastjx calculation; may currently be 'none' or 'lsc_only' (default)
 logical            :: check_convergence = .false.       ! if T, non-converged chem tendencies will not be used
 real               :: e90_tropopause_vmr = 9.e-8        ! e90 tropopause concentration
-logical            :: time_varying_solarflux = .false.  ! allow sloar cycle on fastjx v7.1
+logical            :: time_varying_solarflux = .false.  ! allow solar cycle on fastjx v7.1
 
 ! namelist to fix solar flux bug
 ! if set to true then solar flux will vary with time
@@ -211,6 +216,7 @@ real               :: frac_aerosol_incloud       = 1
 real               :: cloud_pH                   = -999  !<0 do not force
 real               :: max_rh_aerosol             = 9999      !max rh used for aerosol thermo (to make sure no filter)
 logical            :: limit_no3                  = .true.   !for isorropia/stratosphere
+logical            :: scale_dust_uptake      = .true.  !adjust reaction rate by available alkalinity
 
 character(len=64)  :: aerosol_thermo_method = 'legacy'               ! other choice isorropia
 character(len=64)  :: het_chem_type         = 'legacy'
@@ -222,21 +228,33 @@ real               :: gNH3                  = 0.05
 real               :: gHNO3_dust            = 0.
 real               :: gNO3_dust             = -999.
 real               :: gN2O5_dust            = -999.
-integer            :: gHNO3_dust_dynamic    = 0
 real               :: gH2SO4_dust           = 0.
 logical            :: do_h2so4_nucleation   = .false.
 logical            :: cloud_ho2_h2o2        = .true.
 real               :: gNO3                  = 0.1
 real               :: gHO2                  = 1.
 
+logical            :: het_chem_bug1         = .true. !index error in surface area calculation. affects surface area of organic carbon
+real               :: rh_het_max            = 9999. !maximum rh used to calculate surface area.
+
 character(len=128) :: sim_data_filename = 'sim.dat'      ! Input file for chemistry pre-processor
 
 character(len=64)  :: gso2_dynamic          = 'none'
+character(len=64)  :: ghno3_dust_dynamic    = 'none'
+
+real               :: min_t_sfc_cld_chem    = -999   !by default, this filter is turned off. A more reasonable choice would be 273.15K
+
+logical            :: modulate_frac_ic = .false. !modulate the fraction of acids and aerosol in clouds based on frac_liq
+
+real               :: NO2_SO2_max = -999 !NO2 max concentration below which gso2 is scaled by NO2/NO2_SO2_max
+
 
 type(tropchem_diag),  save :: trop_diag
 type(tropchem_opt),   save :: trop_option
 type (domain2D), pointer :: tropchem_domain !< Atmosphere domain
 
+
+integer :: n_hno3d, n_so4d
 
 namelist /tropchem_driver_nml/    &
                                relaxed_dt, &
@@ -255,6 +273,7 @@ namelist /tropchem_driver_nml/    &
                                aircraft_scale_factor, &
                                lght_no_prd_factor, &
                                normalize_lght_no_prd_area, &
+                               allow_small_storms_lght_no_prd, &
                                min_land_frac_lght, &
                                strat_chem_age_factor, &
                                strat_chem_dclydt_factor, &
@@ -299,7 +318,11 @@ namelist /tropchem_driver_nml/    &
                                cloud_pH, &
                                frac_dust_incloud, frac_aerosol_incloud, &
                                max_rh_aerosol, limit_no3, cloud_ho2_h2o2, &
-                               sim_data_filename,time_varying_solarflux, gso2_dynamic
+                               sim_data_filename,time_varying_solarflux, gso2_dynamic, &
+                               het_chem_bug1, rh_het_max, &
+                               modulate_frac_ic, &
+                               min_t_sfc_cld_chem, &
+                               NO2_SO2_max
 
 
 integer                     :: nco2 = 0
@@ -338,7 +361,7 @@ integer :: sphum_ndx=0, cl_ndx=0, clo_ndx=0, hcl_ndx=0, hocl_ndx=0, clono2_ndx=0
            no_ndx=0, no2_ndx=0, no3_ndx=0, n_ndx=0, n2o5_ndx=0, ho2no2_ndx=0, &
            pan_ndx=0, onit_ndx=0, mpan_ndx=0, isopno3_ndx=0, onitr_ndx=0, &
            extinct_ndx=0, noy_ndx=0, cly_ndx=0, bry_ndx=0, ch4_ndx=0, &
-           dms_ndx=0, so4_ndx=0, co_ndx=0, n2o_ndx=0
+           dms_ndx=0, so4_ndx(6)=0, co_ndx=0, n2o_ndx=0
 
 integer :: o3s_ndx=0
 integer :: o3s_e90_ndx=0
@@ -370,9 +393,13 @@ integer, dimension(pcnstm1) :: indices, id_prod, id_loss, id_chem_tend, &
                                id_emis, id_emis3d, id_xactive_emis, &
                                id_ub, id_lb, id_airc
 !new diagnostics (f1p)
+integer, parameter :: max_dust = 5
 integer, dimension(pcnstm1) :: id_prod_mol, id_loss_mol
-integer :: id_pso4_h2o2,id_pso4_o3,id_ghno3_d,id_phno3_d(5), id_phno3_g_d, id_pso4_d(5), &
-           id_pso4_g_d, id_gso2, id_aerosol_pH, id_cloud_pH, id_cloud_pHw, id_cld_amt_chem
+integer :: id_pso4_h2o2,id_pso4_o3,id_ghno3_d,id_phno3_d(max_dust), id_phno3_g_d, id_pso4_d(max_dust), &
+           id_pso4_g_d, id_gso2, id_aerosol_pH, id_cloud_pH, id_cloud_pHw, id_cloud_pHwl, id_cld_amt_chem, id_cld_liq_chem, id_sa_aerosol, id_sa_so4, id_sa_bc, id_sa_oa, id_sa_ss, id_sa_dust
+
+integer :: usr_so2_dust(max_dust), usr_so4_dust(max_dust), usr_hno3_dust(max_dust), usr_no3_dust(max_dust), usr_n2o5_dust(max_dust)
+integer :: id_rx_so2_dust(max_dust), id_rx_so4_dust(max_dust), id_rx_hno3_dust(max_dust), id_rx_no3_dust(max_dust), id_rx_n2o5_dust(max_dust)
 
 integer :: id_so2_emis_cmip, id_nh3_emis_cmip
 integer :: id_co_emis_cmip, id_no_emis_cmip
@@ -582,6 +609,7 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
    real, dimension(size(r,1),size(r,2),size(r,3)) :: imp_slv_nonconv
    real, dimension(size(r,1),size(r,2),size(r,3)):: e90_vmr
    real, dimension(size(r,1),size(r,2),size(r,3)):: dz
+   real, dimension(size(r,1),size(r,2),size(r,3)):: temp_so4
    real :: solar_phase
    real :: solflxband(num_solar_bands)
    type(psc_type) :: psc
@@ -929,6 +957,12 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
       frac_liq(:,:) = 1.
       endwhere
 
+      !only do cld chemistry at the surface if t is greater than freezing temperature. This is because water saturation vapor pressure over ice is much higher than the saturation vapor pressure of water over liquid water (f1p,sm)
+      where (tsurf(:,j) .lt.min_t_sfc_cld_chem)
+         frac_liq(:,size(r,3)) = 0.
+      endwhere
+
+
       if (repartition_water_tracers) then
          h2o_temp(:,:) = h2o_temp(:,:) + cloud_water(:,:) * WTMAIR/WTMH2O
       end if
@@ -1193,8 +1227,14 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
    end if
 
    if (query_cmip_diag_id(ID_pso4_gas_kg_m2_s)) then
+      temp_so4 = 0.
+      do n=1,size(so4_ndx)
+         if (so4_ndx(n)>0) then
+            temp_so4 = temp_so4 + mw_so4 * prod(:,:,:,so4_ndx(n))*pwt(:,:,:)/(WTMAIR*1e-3)
+         end if
+      end do
       used = send_cmip_data_3d (ID_pso4_gas_kg_m2_s,  &
-           mw_so4 * prod(:,:,:,so4_ndx)*pwt(:,:,:)/(WTMAIR*1e-3), &
+           temp_so4, &
            Time_next, is_in=is, js_in=js, ks_in=1)
    end if
    if (query_cmip_diag_id(ID_pso4_aq_kg_m2_s)) then
@@ -1220,6 +1260,27 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
    if (id_gso2>0) then
       used = send_data(id_gso2,trop_diag_array(:,:,:,trop_diag%ind_gso2),Time_next,is_in=is,js_in=js)
    end if
+
+   if (id_sa_aerosol>0) then
+      used = send_data(id_sa_aerosol,trop_diag_array(:,:,:,trop_diag%ind_sa_aerosol),Time_next,is_in=is,js_in=js)
+   end if
+   if (id_sa_so4>0) then
+      used = send_data(id_sa_so4,trop_diag_array(:,:,:,trop_diag%ind_sa_so4),Time_next,is_in=is,js_in=js)
+   end if
+   if (id_sa_bc>0) then
+      used = send_data(id_sa_bc,trop_diag_array(:,:,:,trop_diag%ind_sa_bc),Time_next,is_in=is,js_in=js)
+   end if
+   if (id_sa_oa>0) then
+      used = send_data(id_sa_oa,trop_diag_array(:,:,:,trop_diag%ind_sa_oa),Time_next,is_in=is,js_in=js)
+   end if
+   if (id_sa_dust>0) then
+      used = send_data(id_sa_dust,trop_diag_array(:,:,:,trop_diag%ind_sa_dust),Time_next,is_in=is,js_in=js)
+   end if
+   if (id_sa_ss>0) then
+      used = send_data(id_sa_ss,trop_diag_array(:,:,:,trop_diag%ind_sa_ss),Time_next,is_in=is,js_in=js)
+   end if
+
+
    if (id_aerosol_pH>0) then
       used = send_data(id_aerosol_pH,trop_diag_array(:,:,:,trop_diag%ind_aerosol_pH),Time_next,is_in=is,js_in=js, mask = & 
            ( trop_diag_array(:,:,:,trop_diag%ind_aerosol_pH) .gt. (missing_value + tiny(missing_value))))
@@ -1236,11 +1297,19 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
       used = send_data(id_cld_amt_chem,max(r(:,:,:,inqa),0.),Time_next,is_in=is,js_in=js, &
                        mask = (trop_diag_array(:,:,:,trop_diag%ind_cloud_pH).gt. (missing_value + tiny(missing_value))))
    end if
+
+   if (id_cld_liq_chem>0) then
+      used = send_data(id_cld_liq_chem,max(r(:,:,:,inql),0.),Time_next,is_in=is,js_in=js, &
+                       mask = (trop_diag_array(:,:,:,trop_diag%ind_cloud_pH).gt. (missing_value + tiny(missing_value))))
+   end if
+
+   if (id_cloud_pHwl>0) then
+      used = send_data(id_cloud_pHwl,trop_diag_array(:,:,:,trop_diag%ind_cloud_pH)*max(r(:,:,:,inql),0.),Time_next,is_in=is,js_in=js, &
+                       mask = (trop_diag_array(:,:,:,trop_diag%ind_cloud_pH).gt. (missing_value + tiny(missing_value))))
+   end if
+
    if (id_phno3_g_d>0) then
       used = send_data(id_phno3_g_d,trop_diag_array(:,:,:,trop_diag%ind_phno3_g_d)*pwt(:,:,:)*1.e3/WTMAIR,Time_next,is_in=is,js_in=js)
-   end if
-   if (id_pso4_g_d>0) then
-      used = send_data(id_pso4_g_d,trop_diag_array(:,:,:,trop_diag%ind_pso4_g_d)*pwt(:,:,:)*1.e3/WTMAIR,Time_next,is_in=is,js_in=js)
    end if
 
 !-----------------------------------------------------------------------
@@ -1451,6 +1520,27 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
       end if
    end do
 
+
+!reaction on dust
+   do n=1,max_dust
+      if (usr_hno3_dust(n)>0 .and. id_rx_hno3_dust(n)>0) then
+         used = send_data(id_rx_hno3_dust(n),rate_constants(:,:,:,usr_hno3_dust(n)),Time_next,is_in=is,js_in=js)
+      end if
+      if (usr_n2o5_dust(n)>0 .and. id_rx_n2o5_dust(n)>0) then
+         used = send_data(id_rx_n2o5_dust(n),rate_constants(:,:,:,usr_n2o5_dust(n)),Time_next,is_in=is,js_in=js)
+      end if
+      if (usr_no3_dust(n)>0 .and. id_rx_no3_dust(n)>0) then
+         used = send_data(id_rx_no3_dust(n),rate_constants(:,:,:,usr_no3_dust(n)),Time_next,is_in=is,js_in=js)
+      end if
+      if (usr_so2_dust(n)>0 .and. id_rx_so2_dust(n)>0) then
+         used = send_data(id_rx_so2_dust(n),rate_constants(:,:,:,usr_so2_dust(n)),Time_next,is_in=is,js_in=js)
+      end if
+      if (usr_so4_dust(n)>0 .and. id_rx_so4_dust(n)>0) then
+         used = send_data(id_rx_so4_dust(n),rate_constants(:,:,:,usr_so4_dust(n)),Time_next,is_in=is,js_in=js)
+      end if
+   end do
+
+
 !-----------------------------------------------------------------------
 !     ... Output diagnostics
 !-----------------------------------------------------------------------
@@ -1639,6 +1729,8 @@ elseif ( trim(cloud_chem_type) == 'f1p_bug2' ) then
    trop_option%cloud_chem = CLOUD_CHEM_F1P_BUG2
 end if
 
+trop_option%verbose = verbose
+
 !cloud chem pH solver
 
 
@@ -1685,6 +1777,14 @@ trop_option%gHO2                     = gHO2
 if(mpp_pe() == mpp_root_pe())    write(*,*)     "gHO2:",trop_option%gHO2
 trop_option%gNH3                     = gNH3
 if(mpp_pe() == mpp_root_pe())    write(*,*)     "gNH3:",trop_option%gNH3
+
+
+trop_option%gHNO3_dust               = gHNO3_dust
+trop_option%gN2O5_dust               = gN2O5_dust
+trop_option%gSO2_dust                = gSO2_dust
+trop_option%gNO3_dust                = gNO3_dust
+trop_option%scale_dust_uptake        = scale_dust_uptake
+
 trop_option%retain_cm3_bugs = retain_cm3_bugs
 trop_option%do_fastjx_photo = do_fastjx_photo
 trop_option%min_lwc_for_cloud_chem = min_lwc_for_cloud_chem
@@ -1702,13 +1802,29 @@ if(mpp_pe() == mpp_root_pe()) write(*,*) 'gSO2: ',trop_option%gSO2
 if (trim(gso2_dynamic).eq.'none') then
    trop_option%gSO2_dynamic             = -1
 else if (trim(gso2_dynamic).eq.'wang2014') then
-   trop_option%gSO2_dynamic             = 1   
+   trop_option%gSO2_dynamic             = GSO2_WANG2014   
    !http://onlinelibrary.wiley.com/doi/10.1002/2013JD021426/full  
 else if (trim(gso2_dynamic).eq.'zheng2015') then
-   trop_option%gSO2_dynamic             = 2
+   trop_option%gSO2_dynamic             = GSO2_ZHENG2015
+!   http://www.atmos-chem-phys.net/15/2031/2015/
+else if (trim(gso2_dynamic).eq.'zheng2015_low') then
+   trop_option%gSO2_dynamic             = GSO2_ZHENG2015_LOW
 !   http://www.atmos-chem-phys.net/15/2031/2015/
 end if
+
+trop_option%NO2_SO2_max = NO2_SO2_max
+
 if(mpp_pe() == mpp_root_pe()) write(*,*) 'gso2_dynamic case:',trop_option%gSO2_dynamic
+
+if (trim(ghno3_dust_dynamic).eq.'none') then
+   trop_option%ghno3_dust_dynamic = -1
+elseif (trim(ghno3_dust_dynamic).eq.'dynamic') then
+   trop_option%ghno3_dust_dynamic = 1
+end if
+
+
+trop_option%modulate_frac_ic = modulate_frac_ic
+if (mpp_pe()==mpp_root_pe()) write(*,*) 'modulate_frac_ic',modulate_frac_ic
 
 !aerosol thermo
 if    ( trim(aerosol_thermo_method)   == 'legacy' ) then
@@ -1720,6 +1836,13 @@ elseif ( trim(aerosol_thermo_method)   == 'no_thermo' ) then
    trop_option%aerosol_thermo = NO_AERO
 else
    call error_mesg ('tropchem_driver_init', 'undefined aerosol thermo', FATAL )
+end if
+
+trop_option%het_chem_bug1 = het_chem_bug1
+trop_option%rh_het_max    = rh_het_max
+if (mpp_pe()==mpp_root_pe()) then
+   write(*,*) 'het_chem_bug1',trop_option%het_chem_bug1
+   write(*,*) 'rh_het_max',trop_option%rh_het_max
 end if
 
 !-----------------------------------------------------------------------
@@ -1797,7 +1920,12 @@ end if
    o3_ndx     = get_spc_ndx('O3')
    ch4_ndx    = get_spc_ndx('CH4')
    dms_ndx    = get_spc_ndx('DMS')
-   so4_ndx    = get_spc_ndx('SO4')
+   so4_ndx(1) = get_spc_ndx('SO4')
+   so4_ndx(2) = get_spc_ndx('SO4_D1')
+   so4_ndx(3) = get_spc_ndx('SO4_D2')
+   so4_ndx(4) = get_spc_ndx('SO4_D3')
+   so4_ndx(5) = get_spc_ndx('SO4_D4')
+   so4_ndx(6) = get_spc_ndx('SO4_D5')
    co_ndx     = get_spc_ndx('CO')
    n2o_ndx    = get_spc_ndx('N2O')
 
@@ -2149,7 +2277,9 @@ end if
 !-----------------------------------------------------------------------
 !     ... Call the chemistry hook init routine
 !-----------------------------------------------------------------------
-   call moz_hook_init( lght_no_prd_factor, normalize_lght_no_prd_area, min_land_frac_lght, Time, axes, verbose )
+   call moz_hook_init( lght_no_prd_factor, normalize_lght_no_prd_area, &
+                       allow_small_storms_lght_no_prd, min_land_frac_lght, &
+                       Time, axes, verbose )
 
 !-----------------------------------------------------------------------
 !     ... Initializations for stratospheric chemistry
@@ -2245,15 +2375,91 @@ end if
    id_pso4_o3     = register_diag_field( module_name, 'PSO4_O3',axes(1:3), Time, 'PSO4_O3','mole/m2/s')
 
    id_gso2        = register_diag_field( module_name, 'gamma_so2',axes(1:3), Time, 'gamma_so2','unitless')
+   id_ghno3_d     = register_diag_field( module_name, 'gamma_hno3_d',axes(1:3), Time, 'gamma_hno3_d','unitless')
+
+
+
+   n_hno3d = 0
+   n_so4d  = 0
+
+   do i=1,n_dust_tracers
+      if (dust_tracers(i)%is_hno3d) then
+         n_hno3d = n_hno3d+1
+         id_phno3_d(n_hno3d)    = register_diag_field( module_name, 'P'//trim(dust_tracers(i)%name),axes(1:3), &
+              Time,  'P'//trim(dust_tracers(i)%name),'mole/m2/s')         
+
+         write(fld,'(A6,I1.1,9X)') 'hno3_d',n_hno3d
+         usr_hno3_dust(n_hno3d) = get_rxt_ndx(trim(fld)) - phtcnt
+         id_rx_hno3_dust(n_hno3d) = register_diag_field( module_name, 'rx_'//TRIM(fld), axes(1:3), Time, 'rx_'//TRIM(fld),'1/s')
+
+         write(fld,'(A6,I1.1,9X)') 'n2o5_d',n_hno3d 
+         usr_n2o5_dust(n_hno3d) = get_rxt_ndx(trim(fld)) - phtcnt
+         id_rx_n2o5_dust(n_hno3d) = register_diag_field( module_name, 'rx_'//TRIM(fld), axes(1:3), Time, 'rx_'//TRIM(fld),'1/s')
+
+         write(fld,'(A5,I1.1,10X)') 'no3_d',n_hno3d
+         usr_no3_dust(n_hno3d) = get_rxt_ndx(trim(fld)) - phtcnt
+         id_rx_no3_dust(n_hno3d) = register_diag_field( module_name, 'rx_'//TRIM(fld), axes(1:3), Time, 'rx_'//TRIM(fld),'1/s')
+
+      end if
+      if (dust_tracers(i)%is_so4d) then
+         n_so4d = n_so4d+1
+         id_pso4_d(n_so4d)    = register_diag_field( module_name, 'P'//trim(dust_tracers(i)%name),axes(1:3), &
+              Time,  'P'//trim(dust_tracers(i)%name),'mole/m2/s')         
+
+         write(fld,'(A5,I1.1,10X)') 'so4_d',n_so4d
+         usr_so4_dust(n_so4d) = get_rxt_ndx(trim(fld)) - phtcnt
+         id_rx_so4_dust(n_so4d) = register_diag_field( module_name, 'rx_'//TRIM(fld), axes(1:3), Time, 'rx_'//TRIM(fld),'1/s')
+
+         write(fld,'(A5,I1.1,10X)') 'so2_d',n_so4d
+         usr_so2_dust(n_so4d) = get_rxt_ndx(trim(fld)) - phtcnt
+         id_rx_so2_dust(n_so4d) = register_diag_field( module_name, 'rx_'//TRIM(fld), axes(1:3), Time, 'rx_'//TRIM(fld),'1/s')
+
+      end if
+   end do
+
+   if (mpp_root_pe().eq.mpp_pe()) then
+      write(*,*) 'usr_n2o5_dust', usr_n2o5_dust,id_rx_n2o5_dust
+      write(*,*) 'usr_hno3_dust', usr_hno3_dust,id_rx_hno3_dust
+      write(*,*) 'usr_so4_dust', usr_so4_dust,id_rx_so4_dust
+      write(*,*) 'usr_so2_dust', usr_so2_dust,id_rx_so2_dust
+      write(*,*) 'usr_no3_dust', usr_no3_dust,id_rx_no3_dust
+   end if
+
+   
+
+   id_phno3_g_d    = register_diag_field( module_name, 'PHNO3_G_D',axes(1:3), &
+        Time, 'PHNO3_G_D','mole/m2/s')
+
+   if (max_dust<n_hno3d .or. max_dust<n_so4d) then
+      call error_mesg ('tropchem_driver_init', &
+           'max_dust<n_hno3d .or. max_dust<n_so4d', FATAL)
+   end if
+
+
+   id_sa_aerosol  = register_diag_field( module_name, 'sa_aerosol',axes(1:3), Time, 'sa_aerosol','cm2/cm3')
+   id_sa_so4  = register_diag_field( module_name, 'sa_so4',axes(1:3), Time, 'sa_so4','cm2/cm3')
+   id_sa_bc  = register_diag_field( module_name, 'sa_bc',axes(1:3), Time, 'sa_bc','cm2/cm3')
+   id_sa_oa  = register_diag_field( module_name, 'sa_oa',axes(1:3), Time, 'sa_oa','cm2/cm3')
+   id_sa_ss  = register_diag_field( module_name, 'sa_ss',axes(1:3), Time, 'sa_ss','cm2/cm3')
+   id_sa_dust  = register_diag_field( module_name, 'sa_dust',axes(1:3), Time, 'sa_dust','cm2/cm3')
+
+
+
 
    id_aerosol_pH  = register_diag_field( module_name, 'aerosol_pH',axes(1:3), Time, 'aerosol_ph','unitless', mask_variant = .true.,missing_value=missing_value)
    id_cloud_pH  = register_diag_field( module_name, 'cloud_pH',axes(1:3), Time, 'cloud_ph','unitless', mask_variant = .true.,missing_value=missing_value)
    id_cloud_pHw  = register_diag_field( module_name, 'cloud_pHw',axes(1:3), Time, 'cloud_ph weighted by cloud fraction','unitless', mask_variant = .true.,missing_value=missing_value)
+   id_cloud_pHwl  = register_diag_field( module_name, 'cloud_pHwl',axes(1:3), Time, 'cloud_ph weighted by cloud water','unitless', mask_variant = .true.,missing_value=missing_value)
    id_cld_amt_chem  = register_diag_field( module_name, 'cld_amt_chem',axes(1:3), Time, 'cloud fraction for chemistry','unitless', mask_variant = .true.,missing_value=missing_value)
+   id_cld_liq_chem  = register_diag_field( module_name, 'cld_liq_chem',axes(1:3), Time, 'cloud liquid water for chemistry','unitless', mask_variant = .true.,missing_value=missing_value)
 
    if (id_cloud_pHw .gt. 0 .and. id_cld_amt_chem.le.0) then
       call error_mesg ('tropchem_driver_init', &
            'cld_amt_chem needs to be archived if cloud_pHw is requested', FATAL)
+   end if
+   if (id_cloud_pHwl .gt. 0 .and. id_cld_liq_chem.le.0) then
+      call error_mesg ('tropchem_driver_init', &
+           'cld_liq_chem needs to be archived if cloud_pHwl is requested', FATAL)
    end if
 
 
@@ -2404,6 +2610,30 @@ end if
    if ( id_gso2 > 0 ) then
       trop_diag%nb_diag       = trop_diag%nb_diag + 1
       trop_diag%ind_gso2      = trop_diag%nb_diag
+   end if
+   if ( id_sa_aerosol > 0 ) then
+      trop_diag%nb_diag       = trop_diag%nb_diag + 1
+      trop_diag%ind_SA_aerosol= trop_diag%nb_diag
+   end if
+   if ( id_sa_so4 > 0 ) then
+      trop_diag%nb_diag       = trop_diag%nb_diag + 1
+      trop_diag%ind_SA_SO4    = trop_diag%nb_diag
+   end if
+   if ( id_sa_bc > 0 ) then
+      trop_diag%nb_diag       = trop_diag%nb_diag + 1
+      trop_diag%ind_SA_BC     = trop_diag%nb_diag
+   end if
+   if ( id_sa_oa > 0 ) then
+      trop_diag%nb_diag       = trop_diag%nb_diag + 1
+      trop_diag%ind_SA_OA     = trop_diag%nb_diag
+   end if
+   if ( id_sa_ss > 0 ) then
+      trop_diag%nb_diag       = trop_diag%nb_diag + 1
+      trop_diag%ind_SA_SS     = trop_diag%nb_diag
+   end if
+   if ( id_sa_dust > 0 ) then
+      trop_diag%nb_diag       = trop_diag%nb_diag + 1
+      trop_diag%ind_SA_DUST   = trop_diag%nb_diag
    end if
    if ( id_aerosol_pH > 0 ) then
       trop_diag%nb_diag           = trop_diag%nb_diag + 1

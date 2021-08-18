@@ -65,6 +65,10 @@ type :: dust_data_type
    real, pointer :: dsetl_dtr(:,:) => NULL() ! derivative of the sedimentation flux w.r.t. dust concentration.
    ! diagnostic IDs
    integer       :: id_dust_emis = -1, id_dust_setl = -1
+   !f1p
+   logical       :: is_dust=.false.
+   logical       :: is_hno3d=.false.
+   logical       :: is_so4d=.false.
 end type dust_data_type
 
 logical :: do_dust = .FALSE.
@@ -72,11 +76,16 @@ integer, save   :: ind_dry_dep_lith_dust_flux = 0
 integer, save   :: ind_wet_dep_lith_dust_flux = 0
 integer, save   :: ind_dry_dep_solubleFe_flux = 0
 integer, save   :: ind_wet_dep_solubleFe_flux = 0
+integer, save   :: ind_dry_dep_solubleP_flux = 0
+integer, save   :: ind_wet_dep_solubleP_flux = 0
 real, allocatable :: dry_dep_lith_dust_flux(:,:)
 real, allocatable :: wet_dep_lith_dust_flux(:,:)
 real, allocatable :: dry_dep_solubleFe_flux(:,:)
 real, allocatable :: wet_dep_solubleFe_flux(:,:)
-real, allocatable :: atmos_dust_solFe_frac(:,:) ! total dust concentration at the bottom of the atmos
+real, allocatable :: atmos_dust_solFe_frac(:,:)
+real, allocatable :: dry_dep_solubleP_flux(:,:)
+real, allocatable :: wet_dep_solubleP_flux(:,:)
+real, allocatable :: atmos_dust_solP_frac(:,:)
 
 ! ---- module data ----
 logical :: module_is_initialized = .FALSE.
@@ -87,7 +96,7 @@ integer :: n_dust_tracers = 0 ! number of dust tracers
 type(dust_data_type), allocatable :: dust_tracers(:) ! parameters for specific dust tracers
 type(interpolate_type),save       :: dust_source_interp
 ! ---- identification numbers for diagnostic fields ----
-integer :: id_dust_source, id_dust_emis, id_dust_ddep, id_dust_conc = -1
+integer :: id_dust_source, id_dust_emis, id_dust_ddep, id_dust_conc = -1, id_hno3d_ddep, id_so4d_ddep 
 integer :: id_emidust, id_drydust ! cmip
 
 !---------------------------------------------------------------------
@@ -118,7 +127,7 @@ contains
 ! this subroutine calculates tendencies for all dust tracers, and reports
 ! total fields, like total dust emission and settling
 subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
-       zhalf, pfull, w10m, t, rh, tracer, dsinku, rdt, Time, is,ie,js,je, kbot)
+       zhalf, pfull, w10m, t, rh, tracer, dsinku, rdt, hno3d_setl, all_so4d_setl, Time, is,ie,js,je, kbot)
 
   real, intent(in) :: lon(:,:), lat(:,:) ! geographical coordinates, units?
   real, intent(in) :: frac_land(:,:) ! fraction of land in the grid cell
@@ -132,6 +141,8 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
   real, intent(in) :: dsinku(:,:,:) ! dry deposition flux at the surface, for diag only
   real, intent(in) :: dt ! model timestep
   real, intent(inout) :: rdt(:,:,:,:) ! tendency of tracers, to be updated for dust tracers
+  real, intent(out)   :: hno3d_setl(:,:)
+  real, intent(out)   :: all_so4d_setl(:,:)
   type(time_type), intent(in) :: Time ! current model time
   integer, intent(in) :: is, ie, js, je ! boundaries of physical window
   integer, intent(in), optional :: kbot(:,:) ! index of bottom level
@@ -142,6 +153,7 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
   real, dimension(size(tracer,1),size(tracer,2)) :: &
      source, &        ! source fraction
      all_dust_setl, & ! total dust sedimentation flux at the bottom of the atmos
+     all_hno3d_setl, &    ! total hno3d sedimentation flux at the bottom of the atmos
      dust_emis, &     ! dust emission flux at the bottom of the atmos
      dust_conc, &     ! bin   dust concentration at the bottom of the atmos
      all_dust_conc, & ! total dust concentration at the bottom of the atmos
@@ -160,6 +172,10 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
   all_dust_emis(:,:) = 0.0
   all_dust_setl(:,:) = 0.0
   all_dust_conc(:,:) = 0.0
+  all_hno3d_setl(:,:)  = 0.0
+  all_so4d_setl(:,:)   = 0.0
+
+  hno3d_setl(:,:) = 0.0
 
   !----------- dust sources on local grid
   source(:,:)=0.0
@@ -179,7 +195,7 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
         pfull, w10m, t, rh, &
         tracer(:,:,:,ndust), dust_dt, dust_emis, dust_conc,&
         dust_tracers(i)%dust_setl(is:ie,js:je), dust_tracers(i)%dsetl_dtr(is:ie,js:je), &
-        dust_tracers(i)%do_surf_exch, &
+        dust_tracers(i)%do_surf_exch, dust_tracers(i)%is_dust, &
         is,ie,js,je, kbot)
      ! update dust tendencies
      rdt(:,:,:,ndust)=rdt(:,:,:,ndust)+dust_dt(:,:,:)
@@ -195,20 +211,40 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
 
      ! Accumulate total emission and deposition fluxes for output
      ! accumulate total dust deposition flux
-     all_dust_setl(:,:) = all_dust_setl(:,:) &
-          + dust_tracers(i)%dust_setl(is:ie,js:je) + pwt(:,:,kd)*dsinku(:,:,ndust) ! shouldn't kd be kbot?
+     if (dust_tracers(i)%is_dust) then
+        all_dust_setl(:,:) = all_dust_setl(:,:) &
+             + dust_tracers(i)%dust_setl(is:ie,js:je) + pwt(:,:,kd)*dsinku(:,:,ndust) ! shouldn't kd be kbot?
+     end if
+
+     if (dust_tracers(i)%is_hno3d ) then
+        ! accumulate total dust deposition flux
+        all_hno3d_setl(:,:) = all_hno3d_setl(:,:) &
+               + dust_tracers(i)%dust_setl(is:ie,js:je) + 1.e3*pwt(:,:,kd)/WTMAIR*dsinku(:,:,ndust) ! shouldn't kd be kbot?
+        hno3d_setl(:,:) = hno3d_setl(:,:) + dust_tracers(i)%dust_setl(is:ie,js:je)
+     endif
+     if (dust_tracers(i)%is_so4d ) then
+        ! accumulate total dust deposition flux
+        all_so4d_setl(:,:) = all_so4d_setl(:,:) &
+               + dust_tracers(i)%dust_setl(is:ie,js:je) + 1.e3*pwt(:,:,kd)/WTMAIR*dsinku(:,:,ndust) ! shouldn't kd be kbot?
+     endif
+     
 
 !     all_dust_setl(:,:) = 1.0-frac_land(:,:)  !The exchanged flux of this becomes >1 at some points within ocean near shore!!
      ! accumulate total dust concentration at the bottom of the atmos for Fe solubility calculaion
-     all_dust_conc(:,:) = all_dust_conc(:,:) + dust_conc(:,:)
-    
+     if (dust_tracers(i)%is_dust) then     
+        all_dust_conc(:,:) = all_dust_conc(:,:) + dust_conc(:,:)
+     end if
+     
      if (id_dust_emis > 0 .or. id_emidust > 0) then
-        ! accumulate total dust emission flux
-        all_dust_emis(:,:) = all_dust_emis(:,:) + dust_emis(:,:) 
+        if (dust_tracers(i)%is_dust) then        
+           ! accumulate total dust emission flux
+           all_dust_emis(:,:) = all_dust_emis(:,:) + dust_emis(:,:)
+        end if
      endif
   enddo
 
   call atmos_dust_solFe_frac_set(all_dust_conc, is,ie,js,je) !This must be called before dry and wet dep flux set
+  call atmos_dust_solP_frac_set(all_dust_conc, is,ie,js,je)  
   call atmos_dust_drydep_flux_set(all_dust_setl, is,ie,js,je)
 
   if (id_dust_ddep > 0) then
@@ -220,6 +256,14 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
   if (id_dust_conc > 0) then
      used = send_data (id_dust_conc, all_dust_conc(:,:), Time, is_in=is, js_in=js)
   endif
+
+  if (id_hno3d_ddep > 0) then
+     used = send_data (id_hno3d_ddep, all_hno3d_setl(:,:), Time, is_in=is, js_in=js)
+  endif
+  if (id_so4d_ddep > 0) then
+     used = send_data (id_so4d_ddep, all_so4d_setl(:,:), Time, is_in=is, js_in=js)
+  endif
+
 
   ! cmip variables
   if (id_drydust > 0) then
@@ -238,7 +282,7 @@ subroutine atmos_dust_sourcesink1 ( &
        frac_land, pwt, dt, &
        dustden, dustref, frac_s, source, &
        pfull, w10m, t, rh, &
-       dust, dust_dt, dust_emis, dust_conc, dust_setl, dsetl_dtr, do_surf_exch, is,ie,js,je,kbot)
+       dust, dust_dt, dust_emis, dust_conc, dust_setl, dsetl_dtr, do_surf_exch, in_mmr, is,ie,js,je,kbot)
 
   real, intent(in),  dimension(:,:)   :: frac_land
   real, intent(in) :: dt ! model timestep
@@ -257,6 +301,7 @@ subroutine atmos_dust_sourcesink1 ( &
   integer, intent(in),  dimension(:,:), optional :: kbot
   integer, intent(in)  :: is, ie, js, je
   logical, intent(in)  :: do_surf_exch
+  logical, intent(in) :: in_mmr
 
   ! ---- local vars
   integer :: outunit, unit, ierr, io
@@ -426,7 +471,7 @@ subroutine atmos_dust_init (lonb, latb, axes, Time, mask)
   n_dust_tracers = 0
   do tr = 1, n_atm_tracers
      call get_tracer_names(MODEL_ATMOS,tr,tr_name)
-     if (lowercase(tr_name(1:4))=='dust') then
+     if (lowercase(tr_name(1:4))=='dust' .or. lowercase(tr_name(1:6))=='hno3_d' .or. lowercase(tr_name(1:5))=='so4_d') then
         n_dust_tracers = n_dust_tracers + 1
      endif
   enddo
@@ -446,12 +491,20 @@ subroutine atmos_dust_init (lonb, latb, axes, Time, mask)
   ierr = 0 
   do tr = 1, n_atm_tracers
      call get_tracer_names(MODEL_ATMOS,tr,name=tr_name,longname=longname)
-     if (lowercase(tr_name(1:4)).ne.'dust') cycle ! this is not dust, we are not interested  
+     if (lowercase(tr_name(1:4)).ne.'dust' .and. lowercase(tr_name(1:6)).ne.'hno3_d' .and. lowercase(tr_name(1:5)).ne.'so4_d') cycle
 
      i = i+1
+
+     if (lowercase(tr_name(1:4)).eq.'dust')   then
+        dust_tracers(i)%is_dust  = .true.
+        call set_tracer_atts(MODEL_ATMOS,tr_name,longname,'mmr')
+     end if
+     if (lowercase(tr_name(1:6)).eq.'hno3_d') dust_tracers(i)%is_hno3d = .true.
+     if (lowercase(tr_name(1:5)).eq.'so4_d')  dust_tracers(i)%is_so4d = .true.
+
      dust_tracers(i)%name = tr_name
      dust_tracers(i)%tr   = tr
-     call set_tracer_atts(MODEL_ATMOS,tr_name,longname,'mmr')
+
      ! allocate space to store dust sedimentation flux for exchange with land.
      ! sizes of lonb and latb are used to get the size of the compute domain  
      allocate(dust_tracers(i)%dust_setl(size(lonb,1)-1,size(latb,2)-1))
@@ -474,9 +527,11 @@ subroutine atmos_dust_init (lonb, latb, axes, Time, mask)
         if (do_emission) & 
            call parse_and_check(parameters, tr_name, 'source_fraction',  dust_tracers(i)%frac_s, ierr)
      else
-        call error_mesg('atmos_dust_init',&
-          '"emission" line is missing from the field table for dust tracer "'//trim(tr_name)//'"', NOTE)
-        ierr = ierr+1
+        if  (dust_tracers(i)%is_dust) then
+           call error_mesg('atmos_dust_init',&
+                '"emission" line is missing from the field table for dust tracer "'//trim(tr_name)//'"', NOTE)
+           ierr = ierr+1
+        end if
      endif
 
      if (query_method('dry_deposition', MODEL_ATMOS, tr, method, parameters)) then
@@ -497,11 +552,19 @@ subroutine atmos_dust_init (lonb, latb, axes, Time, mask)
                      trim(dust_tracers(i)%name)//'_emis', axes(1:2),Time,  &
                      trim(dust_tracers(i)%name)//'_emis', 'kg/m2/s',       &
                      missing_value=-999.  )
-     ! Register a diagnostic field : total settling of dust
-     dust_tracers(i)%id_dust_setl = register_diag_field ( module_name,     &
-                     trim(dust_tracers(i)%name)//'_setl', axes(1:2),Time,  &
-                     trim(dust_tracers(i)%name)//'_setl', 'kg/m2/s',       &
-                     missing_value=-999.  )
+     
+     if (dust_tracers(i)%is_dust) then
+        ! Register a diagnostic field : total settling of dust
+        dust_tracers(i)%id_dust_setl = register_diag_field ( module_name,     &
+             trim(dust_tracers(i)%name)//'_setl', axes(1:2),Time,  &
+             trim(dust_tracers(i)%name)//'_setl', 'kg/m2/s',       &
+             missing_value=-999.  )
+     else
+        dust_tracers(i)%id_dust_setl = register_diag_field ( module_name,     &
+             trim(dust_tracers(i)%name)//'_setl', axes(1:2),Time,  &
+             trim(dust_tracers(i)%name)//'_setl', 'mole/m2/s',       &
+             missing_value=-999.  )
+     end if
   enddo  
   ! print out information about dust tracers
   if (mpp_pe()==mpp_root_pe()) then
@@ -531,6 +594,13 @@ subroutine atmos_dust_init (lonb, latb, axes, Time, mask)
   id_dust_ddep = register_diag_field ( module_name, &
       'dust_ddep', axes(1:2), Time, &
       'total dry deposition and settling of dust', 'kg/m2/s')
+
+  id_hno3d_ddep = register_diag_field ( module_name, &
+      'hno3d_ddep', axes(1:2), Time, &
+      'total dry deposition and settling of hno3d', 'mole/m2/s')
+  id_so4d_ddep = register_diag_field ( module_name, &
+      'so4d_ddep', axes(1:2), Time, &
+      'total dry deposition and settling of so4d', 'mole/m2/s')
 
   id_dust_conc = register_diag_field ( module_name, &
       'dust_conc', axes(1:2), Time, &
@@ -563,7 +633,10 @@ subroutine atmos_dust_init (lonb, latb, axes, Time, mask)
   allocate(wet_dep_lith_dust_flux(size(lonb,1)-1,size(latb,2)-1)); wet_dep_lith_dust_flux=0.0
   allocate(dry_dep_solubleFe_flux(size(lonb,1)-1,size(latb,2)-1)); dry_dep_solubleFe_flux=0.0
   allocate(wet_dep_solubleFe_flux(size(lonb,1)-1,size(latb,2)-1)); wet_dep_solubleFe_flux=0.0
+  allocate(dry_dep_solubleP_flux(size(lonb,1)-1,size(latb,2)-1)); dry_dep_solubleP_flux=0.0
+  allocate(wet_dep_solubleP_flux(size(lonb,1)-1,size(latb,2)-1)); wet_dep_solubleP_flux=0.0
   allocate(atmos_dust_solFe_frac( size(lonb,1)-1,size(latb,2)-1)); atmos_dust_solFe_frac=0.0
+  allocate(atmos_dust_solP_frac( size(lonb,1)-1,size(latb,2)-1)); atmos_dust_solP_frac=0.0
 
 
   do_dust = .TRUE.
@@ -663,6 +736,21 @@ subroutine atmos_dust_init (lonb, latb, axes, Time, mask)
            atm_tr_index = ind,                                          &
            mol_wt = 1.0, param = (/ 1.0,1.0 /),                         &
            caller = trim(mod_name) // '(' // trim(sub_name) // ')')
+
+      !Soluble P 
+      ind_dry_dep_solubleP_flux = aof_set_coupler_flux('dry_dep_po4', &
+           flux_type = 'air_sea_deposition', implementation = 'dry',    &
+           atm_tr_index = ind,                                          &
+           mol_wt = 1.0, param = (/ 1.0,1.0 /),                         &
+           caller = trim(mod_name) // '(' // trim(sub_name) // ')')
+
+      ind_wet_dep_solubleP_flux = aof_set_coupler_flux('wet_dep_po4', &
+           flux_type = 'air_sea_deposition', implementation = 'wet',    &
+           atm_tr_index = ind,                                          &
+           mol_wt = 1.0, param = (/ 1.0,1.0 /),                         &
+           caller = trim(mod_name) // '(' // trim(sub_name) // ')')
+
+
    endif
    endif !if(do_esm_dust_flux)
 
@@ -691,13 +779,21 @@ endif
 if (ind_wet_dep_lith_dust_flux .gt. 0) then
   gas_fields%bc(ind_wet_dep_lith_dust_flux)%field(ind_pcair)%values(:,:) = wet_dep_lith_dust_flux(:,:)
 endif
-!soluable iron
+!soluble iron
 if (ind_dry_dep_solubleFe_flux .gt. 0) then
   gas_fields%bc(ind_dry_dep_solubleFe_flux)%field(ind_pcair)%values(:,:) = -dry_dep_solubleFe_flux(:,:)!sign flip
 endif
 
 if (ind_wet_dep_solubleFe_flux .gt. 0) then
   gas_fields%bc(ind_wet_dep_solubleFe_flux)%field(ind_pcair)%values(:,:) = wet_dep_solubleFe_flux(:,:)
+endif
+!soluble iron
+if (ind_dry_dep_solubleP_flux .gt. 0) then
+  gas_fields%bc(ind_dry_dep_solubleP_flux)%field(ind_pcair)%values(:,:) = -dry_dep_solubleP_flux(:,:)!sign flip
+endif
+
+if (ind_wet_dep_solubleP_flux .gt. 0) then
+  gas_fields%bc(ind_wet_dep_solubleP_flux)%field(ind_pcair)%values(:,:) = wet_dep_solubleP_flux(:,:)
 endif
 
 
@@ -738,14 +834,15 @@ subroutine print_table(unit)
 
    write(unit,'(x,121("-"))')
    write(unit,'(3x,99(x,a16))')'dust tr. name','atm. tr. number','ra','rb', &
-       'dustref','dustden','frac_s','do_surf_exch'
+       'dustref','dustden','frac_s','do_surf_exch','is_dust','is_hno3d','is_so4d'
    write(unit,'(x,121("-"))')
    do i = 1,n_dust_tracers
       write(unit,'(x,i2,x,a16,99(x,g16.6))')&
          i, trim(dust_tracers(i)%name), dust_tracers(i)%tr, &
          dust_tracers(i)%ra, dust_tracers(i)%rb, &
          dust_tracers(i)%dustref, dust_tracers(i)%dustden, &
-         dust_tracers(i)%frac_s, dust_tracers(i)%do_surf_exch
+         dust_tracers(i)%frac_s, dust_tracers(i)%do_surf_exch,&
+         dust_tracers(i)%is_dust,dust_tracers(i)%is_hno3d,dust_tracers(i)%is_so4d
    enddo
    write(unit,'(x,121("-"))')   
 end subroutine 
@@ -776,6 +873,7 @@ subroutine atmos_dust_wetdep_flux_set(array, is,ie,js,je)
   wet_dep_lith_dust_flux(is:ie,js:je) = array(is:ie,js:je)
   !Soluble Iron flux
   wet_dep_solubleFe_flux(is:ie,js:je) = atmos_dust_solFe_frac(is:ie,js:je) * array(is:ie,js:je)
+  wet_dep_solubleP_flux(is:ie,js:je) = atmos_dust_solP_frac(is:ie,js:je) * array(is:ie,js:je)
 end subroutine atmos_dust_wetdep_flux_set
 
 subroutine atmos_dust_drydep_flux_set(array, is,ie,js,je)
@@ -785,6 +883,7 @@ subroutine atmos_dust_drydep_flux_set(array, is,ie,js,je)
   dry_dep_lith_dust_flux(is:ie,js:je) = array(is:ie,js:je)
   !Soluble Iron flux
   dry_dep_solubleFe_flux(is:ie,js:je) = atmos_dust_solFe_frac(is:ie,js:je)  * array(is:ie,js:je)
+  dry_dep_solubleP_flux(is:ie,js:je) = atmos_dust_solP_frac(is:ie,js:je)  * array(is:ie,js:je)
 end subroutine atmos_dust_drydep_flux_set
 
 subroutine atmos_dust_solFe_frac_set(array, is,ie,js,je)
@@ -806,6 +905,16 @@ subroutine atmos_dust_solFe_frac_set(array, is,ie,js,je)
 
   atmos_dust_solFe_frac(is:ie,js:je) = 0.035 * 0.031 / (max(array(is:ie,js:je)*1.E9,epsilon))**0.26
 end subroutine atmos_dust_solFe_frac_set
+
+subroutine atmos_dust_solP_frac_set(array, is,ie,js,je)
+  !This subroutine estimates the amount of soluble phosphorus in dust
+  real, dimension(is:ie,js:je), intent(in) :: array ! total dust concentration at the bottom of the atmosphere
+  integer,                      intent(in) :: is,ie,js,je
+  if (n_dust_tracers == 0) return ! nothing to do
+
+  ! Start with a static value, can make a dynamic function of dust concentration etc., later
+  atmos_dust_solP_frac(is:ie,js:je) = 563.0e-6*0.22/31.0 
+end subroutine atmos_dust_solP_frac_set
 
 
 !#######################################################################
@@ -831,6 +940,9 @@ end subroutine atmos_dust_solFe_frac_set
     deallocate(dry_dep_solubleFe_flux)
     deallocate(wet_dep_solubleFe_flux)
     deallocate(atmos_dust_solFe_frac)
+    deallocate(dry_dep_solubleP_flux)
+    deallocate(wet_dep_solubleP_flux)
+    deallocate(atmos_dust_solP_frac)
  end subroutine atmos_dust_end
 !</SUBROUTINE>
 

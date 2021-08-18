@@ -39,7 +39,12 @@ public  atmos_carbon_aerosol_driver,   &
         atmos_carbon_aerosol_init, &
         atmos_carbon_aerosol_time_vary, &
         atmos_carbon_aerosol_endts, &
-        atmos_carbon_aerosol_end
+        atmos_carbon_aerosol_end, &
+        atmos_carbon_moa_fine_enrichment, &
+        get_moa_modulator
+ 
+!density of oa
+real, parameter       :: oadens = 1000.
 
 !-----------------------------------------------------------------------
 ! tracer number for carbonaceous aerosols
@@ -60,6 +65,7 @@ integer :: id_bc_tau
 integer :: id_emibc, id_emipoa, id_emiapoa, id_emibb ! cmip
 
 integer :: id_SOA_prod           = 0
+integer :: id_moa_modulator      = 0
 !----------------------------------------------------------------------
 !--- Interpolate_type variable containing all the information needed to
 ! interpolate the emission provided in the netcdf input file.
@@ -174,6 +180,11 @@ character(len=80), dimension(1) :: omsh_input_name = (/' '/)
 character(len=80), dimension(1) :: omna_input_name = (/' '/)
 character(len=80), dimension(1) :: omss_input_name = (/' '/)
 character(len=80), dimension(1) :: gas_conc_name = (/' '/)
+
+real :: Dp_crit = 1. !cap for emission of marine organic aerosol (in micrometer)
+real :: gantt_param      = 3.   !for omss emissions (gantt scheme)
+real :: gantt_param_wind = -1   !for omss emissions (gantt scheme) <0 use the same as gantt_param
+
 ! Default values for carbon_aerosol_nml
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! FOSSIL FUEL source can be either:
@@ -269,6 +280,7 @@ real                  :: frac_bcbb_phobic = 0.8
 real                  :: frac_bcbb_philic = 0.2
 real                  :: frac_om_phobic = 0.5
 real                  :: frac_om_philic = 0.5
+real                  :: frac_om_philic_ocean = -1.
 !!!!!!!!!!!!!!!!!!!!!!!!!!
 namelist /carbon_aerosol_nml/ &
  bcff_source, bcff_input_name, bcff_filename, &
@@ -299,7 +311,7 @@ namelist /carbon_aerosol_nml/ &
  frac_bcbb_philic, frac_bcbb_phobic,&
  soa_source, gas_conc_name,soa_filename, &
  soa_time_dependency_type, soa_dataset_entry, &
- no_biobur_if_no_pbl, do_biobur_pbl_bug
+ no_biobur_if_no_pbl, do_biobur_pbl_bug, Dp_crit, frac_om_philic_ocean, gantt_param,gantt_param_wind
 
 character(len=6), parameter :: module_name = 'tracer'
 
@@ -338,6 +350,7 @@ subroutine atmos_carbon_aerosol_driver(lon, lat, ocn_flx_fraction,  &
                                omphob, omphob_dt, &
                                omphil, omphil_dt, &
                                oh_conc,&
+                               moa_emis, &
                                diag_time, is, ie, js, je )
 
 !-----------------------------------------------------------------------
@@ -350,6 +363,7 @@ subroutine atmos_carbon_aerosol_driver(lon, lat, ocn_flx_fraction,  &
    real, intent(in),  dimension(:,:,:) :: bcphob,bcphil
    real, intent(in),  dimension(:,:,:) :: omphob,omphil
    real, intent(in),  dimension(:,:,:) :: oh_conc
+   real, intent(in),  dimension(:,:)   :: moa_emis
    real, intent(out), dimension(:,:,:) :: bcphob_dt,bcphil_dt
    real, intent(out), dimension(:,:,:) :: omphob_dt,omphil_dt
 type(time_type), intent(in)            :: diag_time
@@ -566,37 +580,43 @@ real, parameter                            :: yield_soa = 0.1
                        trim(omna_emission_name(1)), is, js)
    endif
    if ( trim(omss_source).ne. ' ') then
-     call interpolator(omss_aerosol_interp, omss_time, dmso, &
-                       trim(omss_emission_name(1)), is, js)
-     do j = 1, jd
-     do i = 1, id
-       SST = t_surf(i,j)-273.15     ! Sea surface temperature [Celsius]
-       if (ocn_flx_fraction(i,j).gt.0.) then
-!  < Schmidt number (Saltzman et al., 1993) >
-         Schm = 2674.0 - 147.12*SST + 3.726*(SST**2) - 0.038*(SST**3)
-         Schm = max(1., Schm)
-! ---  Liss and Merlivat (1986) -----------
-         SchmCO2 = 600.
-         if (w10m(i,j) .le. 3.6) then
-           AKw = 0.17 * w10m(i,j)
-         else if (w10m(i,j) .le. 13.) then
-           AKw = 2.85 * w10m(i,j) - 9.65
-              else
-           AKw = 5.90 * w10m(i,j) - 49.3
-         end if
-         if (w10m(i,j) .le. 3.6) then
-           AKw = AKw * ((SchmCO2/Schm) ** 0.667)
-         else
-           AKw = AKw * sqrt(SchmCO2/Schm)
-         end if
-         omemisocean(i,j) = coef_omss_emis*AKw/100./3600. * 1.e-6*ocn_flx_fraction(i,j)
-       end if
+      if (trim(omss_source).eq.'ODowd') then
+         call interpolator(omss_aerosol_interp, omss_time, dmso, &
+              trim(omss_emission_name(1)), is, js)      
+         do j = 1, jd
+            do i = 1, id
+               SST = t_surf(i,j)-273.15     ! Sea surface temperature [Celsius]
+               if (ocn_flx_fraction(i,j).gt.0.) then
+                  !  < Schmidt number (Saltzman et al., 1993) >
+                  Schm = 2674.0 - 147.12*SST + 3.726*(SST**2) - 0.038*(SST**3)
+                  Schm = max(1., Schm)
+                  ! ---  Liss and Merlivat (1986) -----------
+                  SchmCO2 = 600.
+                  if (w10m(i,j) .le. 3.6) then
+                     AKw = 0.17 * w10m(i,j)
+                  else if (w10m(i,j) .le. 13.) then
+                     AKw = 2.85 * w10m(i,j) - 9.65
+                  else
+                     AKw = 5.90 * w10m(i,j) - 49.3
+                  end if
+                  if (w10m(i,j) .le. 3.6) then
+                     AKw = AKw * ((SchmCO2/Schm) ** 0.667)
+                  else
+                     AKw = AKw * sqrt(SchmCO2/Schm)
+                  end if
+                  omemisocean(i,j) = coef_omss_emis*AKw/100./3600. * 1.e-6*ocn_flx_fraction(i,j)
+               end if
+            enddo
+         enddo
+      elseif (trim(omss_source).eq.'Gantt') then
+         !this is precalculated using sea salt emissions (f1p)
+         omemisocean = moa_emis
+      elseif (trim(omss_source).eq.'Rinaldi') then
+         !this is precalculated using sea salt emissions (f1p)
+         omemisocean = moa_emis
+      endif
 
-     enddo
-     enddo
-
-
-   endif
+   end if
 !
     fa1(:,:,:) = 0.
     fa2(:,:,:) = 0.
@@ -741,9 +761,14 @@ real, parameter                            :: yield_soa = 0.1
 ! Bio-fuel (if not included in fossil fuel inevntory)
 ! International shipping
     do j = 1, jd
-      do i = 1, id
-        omphob_emis(i,j,kd) =  omemisbf(i,j) + omemissh(i,j) + &
-           omemisbg(i,j) + omemisocean(i,j)
+       do i = 1, id
+          if (frac_om_philic_ocean.ge.0.) then
+             omphob_emis(i,j,kd) =  omemisbf(i,j) + omemissh(i,j) + &
+                  omemisbg(i,j) !special treatment for ocean emissions
+          else
+             omphob_emis(i,j,kd) =  omemisbf(i,j) + omemissh(i,j) + &
+                  omemisbg(i,j) + omemisocean(i,j)
+          end if
       end do
     end do
 
@@ -755,6 +780,11 @@ real, parameter                            :: yield_soa = 0.1
           omemisob_2d(i,j) = omemisob_2d(i,j) + omemisob(i,j,l)
           omphil_emis(i,j,l) = omphob_emis(i,j,l) * frac_om_philic/pwt(i,j,l)
           omphob_emis(i,j,l) = omphob_emis(i,j,l) * frac_om_phobic/pwt(i,j,l)
+
+          if (l.eq.kd .and. frac_om_philic_ocean.ge.0.) then
+              omphil_emis(i,j,l) = omphil_emis(i,j,l) + frac_om_philic_ocean/pwt(i,j,l) * omemisocean(i,j)
+              omphob_emis(i,j,l) = omphob_emis(i,j,l) + (1.-frac_om_philic_ocean)/pwt(i,j,l) * omemisocean(i,j) 
+           end if
         end do
       end do
     end do
@@ -1083,7 +1113,6 @@ character(len=7), parameter :: mod_name = 'tracers'
 integer :: n
 integer ::  ierr, io, logunit
 
-
    if (module_is_initialized) return
 !----------------------------------
 !namelist files
@@ -1100,7 +1129,11 @@ integer ::  ierr, io, logunit
                           write (logunit, nml=carbon_aerosol_nml)
 
 !--------------------------------------------------------
-!------namelist
+      !------namelist
+
+      if (gantt_param_wind.lt.0) then
+         gantt_param_wind=gantt_param
+      end if
 
 !----- set initial value of carbon ------------
 
@@ -1301,6 +1334,11 @@ integer ::  ierr, io, logunit
                     'emisbb', axes(1:2),Time,                 &
                     'column BC + OM open biomass burning emission', 'kg/m2/sec' )
 
+     id_moa_modulator    = register_diag_field ( mod_name,           &
+          'moa_modulator', axes(1:2),Time,                 &
+          'Modulator used for MOA emissions', '' )
+
+     
      id_omemisbb_col    = register_diag_field ( mod_name,           &
                     'omemisbb_col', axes(1:2),Time,                 &
                     'column OM open biomass burning emission', 'kg/m2/sec' )
@@ -2453,9 +2491,12 @@ integer ::  ierr, io, logunit
      else
        omss_emission_name(1)=trim(omss_input_name(1))
      endif
+     !Uriel: Add data_names=(/omss_emission_name(1)/). Without it the code thinks that the "*_bnd" variables in 
+     !INPUT/regrid_ocn_Chl_globcolor_stock_fill0.nc are "climatology data" because the variables are 2d in the file:
+     !https://github.com/NOAA-GFDL/FMS/blob/main/interpolator/interpolator.F90#L569-L571, so it is trying to interpolate them.
      call interpolator_init (omss_aerosol_interp,           &
-       trim(omss_filename), lonb, latb, data_out_of_bounds=(/CONSTANT/), &
-       data_names=omss_emission_name(1:1),vert_interp=(/INTERP_WEIGHTED_P/))
+       trim(omss_filename), lonb, latb, data_names=(/omss_emission_name(1)/), data_out_of_bounds=(/CONSTANT/), &
+       vert_interp=(/INTERP_WEIGHTED_P/))
      if (omss_coef .le. -990) then
        coef_omss_emis = 1.
      else
@@ -2469,9 +2510,78 @@ integer ::  ierr, io, logunit
 
 !-----------------------------------------------------------------------
 
-end subroutine atmos_carbon_aerosol_init
+ end subroutine atmos_carbon_aerosol_init
+ 
+subroutine get_moa_modulator(time,is,js,moa_modulator)
+
+  type(time_type), intent(in) :: Time
+  integer, intent(in)         :: is,js
+  real, intent(out) :: moa_modulator(:,:)
+
+  moa_modulator = 0.
+
+  if (trim(omss_source).eq.'Gantt' .or. trim(omss_source).eq.'Rinaldi') then
+     !only applies to fine mode oa
+     call interpolator(omss_aerosol_interp, time, moa_modulator, &
+          trim(omss_emission_name(1)), is, js)      
+
+  elseif (trim(omss_source).eq.'prescribed_modulation') then
+     !this has dimension the number of sea salt emissions
+     if (trim(omss_emission_name(1)).ne.' '.or.trim(omss_emission_name(1)).eq.'none') then
+        call interpolator(omss_aerosol_interp, time, moa_modulator, &
+             trim(omss_emission_name(1)), is, js)      !kg(organic)/kg(salt)     
+     end if
+  end if
 
 
+  if (id_moa_modulator > 0) then
+     used = send_data ( id_moa_modulator, moa_modulator, time, &
+          is_in=is,js_in=js)
+  end if
+
+end subroutine get_moa_modulator
+
+!######################################################################
+
+elemental real function atmos_carbon_moa_fine_enrichment(Dp,w10m,seasaltden,om_mod) result(omss2)
+
+  real, intent(in) :: Dp   !diameter in um
+  real, intent(in) :: w10m !wind speed in m/s
+  real, intent(in) :: seasaltden !sea salt density (kg/m3)
+  real, intent(in) :: om_mod !modulator for om emissions
+
+  real :: omss1
+  omss2 = 0.
+
+  if (trim(omss_source).eq.'Gantt') then
+     !om_mod is chlorophyll [mg m−3]     
+     if (Dp.lt.Dp_crit) then !for now only consider moa for Dp<1um
+        !eq. 1 (Gantt 2015)
+        omss1 = 1.0/(1.0+exp(-2.63*gantt_param*om_mod + 0.18*gantt_param_wind*w10m))
+        omss2 = omss1/(1.0+0.03*exp(6.81*Dp) ) + 0.03*omss1
+        omss2 = omss2 * ( 1.0 / ( 2.160 / ( 1.0 - omss2        &
+                               * (1.0 - 2160.0 / 1000.0 ))))
+        omss2 = omss2*coef_omss_emis
+     end if
+  elseif (trim(omss_source) .eq. 'Rinaldi') then
+     !Rinaldi et al., JGR, 2013, Eq. 2
+     !OM_SS = (56.9 * Chl-a [mg m-3]) + (-4.64 * WS [m s-1]) + 40.9
+     if (Dp.lt.Dp_crit) then
+        omss2 = 56.9 * om_mod - 4.64 * w10m + 40.9
+        omss2 = min(max(omss2,0.) ,1.0)
+        omss2 = omss2 * ( 1.0 / ( 2.160 / ( 1.0 - omss2        &
+                               * (1.0 - 2160.0 / 1000.0 ))))
+        
+        omss2 = omss2 * coef_omss_emis        
+     end if
+     
+  elseif (trim(omss_source).eq.'prescribed_modulation') then
+     if (Dp.lt.Dp_crit) then
+        omss2 = om_mod*coef_omss_emis
+     end if     
+  end if
+  
+end function atmos_carbon_moa_fine_enrichment
 
 !######################################################################
 

@@ -18,6 +18,8 @@ module tropchem_types_mod
      integer :: ind_cloud_pH, ind_cloud_pHw, ind_aerosol_pH     
      integer :: ind_phno3_d(5), ind_phno3_g_d, ind_ghno3_d, ind_gso2
      integer :: ind_pso4_d(5), ind_pso4_g_d
+!for aerosol surface area
+     integer :: ind_SA_aerosol, ind_SA_SO4, ind_SA_BC, ind_SA_OA, ind_SA_SS, ind_SA_DUST
 
 !   integer :: ind_enh4,ind_ehcoo,ind_ech3coo,ind_ehco3,ind_eco3,ind_eoh,ind_eno3,ind_eso4,ind_ehso3,ind_eso3,ind_ealk
 
@@ -35,6 +37,7 @@ module tropchem_types_mod
      real                  :: gSO2
      real                  :: gH2SO4_dust
      real                  :: gSO2_dust
+     real                  :: NO2_SO2_max
      real                  :: gNH3
      real                  :: gHNO3_dust
      real                  :: gNO3_dust
@@ -57,6 +60,11 @@ module tropchem_types_mod
      integer               :: het_chem
      character(len=128)    :: sim_data_flsp
      logical               :: time_varying_solarflux
+     logical               :: het_chem_bug1
+     real                  :: rh_het_max
+     integer               :: verbose
+     logical               :: modulate_frac_ic 
+     logical               :: scale_dust_uptake
   end type tropchem_opt
 
   CONTAINS
@@ -79,7 +87,14 @@ module tropchem_types_mod
     trop_diag%ind_ghno3_d    = 0
     trop_diag%ind_gso2       = 0
     trop_diag%ind_pso4_d     = 0
-    trop_diag%ind_pso4_g_d   = 0    
+    trop_diag%ind_pso4_g_d   = 0
+
+    trop_diag%ind_SA_aerosol = 0
+    trop_diag%ind_SA_SO4     = 0
+    trop_diag%ind_SA_BC      = 0
+    trop_diag%ind_SA_OA      = 0
+    trop_diag%ind_SA_SS      = 0
+    trop_diag%ind_SA_DUST    = 0
 
     small_value = ismall_value
     
