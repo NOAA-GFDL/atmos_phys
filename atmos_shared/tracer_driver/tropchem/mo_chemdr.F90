@@ -702,7 +702,7 @@ logical                       :: module_is_initialized = .false.
 
 !HNO3/SO2 uptake on dust
      do n=1,ndust
-        if (dust_ndx(n) .gt. 0 .and. hno3_d_ndx(n) .gt. 0 .or. so4_d_ndx(n) .gt. 0 ) then
+        if (dust_ndx(n) .gt. 0 .and. ( hno3_d_ndx(n) .gt. 0 .or. so4_d_ndx(n) .gt. 0 ) ) then
            do i = 1,plonl
               do k = 1,plev
                  xalk      =  &
