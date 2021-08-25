@@ -12,6 +12,7 @@ use mpp_domains_mod,    only: domain2D
  type physics_control_type
      integer :: sphum
      integer :: nsphum, nql, nqi, nqa, nqn, nqni, nqr, nqs, nqg
+     integer :: nqnr,   nqns
      integer :: num_prog_tracers
      logical :: hydrostatic, phys_hydrostatic, do_uni_zfull !miz
      logical :: l_host_applies_sfc_fluxes
