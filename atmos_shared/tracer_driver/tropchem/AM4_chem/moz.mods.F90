@@ -1,74 +1,51 @@
-
-
-
-
-
-
       module mo_grid_mod
 !---------------------------------------------------------------------
 ! ... Basic grid point resolution parameters
 !---------------------------------------------------------------------
       implicit none
-
       save
-
       integer, parameter :: &
-                pcnst = 100 +1, & ! number of advected constituents including cloud water
-                pcnstm1 = 100, & ! number of advected constituents excluding cloud water
+                pcnst = 110 +1, & ! number of advected constituents including cloud water
+                pcnstm1 = 110, & ! number of advected constituents excluding cloud water
                 plev = 1, & ! number of vertical levels
                 plevp = plev+1, & ! plev plus 1
                 plevm = plev-1, & ! plev minus 1
                 plon = 1, & ! number of longitudes
                 plat = 1 ! number of latitudes
-
       integer, parameter :: &
                 pnats = 0 ! number of non-advected trace species
-
-
-
-
-
-
       integer :: nodes ! mpi task count
       integer :: plonl ! longitude tile dimension
       integer :: pplon ! longitude tile count
       integer :: plnplv ! plonl * plev
-
       end module mo_grid_mod
-
       module chem_mods_mod
 !--------------------------------------------------------------
 ! ... basic chemistry array parameters
 !--------------------------------------------------------------
-
       use mo_grid_mod, only : pcnstm1
-
       use mpp_mod, only : mpp_error, FATAL
-
       implicit none
-
       save
-
       integer, parameter :: hetcnt = 0, & ! number of heterogeneous processes
                             phtcnt = 43, & ! number of photo processes
-                            rxntot = 248, & ! number of total reactions
-                            gascnt = 205, & ! number of gas phase reactions
+                            rxntot = 268, & ! number of total reactions
+                            gascnt = 225, & ! number of gas phase reactions
                             nfs = 3, & ! number of "fixed" species
                             relcnt = 0, & ! number of relationship species
                             grpcnt = 0, & ! number of group members
-                            imp_nzcnt = 998, & ! number of non-zero implicit matrix entries
+                            imp_nzcnt = 1025, & ! number of non-zero implicit matrix entries
                             rod_nzcnt = 0, & ! number of non-zero rodas matrix entries
                             extcnt = 0, & ! number of species with external forcing
                             clscnt1 = 9, & ! number of species in explicit class
                             clscnt2 = 0, & ! number of species in hov class
                             clscnt3 = 0, & ! number of species in ebi class
-                            clscnt4 = 91, & ! number of species in implicit class
+                            clscnt4 = 101, & ! number of species in implicit class
                             clscnt5 = 0, & ! number of species in rodas class
                             indexm = 1, & ! index of total atm density in invariant array
                             ncol_abs = 2, & ! number of column densities
                             indexh2o = 0, & ! index of water vapor density
                             clsze = 1 ! loop length for implicit chemistry
-
       integer :: ngrp = 0
       integer :: drydep_cnt = 0
       integer :: srfems_cnt = 0
@@ -84,7 +61,6 @@
       character(len=8) :: het_lst(max(1,hetcnt))
       character(len=8) :: extfrc_lst(max(1,extcnt))
       character(len=8) :: inv_lst(max(1,nfs))
-
       type solver_class
   integer :: clscnt
   integer :: lin_rxt_cnt
@@ -96,42 +72,30 @@
          integer, pointer :: diag_map(:)
          integer, pointer :: clsmap(:)
       end type solver_class
-
       type(solver_class) :: explicit, implicit, rodas
-
       contains
       subroutine endrun(msg)
-
       implicit none
-
       character(len=128), intent(in), optional :: msg
       call mpp_error(FATAL, msg)
-
       end subroutine endrun
-
       subroutine chem_mods_init
 !--------------------------------------------------------------
 ! ... intialize the class derived type
 !--------------------------------------------------------------
-
       implicit none
-
       integer :: astat
-
       explicit%clscnt = 9
       explicit%indprd_cnt = 56
-
-      implicit%clscnt = 91
-      implicit%lin_rxt_cnt = 77
+      implicit%clscnt = 101
+      implicit%lin_rxt_cnt = 97
       implicit%nln_rxt_cnt = 168
       implicit%indprd_cnt = 3
       implicit%iter_max = 11
-
       rodas%clscnt = 0
       rodas%lin_rxt_cnt = 0
       rodas%nln_rxt_cnt = 0
       rodas%indprd_cnt = 0
-
       if( explicit%clscnt > 0 ) then
   allocate( explicit%clsmap(explicit%clscnt),stat=astat )
   if( astat /= 0 ) then
@@ -180,15 +144,10 @@
   end if
          rodas%clsmap(:) = 0
       end if
-
       end subroutine chem_mods_init
-
       end module chem_mods_mod
-
       module M_SPC_ID_MOD
-
       implicit none
-
       integer, parameter :: id_O3 = 1
       integer, parameter :: id_O = 2
       integer, parameter :: id_O1D = 3
@@ -202,101 +161,106 @@
       integer, parameter :: id_N2O5 = 11
       integer, parameter :: id_CH4 = 12
       integer, parameter :: id_CH3O2 = 13
-      integer, parameter :: id_CH3OOH = 14
-      integer, parameter :: id_CH2O = 15
-      integer, parameter :: id_CO = 16
-      integer, parameter :: id_OH = 17
-      integer, parameter :: id_HO2 = 18
-      integer, parameter :: id_H2O2 = 19
-      integer, parameter :: id_C3H6 = 20
-      integer, parameter :: id_ISOP = 21
-      integer, parameter :: id_PO2 = 22
-      integer, parameter :: id_CH3CHO = 23
-      integer, parameter :: id_POOH = 24
-      integer, parameter :: id_CH3CO3 = 25
-      integer, parameter :: id_CH3COOOH = 26
-      integer, parameter :: id_PAN = 27
-      integer, parameter :: id_C2H6 = 28
-      integer, parameter :: id_C2H4 = 29
-      integer, parameter :: id_C4H10 = 30
-      integer, parameter :: id_MPAN = 31
-      integer, parameter :: id_ISOPO2 = 32
-      integer, parameter :: id_MVK = 33
-      integer, parameter :: id_MACR = 34
-      integer, parameter :: id_MACRO2 = 35
-      integer, parameter :: id_MACROOH = 36
-      integer, parameter :: id_C2H5O2 = 37
-      integer, parameter :: id_C2H5OOH = 38
-      integer, parameter :: id_C10H16 = 39
-      integer, parameter :: id_C3H8 = 40
-      integer, parameter :: id_C3H7O2 = 41
-      integer, parameter :: id_C3H7OOH = 42
-      integer, parameter :: id_CH3COCH3 = 43
-      integer, parameter :: id_CH3OH = 44
-      integer, parameter :: id_C2H5OH = 45
-      integer, parameter :: id_GLYALD = 46
-      integer, parameter :: id_HYAC = 47
-      integer, parameter :: id_EO2 = 48
-      integer, parameter :: id_EO = 49
-      integer, parameter :: id_ISOPOOH = 50
-      integer, parameter :: id_H2 = 51
-      integer, parameter :: id_SO2 = 52
-      integer, parameter :: id_SO4 = 53
-      integer, parameter :: id_DMS = 54
-      integer, parameter :: id_NH3 = 55
-      integer, parameter :: id_NH4NO3 = 56
-      integer, parameter :: id_NH4 = 57
-      integer, parameter :: id_HCl = 58
-      integer, parameter :: id_HOCl = 59
-      integer, parameter :: id_ClONO2 = 60
-      integer, parameter :: id_Cl = 61
-      integer, parameter :: id_ClO = 62
-      integer, parameter :: id_Cl2O2 = 63
-      integer, parameter :: id_Cl2 = 64
-      integer, parameter :: id_HOBr = 65
-      integer, parameter :: id_HBr = 66
-      integer, parameter :: id_BrONO2 = 67
-      integer, parameter :: id_Br = 68
-      integer, parameter :: id_BrO = 69
-      integer, parameter :: id_BrCl = 70
-      integer, parameter :: id_LCH4 = 71
-      integer, parameter :: id_H = 72
-      integer, parameter :: id_H2O = 73
-      integer, parameter :: id_ROH = 74
-      integer, parameter :: id_RCHO = 75
-      integer, parameter :: id_ISOPNB = 76
-      integer, parameter :: id_ISOPNBO2 = 77
-      integer, parameter :: id_MACRN = 78
-      integer, parameter :: id_MVKN = 79
-      integer, parameter :: id_R4N2 = 80
-      integer, parameter :: id_MEK = 81
-      integer, parameter :: id_R4N1 = 82
-      integer, parameter :: id_IEPOX = 83
-      integer, parameter :: id_IEPOXOO = 84
-      integer, parameter :: id_GLYX = 85
-      integer, parameter :: id_MGLY = 86
-      integer, parameter :: id_MVKO2 = 87
-      integer, parameter :: id_MVKOOH = 88
-      integer, parameter :: id_MACRNO2 = 89
-      integer, parameter :: id_MAO3 = 90
-      integer, parameter :: id_MAOP = 91
-      integer, parameter :: id_MAOPO2 = 92
-      integer, parameter :: id_ATO2 = 93
-      integer, parameter :: id_ATOOH = 94
-      integer, parameter :: id_INO2 = 95
-      integer, parameter :: id_INPN = 96
-      integer, parameter :: id_ISNOOA = 97
-      integer, parameter :: id_ISN1 = 98
-      integer, parameter :: id_O3S = 99
-      integer, parameter :: id_O3S_E90 = 100
-
-
+      integer, parameter :: id_HNO3_D1 = 14
+      integer, parameter :: id_HNO3_D2 = 15
+      integer, parameter :: id_HNO3_D3 = 16
+      integer, parameter :: id_HNO3_D4 = 17
+      integer, parameter :: id_HNO3_D5 = 18
+      integer, parameter :: id_SO4_D1 = 19
+      integer, parameter :: id_SO4_D2 = 20
+      integer, parameter :: id_SO4_D3 = 21
+      integer, parameter :: id_SO4_D4 = 22
+      integer, parameter :: id_SO4_D5 = 23
+      integer, parameter :: id_CH3OOH = 24
+      integer, parameter :: id_CH2O = 25
+      integer, parameter :: id_CO = 26
+      integer, parameter :: id_OH = 27
+      integer, parameter :: id_HO2 = 28
+      integer, parameter :: id_H2O2 = 29
+      integer, parameter :: id_C3H6 = 30
+      integer, parameter :: id_ISOP = 31
+      integer, parameter :: id_PO2 = 32
+      integer, parameter :: id_CH3CHO = 33
+      integer, parameter :: id_POOH = 34
+      integer, parameter :: id_CH3CO3 = 35
+      integer, parameter :: id_CH3COOOH = 36
+      integer, parameter :: id_PAN = 37
+      integer, parameter :: id_C2H6 = 38
+      integer, parameter :: id_C2H4 = 39
+      integer, parameter :: id_C4H10 = 40
+      integer, parameter :: id_MPAN = 41
+      integer, parameter :: id_ISOPO2 = 42
+      integer, parameter :: id_MVK = 43
+      integer, parameter :: id_MACR = 44
+      integer, parameter :: id_MACRO2 = 45
+      integer, parameter :: id_MACROOH = 46
+      integer, parameter :: id_C2H5O2 = 47
+      integer, parameter :: id_C2H5OOH = 48
+      integer, parameter :: id_C10H16 = 49
+      integer, parameter :: id_C3H8 = 50
+      integer, parameter :: id_C3H7O2 = 51
+      integer, parameter :: id_C3H7OOH = 52
+      integer, parameter :: id_CH3COCH3 = 53
+      integer, parameter :: id_CH3OH = 54
+      integer, parameter :: id_C2H5OH = 55
+      integer, parameter :: id_GLYALD = 56
+      integer, parameter :: id_HYAC = 57
+      integer, parameter :: id_EO2 = 58
+      integer, parameter :: id_EO = 59
+      integer, parameter :: id_ISOPOOH = 60
+      integer, parameter :: id_H2 = 61
+      integer, parameter :: id_SO2 = 62
+      integer, parameter :: id_SO4 = 63
+      integer, parameter :: id_DMS = 64
+      integer, parameter :: id_NH3 = 65
+      integer, parameter :: id_NH4NO3 = 66
+      integer, parameter :: id_NH4 = 67
+      integer, parameter :: id_HCl = 68
+      integer, parameter :: id_HOCl = 69
+      integer, parameter :: id_ClONO2 = 70
+      integer, parameter :: id_Cl = 71
+      integer, parameter :: id_ClO = 72
+      integer, parameter :: id_Cl2O2 = 73
+      integer, parameter :: id_Cl2 = 74
+      integer, parameter :: id_HOBr = 75
+      integer, parameter :: id_HBr = 76
+      integer, parameter :: id_BrONO2 = 77
+      integer, parameter :: id_Br = 78
+      integer, parameter :: id_BrO = 79
+      integer, parameter :: id_BrCl = 80
+      integer, parameter :: id_LCH4 = 81
+      integer, parameter :: id_H = 82
+      integer, parameter :: id_H2O = 83
+      integer, parameter :: id_ROH = 84
+      integer, parameter :: id_RCHO = 85
+      integer, parameter :: id_ISOPNB = 86
+      integer, parameter :: id_ISOPNBO2 = 87
+      integer, parameter :: id_MACRN = 88
+      integer, parameter :: id_MVKN = 89
+      integer, parameter :: id_R4N2 = 90
+      integer, parameter :: id_MEK = 91
+      integer, parameter :: id_R4N1 = 92
+      integer, parameter :: id_IEPOX = 93
+      integer, parameter :: id_IEPOXOO = 94
+      integer, parameter :: id_GLYX = 95
+      integer, parameter :: id_MGLY = 96
+      integer, parameter :: id_MVKO2 = 97
+      integer, parameter :: id_MVKOOH = 98
+      integer, parameter :: id_MACRNO2 = 99
+      integer, parameter :: id_MAO3 = 100
+      integer, parameter :: id_MAOP = 101
+      integer, parameter :: id_MAOPO2 = 102
+      integer, parameter :: id_ATO2 = 103
+      integer, parameter :: id_ATOOH = 104
+      integer, parameter :: id_INO2 = 105
+      integer, parameter :: id_INPN = 106
+      integer, parameter :: id_ISNOOA = 107
+      integer, parameter :: id_ISN1 = 108
+      integer, parameter :: id_O3S = 109
+      integer, parameter :: id_O3S_E90 = 110
       end module M_SPC_ID_MOD
-
       module M_RXT_ID_MOD
-
       implicit none
-
       integer, parameter :: rid_jo2 = 1
       integer, parameter :: rid_jo1d = 2
       integer, parameter :: rid_jo3p = 3
@@ -392,48 +356,67 @@
       integer, parameter :: rid_no2h = 200
       integer, parameter :: rid_so2h = 201
       integer, parameter :: rid_uoh_dms = 204
-      integer, parameter :: rid_nh3h = 206
-      integer, parameter :: rid_strat13 = 208
-      integer, parameter :: rid_strat14 = 209
-      integer, parameter :: rid_strat20 = 210
-      integer, parameter :: rid_strat21 = 211
-      integer, parameter :: rid_strat22 = 212
-      integer, parameter :: rid_strat23 = 213
-      integer, parameter :: rid_strat24 = 214
-      integer, parameter :: rid_strat25 = 215
-      integer, parameter :: rid_strat26 = 216
-      integer, parameter :: rid_strat27 = 217
-      integer, parameter :: rid_strat28 = 218
-      integer, parameter :: rid_strat29 = 219
-      integer, parameter :: rid_strat33 = 220
-      integer, parameter :: rid_strat35 = 221
-      integer, parameter :: rid_strat37 = 222
-      integer, parameter :: rid_strat38 = 223
-      integer, parameter :: rid_strat39 = 224
-      integer, parameter :: rid_strat40 = 225
-      integer, parameter :: rid_strat41 = 226
-      integer, parameter :: rid_strat42 = 227
-      integer, parameter :: rid_strat43 = 228
-      integer, parameter :: rid_strat44 = 229
-      integer, parameter :: rid_strat45 = 230
-      integer, parameter :: rid_strat46 = 231
-      integer, parameter :: rid_strat47 = 232
-      integer, parameter :: rid_strat48 = 233
-      integer, parameter :: rid_strat69 = 234
-      integer, parameter :: rid_strat58 = 235
-      integer, parameter :: rid_strat59 = 236
-      integer, parameter :: rid_strat64 = 237
-      integer, parameter :: rid_strat71 = 238
-      integer, parameter :: rid_strat72 = 239
-      integer, parameter :: rid_strat73 = 240
-      integer, parameter :: rid_strat74 = 241
-      integer, parameter :: rid_strat75 = 242
-      integer, parameter :: rid_strat76 = 243
-      integer, parameter :: rid_strat77 = 244
-      integer, parameter :: rid_strat78 = 245
-      integer, parameter :: rid_strat79 = 246
-      integer, parameter :: rid_strat80 = 247
-
+      integer, parameter :: rid_hno3_d1 = 206
+      integer, parameter :: rid_hno3_d2 = 207
+      integer, parameter :: rid_hno3_d3 = 208
+      integer, parameter :: rid_hno3_d4 = 209
+      integer, parameter :: rid_hno3_d5 = 210
+      integer, parameter :: rid_no3_d1 = 211
+      integer, parameter :: rid_no3_d2 = 212
+      integer, parameter :: rid_no3_d3 = 213
+      integer, parameter :: rid_no3_d4 = 214
+      integer, parameter :: rid_no3_d5 = 215
+      integer, parameter :: rid_n2o5_d1 = 216
+      integer, parameter :: rid_n2o5_d2 = 217
+      integer, parameter :: rid_n2o5_d3 = 218
+      integer, parameter :: rid_n2o5_d4 = 219
+      integer, parameter :: rid_n2o5_d5 = 220
+      integer, parameter :: rid_so2_d1 = 221
+      integer, parameter :: rid_so2_d2 = 222
+      integer, parameter :: rid_so2_d3 = 223
+      integer, parameter :: rid_so2_d4 = 224
+      integer, parameter :: rid_so2_d5 = 225
+      integer, parameter :: rid_nh3h = 226
+      integer, parameter :: rid_strat13 = 228
+      integer, parameter :: rid_strat14 = 229
+      integer, parameter :: rid_strat20 = 230
+      integer, parameter :: rid_strat21 = 231
+      integer, parameter :: rid_strat22 = 232
+      integer, parameter :: rid_strat23 = 233
+      integer, parameter :: rid_strat24 = 234
+      integer, parameter :: rid_strat25 = 235
+      integer, parameter :: rid_strat26 = 236
+      integer, parameter :: rid_strat27 = 237
+      integer, parameter :: rid_strat28 = 238
+      integer, parameter :: rid_strat29 = 239
+      integer, parameter :: rid_strat33 = 240
+      integer, parameter :: rid_strat35 = 241
+      integer, parameter :: rid_strat37 = 242
+      integer, parameter :: rid_strat38 = 243
+      integer, parameter :: rid_strat39 = 244
+      integer, parameter :: rid_strat40 = 245
+      integer, parameter :: rid_strat41 = 246
+      integer, parameter :: rid_strat42 = 247
+      integer, parameter :: rid_strat43 = 248
+      integer, parameter :: rid_strat44 = 249
+      integer, parameter :: rid_strat45 = 250
+      integer, parameter :: rid_strat46 = 251
+      integer, parameter :: rid_strat47 = 252
+      integer, parameter :: rid_strat48 = 253
+      integer, parameter :: rid_strat69 = 254
+      integer, parameter :: rid_strat58 = 255
+      integer, parameter :: rid_strat59 = 256
+      integer, parameter :: rid_strat64 = 257
+      integer, parameter :: rid_strat71 = 258
+      integer, parameter :: rid_strat72 = 259
+      integer, parameter :: rid_strat73 = 260
+      integer, parameter :: rid_strat74 = 261
+      integer, parameter :: rid_strat75 = 262
+      integer, parameter :: rid_strat76 = 263
+      integer, parameter :: rid_strat77 = 264
+      integer, parameter :: rid_strat78 = 265
+      integer, parameter :: rid_strat79 = 266
+      integer, parameter :: rid_strat80 = 267
       integer, parameter :: rid_r0045 = 45
       integer, parameter :: rid_r0046 = 46
       integer, parameter :: rid_r0047 = 47
@@ -544,14 +527,9 @@
       integer, parameter :: rid_r0202 = 202
       integer, parameter :: rid_r0203 = 203
       integer, parameter :: rid_r0205 = 205
-      integer, parameter :: rid_r0207 = 207
-      integer, parameter :: rid_r0248 = 248
-
+      integer, parameter :: rid_r0227 = 227
+      integer, parameter :: rid_r0268 = 268
       end module M_RXT_ID_MOD
-
       module M_HET_ID_MOD
-
       implicit none
-
-
       end module M_HET_ID_MOD
