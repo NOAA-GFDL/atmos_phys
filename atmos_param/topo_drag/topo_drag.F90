@@ -993,7 +993,8 @@ type(FmsNetcdfFile_t) :: topography_fileobj, dragtensor_fileobj !< Fms2io fileob
 
         allocate (zdat(ib2:ie2-1,jb2:je2-1))
         ! read relief file
-        call read_data (topography_fileobj, 'hpoz', zdat)
+        call nc_read_util ( topography_file, 'hpoz', zdat,          &
+                            nfold, ib2, ie2-1, jb2, je2-1 )
 
         exponent = 2. - gamma
         zdat = max(0., zdat)**exponent
@@ -1015,7 +1016,8 @@ type(FmsNetcdfFile_t) :: topography_fileobj, dragtensor_fileobj !< Fms2io fileob
            found_field(n) = variable_exists(dragtensor_fileobj, tensornames(n))
            if (.not. found_field(n)) cycle
 
-           call read_data (dragtensor_fileobj, tensornames(n), zdat)
+           call nc_read_util ( dragtensor_file, tensornames(n), zdat,  &
+                               nfold, ib2, ie2-1, jb2, je2-1 )
 
            ! regrid tensor elements
            if (lowercase(trim(interp_method)) == 'bilinear') then
@@ -1049,7 +1051,7 @@ type(FmsNetcdfFile_t) :: topography_fileobj, dragtensor_fileobj !< Fms2io fileob
      call close_file(dragtensor_fileobj)
 
      if(write_restarts_and_stop) then
-       call write_restart(Topo_restart)
+       call topo_drag_restart
        call error_mesg ('topo_drag_init','Write topo_drag restarts and exit!', NOTE)
        stop
      endif
@@ -1128,5 +1130,79 @@ subroutine add_domain_dimension_data(fileobj)
     deallocate(buffer)
 
 end subroutine add_domain_dimension_data
+
+!#######################################################################
+!< nc_read_util: utility to read in hpoz data file
+subroutine nc_read_util ( filename, name, var, lx, ib, ie, jb, je )
+  use netcdf
+  character(len=*),      intent (in)    :: filename, name
+  real, dimension(:,:),  intent (out)   :: var
+  integer,               intent (in)    :: lx, ib, ie, jb, je
+  ! local allocations
+  real, allocatable, dimension(:,:) :: var_west, var_east
+  integer :: status, rstatus
+  integer :: NCID, VARID
+  integer :: start(3), count(3)
+  integer :: lxwest, lxeast
+
+  status = NF90_OPEN (filename, NF90_NOWRITE, NCID)
+
+  if ( status /= 0 ) then
+     call error_handler ('netcdf file not found', FATAL) 
+  endif
+
+  status = NF90_INQ_VARID (NCID, name, VARID)
+
+  if ( status /= 0 ) then
+     call error_handler ('netcdf variable not found', FATAL) 
+  endif
+
+  if ( lx == 0 ) then
+     start(1) = ib
+     start(2) = jb
+     start(3) = 1
+     count(1) = size(var,1)
+     count(2) = size(var,2)
+     count(3) = 1
+
+     rstatus = NF90_GET_VAR ( NCID, VARID, var, start, count )
+     if ( rstatus /= 0 ) then
+        call error_handler ('read failed', FATAL)
+     endif
+  else
+     lxeast = lx - ib + 1
+     lxwest = ie - lx
+     allocate ( var_west(lxwest, size(var,2)) )
+     allocate ( var_east(lxeast, size(var,2)) )
+     start(1) = 1
+     start(2) = jb
+     start(3) = 1
+     count(1) = lxwest
+     count(2) = size(var,2)  
+     count(3) = 1
+     rstatus = NF90_GET_VAR ( NCID, VARID, var_west, start, count )
+     if ( rstatus /= 0 ) then
+        call error_handler ('read failed east of fold', FATAL) 
+     endif
+     var(lxeast+1:lxeast+lxwest,:) = var_west
+     start(1) = ib
+     count(1) = lxeast
+     rstatus = NF90_GET_VAR ( NCID, VARID, var_east, start, count )
+     if ( rstatus /= 0 ) then
+        call error_handler ('read failed west of fold', FATAL)
+     endif
+     var(1:lxeast,:) = var_east
+     deallocate ( var_west, var_east )
+  endif
+  status = NF90_CLOSE (NCID)
+  return
+end subroutine nc_read_util
+
+subroutine error_handler ( message, level )
+  character(len=*), intent(in) :: message
+  integer, intent(in) :: level
+  call error_mesg ( 'topo_drag_mod', message, level )
+  return
+end subroutine error_handler
 
 endmodule topo_drag_mod
