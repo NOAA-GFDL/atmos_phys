@@ -328,7 +328,7 @@ function check_if_tracer_initialized(tracername, domain) result (tracer_initiali
   elseif (open_file(fileobj, 'INPUT/fv_tracer.res.nc', "read", domain)) then
      tracer_initialized = variable_exists(fileobj, tracername)
      call close_file(fileobj)
-  elseif (open_file(fileobj, 'INPUT/tracer_'//trim(lowercase(tracername))//'.res', "read", domain)) then
+  elseif (open_file(fileobj, 'INPUT/tracer_'//trim(lowercase(tracername))//'.res.nc', "read", domain)) then
      tracer_initialized = variable_exists(fileobj, tracername)
      call close_file(fileobj)
   endif
