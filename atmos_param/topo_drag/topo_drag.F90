@@ -12,7 +12,7 @@ use          mpp_mod, only: input_nml_file
 use  mpp_domains_mod, only: domain2D
 use          fms_mod, only: error_mesg, FATAL, NOTE, &
                             mpp_pe, mpp_root_pe, stdout, stdlog,       &
-                            check_nml_error, write_version_number
+                            check_nml_error, write_version_number,lowercase
 use      fms2_io_mod, only: read_data, get_variable_size, variable_exists, file_exists, &
                             FmsNetcdfDomainFile_t, register_variable_attribute, &
                             register_restart_field, register_axis, unlimited, &
@@ -50,7 +50,7 @@ real, parameter :: xl=80.0e3    ! arbitrary horiz length scale for diagnostics
 real, parameter :: ro=1.2       ! arbitrary density scale for diagnostics
 real, parameter :: lapse=Grav/Cp_Air ! adiabatic temperature lapse rate
 real, parameter :: tiny=1.0e-20
-
+real, parameter :: Tpi = 2.*Pi
 real, parameter :: resolution=60.0 ! # of points per degree in topo datasets
 real, parameter :: frint=0.5
 
@@ -82,16 +82,17 @@ logical :: &
   ,do_pbl_average=.false.    & ! average u,rho,N over PBL for baseflux?
   ,use_mg_scaling=.false.    & ! base flux saturates with value 'usat'?
   ,use_mask_for_pbl=.false.  & ! use bottom no_drag_layer as pbl?
-  ,use_pbl_from_lock=.false. &  ! use pbl height from Lock boundary scheme  
-  ,use_uref_4stable=.false.  
-
+  ,use_pbl_from_lock=.false. & ! use pbl height from Lock boundary scheme? 
+  ,use_uref_4stable=.false.  & ! uref instead of u(kdim) if stable PBL?
+  ,write_restarts_and_stop=.false. ! if .true. the run stops after generating the topo_drag.res files 
+  character(len=28)  :: interp_method = 'conservative'
 NAMELIST /topo_drag_nml/                                               &
   frcrit, alin, anonlin, beta, gamma, epsi,                            &
   h_frac, zref_fac, tboost, pcut, samp, max_udt,                       &
   no_drag_frac, max_pbl_frac,                                          &
   do_conserve_energy, keep_residual_flux, do_pbl_average,              &
-  use_mg_scaling, use_mask_for_pbl, use_pbl_from_lock,                 &    !stg
-  use_uref_4stable
+  use_mg_scaling, use_mask_for_pbl, use_pbl_from_lock,                 &
+  use_uref_4stable, write_restarts_and_stop, interp_method
 
 public topo_drag, topo_drag_init, topo_drag_end
 public topo_drag_restart
@@ -100,11 +101,10 @@ contains
 
 !#######################################################################
 
-subroutine topo_drag (                                                 &
-                                       is, js, delt, uwnd, vwnd, atmp, &
-                                           pfull, phalf, zfull, zhalf, & 
-                                             lat, u_ref, v_ref, z_pbl, & !bqx+ z_pbl
-        dtaux, dtauy, dtaux_np, dtauy_np, dtemp, taux, tauy, taus, kbot )
+subroutine topo_drag (is, js, delt, uwnd, vwnd, atmp, &
+                      pfull, phalf, zfull, zhalf, & 
+                      lat, u_ref, v_ref, z_pbl, &
+      dtaux, dtauy, dtaux_np, dtauy_np, dtemp, taux, tauy, taus, kbot )
 
 integer, intent(in) :: is, js
 real,    intent(in) :: delt
@@ -122,7 +122,7 @@ integer, intent(in), optional, dimension(:,:) :: kbot
 ! ZHALF    Height at half levels (IDIM x JDIM x KDIM+1)
 
 real, intent(in), dimension(:,:,:) :: uwnd, vwnd, atmp
-real, intent(in), dimension(:,:)   :: lat, u_ref, v_ref, z_pbl  !bqx+
+real, intent(in), dimension(:,:)   :: lat, u_ref, v_ref, z_pbl
 real, intent(in), dimension(:,:,:) :: pfull, phalf, zfull, zhalf
 
 ! OUTPUT
@@ -709,9 +709,103 @@ integer :: k, kdim
 
 end subroutine get_pbl
 
+subroutine map_horiz_grid (                                            & 
+                                   lon_des, lat_des, lon_src, lat_src, &
+                                                   ib2, ie2, jb2, je2, &
+                                                                 fold )
+
+real, intent(in), dimension(:,:) :: lon_des, lat_des
+real, intent(in), dimension(:)   :: lon_src, lat_src
+integer, intent(out) :: ib2, ie2, jb2, je2
+logical, intent(out) :: fold
+
+!-----------------------------------------------------------------------
+! local allocations
+!-----------------------------------------------------------------------
+
+real, dimension(size(lon_des,1),size(lon_des,2)) :: lon
+real :: slat, nlat, wlon, elon
+integer :: idim, jdim
+logical :: pole
+
+  idim = size(lon_des,1)
+  jdim = size(lon_des,2)
+
+  slat = minval(lat_des)
+  nlat = maxval(lat_des)
+
+  pole = ((lat_des(2,2)-lat_des(1,1))*                                 &
+          (lat_des(idim,jdim)-lat_des(idim-1,jdim-1)) < 0)
+
+  fold = (abs(lon_des(idim,jdim) - lon_des(1,1)) > pi)
+
+  idim = size(lon_src)
+  jdim = size(lat_src)
+
+  if (pole) then
+
+     call get_indices ( jdim, jb2, je2, lat_src, slat, nlat )
+     ib2 = 1 ; ie2 = idim
+     je2 = jdim
+
+  else
+
+     lon = lon_des
+
+     if (fold) where (lon < pi) lon = lon + Tpi
+
+     wlon = minval(lon)
+     elon = mod(maxval(lon), Tpi)
+
+     call get_indices ( idim, ib2, ie2, lon_src, wlon, elon )
+     call get_indices ( jdim, jb2, je2, lat_src, slat, nlat )
+
+  endif
+
+  if ( fold .and. .NOT. pole ) ie2 = ie2 + ipts
+
+  return
+end subroutine map_horiz_grid
+
+!#######################################################################
+
+subroutine get_indices (                                               &
+                                                     ndim, nbeg, nend, &
+                                 axis_src, axis_des_beg, axis_des_end )
+
+integer,                    intent (in)  :: ndim
+integer,                    intent (out) :: nbeg, nend
+real, dimension(ndim),      intent (in)  :: axis_src
+real,                       intent (in)  :: axis_des_beg, axis_des_end
+
+!-----------------------------------------------------------------------
+! local allocations
+!-----------------------------------------------------------------------
+
+  integer, parameter :: npad=3
+  integer :: n
+
+  do n=1,ndim
+     nbeg = n-1
+     if ( axis_src(n) > axis_des_beg ) exit
+  enddo
+
+  do n=ndim,1,-1
+     nend = n+1
+     if ( axis_src(n) < axis_des_end ) exit
+  enddo
+
+  if ( nbeg == 0 .or. nend == ndim+1 ) &
+     call error_mesg('topo_drag_mod','destination grid is not inside source grid', FATAL)
+
+  nbeg = max(1,nbeg-npad)
+  nend = min(ndim,nend+npad)
+
+  return
+end subroutine get_indices
+
 !=======================================================================
  subroutine topo_drag_register_tile_restart(restart)
-
      type(FmsNetcdfDomainFile_t), intent(inout) :: restart
      character(len=8), dimension(3)             :: dim_names
 
@@ -747,19 +841,26 @@ character(len=64)  :: topography_file='INPUT/poztopog.nc'
 character(len=64)  :: dragtensor_file='INPUT/dragelements.nc'
 character(len=3)   :: tensornames(4) = (/ 't11', 't21', 't12', 't22' /)
 
-logical :: found_field(4)
+logical :: found_field(4), fold
 
 real, parameter :: bfscale=1.0e-2      ! buoyancy frequency scale [1/s]
 
-real, allocatable, dimension(:)   :: xdatb, ydatb
-real, allocatable, dimension(:,:) :: zdat, zout
-type (horiz_interp_type) :: Interp
-real :: exponent, hmod
+real, parameter :: flonmin = 0.
+real, parameter :: flonmax = 360.
+real, parameter :: flatmin = -90.
+real, parameter :: flatmax = 90.
 
-integer :: n
+real, allocatable, dimension(:)   :: flonb, flatb, glonb, glatb
+real, allocatable, dimension(:,:) :: clonb, clatb
+real, allocatable, dimension(:,:) :: zdat, zout, zoutb
+type (horiz_interp_type) :: Interp
+real :: exponent
+
+integer :: n, nfold
 integer :: io, ierr, unit_nml, logunit
 integer :: i, j
-integer :: siz(4)
+integer :: ib, ie, jb, je, ib2, ie2, jb2, je2
+integer :: siz(2)
 type(FmsNetcdfDomainFile_t) :: Topo_restart !< Fms2io domain decomposed fileobj
 type(FmsNetcdfFile_t) :: topography_fileobj, dragtensor_fileobj !< Fms2io fileobj
 
@@ -808,9 +909,9 @@ type(FmsNetcdfFile_t) :: topography_fileobj, dragtensor_fileobj !< Fms2io fileob
 
 !    read and interpolate topography datasets
 
+     ! check for correct field size in topography file
      if (mpp_pe() == mpp_root_pe()) then
-        write ( msg, '("Reading topography file: ",a)')                &
-                                                        trim(topography_file)
+        write ( msg, '("Reading topography file: ",a)') trim(topography_file)
         call error_mesg('topo_drag_mod', msg, NOTE)
      endif
 
@@ -823,89 +924,139 @@ type(FmsNetcdfFile_t) :: topography_fileobj, dragtensor_fileobj !< Fms2io fileob
      endif
 
      ! check for correct field size in topography
-     call get_variable_size(topography_fileobj, 'hpos', siz)
+     call get_variable_size(topography_fileobj, 'hpoz', siz)
      if (siz(1) /= ipts .or. siz(2) /= jpts) then
-         call error_mesg('topo_drag_mod', 'Field \"hpos\" in file '//  &
+         call error_mesg('topo_drag_mod', 'Field \"hpoz\" in file '//  &
                    trim(topography_file)//' has the wrong size', FATAL)
-     endif
-     
-     allocate (xdatb(ipts+1))
-     allocate (ydatb(jpts+1))
-     allocate (zdat(ipts,jpts))
-     allocate (zout(nlon,nlat))
-
-     do i=1,ipts+1
-        xdatb(i) = (i-1)/resolution / Radian
-     enddo
-     do j=1,jpts+1
-        ydatb(j) = (-90.0 + (j-1)/resolution) / Radian
-     enddo
-
-     allocate (lon(nlon,nlat),lat(nlon,nlat))
-     do i=1,nlon
-        do j=1,nlat
-           lon(i,j) = 0.25*(lonb(i,j)+lonb(i+1,j)+lonb(i,j+1)+lonb(i+1,j+1))
-           lat(i,j) = 0.25*(latb(i,j)+latb(i+1,j)+latb(i,j+1)+latb(i+1,j+1))
-        enddo
-     enddo
-
-     ! initialize horizontal interpolation
-
-     call horiz_interp_init
-     call horiz_interp_new ( Interp, xdatb, ydatb, lonb, latb, interp_method="conservative" )
-
-     call read_data (topography_fileobj, 'hpos', zdat)
-
-     exponent = 2. - gamma
-     zdat = max(0., zdat)**exponent
-     call horiz_interp ( Interp, zdat, zout )
-
-     hmax = (abs(zout)*(gamma + 2.)/(2.*gamma) * &
-          (1. - h_frac**(2.*gamma))/(1. - h_frac**(gamma + 2.)))**(1.0/exponent)
-     hmin = hmax*h_frac
-
-     if (mpp_pe() == mpp_root_pe()) then
-        write ( msg, '("Reading drag tensor file: ",a)')             &
-                                                trim(dragtensor_file)
-        call error_mesg('topo_drag_mod', msg, NOTE)
      endif
 
      ! check for correct field size in tensor file
 
+     if (mpp_pe() == mpp_root_pe()) then
+        write ( msg, '("Reading drag tensor file: ",a)')               &
+                                                trim(dragtensor_file)
+        call error_mesg('topo_drag_mod', msg, NOTE)
+     endif
      call get_variable_size(dragtensor_fileobj, tensornames(1), siz)
      if (siz(1) /= ipts .or. siz(2) /= jpts) then
          call error_mesg('topo_drag_mod', 'Fields in file ' &
          //trim(dragtensor_file)//' have the wrong size', FATAL)
      endif
 
-     do n=1,4
-        found_field(n) = variable_exists(dragtensor_fileobj, tensornames(n))
-        if (.not. found_field(n)) cycle
-        call read_data (dragtensor_fileobj, tensornames(n), zdat)
-        call horiz_interp ( Interp, zdat, zout )
-        if ( tensornames(n) == 't11' ) then
-           t11 = zout/bfscale
-        else if ( tensornames(n) == 't21' ) then
-           t21 = zout/bfscale
-        else if ( tensornames(n) == 't12' ) then
-           t12 = zout/bfscale
-        else if ( tensornames(n) == 't22' ) then
-           t22 = zout/bfscale
-        endif
+     allocate (zout(1:nlon,1:nlat))
+     allocate (zoutb(1:nlon+1,1:nlat+1))
+     allocate (flonb(ipts+1))
+     allocate (flatb(jpts+1))
+
+     do i=1,ipts+1
+        flonb(i) = (i-1)/resolution / Radian
      enddo
+     do j=1,jpts+1
+        flatb(j) = (-90.0 + (j-1)/resolution) / Radian
+     enddo
+
+     ! initialize horizontal interpolation
+     call horiz_interp_init
+
+     ! new data input procedure
+     call map_horiz_grid (lonb, latb, flonb, flatb, ib2, ie2, jb2, je2, fold )
+
+        if (fold) then
+           nfold = ipts
+        else
+           nfold = 0
+        endif
+
+        allocate (glonb(ib2:ie2))
+        allocate (glatb(jb2:je2))
+
+        do i=ib2,ie2
+           glonb(i) = (i-1)/resolution / Radian
+        enddo
+        do j=jb2,je2
+           glatb(j) = (-90.0 + (j-1)/resolution) / Radian
+        enddo
+ 
+        allocate (clonb(nlon+1,nlat+1))
+        allocate (clatb(nlon+1,nlat+1))
+
+        clonb = lonb
+        clatb = latb
+        if (fold) then
+           where (clonb(:,:) < pi) clonb(:,:) = clonb(:,:) + Tpi
+        endif
+
+        ! initialize horizontal interpolation
+
+        call horiz_interp_new ( Interp, glonb, glatb,                &
+                         clonb, clatb, interp_method=interp_method)
+
+        allocate (zdat(ib2:ie2-1,jb2:je2-1))
+        ! read relief file
+        call nc_read_util ( topography_file, 'hpoz', zdat,          &
+                            nfold, ib2, ie2-1, jb2, je2-1 )
+
+        exponent = 2. - gamma
+        zdat = max(0., zdat)**exponent
+        ! regrid hpoz
+        if (lowercase(trim(interp_method)) == 'bilinear') then
+          call horiz_interp( Interp, zdat, zoutb)
+          zout(1:nlon,1:nlat)=zoutb(1:nlon,1:nlat)
+        else
+          call horiz_interp( Interp, zdat, zout)
+        endif
+        hmax = (abs(zout)*(gamma + 2.)/(2.*gamma) * &
+          (1. - h_frac**(2.*gamma))/(1. - h_frac**(gamma + 2.)))**(1.0/exponent)
+        hmin = hmax*h_frac
+        if(write_restarts_and_stop) print*,'topo_drag maxvals of zdat,zout',maxval(zdat),maxval(zout)
+
+        ! read tensor file
+
+        do n=1,4
+           found_field(n) = variable_exists(dragtensor_fileobj, tensornames(n))
+           if (.not. found_field(n)) cycle
+
+           call nc_read_util ( dragtensor_file, tensornames(n), zdat,  &
+                               nfold, ib2, ie2-1, jb2, je2-1 )
+
+           ! regrid tensor elements
+           if (lowercase(trim(interp_method)) == 'bilinear') then
+             call horiz_interp( Interp, zdat, zoutb)
+             zout(1:nlon,1:nlat)=zoutb(1:nlon,1:nlat)
+           else
+             call horiz_interp( Interp, zdat, zout)
+           endif
+
+           if ( tensornames(n) == 't11' ) then
+              t11 = zout/bfscale
+           else if ( tensornames(n) == 't21' ) then
+              t21 = zout/bfscale
+           else if ( tensornames(n) == 't12' ) then
+              t12 = zout/bfscale
+           else if ( tensornames(n) == 't22' ) then
+              t22 = zout/bfscale
+           endif
+        enddo
+
+        deallocate (glonb, glatb)
+        deallocate (clonb, clatb)
 
      if (.not. found_field(3)) t12 = t21
 
-     deallocate (zdat, zout)
+     deallocate (flonb, flatb)
+     deallocate (zdat, zout, zoutb)
      call horiz_interp_del ( Interp )
 
      call close_file(topography_fileobj)
      call close_file(dragtensor_fileobj)
 
+     if(write_restarts_and_stop) then
+       call topo_drag_restart
+       call error_mesg ('topo_drag_init','Write topo_drag restarts and exit!', NOTE)
+       stop
+     endif
   else
-
-     call ERROR_MESG ('topo_drag_init',                                &
-                'No sub-grid orography available for topo_drag', FATAL)
+     call error_mesg ('topo_drag_init','No sub-grid orography available for topo_drag', FATAL)
 
   endif
 
@@ -979,5 +1130,79 @@ subroutine add_domain_dimension_data(fileobj)
     deallocate(buffer)
 
 end subroutine add_domain_dimension_data
+
+!#######################################################################
+!< nc_read_util: utility to read in hpoz data file
+subroutine nc_read_util ( filename, name, var, lx, ib, ie, jb, je )
+  use netcdf
+  character(len=*),      intent (in)    :: filename, name
+  real, dimension(:,:),  intent (out)   :: var
+  integer,               intent (in)    :: lx, ib, ie, jb, je
+  ! local allocations
+  real, allocatable, dimension(:,:) :: var_west, var_east
+  integer :: status, rstatus
+  integer :: NCID, VARID
+  integer :: start(3), count(3)
+  integer :: lxwest, lxeast
+
+  status = NF90_OPEN (filename, NF90_NOWRITE, NCID)
+
+  if ( status /= 0 ) then
+     call error_handler ('netcdf file not found', FATAL) 
+  endif
+
+  status = NF90_INQ_VARID (NCID, name, VARID)
+
+  if ( status /= 0 ) then
+     call error_handler ('netcdf variable not found', FATAL) 
+  endif
+
+  if ( lx == 0 ) then
+     start(1) = ib
+     start(2) = jb
+     start(3) = 1
+     count(1) = size(var,1)
+     count(2) = size(var,2)
+     count(3) = 1
+
+     rstatus = NF90_GET_VAR ( NCID, VARID, var, start, count )
+     if ( rstatus /= 0 ) then
+        call error_handler ('read failed', FATAL)
+     endif
+  else
+     lxeast = lx - ib + 1
+     lxwest = ie - lx
+     allocate ( var_west(lxwest, size(var,2)) )
+     allocate ( var_east(lxeast, size(var,2)) )
+     start(1) = 1
+     start(2) = jb
+     start(3) = 1
+     count(1) = lxwest
+     count(2) = size(var,2)  
+     count(3) = 1
+     rstatus = NF90_GET_VAR ( NCID, VARID, var_west, start, count )
+     if ( rstatus /= 0 ) then
+        call error_handler ('read failed east of fold', FATAL) 
+     endif
+     var(lxeast+1:lxeast+lxwest,:) = var_west
+     start(1) = ib
+     count(1) = lxeast
+     rstatus = NF90_GET_VAR ( NCID, VARID, var_east, start, count )
+     if ( rstatus /= 0 ) then
+        call error_handler ('read failed west of fold', FATAL)
+     endif
+     var(1:lxeast,:) = var_east
+     deallocate ( var_west, var_east )
+  endif
+  status = NF90_CLOSE (NCID)
+  return
+end subroutine nc_read_util
+
+subroutine error_handler ( message, level )
+  character(len=*), intent(in) :: message
+  integer, intent(in) :: level
+  call error_mesg ( 'topo_drag_mod', message, level )
+  return
+end subroutine error_handler
 
 endmodule topo_drag_mod
