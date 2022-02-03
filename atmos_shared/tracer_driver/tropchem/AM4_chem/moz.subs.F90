@@ -1,37 +1,22 @@
-
-
-
-
-
-
       module mo_setrxt_mod
-
       private
       public :: setrxt
-
       contains
-
       subroutine setrxt( rate, temp, m, plonl, plev, plnplv )
-
-
       use CHEM_MODS_MOD, only : rxntot
       use mo_jpl_mod, only : jpl
-
       implicit none
-
 !-------------------------------------------------------
 ! ... Dummy arguments
 !-------------------------------------------------------
       integer, intent(in) :: plonl, plev, plnplv
       real, intent(in) :: temp(plonl,plev), m(plonl,plev)
       real, intent(inout) :: rate(plonl,plev,rxntot)
-
 !-------------------------------------------------------
 ! ... Local variables
 !-------------------------------------------------------
       real :: itemp(plonl,plev), exp_fac(plonl,plev)
       real, dimension(plonl,plev) :: ko, kinf
-
       rate(:,:,50) = 1.2e-10
       rate(:,:,56) = 1.8e-12
       rate(:,:,58) = 1.8e-12
@@ -218,90 +203,64 @@
       rate(:,:,250) = 4.8e-12 * exp( -310. * itemp(:,:) )
       rate(:,:,254) = 6.0e-13 * exp( 230. * itemp(:,:) )
       rate(:,:,255) = 4.5e-14 * exp( -1260. * itemp(:,:) )
-
       itemp(:,:) = 300. * itemp(:,:)
-
       ko(:,:) = 5.9e-33 * itemp(:,:)**1.4
       kinf(:,:) = 1.1e-12 * itemp(:,:)**-1.3
       call jpl( rate(1,1,48), m, .6, ko, kinf, plnplv )
-
       ko(:,:) = 1.5e-13 * itemp(:,:)**-0.6
       kinf(:,:) = 2.1e9 * itemp(:,:)**-6.1
       call jpl( rate(1,1,49), m, .6, ko, kinf, plnplv )
-
       ko(:,:) = 2.e-30 * itemp(:,:)**4.4
       kinf(:,:) = 1.4e-12 * itemp(:,:)**.7
       call jpl( rate(1,1,70), m, .6, ko, kinf, plnplv )
-
       ko(:,:) = 1.8e-30 * itemp(:,:)**3.0
       kinf(:,:) = 2.8e-11
       call jpl( rate(1,1,73), m, .6, ko, kinf, plnplv )
-
       ko(:,:) = 2.0e-31 * itemp(:,:)**3.4
       kinf(:,:) = 2.9e-12 * itemp(:,:)**1.1
       call jpl( rate(1,1,76), m, .6, ko, kinf, plnplv )
-
       ko(:,:) = 1.e-28 * itemp(:,:)**4.5
       kinf(:,:) = 7.5e-12 * itemp(:,:)**0.85
       call jpl( rate(1,1,88), m, .6, ko, kinf, plnplv )
-
       ko(:,:) = 8.e-27 * itemp(:,:)**3.5
       kinf(:,:) = 3.e-11
       call jpl( rate(1,1,93), m, .5, ko, kinf, plnplv )
-
       ko(:,:) = 9.7e-29 * itemp(:,:)**5.6
       kinf(:,:) = 9.3e-12 * itemp(:,:)**1.5
       call jpl( rate(1,1,102), m, .6, ko, kinf, plnplv )
-
       ko(:,:) = 9.0e-28 * itemp(:,:)**8.9
       kinf(:,:) = 7.7e-12 * itemp(:,:)**.2
       call jpl( rate(1,1,162), m, .6, ko, kinf, plnplv )
-
       ko(:,:) = 3.3e-31 * itemp(:,:)**4.3
       kinf(:,:) = 1.6e-12
       call jpl( rate(1,1,202), m, 0.6, ko, kinf, plnplv )
-
       ko(:,:) = 4.4e-32 * itemp(:,:)**1.3
       kinf(:,:) = 4.7e-11 * itemp(:,:)**0.2
       call jpl( rate(1,1,229), m, 0.6, ko, kinf, plnplv )
-
       ko(:,:) = 1.8e-31 * itemp(:,:)**3.4
       kinf(:,:) = 1.5e-11 * itemp(:,:)**1.9
       call jpl( rate(1,1,233), m, 0.6, ko, kinf, plnplv )
-
       ko(:,:) = 6.9e-31 * itemp(:,:)**1.0
       kinf(:,:) = 2.6e-11
       call jpl( rate(1,1,241), m, 0.6, ko, kinf, plnplv )
-
       ko(:,:) = 1.6e-32 * itemp(:,:)**4.5
       kinf(:,:) = 2.0e-12 * itemp(:,:)**2.4
       call jpl( rate(1,1,242), m, 0.6, ko, kinf, plnplv )
-
       ko(:,:) = 5.2e-31 * itemp(:,:)**3.2
       kinf(:,:) = 6.9e-12 * itemp(:,:)**2.9
       call jpl( rate(1,1,245), m, 0.6, ko, kinf, plnplv )
-
       ko(:,:) = 9.0e-32 * itemp(:,:)**1.5
       kinf(:,:) = 3.0e-11
       call jpl( rate(1,1,257), m, 0.6, ko, kinf, plnplv )
-
       end subroutine setrxt
-
       end module mo_setrxt_mod
-
       module mo_adjrxt_mod
-
       private
       public :: adjrxt
-
       contains
-
       subroutine adjrxt( rate, inv, m, plnplv )
-
       use CHEM_MODS_MOD, only : nfs, rxntot
-
       implicit none
-
 !--------------------------------------------------------------------
 ! ... Dummy arguments
 !--------------------------------------------------------------------
@@ -309,12 +268,10 @@
       real, intent(in) :: inv(plnplv,nfs)
       real, intent(in) :: m(plnplv)
       real, intent(inout) :: rate(plnplv,rxntot)
-
 !--------------------------------------------------------------------
 ! ... Local variables
 !--------------------------------------------------------------------
       real :: im(plnplv)
-
       rate(:, 46) = rate(:, 46) * inv(:, 3)
       rate(:, 48) = rate(:, 48) * inv(:, 1)
       rate(:, 60) = rate(:, 60) * inv(:, 2)
@@ -523,24 +480,15 @@
       rate(:,265) = rate(:,265) * m(:)
       rate(:,266) = rate(:,266) * m(:)
       rate(:,267) = rate(:,267) * m(:)
-
       end subroutine adjrxt
-
       end module mo_adjrxt_mod
-
       module mo_phtadj_mod
-
       private
       public :: phtadj
-
       contains
-
       subroutine phtadj( p_rate, inv, m, plnplv )
-
       use CHEM_MODS_MOD, only : nfs, phtcnt
-
       implicit none
-
 !--------------------------------------------------------------------
 ! ... Dummy arguments
 !--------------------------------------------------------------------
@@ -548,32 +496,21 @@
       real, intent(in) :: inv(plnplv,nfs)
       real, intent(in) :: m(plnplv)
       real, intent(inout) :: p_rate(plnplv,phtcnt)
-
 !--------------------------------------------------------------------
 ! ... Local variables
 !--------------------------------------------------------------------
       real :: im(plnplv)
-
       im(:) = 1. / m(:)
       p_rate(:, 1) = p_rate(:, 1) * inv(:, 3) * im(:)
-
       end subroutine phtadj
-
       end module mo_phtadj_mod
-
       module mo_rxt_mod
-
       private
       public :: rxt_mod
-
       contains
-
       subroutine rxt_mod( rate, het_rates, grp_ratios, plnplv )
-
       use CHEM_MODS_MOD, only : rxntot, hetcnt, grpcnt
-
       implicit none
-
 !---------------------------------------------------------------------------
 ! ... Dummy arguments
 !---------------------------------------------------------------------------
@@ -581,26 +518,16 @@
       real, intent(inout) :: rate(plnplv,rxntot)
       real, intent(inout) :: het_rates(plnplv,hetcnt)
       real, intent(in) :: grp_ratios(plnplv,grpcnt)
-
-
       end subroutine rxt_mod
-
       end module mo_rxt_mod
-
       module mo_make_grp_vmr_mod
-
       private
       public :: mak_grp_vmr
-
       contains
-
       subroutine mak_grp_vmr( vmr, group_ratios, group_vmrs, plonl )
-
       use MO_GRID_MOD, only : plev, pcnstm1
       use CHEM_MODS_MOD, only : grpcnt
-
       implicit none
-
 !----------------------------------------------------------------------------
 ! ... Dummy arguments
 !----------------------------------------------------------------------------
@@ -608,12 +535,9 @@
       real, intent(in) :: vmr(plonl,plev,pcnstm1)
       real, intent(in) :: group_ratios(plonl,plev,grpcnt)
       real, intent(out) :: group_vmrs(plonl,plev,grpcnt)
-
 !----------------------------------------------------------------------------
 ! ... Local variables
 !----------------------------------------------------------------------------
       integer :: k
-
       end subroutine mak_grp_vmr
-
       end module mo_make_grp_vmr_mod
