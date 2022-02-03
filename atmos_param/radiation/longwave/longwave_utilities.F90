@@ -37,22 +37,22 @@ end interface
 public :: gas_tf_type
 
 type gas_tf_type
-     real, dimension(:,:,:),   pointer :: tdav=>NULL(),    &
-                                          tlsqu=>NULL(),   &
-                                          tmpdiff=>NULL(), &
-                                          tstdav=>NULL(),  &
-                                          n2o9c=>NULL(),   &
-                                          tn2o17=>NULL()
-     real, dimension(:,:,:),   pointer :: co2nbl=>NULL()
-     real, dimension(:,:,:),   pointer :: co2990nbl=>NULL(), &
-                                          co2900nbl=>NULL(), &
-                                          co21070nbl=>NULL()
-     real, dimension(:,:,:,:), pointer :: co2spnb=>NULL()
-     real, dimension(:,:,:),   pointer :: co2990spnb=>NULL()
-     real, dimension(:,:,:),   pointer :: co2900spnb=>NULL()
-     real, dimension(:,:,:),   pointer :: co21070spnb=>NULL()
-     real, dimension(:,:),     pointer :: a1=>NULL(),    &
-                                          a2=>NULL()
+     real, dimension(:,:,:),   allocatable :: tdav,    &
+                                          tlsqu,   &
+                                          tmpdiff, &
+                                          tstdav,  &
+                                          n2o9c,   &
+                                          tn2o17
+     real, dimension(:,:,:),   allocatable :: co2nbl
+     real, dimension(:,:,:),   allocatable :: co2990nbl, &
+                                          co2900nbl, &
+                                          co21070nbl
+     real, dimension(:,:,:,:), allocatable :: co2spnb
+     real, dimension(:,:,:),   allocatable :: co2990spnb
+     real, dimension(:,:,:),   allocatable :: co2900spnb
+     real, dimension(:,:,:),   allocatable :: co21070spnb
+     real, dimension(:,:),     allocatable :: a1,    &
+                                          a2
 end type gas_tf_type
 
 !------------------------------------------------------------------
@@ -60,10 +60,10 @@ end type gas_tf_type
 public longwave_tables1_type
 
 type longwave_tables1_type
-    real, dimension(:,:), pointer  ::  vae=>NULL(),   &
-                                       td=>NULL(), &
-                                       md=>NULL(), &
-                                       cd=>NULL()
+    real, dimension(:,:), allocatable  ::  vae,   &
+                                       td, &
+                                       md, &
+                                       cd
 end type longwave_tables1_type
 
 !--------------------------------------------------------------------
@@ -71,10 +71,10 @@ end type longwave_tables1_type
 public longwave_tables2_type
 
 type longwave_tables2_type
-    real, dimension(:,:,:), pointer  ::  vae=>NULL(),  &
-                                         td=>NULL(),  &
-                                         md=>NULL(),   &
-                                         cd=>NULL()
+    real, dimension(:,:,:), allocatable  ::  vae,  &
+                                         td,  &
+                                         md,   &
+                                         cd
 end type longwave_tables2_type
 
 !---------------------------------------------------------------------
@@ -82,8 +82,8 @@ end type longwave_tables2_type
 public longwave_tables3_type
 
 type longwave_tables3_type
-     real,  dimension(:,:), pointer    ::  vae=>NULL(),   &
-                                           td=>NULL()
+     real,  dimension(:,:), allocatable    ::  vae,   &
+                                           td
 end type longwave_tables3_type
 
 !---------------------------------------------------------------------
@@ -91,9 +91,9 @@ end type longwave_tables3_type
 public lw_clouds_type
 
 type lw_clouds_type
-     real, dimension(:,:,:,:),   pointer :: taucld_rndlw=>NULL(), &
-                                            taucld_mxolw=>NULL(), &
-                                            taunbl_mxolw=>NULL()
+     real, dimension(:,:,:,:),   allocatable :: taucld_rndlw, &
+                                            taucld_mxolw, &
+                                            taunbl_mxolw
 end type lw_clouds_type
 
 !------------------------------------------------------------------
@@ -101,11 +101,11 @@ end type lw_clouds_type
 public lw_table_type
 
 type lw_table_type
-     real, dimension(:),    pointer :: bdlocm=>NULL(),   &
-                                       bdhicm=>NULL(),  &
-                                       bandlo=>NULL(),  &
-                                       bandhi=>NULL()
-     integer, dimension(:), pointer :: iband=>NULL()
+     real, dimension(:),    allocatable :: bdlocm,   &
+                                       bdhicm,  &
+                                       bandlo,  &
+                                       bandhi
+     integer, dimension(:), allocatable :: iband
 end type lw_table_type
 
 !------------------------------------------------------------------
@@ -113,42 +113,42 @@ end type lw_table_type
 public optical_path_type
 
 type optical_path_type
-     real, dimension (:,:,:,:), pointer :: empl1f=>NULL(),  &
-                                           empl2f=>NULL(),  &
-                                           vrpfh2o=>NULL(), &
-                                           xch2obd=>NULL(),  &
-                                           tphfh2o=>NULL(), &
-                                           avephif=>NULL(), &
-                                           totaerooptdep=>NULL()
-     real, dimension (:,:,:),   pointer :: empl1=>NULL(), &
-                                           empl2=>NULL(),  &
-                                           var1=>NULL(), &
-                                           var2=>NULL(), &
-                                           emx1f=>NULL(),   &
-                                           emx2f=>NULL(),   &
-                                           totvo2=>NULL(),  &
-                                           avephi=>NULL(),&
-                                           totch2obdwd=>NULL(), &
-                                           xch2obdwd=>NULL(), &
-                                           totphi=>NULL(),   &
-                                           cntval=>NULL(), &
-                                           toto3=>NULL(),   &
-                                           tphio3=>NULL(),  &
-                                           var3=>NULL(),  &
-                                           var4=>NULL(),        &
-                                           wk=>NULL(),         &
-                                           rh2os=>NULL(),  &
-                                           rfrgn=>NULL(),  &
-                                           tfac=>NULL(), &
-                                           totaerooptdep_15=>NULL(), &
-                                           totf11=>NULL(),   &
-                                           totf12=>NULL(),  &
-                                           totf113=>NULL(),   &
-                                           totf22=>NULL()
-      real, dimension (:,:), pointer    :: emx1=>NULL(),  &
-                                           emx2=>NULL(),  &
-                                           csfah2o=>NULL(), &
-                                           aerooptdep_KE_15=>NULL()
+     real, dimension (:,:,:,:), allocatable :: empl1f,  &
+                                           empl2f,  &
+                                           vrpfh2o, &
+                                           xch2obd,  &
+                                           tphfh2o, &
+                                           avephif, &
+                                           totaerooptdep
+     real, dimension (:,:,:),   allocatable :: empl1, &
+                                           empl2,  &
+                                           var1, &
+                                           var2, &
+                                           emx1f,   &
+                                           emx2f,   &
+                                           totvo2,  &
+                                           avephi,&
+                                           totch2obdwd, &
+                                           xch2obdwd, &
+                                           totphi,   &
+                                           cntval, &
+                                           toto3,   &
+                                           tphio3,  &
+                                           var3,  &
+                                           var4,        &
+                                           wk,         &
+                                           rh2os,  &
+                                           rfrgn,  &
+                                           tfac, &
+                                           totaerooptdep_15, &
+                                           totf11,   &
+                                           totf12,  &
+                                           totf113,   &
+                                           totf22
+      real, dimension (:,:), allocatable    :: emx1,  &
+                                           emx2,  &
+                                           csfah2o, &
+                                           aerooptdep_KE_15
 end type optical_path_type
 
 !------------------------------------------------------------------
