@@ -140,7 +140,7 @@ contains
  real,    intent(inout), dimension(:,:,:)   :: udt,vdt,tdt,qdt
  real,    intent(inout), dimension(:,:,:,:) :: rdt
  real,    intent(in),    dimension(:,:)     :: z_pbl, area 
- class(*),    intent(in),    dimension(:,:,:), optional :: mask
+ real,    intent(in),    dimension(:,:,:), optional :: mask
  integer, intent(in),    dimension(:,:),   optional :: kbot
 
 !-----------------------------------------------------------------------

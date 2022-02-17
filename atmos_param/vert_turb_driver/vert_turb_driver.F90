@@ -61,7 +61,6 @@ use atmos_cmip_diag_mod, only: register_cmip_diag_field_2d, &
                                send_cmip_data_3d, &
                                cmip_diag_id_type, &
                                query_cmip_diag_id
-use platform_mod, only: r8_kind, r4_kind
 
 implicit none
 private
@@ -188,7 +187,7 @@ logical, intent(in), dimension(:,:) :: convect
    real, intent(inout), dimension(:,:,:,ntp+1:) :: rdiag
    real, intent(out),   dimension(:,:,:) :: diff_t, diff_m
    real, intent(out),   dimension(:,:)   :: gust, z_pbl 
-   class(*), intent(in),optional, dimension(:,:,:) :: mask
+   real, intent(in),optional, dimension(:,:,:) :: mask
 integer, intent(in),optional, dimension(:,:) :: kbot
 
 !---> h1g, 2015-08-11
@@ -305,14 +304,8 @@ if (do_mellor_yamada) then
      else
        thv(:,:,:)=tt(:,:,:)*(qq(:,:,:)*d608+1.0)*ape(:,:,:)
      endif  
-     if (present(mask)) then
-       select type(mask)
-       type is (real(kind=r8_kind))
-         where (mask < 0.5) thv = 200.
-       type is (real(kind=r4_kind))
-         where (mask < 0.5) thv = 200.
-       end select
-     endif
+     if (present(mask)) where (mask < 0.5) thv = 200.
+
  endif
 
 !---------------------------
@@ -546,12 +539,7 @@ if (do_mellor_yamada .or. do_tke_turb) then
 !     --- set up local mask for fields with surface data ---
       if ( present(mask) ) then
          lmask(:,:,1)        = .true.
-         select type(mask)
-         type is (real(kind=r4_kind))
-           lmask(:,:,2:nlev+1) = mask(:,:,1:nlev) > 0.5
-         type is (real(kind=r8_kind))
-           lmask(:,:,2:nlev+1) = mask(:,:,1:nlev) > 0.5
-         end select
+         lmask(:,:,2:nlev+1) = mask(:,:,1:nlev) > 0.5
       else
          lmask = .true.
       endif
@@ -581,12 +569,7 @@ if (do_edt) then
 !     --- set up local mask for fields with surface data ---
     if ( present(mask) ) then
           lmask(:,:,1)        = .true.
-          select type(mask)
-          type is (real(kind=r4_kind))
-           lmask(:,:,2:nlev+1) = mask(:,:,1:nlev) > 0.5
-          type is (real(kind=r8_kind))
-           lmask(:,:,2:nlev+1) = mask(:,:,1:nlev) > 0.5
-          end select
+          lmask(:,:,2:nlev+1) = mask(:,:,1:nlev) > 0.5
      else   
         lmask = .true.
        endif
@@ -659,13 +642,8 @@ end if
        query_cmip_diag_id(ID_edt) .or. query_cmip_diag_id(ID_evu) ) then
 !       --- set up local mask for fields without surface data ---
         if (present(mask)) then
-           select type (mask)
-           type is (real(kind=r4_kind))
-             lmask(:,:,1:nlev) = mask(:,:,1:nlev) > 0.5
-           type is (real(kind=r8_kind))
-             lmask(:,:,1:nlev) = mask(:,:,1:nlev) > 0.5
-           end select
-           lmask(:,:,nlev+1) = .false.
+            lmask(:,:,1:nlev) = mask(:,:,1:nlev) > 0.5
+            lmask(:,:,nlev+1) = .false.
         else
             lmask(:,:,1:nlev) = .true.
             lmask(:,:,nlev+1) = .false.
@@ -737,12 +715,7 @@ end if
       !--- set up local mask for fields with surface data ---
       if ( present(mask) ) then
          lmask(:,:,1)        = .true.
-         select type(mask)
-         type is (real(kind=r4_kind))
-           lmask(:,:,2:nlev+1) = mask(:,:,1:nlev) > 0.5
-         type is (real(kind=r8_kind))
-           lmask(:,:,2:nlev+1) = mask(:,:,1:nlev) > 0.5
-         end select
+         lmask(:,:,2:nlev+1) = mask(:,:,1:nlev) > 0.5
       else
          lmask = .true.
       endif

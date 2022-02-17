@@ -517,8 +517,7 @@ logical function send_cmip_data_3d (cmip_id, field, Time, is_in, js_in, ks_in, p
   real, dimension(:,:,:),    intent(in) :: field
   type(time_type),           intent(in), optional :: Time
   integer,                   intent(in), optional :: is_in, js_in, ks_in
-  real,    dimension(:,:,:), intent(in), optional :: phalf
-  class(*),    dimension(:,:,:), intent(in), optional :: rmask
+  real,    dimension(:,:,:), intent(in), optional :: phalf, rmask
   logical, dimension(:,:,:), intent(in), optional :: mask
   integer,                   intent(in), optional :: opt  ! if opt /= 0 then phalf(i,k,j)
   logical,                   intent(in), optional :: ext
