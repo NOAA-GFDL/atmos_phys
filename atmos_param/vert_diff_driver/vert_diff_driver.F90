@@ -31,7 +31,7 @@ use atmos_cmip_diag_mod, only: register_cmip_diag_field_3d, &
                                send_cmip_data_3d, &
                                cmip_diag_id_type, &
                                query_cmip_diag_id
-use platform_mod, only: r4_kind, r8_kind
+
 !-----------------------------------------------------------------------
 
 implicit none
@@ -120,7 +120,7 @@ type(surf_diff_type), intent(inout)     :: Surf_diff
 !-->cjg
 real, intent(in)   , dimension(:,:,:), optional :: diff_t_clubb
 !<--cjg
-class(*)   , intent(in), dimension(:,:,:), optional :: mask
+real   , intent(in), dimension(:,:,:), optional :: mask
 integer, intent(in), dimension(:,:),   optional :: kbot
 
 real, dimension(size(t,1),size(t,2),size(t,3)) :: tt, dpg, q_2
@@ -234,14 +234,8 @@ real                                                      :: delp, dpsum !miz
 !     (avoids divid by zero when computing virtual temp)
 
    tt = t
-   if (present(mask)) then
-     select type(mask)
-     type is (real(kind=r4_kind))
-       where (mask < 0.5) tt = 200.
-     type is (real(kind=r8_kind))
-       where (mask < 0.5) tt = 200.
-     end select
-   endif
+   if (present(mask)) where (mask < 0.5) tt = 200.
+
 !-----------------------------------------------------------------------
 !---- momentum diffusion ----
 !---- heat/moisture diffusion (down only) ----
@@ -274,14 +268,7 @@ real                                                      :: delp, dpsum !miz
             do k = 1, size(p_half,3)-1
                dpg(:,:,k) = (p_half(:,:,k+1)-p_half(:,:,k))/GRAV
             enddo
-            if (present(mask)) then
-              select type(mask)
-              type is (real(kind=r4_kind))
-                dpg = dpg*mask
-              type is (real(kind=r8_kind))
-                dpg = dpg*mask
-              end select
-            endif
+            if (present(mask)) dpg = dpg*mask
     endif
     
 
@@ -348,7 +335,7 @@ real                                                      :: delp, dpsum !miz
  type(surf_diff_type),   intent(in)       :: Surf_diff
  real,    intent(inout), dimension(:,:,:) :: dt_t, dt_q
  real,    intent(inout), dimension(:,:,:,:) :: dt_tr
- class(*)   , intent(in), dimension(:,:,:), optional :: mask
+ real   , intent(in), dimension(:,:,:), optional :: mask
  integer, intent(in),    dimension(:,:), optional :: kbot
 
  integer :: k, tr, i, j !miz
@@ -409,14 +396,7 @@ real                                                      :: delp, dpsum !miz
             do k = 1, size(p_half,3)-1
                dpg(:,:,k) = (p_half(:,:,k+1)-p_half(:,:,k))/GRAV
             enddo
-            if (present(mask)) then
-              select type(mask)
-              type is (real(kind=r4_kind))
-                dpg = dpg*mask
-              type is (real(kind=r8_kind))
-                dpg = dpg*mask
-              end select
-            endif
+            if (present(mask)) dpg = dpg*mask
     endif
 
 !------- diagnostics for sens_diff -------
