@@ -165,7 +165,7 @@ use       time_manager_mod,  only : time_type,             &
 use           constants_mod, only : SECONDS_PER_DAY,       &
                                     DEG_TO_RAD,            &
                                     WTMAIR, rdgas,         &
-                                    AVOGNO, PI
+                                    AVOGNO, PI, EPSLN
 use         horiz_interp_mod, only: horiz_interp_type,     &
                                     horiz_interp_init,     &
                                     horiz_interp_new,      &
@@ -230,6 +230,9 @@ logical             :: do_ONLINE_LAI     = .false.,  &         ! flag: online le
 logical             :: fix_megan2_isop   = .TRUE.              ! if T, increases isop emis factors by 50% to achieve ~500 Tg/yr global
 
 real                :: T_s = 297.                              ! Temperature that represents standard conditions [K]
+
+real                :: scale_isoprene_emissions = 1.           ! Global scale for isoprene emission
+real                :: scale_terpene_emissions = 1.            ! Global scale for terpene emission
 real                :: min_land_frac = 0.01                    ! Fraction of land required to calculate emissions
 integer             :: verbose = 3                             ! level of diagnostic output
 
@@ -273,7 +276,9 @@ namelist /xactive_bvoc_nml/                     &
                              do_ONLINE_SM,      &
                              RHO_CANOPY,        &
                              min_land_frac,     &
-                             T_s
+                             T_s,               &
+                             scale_isoprene_emissions,      &
+                             scale_terpene_emissions      
 
 
 logical                     :: Ldebug = .false.
@@ -698,7 +703,19 @@ subroutine xactive_bvoc( lon, lat, land, is, ie, js, je, Time, Time_next, coszen
                                             id_GAMMA_HW=id_G_HW(i))
             ENDIF !/megan version
          ENDIF !/species
-! Send emissions diagnostics
+         ! Send emissions diagnostics
+         if ( trim(tracnam(i))=='ISOP' ) then
+            if (abs(scale_isoprene_emissions - 1.).gt.epsln) then
+               EMIS = EMIS*scale_isoprene_emissions
+            end if
+         end if
+         if ( trim(tracnam(i))=='C10H16' ) then
+            if (abs(scale_terpene_emissions - 1.).gt.epsln) then
+               EMIS = EMIS*scale_terpene_emissions
+            end if
+         end if
+
+         
          IF ( id_EMIS(i) > 0 ) THEN
             used = send_data ( id_EMIS(i), EMIS, Time_next, is_in=is, js_in=js)
          ENDIF

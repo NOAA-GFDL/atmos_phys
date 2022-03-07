@@ -142,6 +142,7 @@ public  tropchem_driver, tropchem_driver_init,  &
 !-----------------------------------------------------------------------
 type,public :: field_init_type
    character(len=64), pointer :: field_names(:)
+   real, pointer :: scale_emis(:)
 end type field_init_type
 
 
@@ -248,10 +249,16 @@ logical            :: modulate_frac_ic = .false. !modulate the fraction of acids
 
 real               :: NO2_SO2_max = -999 !NO2 max concentration below which gso2 is scaled by NO2/NO2_SO2_max
 
+integer, parameter :: max_scale_emis_fields = 10
+real               :: scale_emis_field_values(max_scale_emis_fields)
+character(len=64)  :: scale_emis_field_names(max_scale_emis_fields)
+
 
 type(tropchem_diag),  save :: trop_diag
 type(tropchem_opt),   save :: trop_option
 type (domain2D), pointer :: tropchem_domain !< Atmosphere domain
+
+
 
 
 integer :: n_hno3d, n_so4d
@@ -322,7 +329,8 @@ namelist /tropchem_driver_nml/    &
                                het_chem_bug1, rh_het_max, &
                                modulate_frac_ic, &
                                min_t_sfc_cld_chem, &
-                               NO2_SO2_max
+                               NO2_SO2_max, &
+                               scale_emis_field_names, scale_emis_field_values
 
 
 integer                     :: nco2 = 0
@@ -667,12 +675,12 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
             call read_2D_emis_data( inter_emis(n), emis, Time, Time_next, &
                  emis_field_names(n)%field_names, &
                  diurnal_emis(n), coszen, half_day, lon, &
-                 is, js, has_xactive_emis(n),'ocean')
+                 is, js, has_xactive_emis(n),emis_field_names(n)%scale_emis,'ocean')
          else
             call read_2D_emis_data( inter_emis(n), emis, Time, Time_next, &
                  emis_field_names(n)%field_names, &
                  diurnal_emis(n), coszen, half_day, lon, &
-                 is, js, has_xactive_emis(n))
+                 is, js, has_xactive_emis(n),emis_field_names(n)%scale_emis)
          end if
          if ( land_does_emission(n) ) then
             emis = emis * ( 1. - land )
@@ -721,7 +729,7 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
          call read_3D_emis_data( inter_emis3d(n), emis3d, Time, Time_next,phalf, &
                                  emis3d_field_names(n)%field_names, &
                                  diurnal_emis3d(n), coszen, half_day, lon, &
-                                 is, js, id_emis3d(n) )
+                                 is, js, id_emis3d(n), emis3d_field_names(n)%scale_emis )
 
          emis_source(:,:,:,n) = emis_source(:,:,:,n) &
                               + emis3d(:,:,:)/pwt(:,:,:) * emis_cons
@@ -2296,9 +2304,9 @@ end if
    end if
    call strat_chem_utilities_init( lonb_mod, latb_mod, &
                                    strat_chem_age_factor, strat_chem_dclydt_factor, &
-                                   set_min_h2o_strat, ch4_filename, ch4_scale_factor, &
+                                   set_min_h2o_strat, ch4_filename,ch4_scale_factor, &
                                    fixed_lbc_time(ch4_ndx), lbc_entry(ch4_ndx), &
-                                   cfc_lbc_filename, time_varying_cfc_lbc, cfc_lbc_dataset_entry )
+                                   cfc_lbc_filename, time_varying_cfc_lbc, cfc_lbc_dataset_entry)
 !--lwh
    id_dclydt      = register_diag_field( module_name, 'cly_chem_dt', axes(1:3), Time, 'cly_chem_dt', 'VMR/s' )
    id_dclydt_chem = register_diag_field( module_name, 'cly_chem_dt_diag', axes(1:3), Time, 'cly_chem_dt_diag', 'VMR/s' )
@@ -2796,12 +2804,13 @@ end subroutine tropchem_driver_end
 subroutine read_2D_emis_data( emis_type, emis, Time, Time_next, &
                               field_names, &
                               Ldiurnal, coszen, half_day, lon, &
-                              is, js, skip_biogenic_emis, skip_field )
+                              is, js, skip_biogenic_emis, scale_emis, skip_field )
 
    type(interpolate_type),intent(inout) :: emis_type
    real, dimension(:,:),intent(out) :: emis
    type(time_type),intent(in) :: Time, Time_next
    character(len=*),dimension(:), intent(in) :: field_names
+   real,dimension(:), intent(in) :: scale_emis
    character(len=*), intent(in), optional :: skip_field
    logical, intent(in) :: Ldiurnal
    real, dimension(:,:), intent(in) :: coszen, half_day, lon
@@ -2813,7 +2822,8 @@ subroutine read_2D_emis_data( emis_type, emis, Time, Time_next, &
    real, dimension(size(emis,1),size(emis,2)) :: temp_data
    real :: diurnal_scale_factor, gmt, iso_on, iso_off, dayfrac
    real :: local_angle, factor_tmp
-
+   integer :: n
+   
    emis(:,:) = 0.
    temp_data(:,:) = 0.
    do k = 1,size(field_names)
@@ -2825,6 +2835,7 @@ subroutine read_2D_emis_data( emis_type, emis, Time, Time_next, &
          else
             call interpolator(emis_type,Time,temp_data,field_names(k),is,js)
          end if
+         temp_data = temp_data*scale_emis(k)
       end if
       emis(:,:) = emis(:,:) + temp_data(:,:)
    end do
@@ -2877,13 +2888,14 @@ end subroutine read_2D_emis_data
 subroutine read_3D_emis_data( emis_type, emis, Time, Time_next, phalf, &
                               field_names, &
                               Ldiurnal, coszen, half_day, lon, &
-                              is, js, id_emis_diag )
+                              is, js, id_emis_diag, scale_emis )
 
    type(interpolate_type),intent(inout) :: emis_type
    real, dimension(:,:,:),intent(in) :: phalf
    real, dimension(:,:,:),intent(out) :: emis
    type(time_type),intent(in) :: Time, Time_next
    character(len=*),dimension(:), intent(in) :: field_names
+   real,dimension(:), intent(in) :: scale_emis
    logical, intent(in) :: Ldiurnal
    real, dimension(:,:), intent(in) :: coszen, half_day, lon
    integer, intent(in) :: is, js
@@ -2900,7 +2912,7 @@ subroutine read_3D_emis_data( emis_type, emis, Time, Time_next, phalf, &
    temp_data(:,:,:) = 0.
    do k = 1,size(field_names)
       call interpolator(emis_type,Time,phalf,temp_data,field_names(k),is,js)
-      emis(:,:,:) = emis(:,:,:) + temp_data(:,:,:)
+      emis(:,:,:) = emis(:,:,:) + temp_data(:,:,:)*scale_emis(k)
    end do
    if (Ldiurnal) then
       do j=1,size(emis,2)
@@ -3016,10 +3028,13 @@ subroutine init_emis_data( emis_type, model, method_type, pos, file_name, &
    integer        , intent(in)  :: axes(4)
    type(time_type), intent(in)  :: Time
 
-   character(len=64) :: name, control
+   character(len=128) :: name, control
    integer :: nfields
-   integer :: flag_name, flag_file, flag_diurnal
+   integer :: flag_name, flag_file, flag_diurnal, flag_scale
    character(len=64) :: emis_name, emis_file, control_diurnal
+
+   integer :: n,n2
+   real    :: scale_emis
 
    flag = .false.
    diurnal = .false.
@@ -3048,7 +3063,31 @@ subroutine init_emis_data( emis_type, model, method_type, pos, file_name, &
                                  vert_interp=(/INTERP_WEIGHTED_P/) )
          call query_interpolator(emis_type,nfields=nfields)
          allocate(field_type%field_names(nfields))
+         allocate(field_type%scale_emis(nfields))         
          call query_interpolator(emis_type,field_names=field_type%field_names)
+         do n=1,nfields
+            field_type%scale_emis(n) = 1.
+
+            flag_scale = parse(control, field_type%field_names(n), scale_emis)
+            if (flag_scale > 0) then
+               field_type%scale_emis(n) = scale_emis
+            else
+               flag_scale = parse(control, "scale_all", scale_emis)
+               if (flag_scale > 0 ) then
+                  field_type%scale_emis(n) = scale_emis
+               else
+                  do n2=1,max_scale_emis_fields
+                     if (trim(field_type%field_names(n)).eq.trim(scale_emis_field_names(n2))) then
+                        field_type%scale_emis(n) = scale_emis_field_values(n2)
+                     end if
+                  end do
+               end if
+            end if
+
+            if (mpp_root_pe().eq.mpp_pe()) write(*,*) field_type%field_names(n), &
+                 field_type%scale_emis(n)
+            
+         end do         
       end if
       if ( present(land_does_emis) )  land_does_emis  = (index(lowercase(name),'land:lm3')>0)
    end if
