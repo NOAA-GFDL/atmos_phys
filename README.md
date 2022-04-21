@@ -1,9 +1,9 @@
-# atmos_phys
+# AM5_Phys
 This is the repository that combines the atmosphere physics and chemistry
 ## Table of contents
 * [Guidelines for Contributing](README.md#guidelines-for-contributing)
 * [Instructions on merging in code from atmos_param or atmos_shared](README.md#instructions-on-merging-in-code-from-atmos_param-or-atmos_shared)
-* [XML changes to checkout atmos_phys](README.md#xml-changes-to-checkout-atmos_phys)
+* [XML changes to checkout am5_phys](README.md#xml-changes-to-checkout-am5_phys)
 ## Guidelines for Contributing
 If you have code you would like to contribute, you will first create a git branch.
 Your branch should be in the format of /user/**ini**/**BranchName** where **ini** 
@@ -13,7 +13,7 @@ descritive.
 ```bash
 git checkout -b user/ini/BranchName
 ```
-Second, you will commit your changes, and push them to the atmos_phys remote 
+Second, you will commit your changes, and push them to the am5_phys remote 
 repository.  
 ```bash
 git push -u origin user/ini/BranchName
@@ -27,15 +27,15 @@ main development branch (*master*).  Assign your merge request to Uriel Ramirez.
 ## Instructions on merging in code from atmos_param or atmos_shared
 In order to commit changes that currently exist on atmos_param or atmos_shared,
 you first have to commit and push the changes to a branch in the repository you are 
-working in. Next you will clone atmos_phys.  After that, you will add the original 
-repository to as a remote in your atmos_phys directory.  You can then fetch from the
+working in. Next you will clone am5_phys.  After that, you will add the original 
+repository to as a remote in your am5_phys directory.  You can then fetch from the
 original repository and merge in the branch you were working on.
 
 Below is an example set of instructions to accomplish this.  This assumes that you 
 cloned atmos_param.
 ```bash
-git clone https://gitlab.gfdl.noaa.gov/fms/atmos_phys.git #clone atmos_param
-cd atmos_phys 
+git clone https://gitlab.gfdl.noaa.gov/fms/am5_phys.git #clone atmos_param
+cd am5_phys 
 pushd ../atmos_param/ #Set up a directory stack with the two repo directories
 git checkout user/ter/exampleBranch #check out your user branch
 git fetch #fetch any changes that may have occurred in atmos_param since you branched
@@ -46,11 +46,11 @@ git add test.file #stage your changes
 git commit -m "Save a test commit to user branch" #commit your changes
 ## The folowing can be skipped if you have already pushed your changes ##
 git push -u origin user/ter/exampleBranch
-pushd #change directory to the atmos_phys folder
-git checkout -b user/ter/exampleBranch #create your branch in atmos_phys
+pushd #change directory to the am5_phys folder
+git checkout -b user/ter/exampleBranch #create your branch in am5_phys
 git remote add param https://gitlab.gfdl.noaa.gov/fms/atmos_param.git #add atmos_param as a remote
 git fetch param #fetch the contents of the atmos_param
-git merge param/user/ter/exampleBranch #merge your branch from atmos_param into your branch on atmos_phys
+git merge param/user/ter/exampleBranch #merge your branch from atmos_param into your branch on am5_phys
 git push -u origin user/ter/exampleBranch
 ```
 A note on git remotes: 
@@ -64,11 +64,11 @@ command
 git remote -v
 ```
 
-## XML changes to checkout atmos_phys
-There are a few modifications to an XML in order switch to the atmos_phys code. 
+## XML changes to checkout am5_phys
+There are a few modifications to an XML in order switch to the am5_phys code. 
 An XML will have a section in the compile experiment that looks like the following:
 ```xml
-    <component name="atmos_phys" requires="fms" paths="atmos_param atmos_shared">
+    <component name="am5_phys" requires="fms" paths="atmos_param atmos_shared">
       <description domainName="" communityName="" communityVersion="$(RELEASE)" communityGrid=""/>
       <source versionControl="git" root="http://gitlab.gfdl.noaa.gov/fms">
         <codeBase version="$(RELEASE)"> atmos_shared.git atmos_param.git </codeBase>
@@ -83,15 +83,15 @@ An XML will have a section in the compile experiment that looks like the followi
       </compile>
     </component>
 ```
-This can be found by searching the XML for *atmos_phys* or *atmos_shared.git* or 
+This can be found by searching the XML for *am5_phys* or *atmos_shared.git* or 
 *atmos_param.git*. This <component> block should be updated to the following:
 ```xml
-    <component name="atmos_phys" requires="fms" paths="atmos_phys">
+    <component name="am5_phys" requires="fms" paths="am5_phys">
       <description domainName="" communityName="" communityVersion="$(RELEASE)" communityGrid=""/>
       <source versionControl="git" root="http://gitlab.gfdl.noaa.gov/fms">
-        <codeBase version="$(RELEASE)"> atmos_phys.git </codeBase>
+        <codeBase version="$(RELEASE)"> am5_phys.git </codeBase>
           <csh><![CDATA[
-            ( cd atmos_phys  && git checkout $(ATMOS_GIT_TAG) )
+            ( cd am5_phys  && git checkout $(ATMOS_GIT_TAG) )
            ]]>
           </csh>
       </source>
@@ -100,10 +100,8 @@ This can be found by searching the XML for *atmos_phys* or *atmos_shared.git* or
       </compile>
     </component>
 ```
-1. The **paths** has been changed from "atmos_param atmos_shared" to "atmos_phys".
-2. The **codeBase** was changed from **atmos_shared.git atmos_param.git** to **atmos_phys.git**
-3. The `csh` block was updated to only `cd` to atmos_phys
+1. The **paths** has been changed from "atmos_param atmos_shared" to "am5_phys".
+2. The **codeBase** was changed from **atmos_shared.git atmos_param.git** to **am5_phys.git**
+3. The `csh` block was updated to only `cd` to am5_phys
 
-NOTE: Users should switch to atmos_phys if they are checking out code that is newer 
-than xanadu.  If your model is running code older than xanadu, you should check the 
-code out from atmos_shared and atmos_param.
+NOTE: Users should switch to am5_phys if they are doing development on AM5. 
