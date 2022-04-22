@@ -1,19 +1,18 @@
-**Description**
+**Description:**
 Include a summary of the change and which issue is fixed. Please also include
 relevant motivation and context. List any dependencies that are required for
 this change.
 
-Fixes # (issue)
+Fixes # (link the issue that this merge request is solving, if there is one)
 
 **How Has This Been Tested?**
-XML/Experiments:
-Configuration: [compiler/OS]
+Please indication how your code was tested (XML, Experiments, compilers, OS)
 
 **Do Answers Reproduce?**
 Please indicate whether answers still reproduce with your changes and any namelist 
 changes that are needed. If answers do not reproduce please provide an explanation. 
 
-**Reviewers**
+**Reviewers:**
 List at least one person to review your code changes
 @[Reviewer name]
 
