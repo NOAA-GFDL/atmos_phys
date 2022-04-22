@@ -26,6 +26,18 @@ An XML will have a section in the compile experiment that looks like the followi
       </compile>
     </component>
 ```
+To use AM5 physics you can do
+```xml
+    <component name="atmos_phys" requires="fms" paths="am5_phys">
+      <description domainName="" communityName="" communityVersion="$(RELEASE)" communityGrid=""/>
+        <source versionControl="git" root="http://gitlab.gfdl.noaa.gov/fms">
+          <codeBase version="$(AM5_GIT_TAG)">am5_phys.git</codeBase>
+        </source>
+      <compile>
+        <cppDefs>$(F2003_FLAGS) -DCLUBB </cppDefs>
+      </compile>
+    </component>
+```
 1. The **paths** has been changed to "am5_phys".
 2. The **codeBase** was changed from **atmos_phys.git** to **am5_phys.git**
-3. The `csh` block was updated to only `cd` to am5_phys
+3. The `csh` block can be removed and checkout the tag you want by defining `AM5_GIT_TAG`
