@@ -7,7 +7,7 @@ This is the repository that contains AM5 physics!
 ## Running AM5
 To run this code please refer to the instuctions in the [AM5xml repo](https://gitlab.gfdl.noaa.gov/m5/am5xml#quickstart)
 ## Guidelines for Contributing
-To contribute to this code. Please refer to the [contribution guide](https://gitlab.gfdl.noaa.gov/-/ide/project/fms/am5_phys/tree/main/-/CONTRIBUTING.md/)
+To contribute to this code. Please refer to the [contribution guide](https://gitlab.gfdl.noaa.gov/fms/am5_phys/-/blob/main/CONTRIBUTING.md)
 ## Using am5_phys in existing xmls
 There are a few modifications to an XML in order switch to the am5_phys code. 
 An XML will have a section in the compile experiment that looks like the following:
