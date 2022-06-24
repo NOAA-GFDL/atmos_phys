@@ -18,7 +18,7 @@ use fms2_io_mod,        only :  FmsNetcdfFile_t, FmsNetcdfDomainFile_t, &
  use tridiagonal_mod,   only : tri_invert, close_tridiagonal
  use constants_mod,     only : grav, vonkarm
  use monin_obukhov_mod, only : mo_diff
-
+ use platform_mod, only: r8_kind, r4_kind
 !---------------------------------------------------------------------
  implicit none
  private
@@ -131,7 +131,7 @@ use fms2_io_mod,        only :  FmsNetcdfFile_t, FmsNetcdfDomainFile_t, &
   real,    intent(in), dimension(:,:,:) :: um, vm, theta
 
   integer, intent(in), OPTIONAL, dimension(:,:)   :: kbot
-  real,    intent(in), OPTIONAL, dimension(:,:,:) :: mask
+  class(*),    intent(in), OPTIONAL, dimension(:,:,:) :: mask
   real,    intent(in), OPTIONAL, dimension(:,:)   :: ustar, bstar
 
 !---------------------------------------------------------------------
@@ -233,13 +233,24 @@ use fms2_io_mod,        only :  FmsNetcdfFile_t, FmsNetcdfDomainFile_t, &
     do k=2,kx
     do j=1,jx
     do i=1,ix
-      if(mask(i,j,k) < 0.1) then
+      select type(mask)
+      type is (real(kind=r4_kind))
+        if(mask(i,j,k) < 0.1) then
           TKE(ism+i,jsm+j,k+1) = 0.0
-         dsdz(i,j,k  ) = 0.0
-        dsdzh(i,j,k-1) = 0.0
-        shear(i,j,k-1) = 0.0
-       buoync(i,j,k-1) = 0.0
-      endif
+          dsdz(i,j,k  ) = 0.0
+          dsdzh(i,j,k-1) = 0.0
+          shear(i,j,k-1) = 0.0
+          buoync(i,j,k-1) = 0.0
+        endif
+      type is (real(kind=r8_kind))
+        if(mask(i,j,k) < 0.1) then
+          TKE(ism+i,jsm+j,k+1) = 0.0
+          dsdz(i,j,k  ) = 0.0
+          dsdzh(i,j,k-1) = 0.0
+          shear(i,j,k-1) = 0.0
+          buoync(i,j,k-1) = 0.0
+        endif
+      end select
     enddo
     enddo
     enddo
@@ -307,8 +318,14 @@ use fms2_io_mod,        only :  FmsNetcdfFile_t, FmsNetcdfDomainFile_t, &
   endif
 
   if (PRESENT(mask)) then
-    x1 = SUM( xx1, 3, mask=mask.gt.0.1 )
-    x2 = SUM( xx2, 3, mask=mask.gt.0.1 )
+    select type(mask)
+    type is (real(kind=r4_kind))
+      x1 = SUM( xx1, 3, mask=mask.gt.0.1 )
+      x2 = SUM( xx2, 3, mask=mask.gt.0.1 )
+    type is (real(kind=r8_kind))
+      x1 = SUM( xx1, 3, mask=mask.gt.0.1 )
+      x2 = SUM( xx2, 3, mask=mask.gt.0.1 )
+    end select
   else
     x1 = SUM( xx1, 3 )
     x2 = SUM( xx2, 3 )
@@ -428,8 +445,14 @@ use fms2_io_mod,        only :  FmsNetcdfFile_t, FmsNetcdfDomainFile_t, &
 !-------------------------------------------------------------------
 
  if( PRESENT( mask ) ) then
+   select type(mask)
+   type is (real(kind=r4_kind))
      akm(:,:,1:kx) = akm(:,:,1:kx) * mask(:,:,1:kx) 
      akh(:,:,1:kx) = akh(:,:,1:kx) * mask(:,:,1:kx) 
+   type is (real(kind=r8_kind))
+     akm(:,:,1:kx) = akm(:,:,1:kx) * mask(:,:,1:kx) 
+     akh(:,:,1:kx) = akh(:,:,1:kx) * mask(:,:,1:kx) 
+   end select
  endif
 
 !====================================================================
@@ -493,7 +516,12 @@ use fms2_io_mod,        only :  FmsNetcdfFile_t, FmsNetcdfDomainFile_t, &
 ! mask out terms below ground
 
   if (present(mask)) then
-     where (mask(:,:,2:kx) < 0.1) ddd(:,:,1:kxm) = 0.0
+     select type(mask)
+     type is (real(kind=r4_kind))
+       where (mask(:,:,2:kx) < 0.1) ddd(:,:,1:kxm) = 0.0
+     type is (real(kind=r8_kind))
+       where (mask(:,:,2:kx) < 0.1) ddd(:,:,1:kxm) = 0.0
+     end select
   endif
 
 
@@ -508,7 +536,12 @@ use fms2_io_mod,        only :  FmsNetcdfFile_t, FmsNetcdfDomainFile_t, &
    do k=1,kxm
    do j=1,jx
    do i=1,ix
-     if(mask(i,j,k+1) < 0.1) xxm1(i,j,k) = TKE(ism+i,jsm+j,k+1)
+     select type(mask)
+     type is (real(kind=r4_kind))
+       if(mask(i,j,k+1) < 0.1) xxm1(i,j,k) = TKE(ism+i,jsm+j,k+1)
+     type is (real(kind=r8_kind))
+       if(mask(i,j,k+1) < 0.1) xxm1(i,j,k) = TKE(ism+i,jsm+j,k+1)
+     end select
    enddo
    enddo
    enddo
@@ -545,7 +578,12 @@ use fms2_io_mod,        only :  FmsNetcdfFile_t, FmsNetcdfDomainFile_t, &
     do k=1,kx
     do j=1,jx
     do i=1,ix
-      if(mask(i,j,k) < 0.1) TKE(ism+i,jsm+j,k+1) = 0.0
+      select type(mask)
+      type is (real(kind=r4_kind))
+        if(mask(i,j,k) < 0.1) TKE(ism+i,jsm+j,k+1) = 0.0
+      type is (real(kind=r8_kind))
+        if(mask(i,j,k) < 0.1) TKE(ism+i,jsm+j,k+1) = 0.0
+      end select
     enddo
     enddo
     enddo
