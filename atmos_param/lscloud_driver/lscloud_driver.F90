@@ -210,7 +210,7 @@ integer            :: kmap = 1
 integer            :: kord = 7
 logical            :: pdf_org = .true.
 logical :: use_cf_metadata = .false.
-
+logical :: do_liq_num_fill = .true.
 
 namelist / lscloud_driver_nml / do_legacy_strat_cloud, Dmin, cfact, &
                                 microphys_scheme, macrophys_scheme, &
@@ -219,7 +219,8 @@ namelist / lscloud_driver_nml / do_legacy_strat_cloud, Dmin, cfact, &
                                 super_ice_opt, do_ice_nucl_wpdf, &
                                 do_pdf_clouds, betaP, qthalfwidth, &
                                 nsublevels, kmap, kord, pdf_org, &
-                                use_cf_metadata
+                                use_cf_metadata,                 &
+                                do_liq_num_fill    ! h1g, 2020-03-19
 
 
 
@@ -253,8 +254,8 @@ integer :: id_LWP, id_IWP, id_tdt_ls, id_qdt_ls, id_prec_ls, id_snow_ls, &
            id_lsc_precip, id_lsc_freq,                           &
            id_lscale_rain3d, id_lscale_snow3d, id_lscale_precip3d
  
-integer :: id_qvout, id_qaout, id_qlout, id_qiout
-integer :: id_qnout, id_qniout
+integer :: id_qvout, id_qaout, id_qlout, id_qiout, id_qrout, id_qsout, id_qgout
+integer :: id_qnout, id_qniout, id_qnrout, id_qnsout
 integer :: id_f_snow_berg, id_f_snow_berg_cond, id_f_snow_berg_wtd
 
 integer, dimension(:), allocatable :: id_wet_deposition    
@@ -286,7 +287,7 @@ logical  :: do_simple
 
 real     :: dtcloud, inv_dtcloud
 logical  :: do_predicted_ice_number
-integer  :: nsphum, nql, nqi, nqa, nqn, nqni, nqr, nqs, nqg
+integer  :: nsphum, nql, nqi, nqa, nqn, nqni, nqr, nqs, nqg, nqnr, nqns
 integer  :: nso2, nso4
 integer  :: num_prog_tracers
 logical  :: debug
@@ -367,7 +368,9 @@ real, dimension(:),      intent(in)     :: pref
       nqni   = Physics_control%nqni    
       nqr    = Physics_control%nqr    
       nqs    = Physics_control%nqs    
-      nqg    = Physics_control%nqg    
+      nqg    = Physics_control%nqg
+      nqnr   = Physics_control%nqnr
+      nqns   = Physics_control%nqns
       num_prog_tracers = Physics_control%num_prog_tracers
 
 !-------------------------------------------------------------------------
@@ -614,6 +617,7 @@ real, dimension(:),      intent(in)     :: pref
           Constants_lsc%do_mg_microphys = .false.
           Constants_lsc%do_mg_ncar_microphys = .false.
           Constants_lsc%do_ncar_microphys = .false.
+          Constants_lsc%do_ncar_MG2 = .false.
           do_predicted_ice_number = .false.
           Constants_lsc%do_lin_cld_microphys = .false.
         else if (trim(microphys_scheme) == 'morrison_gettelman') then
@@ -621,6 +625,7 @@ real, dimension(:),      intent(in)     :: pref
           Constants_lsc%do_mg_microphys = .true.
           Constants_lsc%do_mg_ncar_microphys = .false.
           Constants_lsc%do_ncar_microphys = .false.
+          Constants_lsc%do_ncar_MG2 = .false.
           do_predicted_ice_number = .true.
           Constants_lsc%do_lin_cld_microphys = .false.
         else if (trim(microphys_scheme) == 'mg_ncar') then
@@ -628,6 +633,7 @@ real, dimension(:),      intent(in)     :: pref
           Constants_lsc%do_mg_microphys = .false.
           Constants_lsc%do_mg_ncar_microphys = .true.
           Constants_lsc%do_ncar_microphys = .false.
+          Constants_lsc%do_ncar_MG2 = .false.
           do_predicted_ice_number = .true.
           Constants_lsc%do_lin_cld_microphys = .false.
         else if (trim(microphys_scheme) == 'ncar') then
@@ -635,6 +641,15 @@ real, dimension(:),      intent(in)     :: pref
           Constants_lsc%do_mg_microphys = .false.
           Constants_lsc%do_mg_ncar_microphys = .false.
           Constants_lsc%do_ncar_microphys = .true.
+          Constants_lsc%do_ncar_MG2 = .false.
+          do_predicted_ice_number = .true.
+          Constants_lsc%do_lin_cld_microphys = .false.
+       else if (trim(microphys_scheme) == 'mg2') then
+          Constants_lsc%do_rk_microphys = .false.
+          Constants_lsc%do_mg_microphys = .false.
+          Constants_lsc%do_mg_ncar_microphys = .false.
+          Constants_lsc%do_ncar_microphys = .false.
+          Constants_lsc%do_ncar_MG2 = .true.
           do_predicted_ice_number = .true.
           Constants_lsc%do_lin_cld_microphys = .false.
         else if (trim(microphys_scheme) == 'lin') then
@@ -642,6 +657,7 @@ real, dimension(:),      intent(in)     :: pref
           Constants_lsc%do_mg_microphys = .false.
           Constants_lsc%do_mg_ncar_microphys = .false.
           Constants_lsc%do_ncar_microphys = .false.
+          Constants_lsc%do_ncar_MG2 = .false.
           Constants_lsc%do_lin_cld_microphys = .true.
 ! this version of lin could not be active with prog drop number (and thus
 !   with predicted ice number)
@@ -738,6 +754,7 @@ real, dimension(:),      intent(in)     :: pref
         Constants_lsc%do_mg_microphys = .false.
         Constants_lsc%do_mg_ncar_microphys = .false.
         Constants_lsc%do_ncar_microphys = .false.
+        Constants_lsc%do_ncar_MG2 = .false.
         do_predicted_ice_number = .false.
         Constants_lsc%do_lin_cld_microphys = .false.
         Constants_lsc%dqa_activation = .false.
@@ -841,7 +858,7 @@ end subroutine lscloud_driver_time_vary
 
 !#########################################################################
 
-subroutine lscloud_driver  (is, ie, js, je, Time, dt, Input_mp, &
+subroutine lscloud_driver  (is, ie, js, je, Time, dt, lon, lat, Input_mp, &
                             rdiag, Tend_mp, C2ls_mp, Output_mp, &
                             Removal_mp, Cld_props, Aerosol)
 
@@ -877,6 +894,8 @@ subroutine lscloud_driver  (is, ie, js, je, Time, dt, Input_mp, &
 integer,                     intent(in)           :: is,ie,js,je
 type(time_type),             intent(in)           :: Time
 real,                        intent(in)           :: dt
+real,                        intent(in), dimension(:,:) :: lon, lat
+
 type(mp_input_type),         intent(inout)        :: Input_mp
 type(mp_tendency_type),      intent(inout)        :: Tend_mp
 type(mp_conv2ls_type),       intent(inout)        :: C2ls_mp
@@ -1028,7 +1047,7 @@ type(aerosol_type),          intent(in), optional :: Aerosol
 !    fields. start clock to time this subroutine.
 !----------------------------------------------------------------------
             call mpp_clock_begin (realiz_clock)
-            call impose_realizability (    &
+            call impose_realizability (   &
                    Atmos_state, Cloud_state, Tend_mp%qtnd, Tend_mp%ttnd, &
                    Lsdiag_mp%diag_4d, Lsdiag_mp_control%diag_id,   &
                                                Lsdiag_mp_control%diag_pt)
@@ -1132,7 +1151,7 @@ type(aerosol_type),          intent(in), optional :: Aerosol
 !---------------------------------------------------------------------
             call mpp_clock_begin (ls_microphysics_clock)
             call ls_cloud_microphysics    &
-                (is, ie, js, je, Time, dt,  &
+                (is, ie, js, je, Time, dt, lon, lat, &
                  Input_mp, Output_mp, C2ls_mp, Tend_mp, Lsdiag_mp, &
                  Lsdiag_mp_control, &
                  Atmos_state, Cloud_state, Particles, Precip_state,  &
@@ -1578,6 +1597,26 @@ type(time_type),         intent(in) :: Time
         'qlout', axes(1:3), Time, 'ql after strat_cloud', 'kg/kg', &
         missing_value=missing_value               )
 
+      id_qrout = register_diag_field ( mod_name, &
+        'qrout', axes(1:3), Time, 'qr after strat_cloud', 'kg/kg', &
+        missing_value=missing_value               )
+
+      id_qsout = register_diag_field ( mod_name, &
+        'qsout', axes(1:3), Time, 'qs after strat_cloud', 'kg/kg', &
+        missing_value=missing_value               )
+
+      id_qnrout = register_diag_field ( mod_name, &
+        'qnrout', axes(1:3), Time, 'qnr after strat_cloud', '#/kg', &
+        missing_value=missing_value               )
+
+      id_qnsout = register_diag_field ( mod_name, &
+        'qnsout', axes(1:3), Time, 'qns after strat_cloud', '#/kg', &
+        missing_value=missing_value               )
+
+      id_qgout = register_diag_field ( mod_name, &
+        'qgout', axes(1:3), Time, 'qg after strat_cloud', 'kg/kg', &
+       missing_value=missing_value               )
+
       id_qiout = register_diag_field ( mod_name, &
         'qiout', axes(1:3), Time, 'qi after strat_cloud', 'kg/kg', &
         missing_value=missing_value               )
@@ -1847,24 +1886,45 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       allocate (Cloud_state%qa_upd    (idim, jdim, kdim) )
       allocate (Cloud_state%qn_upd    (idim, jdim, kdim) )
       allocate (Cloud_state%qni_upd   (idim, jdim, kdim) )
+      allocate (Cloud_state%qr_upd    (idim, jdim, kdim) )
+      allocate (Cloud_state%qs_upd    (idim, jdim, kdim) )
+      allocate (Cloud_state%qnr_upd    (idim, jdim, kdim) )
+      allocate (Cloud_state%qns_upd    (idim, jdim, kdim) )
+
   
       allocate (Cloud_state%ql_mean   (idim, jdim, kdim) )
       allocate (Cloud_state%qi_mean   (idim, jdim, kdim) )
       allocate (Cloud_state%qa_mean   (idim, jdim, kdim) )
       allocate (Cloud_state%qn_mean   (idim, jdim, kdim) )
       allocate (Cloud_state%qni_mean  (idim, jdim, kdim) )
+      allocate (Cloud_state%qr_mean    (idim, jdim, kdim) )
+      allocate (Cloud_state%qs_mean    (idim, jdim, kdim) )
+      allocate (Cloud_state%qnr_mean    (idim, jdim, kdim) )
+      allocate (Cloud_state%qns_mean    (idim, jdim, kdim) )
+
  
       allocate (Cloud_state%ql_in     (idim, jdim, kdim) )
+      allocate (Cloud_state%qr_in     (idim, jdim, kdim) )
       allocate (Cloud_state%qi_in     (idim, jdim, kdim) )
+      allocate (Cloud_state%qs_in     (idim, jdim, kdim) )
+      allocate (Cloud_state%qg_in     (idim, jdim, kdim) )
       allocate (Cloud_state%qa_in     (idim, jdim, kdim) )
       allocate (Cloud_state%qn_in     (idim, jdim, kdim) )
       allocate (Cloud_state%qni_in    (idim, jdim, kdim) )
+      allocate (Cloud_state%qnr_in    (idim, jdim, kdim) )
+      allocate (Cloud_state%qns_in    (idim, jdim, kdim) )
+
 
       allocate (Cloud_state%SL_out    (idim, jdim, kdim) )
       allocate (Cloud_state%SI_out    (idim, jdim, kdim) )
       allocate (Cloud_state%SA_out    (idim, jdim, kdim) )
       allocate (Cloud_state%SN_out    (idim, jdim, kdim) )
       allocate (Cloud_state%SNi_out   (idim, jdim, kdim) )
+      allocate (Cloud_state%SR_out    (idim, jdim, kdim) )
+      allocate (Cloud_state%SS_out    (idim, jdim, kdim) )
+      allocate (Cloud_state%SNR_out    (idim, jdim, kdim) )
+      allocate (Cloud_state%SNS_out    (idim, jdim, kdim) )
+
       allocate (Cloud_state%qcvar_clubb   (idim, jdim, kdim) )
       allocate (Cloud_state%relvarn       (idim, jdim, kdim) )
 
@@ -1876,22 +1936,47 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       Cloud_state%qa_upd    = 0.
       Cloud_state%qn_upd    = 0.
       Cloud_state%qni_upd   = 0.
+      Cloud_state%qr_upd    = 0.
+      Cloud_state%qs_upd    = 0.
+      Cloud_state%qnr_upd   = 0.
+      Cloud_state%qns_upd   = 0.
 
       Cloud_state%ql_mean    = 0.      
       Cloud_state%qi_mean    = 0.      
       Cloud_state%qa_mean    = 0.      
       Cloud_state%qn_mean    = 0.      
       Cloud_state%qni_mean   = 0.      
+      Cloud_state%qr_mean    = 0.
+      Cloud_state%qs_mean    = 0.
+      Cloud_state%qnr_mean   = 0.
+      Cloud_state%qns_mean   = 0.
+
+
 
       if (nql == NO_TRACER) then
         Cloud_state%ql_in = 0.    
       else
         Cloud_state%ql_in = Input_mp%tracer(:,:,:,nql)
       endif
+      if (nqr == NO_TRACER) then
+        Cloud_state%qr_in = 0.    
+      else
+        Cloud_state%qr_in = Input_mp%tracer(:,:,:,nqr)
+      endif
       if (nqi == NO_TRACER) then
         Cloud_state%qi_in = 0.    
       else
         Cloud_state%qi_in = Input_mp%tracer(:,:,:,nqi)
+      endif
+      if (nqs == NO_TRACER) then
+        Cloud_state%qs_in = 0.    
+      else
+        Cloud_state%qs_in = Input_mp%tracer(:,:,:,nqs)
+      endif
+      if (nqg == NO_TRACER) then
+        Cloud_state%qg_in = 0.    
+      else
+        Cloud_state%qg_in = Input_mp%tracer(:,:,:,nqg)
       endif
       if (nqa == NO_TRACER) then
         Cloud_state%qa_in = 0.    
@@ -1903,21 +1988,34 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       else
         Cloud_state%qn_in = Input_mp%tracer(:,:,:,nqn)
       end if
-
       if (nqni == NO_TRACER) then
         Cloud_state%qni_in = 0.    
       else
         Cloud_state%qni_in = Input_mp%tracer(:,:,:,nqni)
       end if
+      if (nqnr == NO_TRACER) then
+        Cloud_state%qnr_in = 0.    
+      else
+        Cloud_state%qnr_in = Input_mp%tracer(:,:,:,nqnr)
+      endif
+      if (nqns == NO_TRACER) then
+        Cloud_state%qns_in = 0.    
+      else
+        Cloud_state%qns_in = Input_mp%tracer(:,:,:,nqns)
+      endif
 
       Cloud_state%SL_out  = 0.
       Cloud_state%SI_out  = 0.
       Cloud_state%SA_out  = 0.
       Cloud_state%SN_out  = 0.
       Cloud_state%SNi_out = 0.
+      Cloud_state%SR_out  = 0.
+      Cloud_state%SS_out  = 0.
+      Cloud_state%SNR_out = 0.
+      Cloud_state%SNS_out = 0.
     
       Cloud_state%qcvar_clubb  = 0.
-      Cloud_state%relvarn      = 0.
+      Cloud_state%relvarn      = qcvar
       Cloud_state%qa_upd_0 = 0.
       Cloud_state%SA_0        = 0.
 
@@ -1963,7 +2061,8 @@ type(diag_pt_type),         intent(in)    :: diag_pt
 !   local variables:
 
       logical, dimension(size(ST_out,1), size(ST_out,2),   &
-                           size(ST_out,3)) :: ql_too_small, qi_too_small 
+                         size(ST_out,3)) :: ql_too_small, qi_too_small, qr_too_small, &
+                                            qs_too_small, qg_too_small 
 
       integer      :: idim,jdim,kdim
       integer      :: i,j,k
@@ -2042,6 +2141,14 @@ type(diag_pt_type),         intent(in)    :: diag_pt
           qi_too_small = (Cloud_state%qi_in .le.  qmin .or.   &
                           Cloud_state%qa_in .le. qmin)
         endif
+! --> h1g, 2019-09-19
+        if( Constants_lsc%do_ncar_MG2 ) then
+           qr_too_small =  (Cloud_state%qr_in .le.  qmin .or.   &
+                            Cloud_state%qnr_in .le. qmin)
+           qs_too_small =  (Cloud_state%qs_in .le.  qmin .or.   &
+                            Cloud_state%qns_in .le. qmin)
+        endif 
+! <-- h1g, 2019-09-19
       else
         if (do_liq_num) then
           ql_too_small = (Cloud_state%ql_in .le.  qmin  .or.   &
@@ -2104,7 +2211,7 @@ type(diag_pt_type),         intent(in)    :: diag_pt
 !    predicted. if droplet number is not being predicted, values were 
 !    set at allocation.  
 !------------------------------------------------------------------------
-      if (do_liq_num) then
+      if (do_liq_num .and. do_liq_num_fill ) then
         call adjust_particle_number (ql_too_small, Cloud_state%SN_out, &
                 cloud_state%qn_in, Cloud_state%qn_upd)
 
@@ -2175,6 +2282,67 @@ type(diag_pt_type),         intent(in)    :: diag_pt
         call mpp_clock_end (lscloud_debug_clock)
       endif
 
+
+      if ( Constants_lsc%do_ncar_MG2 ) then
+!------------------------------------------------------------------------
+!    call subroutine adjust_condensate to conservatively fill qr if needed.
+!------------------------------------------------------------------------
+      call adjust_condensate (qr_too_small, Cloud_state%SR_out, &
+            SQ_out, ST_out, Cloud_state%qr_in, HLV, Cloud_state%qr_upd)
+!------------------------------------------------------------------------
+!    save diagnostics defining the rain filling amount. 
+!------------------------------------------------------------------------
+        if ( diag_id%qrdt_fill  + diag_id%qr_fill_col > 0 ) then
+          where (qr_too_small )
+            diag_4d(:,:,:,diag_pt%qrdt_fill) =   &
+                              -1.*Cloud_state%qr_in*inv_dtcloud
+          endwhere
+        end if
+        if ( diag_id%qdt_liquid_init > 0 ) then
+          where (qr_too_small )
+            diag_4d(:,:,:,diag_pt%qdt_liquid_init) = diag_4d(:,:,:,diag_pt%qdt_liquid_init)+  &
+                              Cloud_state%qr_in*inv_dtcloud
+          endwhere
+        end if
+
+        call adjust_particle_number (qr_too_small, Cloud_state%SNR_out, &
+                                  Cloud_state%qnr_in, Cloud_state%qnr_upd)
+        if ( diag_id%qnrdt_fill  + diag_id%qnr_fill_col > 0 ) then
+          where (qr_too_small )
+            diag_4d(:,:,:,diag_pt%qnrdt_fill) =   &
+                              -1.*Cloud_state%qnr_in*inv_dtcloud
+          endwhere
+        end if
+
+
+!------------------------------------------------------------------------
+!    call subroutine adjust_condensate to conservatively fill qs if needed.
+!------------------------------------------------------------------------
+        call adjust_condensate (qs_too_small, Cloud_state%SS_out, &
+              SQ_out, ST_out, CLoud_state%qs_in, HLS, Cloud_state%qs_upd)
+
+        if ( diag_id%qsdt_fill  + diag_id%qs_fill_col > 0 ) then
+          where (qs_too_small )
+            diag_4d(:,:,:,diag_pt%qsdt_fill) =   &
+                              -1.*Cloud_state%qs_in*inv_dtcloud
+          endwhere
+        end if
+        if ( diag_id%qdt_ice_init > 0 ) then
+          where (qs_too_small )
+            diag_4d(:,:,:,diag_pt%qdt_ice_init) = diag_4d(:,:,:,diag_pt%qdt_ice_init)+  &
+                              Cloud_state%qs_in*inv_dtcloud
+          endwhere
+        end if
+        call adjust_particle_number (qs_too_small, Cloud_state%SNS_out, &
+                                  Cloud_state%qns_in, Cloud_state%qns_upd)
+        if ( diag_id%qnsdt_fill  + diag_id%qns_fill_col > 0 ) then
+          where (qs_too_small )
+            diag_4d(:,:,:,diag_pt%qnsdt_fill) =   &
+                              -1.*Cloud_state%qns_in*inv_dtcloud
+          endwhere
+        end if
+
+      endif  ! do_ncar_MG2
 !-----------------------------------------------------------------------
 
 
@@ -2493,6 +2661,7 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
               + diag_4d(:,:,:,diag_pt%qldt_accrs)         &
               + diag_4d(:,:,:,diag_pt%qldt_bergs)         &
               + diag_4d(:,:,:,diag_pt%qldt_HM_splinter)   &
+              + diag_4d(:,:,:,diag_pt%qldt_tiny)          &  ! h1g, 2020-06-25
               - diag_4d(:,:,:,diag_pt%qidt_melt2 )        &
               - diag_4d(:,:,:,diag_pt%qidt_accrs)         &
               - diag_4d(:,:,:,diag_pt%qdt_cleanup_liquid) &    
@@ -2519,6 +2688,8 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
               + diag_4d(:,:,:,diag_pt%qidt_accr)        &
               + diag_4d(:,:,:,diag_pt%qidt_accrs)       &
               + diag_4d(:,:,:,diag_pt%ice_adj    )      &
+              + diag_4d(:,:,:,diag_pt%qidt_tiny)        &  ! h1g, 2020-06-25
+              + diag_4d(:,:,:,diag_pt%qidt_rain2ice)    &  ! h1g, 2020-06-26
               - diag_4d(:,:,:,diag_pt%qdt_cleanup_ice)  &
                                                           )
       endif
@@ -2544,6 +2715,7 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
               + diag_4d(:,:,:,diag_pt%qndt_size_adj)    &
               + diag_4d(:,:,:,diag_pt%qndt_fill2)       &
               + diag_4d(:,:,:,diag_pt%qndt_contact_frz) &
+              + diag_4d(:,:,:,diag_pt%qndt_tiny)        &  ! h1g, 2020-06-25
               + diag_4d(:,:,:,diag_pt%qndt_cleanup)     &
               + diag_4d(:,:,:,diag_pt%qndt_cleanup2)    &
                                                             )
@@ -2557,6 +2729,8 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
               + diag_4d(:,:,:,diag_pt%qnidt_nerosi)    &
               + diag_4d(:,:,:,diag_pt%qnidt_nprci)     &
               + diag_4d(:,:,:,diag_pt%qnidt_nprai)     &
+              + diag_4d(:,:,:,diag_pt%qnidt_auto)      &  ! h1g, 2020-06-29
+              + diag_4d(:,:,:,diag_pt%qnidt_accr)      &  ! h1g, 2020-06-29           
               + diag_4d(:,:,:,diag_pt%qnidt_nucclim1)  &
               + diag_4d(:,:,:,diag_pt%qnidt_nucclim2)  &
               + diag_4d(:,:,:,diag_pt%qnidt_sedi  )    &
@@ -2566,6 +2740,9 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
               + diag_4d(:,:,:,diag_pt%qnidt_super )    &
               + diag_4d(:,:,:,diag_pt%qnidt_ihom )     &
               + diag_4d(:,:,:,diag_pt%qnidt_destr )    &
+              + diag_4d(:,:,:,diag_pt%qnidt_tiny)      &  ! h1g, 2020-06-25
+              + diag_4d(:,:,:,diag_pt%qnidt_rain2ice)  &  ! h1g, 2020-06-29
+              - diag_4d(:,:,:,diag_pt%qndt_contact_frz)  &  ! h1g, 2020-06-29 
               + diag_4d(:,:,:,diag_pt%qnidt_cleanup)   &
               + diag_4d(:,:,:,diag_pt%qnidt_cleanup2)  &
               + diag_4d(:,:,:,diag_pt%qnidt_nsacwi)    &
@@ -2977,6 +3154,23 @@ real,                        intent(in)     :: dtinv
                                                  Tend_mp%q_tnd(:,:,:,nql)  
         Input_mp%tracer(:,:,:,nqi) = Input_mp%tracer(:,:,:,nqi) +   &
                                                  Tend_mp%q_tnd(:,:,:,nqi)
+!--> h1g, 2019-08-27  ---
+        if( nqr  /= NO_TRACER) &
+          Input_mp%tracer(:,:,:,nqr) = Input_mp%tracer(:,:,:,nqr) +   &
+                                                 Tend_mp%q_tnd(:,:,:,nqr)
+        if( nqs  /= NO_TRACER) &
+          Input_mp%tracer(:,:,:,nqs) = Input_mp%tracer(:,:,:,nqs) +   &
+                                                 Tend_mp%q_tnd(:,:,:,nqs)
+        if( nqg  /= NO_TRACER) &
+          Input_mp%tracer(:,:,:,nqg) = Input_mp%tracer(:,:,:,nqg) +   &
+                                                 Tend_mp%q_tnd(:,:,:,nqg)
+        if( nqnr /= NO_TRACER) &
+          Input_mp%tracer(:,:,:,nqnr) = Input_mp%tracer(:,:,:,nqnr) +   &
+                                                 Tend_mp%q_tnd(:,:,:,nqnr)
+        if( nqns /= NO_TRACER) &
+          Input_mp%tracer(:,:,:,nqns) = Input_mp%tracer(:,:,:,nqns) +   &
+                                                 Tend_mp%q_tnd(:,:,:,nqns)
+!<-- h1g, 2019-08-27 ----
         Input_mp%tracer(:,:,:,nqa) = Input_mp%tracer(:,:,:,nqa) +   &
                                                  Tend_mp%q_tnd(:,:,:,nqa)
         if (do_liq_num)   &
@@ -3000,6 +3194,24 @@ real,                        intent(in)     :: dtinv
                                                         Time, is, js, 1)
         used = send_data (id_qlout, Input_mp%tracer(:,:,:,nql),   &
                                                         Time, is, js, 1)
+        if ( nqr /= NO_TRACER ) &
+          used = send_data (id_qrout, Input_mp%tracer(:,:,:,nqr),   &
+                                                        Time, is, js, 1)
+        if ( nqs /= NO_TRACER ) &
+          used = send_data (id_qsout, Input_mp%tracer(:,:,:,nqs),   &
+                                                        Time, is, js, 1)
+        if ( nqg /= NO_TRACER ) &
+          used = send_data (id_qgout, Input_mp%tracer(:,:,:,nqg),   &
+                                                        Time, is, js, 1)
+!--> h1g, 2019-08-27  ---
+        if ( nqnr /= NO_TRACER ) &
+          used = send_data (id_qnrout, Input_mp%tracer(:,:,:,nqnr),   &
+                                                        Time, is, js, 1)
+        if ( nqns /= NO_TRACER ) &
+          used = send_data (id_qnsout, Input_mp%tracer(:,:,:,nqns),   &
+                                                        Time, is, js, 1)
+!<-- h1g, 2019-08-27 ----
+        
         used = send_data (id_qiout, Input_mp%tracer(:,:,:,nqi),   &
                                                         Time, is, js, 1)
 
@@ -3022,6 +3234,19 @@ real,                        intent(in)     :: dtinv
       if (doing_prog_clouds) then
         Tend_mp%q_tnd(:,:,:,nql) = Tend_mp%q_tnd(:,:,:,nql)*dtinv
         Tend_mp%q_tnd(:,:,:,nqi) = Tend_mp%q_tnd(:,:,:,nqi)*dtinv
+
+!<-- h1g, 2019-08-27 ----
+        if ( nqr /= NO_TRACER ) &
+          Tend_mp%q_tnd(:,:,:,nqr) = Tend_mp%q_tnd(:,:,:,nqr)*dtinv
+        if ( nqs /= NO_TRACER ) &
+          Tend_mp%q_tnd(:,:,:,nqs) = Tend_mp%q_tnd(:,:,:,nqs)*dtinv
+        if ( nqg /= NO_TRACER ) &
+          Tend_mp%q_tnd(:,:,:,nqg) = Tend_mp%q_tnd(:,:,:,nqg)*dtinv
+        if ( nqnr /= NO_TRACER ) &
+          Tend_mp%q_tnd(:,:,:,nqnr)= Tend_mp%q_tnd(:,:,:,nqnr)*dtinv
+        if ( nqns /= NO_TRACER ) &
+          Tend_mp%q_tnd(:,:,:,nqns)= Tend_mp%q_tnd(:,:,:,nqns)*dtinv
+!<-- h1g, 2019-08-27 ----
         Tend_mp%q_tnd(:,:,:,nqa) = Tend_mp%q_tnd(:,:,:,nqa)*dtinv
         if (do_liq_num) Tend_mp%q_tnd(:,:,:,nqn) =   &
                                           Tend_mp%q_tnd(:,:,:,nqn)*dtinv
@@ -3042,6 +3267,28 @@ real,                        intent(in)     :: dtinv
                                                  Tend_mp%q_tnd(:,:,:,nql)
         Output_mp%rdt(:,:,:,nqi) = Output_mp%rdt(:,:,:,nqi) +   &
                                                  Tend_mp%q_tnd(:,:,:,nqi)
+
+!<-- h1g, 2019-08-27 ----
+        if ( nqr /= NO_TRACER ) &
+          Output_mp%rdt(:,:,:,nqr) = Output_mp%rdt(:,:,:,nqr) +   &
+                                                 Tend_mp%q_tnd(:,:,:,nqr)
+        if ( nqs /= NO_TRACER ) &
+          Output_mp%rdt(:,:,:,nqs) = Output_mp%rdt(:,:,:,nqs) +   &
+                                                 Tend_mp%q_tnd(:,:,:,nqs)
+        if ( nqg /= NO_TRACER ) &
+          Output_mp%rdt(:,:,:,nqg) = Output_mp%rdt(:,:,:,nqg) +   &
+                                                 Tend_mp%q_tnd(:,:,:,nqg)
+!       if (mpp_pe() == mpp_root_pe() ) &
+!        write(*,*) 'before Output_mp nqr,nqs,nqg: ', nqr,nqs,nqg,NO_TRACER
+
+        if ( nqnr /= NO_TRACER ) &
+          Output_mp%rdt(:,:,:,nqnr) = Output_mp%rdt(:,:,:,nqnr) +   &
+                                                 Tend_mp%q_tnd(:,:,:,nqnr)
+        if ( nqns /= NO_TRACER ) &
+          Output_mp%rdt(:,:,:,nqns) = Output_mp%rdt(:,:,:,nqns) +   &
+                                                 Tend_mp%q_tnd(:,:,:,nqns)
+!<-- h1g, 2019-08-27 ----
+
         Output_mp%rdt(:,:,:,nqa) = Output_mp%rdt(:,:,:,nqa) +   &
                                                  Tend_mp%q_tnd(:,:,:,nqa)
         if (do_liq_num)   &
@@ -3060,6 +3307,7 @@ real,                        intent(in)     :: dtinv
 !----------------------------------------------------------------------
       if (doing_prog_clouds) then
         Cld_props%cloud_area = Input_mp%tracer(:,:,:,nqa)
+
         Cld_props%liquid_amt = Input_mp%tracer(:,:,:,nql)
         Cld_props%ice_amt    = Input_mp%tracer(:,:,:,nqi)
         if (do_liq_num)   &
@@ -3085,8 +3333,6 @@ real,                        intent(in)     :: dtinv
       endif
 
 !----------------------------------------------------------------------
-
-
 
 end subroutine update_fields_and_tendencies
 
@@ -3123,6 +3369,12 @@ type(precip_state_type), intent(inout) :: Precip_state
       integer :: kx
       logical :: used
 
+!--> h1g, 2019-11-22
+      integer :: i,j,k, ix, jx
+      ix=  size(Input_mp%t,1)
+      jx=  size(Input_mp%t,2)
+!<-- h1g, 2019-11-22
+
       kx = size(Input_mp%t,3)
 
 !---------------------------------------------------------------------
@@ -3131,13 +3383,22 @@ type(precip_state_type), intent(inout) :: Precip_state
 !---------------------------------------------------------------------
       Tend_mp%qtnd_wet = Tend_mp%qtnd
       if (doing_prog_clouds) then
-        Tend_mp%qtnd_wet = Tend_mp%qtnd_wet + Tend_mp%q_tnd(:,:,:,nql) +  &
-                                              Tend_mp%q_tnd(:,:,:,nqi)
+!bqx
+        if (Constants_lsc%do_lin_cld_microphys) then
+         Tend_mp%qtnd_wet = Tend_mp%qtnd_wet + Tend_mp%q_tnd(:,:,:,nql) +  &
+                                               Tend_mp%q_tnd(:,:,:,nqr) +  &
+                                               Tend_mp%q_tnd(:,:,:,nqi) +  &
+                                               Tend_mp%q_tnd(:,:,:,nqs) +  &
+                                               Tend_mp%q_tnd(:,:,:,nqg) 
+        else
+         Tend_mp%qtnd_wet = Tend_mp%qtnd_wet + Tend_mp%q_tnd(:,:,:,nql) +  &
+                                               Tend_mp%q_tnd(:,:,:,nqi)
+        endif
 
 !-----------------------------------------------------------------------
 !    sum up the precipitation formed over timestep.
 !-----------------------------------------------------------------------
-        if (Constants_lsc%do_lin_cld_microphys) then
+        if (Constants_lsc%do_lin_cld_microphys .or. Constants_lsc%do_ncar_MG2 ) then
           C2ls_mp%cloud_wet = Input_mp%tracer(:,:,:,nqr) +   &
                               Input_mp%tracer(:,:,:,nqs) +   &
                               Input_mp%tracer(:,:,:,nqg)
@@ -3193,9 +3454,14 @@ type(precip_state_type), intent(inout) :: Precip_state
              n /=              nqi .and.  &
              n /=              nqa .and.  &
              n /=              nqn .and.  &
-             n /=              nqni       &
+             n /=              nqni .and. &
+             n /=              nqr .and. &
+             n /=              nqs .and. &
+             n /=              nqg       &      
                                        ) then
           Tend_mp%wetdeptnd(:,:,:) = 0.0
+
+
           call wet_deposition (        &
               n, Input_mp%t, Input_mp%pfull, Input_mp%phalf,   &
               Input_mp%zfull, Input_mp%zhalf, Precip_state%surfrain,  &
@@ -3212,7 +3478,6 @@ type(precip_state_type), intent(inout) :: Precip_state
 !-----------------------------------------------------------------------
           Output_mp%rdt (:,:,:,n) =  Output_mp%rdt(:,:,:,n) -   &
                                                   Tend_mp%wetdeptnd(:,:,:)
-
 !-----------------------------------------------------------------------
 !    add the large-scale wet deposition tendency for the tracer to the 
 !    previously-obtained convective wet deposition tendency 
@@ -3492,21 +3757,42 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
       deallocate (Cloud_state%qa_upd  )
       deallocate (Cloud_state%qn_upd  )
       deallocate (Cloud_state%qni_upd )
+      deallocate (Cloud_state%qr_upd  )
+      deallocate (Cloud_state%qs_upd  )
+      deallocate (Cloud_state%qnr_upd )
+      deallocate (Cloud_state%qns_upd )
+
       deallocate (Cloud_state%ql_mean )
       deallocate (Cloud_state%qi_mean )
       deallocate (Cloud_state%qa_mean )
       deallocate (Cloud_state%qn_mean )
       deallocate (Cloud_state%qni_mean)
+      deallocate (Cloud_state%qr_mean )
+      deallocate (Cloud_state%qs_mean )
+      deallocate (Cloud_state%qnr_mean)
+      deallocate (Cloud_state%qns_mean)
+
       deallocate (Cloud_state%ql_in   )
+      deallocate (Cloud_state%qr_in   )
       deallocate (Cloud_state%qi_in   )
+      deallocate (Cloud_state%qs_in   )
+      deallocate (Cloud_state%qg_in   )
       deallocate (Cloud_state%qa_in   )
       deallocate (Cloud_state%qn_in   )
       deallocate (Cloud_state%qni_in  )
+      deallocate (Cloud_state%qnr_in  )
+      deallocate (Cloud_state%qns_in  )
+ 
       deallocate (Cloud_state%SL_out  )
       deallocate (Cloud_state%SI_out  )
       deallocate (Cloud_state%SA_out  )
       deallocate (Cloud_state%SN_out  )
       deallocate (Cloud_state%SNi_out )
+      deallocate (Cloud_state%SR_out  )
+      deallocate (Cloud_state%SS_out  )
+      deallocate (Cloud_state%SNR_out )
+      deallocate (Cloud_state%SNS_out )
+
       deallocate (Cloud_state%qcvar_clubb )
       deallocate (Cloud_state%relvarn     )
       deallocate (Cloud_state%qa_upd_0)
