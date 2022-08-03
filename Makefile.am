@@ -65,8 +65,6 @@ libatmos_phys_la_SOURCES = ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.F9
     ${top_srcdir}/atmos_shared/tracer_driver/aer_ccn_act/aerosol_params.F90 \
     ${top_srcdir}/atmos_param/physics_driver/physics_types.F90 \
     ${top_srcdir}/atmos_param/physics_driver/physics_driver.F90 \
-    ${top_srcdir}/atmos_param/diag_cloud/diag_cloud.F90 \
-    ${top_srcdir}/atmos_param/grey_radiation/grey_radiation.F90 \
     ${top_srcdir}/atmos_param/diffusivity/diffusivity.F90 \
     ${top_srcdir}/atmos_param/topo_drag/topo_drag.F90 \
     ${top_srcdir}/atmos_param/macrophysics/ls_cloud_macrophysics.F90 \
@@ -121,7 +119,6 @@ libatmos_phys_la_SOURCES = ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.F9
     ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.F90 \
     ${top_srcdir}/atmos_param/cloud_generator/betaDistribution.F90 \
     ${top_srcdir}/atmos_param/cloud_generator/cloud_generator.F90 \
-    ${top_srcdir}/atmos_param/qe_moist_convection/qe_moist_convection.F90 \
     ${top_srcdir}/atmos_param/lscloud_driver/lscloud_debug.F90 \
     ${top_srcdir}/atmos_param/lscloud_driver/lscloud_constants.F90 \
     ${top_srcdir}/atmos_param/lscloud_driver/lscloud_netcdf.F90 \
@@ -140,12 +137,8 @@ libatmos_phys_la_SOURCES = ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.F9
     ${top_srcdir}/atmos_param/microphysics/ls_cloud_microphysics.F90 \
     ${top_srcdir}/atmos_param/microphysics/simple_pdf.F90 \
     ${top_srcdir}/atmos_param/microphysics/cldwat2m_micro.F90 \
-    ${top_srcdir}/atmos_param/clouds/clouds.F90 \
     ${top_srcdir}/atmos_param/lin_cloud_microphys/lin_cloud_microphys.F90 \
-    ${top_srcdir}/atmos_param/cloud_obs/cloud_obs.F90 \
-    ${top_srcdir}/atmos_param/diag_cloud_rad/diag_cloud_rad.F90 \
     ${top_srcdir}/atmos_param/damping_driver/damping_driver.F90 \
-    ${top_srcdir}/atmos_param/shallow_physics/shallow_physics.F90 \
     ${top_srcdir}/atmos_param/vert_diff_driver/vert_diff_driver.F90 \
     ${top_srcdir}/atmos_param/moist_processes/moist_processes.F90 \
     ${top_srcdir}/atmos_param/moist_processes/moist_processes_utils.F90 \
@@ -199,10 +192,8 @@ libatmos_phys_la_SOURCES = ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.F9
     ${top_srcdir}/atmos_param/betts_miller/betts_miller.F90 \
     ${top_srcdir}/atmos_param/betts_miller/bm_massflux.F90 \
     ${top_srcdir}/atmos_param/vert_diff/vert_diff.F90 \
-    ${top_srcdir}/atmos_param/two_stream_gray_rad/two_stream_gray_rad.F90 \
     ${top_srcdir}/atmos_param/aerosol_cloud/aerosol_cloud.F90 \
     ${top_srcdir}/atmos_param/rh_clouds/rh_clouds.F90 \
-    ${top_srcdir}/atmos_param/cloud_zonal/cloud_zonal.F90 \
     ${top_srcdir}/atmos_param/donner_deep/donner_deep.F90 \
     ${top_srcdir}/atmos_param/donner_deep/donner_deep_k.F90 \
     ${top_srcdir}/atmos_param/donner_deep/donner_deep_miz.F90 \
@@ -517,13 +508,7 @@ ${top_builddir}/atmos_param/physics_driver/physics_driver.lo: ${top_srcdir}/atmo
      ${top_srcdir}/atmos_param/moist_processes/moist_processes.lo \
      ${top_srcdir}/atmos_param/vert_turb_driver/vert_turb_driver.lo \
      ${top_srcdir}/atmos_param/vert_diff_driver/vert_diff_driver.lo \
-     ${top_srcdir}/atmos_param/damping_driver/damping_driver.lo \
-     ${top_srcdir}/atmos_param/grey_radiation/grey_radiation.lo
-${top_builddir}/atmos_param/diag_cloud/diag_cloud.lo: ${top_srcdir}/atmos_param/diag_cloud/diag_cloud.F90 \
-     ${top_srcdir}/atmos_param/cloud_zonal/cloud_zonal.lo \
-     ${top_srcdir}/atmos_param/diag_cloud_rad/diag_cloud_rad.lo \
-     ${top_srcdir}/atmos_param/shallow_conv/shallow_conv.lo
-${top_builddir}/atmos_param/grey_radiation/grey_radiation.lo: ${top_srcdir}/atmos_param/grey_radiation/grey_radiation.F90
+     ${top_srcdir}/atmos_param/damping_driver/damping_driver.lo 
 ${top_builddir}/atmos_param/diffusivity/diffusivity.lo: ${top_srcdir}/atmos_param/diffusivity/diffusivity.F90
 ${top_builddir}/atmos_param/topo_drag/topo_drag.lo: ${top_srcdir}/atmos_param/topo_drag/topo_drag.F90
 ${top_builddir}/atmos_param/macrophysics/ls_cloud_macrophysics.lo: ${top_srcdir}/atmos_param/macrophysics/ls_cloud_macrophysics.F90 \
@@ -735,7 +720,6 @@ ${top_builddir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo: ${
 ${top_builddir}/atmos_param/cloud_generator/betaDistribution.lo: ${top_srcdir}/atmos_param/cloud_generator/betaDistribution.F90
 ${top_builddir}/atmos_param/cloud_generator/cloud_generator.lo: ${top_srcdir}/atmos_param/cloud_generator/cloud_generator.F90 \
      ${top_srcdir}/atmos_param/cloud_generator/betaDistribution.lo
-${top_builddir}/atmos_param/qe_moist_convection/qe_moist_convection.lo: ${top_srcdir}/atmos_param/qe_moist_convection/qe_moist_convection.F90
 ${top_builddir}/atmos_param/lscloud_driver/lscloud_debug.lo: ${top_srcdir}/atmos_param/lscloud_driver/lscloud_debug.F90 \
      ${top_srcdir}/atmos_param/lscloud_driver/lscloud_types.lo \
      ${top_srcdir}/atmos_param/moist_processes/moist_processes_utils.lo \
@@ -820,22 +804,12 @@ ${top_builddir}/atmos_param/microphysics/cldwat2m_micro.lo: ${top_srcdir}/atmos_
      ${top_srcdir}/atmos_param/lscloud_driver/lscloud_types.lo \
      ${top_srcdir}/atmos_param/microphysics/simple_pdf.lo \
      ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo
-${top_builddir}/atmos_param/clouds/clouds.lo: ${top_srcdir}/atmos_param/clouds/clouds.F90 \
-     ${top_srcdir}/atmos_param/cloud_rad/cloud_rad.lo \
-     ${top_srcdir}/atmos_param/cloud_zonal/cloud_zonal.lo \
-     ${top_srcdir}/atmos_param/cloud_obs/cloud_obs.lo \
-     ${top_srcdir}/atmos_param/rh_clouds/rh_clouds.lo \
-     ${top_srcdir}/atmos_param/diag_cloud/diag_cloud.lo
 ${top_builddir}/atmos_param/lin_cloud_microphys/lin_cloud_microphys.lo: ${top_srcdir}/atmos_param/lin_cloud_microphys/lin_cloud_microphys.F90
-${top_builddir}/atmos_param/cloud_obs/cloud_obs.lo: ${top_srcdir}/atmos_param/cloud_obs/cloud_obs.F90
-${top_builddir}/atmos_param/diag_cloud_rad/diag_cloud_rad.lo: ${top_srcdir}/atmos_param/diag_cloud_rad/diag_cloud_rad.F90 \
-     ${top_srcdir}/atmos_param/cloud_rad/cloud_rad.lo
 ${top_builddir}/atmos_param/damping_driver/damping_driver.lo: ${top_srcdir}/atmos_param/damping_driver/damping_driver.F90 \
      ${top_srcdir}/atmos_param/mg_drag/mg_drag.lo \
      ${top_srcdir}/atmos_param/cg_drag/cg_drag.lo \
      ${top_srcdir}/atmos_param/topo_drag/topo_drag.lo \
      ${top_srcdir}/atmos_shared/atmos_cmip_diag/atmos_cmip_diag.lo
-${top_builddir}/atmos_param/shallow_physics/shallow_physics.lo: ${top_srcdir}/atmos_param/shallow_physics/shallow_physics.F90
 ${top_builddir}/atmos_param/vert_diff_driver/vert_diff_driver.lo: ${top_srcdir}/atmos_param/vert_diff_driver/vert_diff_driver.F90 \
      ${top_srcdir}/atmos_param/vert_diff/vert_diff.lo \
      ${top_srcdir}/atmos_shared/atmos_cmip_diag/atmos_cmip_diag.lo
@@ -1005,7 +979,6 @@ ${top_builddir}/atmos_param/betts_miller/bm_omp.lo: ${top_srcdir}/atmos_param/be
 ${top_builddir}/atmos_param/betts_miller/betts_miller.lo: ${top_srcdir}/atmos_param/betts_miller/betts_miller.F90
 ${top_builddir}/atmos_param/betts_miller/bm_massflux.lo: ${top_srcdir}/atmos_param/betts_miller/bm_massflux.F90
 ${top_builddir}/atmos_param/vert_diff/vert_diff.lo: ${top_srcdir}/atmos_param/vert_diff/vert_diff.F90
-${top_builddir}/atmos_param/two_stream_gray_rad/two_stream_gray_rad.lo: ${top_srcdir}/atmos_param/two_stream_gray_rad/two_stream_gray_rad.F90
 ${top_builddir}/atmos_param/aerosol_cloud/aerosol_cloud.lo: ${top_srcdir}/atmos_param/aerosol_cloud/aerosol_cloud.F90 \
      ${top_srcdir}/atmos_shared/aerosol/aerosol_types.lo \
      ${top_srcdir}/atmos_param/lscloud_driver/polysvp.lo \
@@ -1017,7 +990,6 @@ ${top_builddir}/atmos_param/aerosol_cloud/aerosol_cloud.lo: ${top_srcdir}/atmos_
      ${top_srcdir}/atmos_param/moist_processes/moist_processes_utils.lo \
      ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo
 ${top_builddir}/atmos_param/rh_clouds/rh_clouds.lo: ${top_srcdir}/atmos_param/rh_clouds/rh_clouds.F90
-${top_builddir}/atmos_param/cloud_zonal/cloud_zonal.lo: ${top_srcdir}/atmos_param/cloud_zonal/cloud_zonal.F90
 ${top_builddir}/atmos_param/donner_deep/donner_deep.lo: ${top_srcdir}/atmos_param/donner_deep/donner_deep.F90 \
      ${top_srcdir}/atmos_param/donner_deep/donner_types.lo \
      ${top_srcdir}/atmos_param/shallow_cu/conv_utilities_k.lo \
@@ -1601,8 +1573,6 @@ ice_nucl_mod.mod: ${top_srcdir}/atmos_shared/tracer_driver/aer_ccn_act/ice_nucl.
 aerosol_params_mod.mod: ${top_srcdir}/atmos_shared/tracer_driver/aer_ccn_act/aerosol_params.lo
 physics_types_mod.mod: ${top_srcdir}/atmos_param/physics_driver/physics_types.lo
 physics_driver_mod.mod: ${top_srcdir}/atmos_param/physics_driver/physics_driver.lo
-diag_cloud_mod.mod: ${top_srcdir}/atmos_param/diag_cloud/diag_cloud.lo
-grey_radiation_mod.mod: ${top_srcdir}/atmos_param/grey_radiation/grey_radiation.lo
 diffusivity_mod.mod: ${top_srcdir}/atmos_param/diffusivity/diffusivity.lo
 topo_drag_mod.mod: ${top_srcdir}/atmos_param/topo_drag/topo_drag.lo
 ls_cloud_macrophysics_mod.mod: ${top_srcdir}/atmos_param/macrophysics/ls_cloud_macrophysics.lo
@@ -1657,7 +1627,6 @@ convection_driver_mod.mod: ${top_srcdir}/atmos_param/convection_driver/convectio
 physics_radiation_exch_mod.mod: ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo
 beta_dist_mod.mod: ${top_srcdir}/atmos_param/cloud_generator/betaDistribution.lo
 cloud_generator_mod.mod: ${top_srcdir}/atmos_param/cloud_generator/cloud_generator.lo
-qe_moist_convection_mod.mod: ${top_srcdir}/atmos_param/qe_moist_convection/qe_moist_convection.lo
 lscloud_debug_mod.mod: ${top_srcdir}/atmos_param/lscloud_driver/lscloud_debug.lo
 lscloud_constants_mod.mod: ${top_srcdir}/atmos_param/lscloud_driver/lscloud_constants.lo
 lscloud_netcdf_mod.mod: ${top_srcdir}/atmos_param/lscloud_driver/lscloud_netcdf.lo
@@ -1678,12 +1647,8 @@ ls_cloud_microphysics_mod.mod: ${top_srcdir}/atmos_param/microphysics/ls_cloud_m
 simple_pdf_mod.mod: ${top_srcdir}/atmos_param/microphysics/simple_pdf.lo
 cldwat2m_micro_mod.mod: ${top_srcdir}/atmos_param/microphysics/cldwat2m_micro.lo
 cldwat2m_micro.mod: ${top_srcdir}/atmos_param/microphysics/cldwat2m_micro.lo
-clouds_mod.mod: ${top_srcdir}/atmos_param/clouds/clouds.lo
 lin_cld_microphys_mod.mod: ${top_srcdir}/atmos_param/lin_cloud_microphys/lin_cloud_microphys.lo
-cloud_obs_mod.mod: ${top_srcdir}/atmos_param/cloud_obs/cloud_obs.lo
-diag_cloud_rad_mod.mod: ${top_srcdir}/atmos_param/diag_cloud_rad/diag_cloud_rad.lo
 damping_driver_mod.mod: ${top_srcdir}/atmos_param/damping_driver/damping_driver.lo
-shallow_physics_mod.mod: ${top_srcdir}/atmos_param/shallow_physics/shallow_physics.lo
 vert_diff_driver_mod.mod: ${top_srcdir}/atmos_param/vert_diff_driver/vert_diff_driver.lo
 moist_processes_mod.mod: ${top_srcdir}/atmos_param/moist_processes/moist_processes.lo
 moist_proc_utils_mod.mod: ${top_srcdir}/atmos_param/moist_processes/moist_processes_utils.lo
@@ -1724,10 +1689,8 @@ bm_omp_mod.mod: ${top_srcdir}/atmos_param/betts_miller/bm_omp.lo
 betts_miller_mod.mod: ${top_srcdir}/atmos_param/betts_miller/betts_miller.lo
 bm_massflux_mod.mod: ${top_srcdir}/atmos_param/betts_miller/bm_massflux.lo
 vert_diff_mod.mod: ${top_srcdir}/atmos_param/vert_diff/vert_diff.lo
-two_stream_gray_rad_mod.mod: ${top_srcdir}/atmos_param/two_stream_gray_rad/two_stream_gray_rad.lo
 aerosol_cloud_mod.mod: ${top_srcdir}/atmos_param/aerosol_cloud/aerosol_cloud.lo
 rh_clouds_mod.mod: ${top_srcdir}/atmos_param/rh_clouds/rh_clouds.lo
-cloud_zonal_mod.mod: ${top_srcdir}/atmos_param/cloud_zonal/cloud_zonal.lo
 donner_deep_mod.mod: ${top_srcdir}/atmos_param/donner_deep/donner_deep.lo
 null_donner_deep_miz.mod: ${top_srcdir}/atmos_param/donner_deep/donner_deep_miz.lo
 fms_donner_mod.mod: ${top_srcdir}/atmos_param/donner_deep/fms_donner.lo
@@ -1915,8 +1878,6 @@ include_HEADERS = atmos_nudge_mod.mod \
     aerosol_params_mod.mod \
     physics_types_mod.mod \
     physics_driver_mod.mod \
-    diag_cloud_mod.mod \
-    grey_radiation_mod.mod \
     diffusivity_mod.mod \
     topo_drag_mod.mod \
     ls_cloud_macrophysics_mod.mod \
@@ -1971,7 +1932,6 @@ include_HEADERS = atmos_nudge_mod.mod \
     physics_radiation_exch_mod.mod \
     beta_dist_mod.mod \
     cloud_generator_mod.mod \
-    qe_moist_convection_mod.mod \
     lscloud_debug_mod.mod \
     lscloud_constants_mod.mod \
     lscloud_netcdf_mod.mod \
@@ -1994,10 +1954,7 @@ include_HEADERS = atmos_nudge_mod.mod \
     cldwat2m_micro.mod \
     clouds_mod.mod \
     lin_cld_microphys_mod.mod \
-    cloud_obs_mod.mod \
-    diag_cloud_rad_mod.mod \
     damping_driver_mod.mod \
-    shallow_physics_mod.mod \
     vert_diff_driver_mod.mod \
     moist_processes_mod.mod \
     moist_proc_utils_mod.mod \
@@ -2038,10 +1995,8 @@ include_HEADERS = atmos_nudge_mod.mod \
     betts_miller_mod.mod \
     bm_massflux_mod.mod \
     vert_diff_mod.mod \
-    two_stream_gray_rad_mod.mod \
     aerosol_cloud_mod.mod \
     rh_clouds_mod.mod \
-    cloud_zonal_mod.mod \
     donner_deep_mod.mod \
     null_donner_deep_miz.mod \
     fms_donner_mod.mod \
