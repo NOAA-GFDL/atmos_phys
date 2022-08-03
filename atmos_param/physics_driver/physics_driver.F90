@@ -150,9 +150,6 @@ use damping_driver_mod,      only: damping_driver,      &
                                    damping_driver_end,  &
                                    damping_driver_restart
 
-use grey_radiation_mod,       only: grey_radiation_init, grey_radiation, &
-                                    grey_radiation_end
-
 use monin_obukhov_mod,        only: monin_obukhov_init
 
 #ifdef SCM
