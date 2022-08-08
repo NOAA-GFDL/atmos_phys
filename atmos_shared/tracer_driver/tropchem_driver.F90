@@ -38,7 +38,7 @@ use                    fms_mod, only : write_version_number, &
                                        WARNING, &
                                        NOTE
 use         tropchem_types_mod, only : tropchem_opt, tropchem_diag, tropchem_types_init, missing_value
-use           time_manager_mod, only : time_type, &
+use           time_manager_mod, only : time_type,print_date, &
                                        get_date, &
                                        set_date, &
                                        set_time, &
@@ -360,7 +360,7 @@ logical, dimension(pcnstm1) :: has_ubc = .false., &
      has_lbc    = .false., &
      has_lbc_2d = .false., &
      fixed_lbc_time = .false.
-type(time_type), dimension(pcnstm1) :: lbc_entry, lbc_time
+type(time_type), dimension(pcnstm1) :: lbc_entry
 logical, dimension(pcnstm1) :: has_airc = .false., lbc_dry=.false.
 character(len=64),dimension(pcnstm1) :: ub_names, airc_names,lbc_names
 real, dimension(pcnstm1) :: lbc_factor
@@ -630,7 +630,7 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
    real, dimension(size(r,1),size(r,2),size(r,3),trop_diag%nb_diag) :: trop_diag_array
    type(time_type) :: co2_time
    character(len=32) :: tracer_name, noytracer
-
+   type(time_type) :: lbc_time
 !-----------------------------------------------------------------------
 
 !<ERROR MSG="tropchem_driver_init must be called first." STATUS="FATAL">
@@ -1169,11 +1169,11 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
       if(has_lbc(n)) then
          if (.not.has_lbc_2d(n)) then
             if (fixed_lbc_time(n)) then
-               lbc_Time(n) = lbc_entry(n)
+               lbc_Time = lbc_entry(n)
             else
-               lbc_Time(n) = Time
+               lbc_Time = Time
             end if
-            call time_interp( lbc_Time(n), lb(n)%gas_time(:), frac, index1, index2 )
+            call time_interp( lbc_Time, lb(n)%gas_time(:), frac, index1, index2 )
             r_lb(n) = lb(n)%gas_value(index1) + frac*( lb(n)%gas_value(index2) - lb(n)%gas_value(index1))
             if(id_lb(n)>0) then
                used = send_data(id_lb(n), r_lb(n), Time_next)
@@ -1189,7 +1189,13 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
                end where
             end do                        
          else
-            call interpolator(lbc_interp(n), Time, r_lb_2d, trim(lbc_names(n)), is,js)
+            if (fixed_lbc_time(n)) then
+               lbc_Time = lbc_entry(n)
+            else
+               lbc_Time = Time
+            end if
+                        
+            call interpolator(lbc_interp(n), lbc_time, r_lb_2d, trim(lbc_names(n)), is,js)
             r_lb_2d = r_lb_2d*lbc_factor(n)
             if (id_lb(n)>0) then
                used = send_data(id_lb(n), r_lb_2d, Time_next, is_in=is, js_in=js)   
@@ -2161,8 +2167,10 @@ end if
                      else
                         lbc_names(i) = trim(lowercase(tracnam(i)))
                      end if
+
+                     if (mpp_root_pe().eq.mpp_pe()) write(*,*) 'fixed_year',flag_fixed,fixed_year
                      
-                     if( flag_fixed > 0 ) then
+                     if( flag_fixed > 0 ) then                        
                         fixed_lbc_time(i) = .true.
                         year = INT(fixed_year)
                         Year_t = set_date(year,1,1,0,0,0)
@@ -2752,7 +2760,8 @@ end function tropchem_driver_init
 
 subroutine tropchem_driver_time_vary (Time)
 
-type(time_type), intent(in) :: Time
+      type(time_type), intent(in) :: Time
+      type(time_type) :: lbc_time
 
       integer :: yr, mo,day, hr,min, sec, mo_yr, dum, dayspmn
       integer :: n
@@ -2797,7 +2806,12 @@ type(time_type), intent(in) :: Time
 
       do n=1,size(has_lbc,1)
          if (has_lbc_2d(n)) then
-            call obtain_interpolator_time_slices (lbc_interp(n), Time)
+            if (fixed_lbc_time(n)) then
+               lbc_Time = lbc_entry(n)
+            else
+               lbc_Time = Time
+            end if            
+            call obtain_interpolator_time_slices (lbc_interp(n), lbc_time)
          end if
       end do
      
