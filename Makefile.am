@@ -137,12 +137,10 @@ libatmos_phys_la_SOURCES = ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.F9
     ${top_srcdir}/atmos_param/microphysics/ls_cloud_microphysics.F90 \
     ${top_srcdir}/atmos_param/microphysics/simple_pdf.F90 \
     ${top_srcdir}/atmos_param/microphysics/cldwat2m_micro.F90 \
-    ${top_srcdir}/atmos_param/lin_cloud_microphys/lin_cloud_microphys.F90 \
     ${top_srcdir}/atmos_param/damping_driver/damping_driver.F90 \
     ${top_srcdir}/atmos_param/vert_diff_driver/vert_diff_driver.F90 \
     ${top_srcdir}/atmos_param/moist_processes/moist_processes.F90 \
     ${top_srcdir}/atmos_param/moist_processes/moist_processes_utils.F90 \
-    ${top_srcdir}/atmos_param/strat_cloud/strat_cloud.F90 \
     ${top_srcdir}/atmos_param/my25_turb/my25_turb.F90 \
     ${top_srcdir}/atmos_param/cosp/cosp_modis_simulator.F90 \
     ${top_srcdir}/atmos_param/cosp/cosp_driver.F90 \
@@ -742,7 +740,6 @@ ${top_builddir}/atmos_param/lscloud_driver/lscloud_driver.lo: ${top_srcdir}/atmo
      ${top_srcdir}/atmos_param/macrophysics/ls_cloud_macrophysics.lo \
      ${top_srcdir}/atmos_param/microphysics/ls_cloud_microphysics.lo \
      ${top_srcdir}/atmos_param/aerosol_cloud/aerosol_cloud.lo \
-     ${top_srcdir}/atmos_param/strat_cloud/strat_cloud.lo \
      ${top_srcdir}/atmos_param/moist_processes/moist_processes_utils.lo \
      ${top_srcdir}/atmos_shared/aerosol/aerosol_types.lo \
      ${top_srcdir}/atmos_shared/tracer_driver/atmos_tracer_utilities.lo \
@@ -789,7 +786,6 @@ ${top_builddir}/atmos_param/microphysics/ls_cloud_microphysics.lo: ${top_srcdir}
      ${top_srcdir}/atmos_shared/aerosol/aerosol_types.lo \
      ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo \
      ${top_srcdir}/atmos_param/moist_processes/moist_processes_utils.lo \
-     ${top_srcdir}/atmos_param/lin_cloud_microphys/lin_cloud_microphys.lo \
      ${top_srcdir}/atmos_param/lscloud_driver/lscloud_debug.lo \
      ${top_srcdir}/atmos_param/microphysics/rotstayn_klein_mp.lo \
      ${top_srcdir}/atmos_param/microphysics/morrison_gettelman_microp.lo \
@@ -804,7 +800,6 @@ ${top_builddir}/atmos_param/microphysics/cldwat2m_micro.lo: ${top_srcdir}/atmos_
      ${top_srcdir}/atmos_param/lscloud_driver/lscloud_types.lo \
      ${top_srcdir}/atmos_param/microphysics/simple_pdf.lo \
      ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo
-${top_builddir}/atmos_param/lin_cloud_microphys/lin_cloud_microphys.lo: ${top_srcdir}/atmos_param/lin_cloud_microphys/lin_cloud_microphys.F90
 ${top_builddir}/atmos_param/damping_driver/damping_driver.lo: ${top_srcdir}/atmos_param/damping_driver/damping_driver.F90 \
      ${top_srcdir}/atmos_param/mg_drag/mg_drag.lo \
      ${top_srcdir}/atmos_param/cg_drag/cg_drag.lo \
@@ -830,18 +825,6 @@ ${top_builddir}/atmos_param/moist_processes/moist_processes.lo: ${top_srcdir}/at
      ${top_srcdir}/atmos_shared/atmos_cmip_diag/atmos_cmip_diag.lo
 ${top_builddir}/atmos_param/moist_processes/moist_processes_utils.lo: ${top_srcdir}/atmos_param/moist_processes/moist_processes_utils.F90 \
      ${top_srcdir}/atmos_param/lscloud_driver/lscloud_types.lo
-${top_builddir}/atmos_param/strat_cloud/strat_cloud.lo: ${top_srcdir}/atmos_param/strat_cloud/strat_cloud.F90 \
-     ${top_srcdir}/atmos_shared/aerosol/aerosol_types.lo \
-     ${top_srcdir}/atmos_param/lscloud_driver/lscloud_types.lo \
-     ${top_srcdir}/atmos_param/moist_processes/moist_processes_utils.lo \
-     ${top_srcdir}/atmos_param/physics_driver/physics_types.lo \
-     ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo \
-     ${top_srcdir}/atmos_param/lscloud_driver/lscloud_netcdf.lo \
-     ${top_srcdir}/atmos_param/aerosol_cloud/aerosol_cloud.lo \
-     ${top_srcdir}/atmos_param/cloud_generator/betaDistribution.lo \
-     ${top_srcdir}/atmos_shared/tracer_driver/aer_ccn_act/aer_in_act.lo \
-     ${top_srcdir}/atmos_shared/tracer_driver/aer_ccn_act/aer_ccn_act.lo \
-     ${top_srcdir}/atmos_param/cloud_generator/cloud_generator.lo
 ${top_builddir}/atmos_param/my25_turb/my25_turb.lo: ${top_srcdir}/atmos_param/my25_turb/my25_turb.F90
 ${top_builddir}/atmos_param/cosp/cosp_modis_simulator.lo: ${top_srcdir}/atmos_param/cosp/cosp_modis_simulator.F90 \
      ${top_srcdir}/atmos_param/cosp/cosp_constants.lo \
@@ -1647,12 +1630,10 @@ ls_cloud_microphysics_mod.mod: ${top_srcdir}/atmos_param/microphysics/ls_cloud_m
 simple_pdf_mod.mod: ${top_srcdir}/atmos_param/microphysics/simple_pdf.lo
 cldwat2m_micro_mod.mod: ${top_srcdir}/atmos_param/microphysics/cldwat2m_micro.lo
 cldwat2m_micro.mod: ${top_srcdir}/atmos_param/microphysics/cldwat2m_micro.lo
-lin_cld_microphys_mod.mod: ${top_srcdir}/atmos_param/lin_cloud_microphys/lin_cloud_microphys.lo
 damping_driver_mod.mod: ${top_srcdir}/atmos_param/damping_driver/damping_driver.lo
 vert_diff_driver_mod.mod: ${top_srcdir}/atmos_param/vert_diff_driver/vert_diff_driver.lo
 moist_processes_mod.mod: ${top_srcdir}/atmos_param/moist_processes/moist_processes.lo
 moist_proc_utils_mod.mod: ${top_srcdir}/atmos_param/moist_processes/moist_processes_utils.lo
-strat_cloud_mod.mod: ${top_srcdir}/atmos_param/strat_cloud/strat_cloud.lo
 my25_turb_mod.mod: ${top_srcdir}/atmos_param/my25_turb/my25_turb.lo
 mod_cosp_modis_simulator.mod: ${top_srcdir}/atmos_param/cosp/cosp_modis_simulator.lo
 cosp_driver_mod.mod: ${top_srcdir}/atmos_param/cosp/cosp_driver.lo
@@ -1953,12 +1934,10 @@ include_HEADERS = atmos_nudge_mod.mod \
     cldwat2m_micro_mod.mod \
     cldwat2m_micro.mod \
     clouds_mod.mod \
-    lin_cld_microphys_mod.mod \
     damping_driver_mod.mod \
     vert_diff_driver_mod.mod \
     moist_processes_mod.mod \
     moist_proc_utils_mod.mod \
-    strat_cloud_mod.mod \
     my25_turb_mod.mod \
     mod_cosp_modis_simulator.mod \
     cosp_driver_mod.mod \

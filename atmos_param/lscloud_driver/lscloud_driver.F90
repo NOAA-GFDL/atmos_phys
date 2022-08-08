@@ -4,7 +4,6 @@
 !
 !         interface module for large-scale moisture processes
 !         ---------------------------------------
-!             calls legacy strat_cloud code if desired
 !             determines aerosol available for condensation
 !             enforces realizability conditions
 !             calls bulk large-scale condensation routine if requested
@@ -72,8 +71,6 @@ use ls_cloud_microphysics_mod,      &
 use aerosol_cloud_mod,     only: aerosol_cloud_init, &
                                  determine_available_aerosol, &
                                  aerosol_cloud_end 
-use strat_cloud_mod,       only: strat_cloud_init, strat_cloud_end, &
-                                 strat_cloud
 use moist_proc_utils_mod,  only: column_diag, rh_calc, & 
                                  mp_nml_type, mp_input_type, &
                                  mp_removal_type, mp_tendency_type,  &
@@ -121,10 +118,6 @@ character(len=128) :: tagname = '$Name: $'
 
 
 !-----------------------------------------------------------------------
-!    do_legacy_strat_cloud 
-!                   activate the older version of the strat_cloud module
-!                   rather than the latest ? (default = .false)
-
 !  <DATA NAME="Dmin" UNITS="dimensionless" TYPE="real"  DEFAULT="1.0e-07">
 !   minimum permissible dissipation in analytic integration of qa, ql, qi
 !   equations. This constant only affects the method by which the
@@ -193,7 +186,6 @@ character(len=128) :: tagname = '$Name: $'
 
 
 
-logical            :: do_legacy_strat_cloud = .false.
 real               :: Dmin = 1.0e-7
 real               :: cfact = 1.0
 character(len=64)  :: microphys_scheme = 'rotstayn_klein'
@@ -212,7 +204,7 @@ logical            :: pdf_org = .true.
 logical :: use_cf_metadata = .false.
 logical :: do_liq_num_fill = .true.
 
-namelist / lscloud_driver_nml / do_legacy_strat_cloud, Dmin, cfact, &
+namelist / lscloud_driver_nml / Dmin, cfact, &
                                 microphys_scheme, macrophys_scheme, &
                                 aerosol_activation_scheme, &
                                 do_dust_berg, &
@@ -232,7 +224,7 @@ real, parameter :: d608 = (RVGAS - RDGAS)/RDGAS
 
 !-------------------- clock definitions --------------------------------
 
-integer :: lscloud_driver_clock, stratcloud_clock, ls_macrophysics_clock,&
+integer :: lscloud_driver_clock, ls_macrophysics_clock,&
            ls_microphysics_clock, lscalecond_clock, &
            polysvp_clock, lscloud_debug_clock, aerosol_cloud_clock, &
            lscloud_driver_init_clock, lscloud_driver_term_clock, &
@@ -302,7 +294,7 @@ type(cmip_diag_id_type) :: ID_tntscp, ID_tnhusscp
 
 subroutine lscloud_driver_init (domain, id, jd, kd, axes, Time, &
                                 Exch_ctrl, Nml_mp, Physics_control, &
-                                lon, lat, phalf, pref)
+                                lon, lat, phalf )
 
 type(domain2D), target,  intent(in)     :: domain !< Atmosphere domain
 integer,                 intent(in)     :: id, jd, kd
@@ -313,14 +305,13 @@ type(mp_nml_type),       intent(inout)  :: Nml_mp
 type(physics_control_type), intent(in)  :: Physics_control
 real,dimension(:,:),     intent(in)     :: lon,  lat    ! h1g
 real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
-real, dimension(:),      intent(in)     :: pref
 
 
 ! --- internal variables ---
       integer            :: unit, io, ierr, logunit
       character(len=128) :: errstring     ! Output status: non-blank for 
                                           ! error return
-      integer            :: lscalecond_init_clock, strat_init_clock, &
+      integer            :: lscalecond_init_clock, &
                             debug_init_clock, polysvp_init_clock, &
                             lscloud_types_init_clock,   &
                             aerosol_cloud_init_clock,  &
@@ -379,9 +370,6 @@ real, dimension(:),      intent(in)     :: pref
       lscalecond_init_clock = mpp_clock_id(   &
                    'Lscloud_driver: lscale_cond:Initialization' , &
                                                grain=CLOCK_MODULE_DRIVER )
-      strat_init_clock = mpp_clock_id(   &
-                   'Lscloud_driver: strat_cloud:Initialization' , &
-                                               grain=CLOCK_MODULE_DRIVER )
       debug_init_clock = mpp_clock_id(   &
                    'Lscloud_driver: lscloud_debug:Initialization' , &
                                                grain=CLOCK_MODULE_DRIVER )
@@ -408,9 +396,6 @@ real, dimension(:),      intent(in)     :: pref
       lscalecond_clock = mpp_clock_id(   &
                    '   Lscloud_driver: lscale_cond' , &
                                               grain=CLOCK_MODULE_DRIVER )
-      stratcloud_clock = mpp_clock_id  &
-                              ( '   Lscloud_driver: strat_cloud' ,&
-                                                grain=CLOCK_MODULE_DRIVER )
       polysvp_clock = mpp_clock_id  &
                               ( '   Lscloud_driver: polysvp' ,&
                                                 grain=CLOCK_MODULE_DRIVER )
@@ -509,12 +494,8 @@ real, dimension(:),      intent(in)     :: pref
           Constants_lsc%tiedtke_macrophysics = .false.
         endif
 
-!-----------------------------------------------------------------------
-!    prevent legacy strat cloud from being activated with clubb.
-!-----------------------------------------------------------------------
         if (do_clubb > 0) then
           Constants_lsc%tiedtke_macrophysics = .false.
-          do_legacy_strat_cloud = .false.
         endif
  
 !-----------------------------------------------------------------------
@@ -534,48 +515,11 @@ real, dimension(:),      intent(in)     :: pref
                                 & tiedtke_macrophysics is active', FATAL)
         endif
 
-        if ( .not. Constants_lsc%tiedtke_macrophysics .and.   &
-                                              do_legacy_strat_cloud) then
-          call error_mesg ('lscloud_driver_mod', &
-                 ' do_legacy_strat_cloud cannot be true when&
-                                & tiedtke_macrophysics is false', FATAL)
-        endif
-
-        if (trim(microphys_scheme) == 'lin' .and. do_clubb > 0) then
-          call error_mesg ('lscloud_driver_mod', &
-                        'cannot run lin microphysics with CLUBB', FATAL)
-        endif
-
-        if (trim(microphys_scheme) == 'lin' .and. do_lsc) then
-          call error_mesg ('lscloud_driver_mod', &
-                        'cannot run lin microphysics with large-&
-                                   &scale condensation', FATAL)
-        endif
-
         if (do_clubb > 0 .and. .not. do_liq_num) then
           call error_mesg ('lscloud_driver_mod', &
               'can only execute clubb with prognostic droplet number', &
                                                                     FATAL)
         endif ! do_clubb
-
-        if (trim(microphys_scheme) == 'lin') then
-
-          if (Constants_lsc%tiedtke_macrophysics) then
-            call error_mesg ('lscloud_driver_mod', &
-              'cannot have both tiedtke_macrophysics and lin active &
-                      &at once: setting tiedtke_macrophysics   &
-                       &and do_legacy_strat_cloud = F', NOTE)
-            Constants_lsc%tiedtke_macrophysics = .false.
-            do_legacy_strat_cloud = .false.
-
-            logunit = stdlog()
-            if ( mpp_pe() == mpp_root_pe() ) &
-              write ( logunit, '(a)')    &
-               'variables tiedtke_macrophysics and   &
-                     &do_legacy_strat_cloud set to .false,   &
-                             &since lin microphysics has been activated.'
-          endif ! tiedtke_macrophysics
-        endif  ! trim(microphys_scheme) ==  'lin'
 
 !-----------------------------------------------------------------------
 !    check for acceptable namelist values:
@@ -595,7 +539,6 @@ real, dimension(:),      intent(in)     :: pref
 !    put lscloud_driver_nml variables into a derived type variable for
 !    passing to other modules as needed.
 !-----------------------------------------------------------------------
-        Nml_lsc%do_legacy_strat_cloud = do_legacy_strat_cloud
         Nml_lsc%Dmin = Dmin 
         Nml_lsc%cfact = cfact
         Nml_lsc%super_ice_opt = super_ice_opt
@@ -619,7 +562,6 @@ real, dimension(:),      intent(in)     :: pref
           Constants_lsc%do_ncar_microphys = .false.
           Constants_lsc%do_ncar_MG2 = .false.
           do_predicted_ice_number = .false.
-          Constants_lsc%do_lin_cld_microphys = .false.
         else if (trim(microphys_scheme) == 'morrison_gettelman') then
           Constants_lsc%do_rk_microphys = .false.
           Constants_lsc%do_mg_microphys = .true.
@@ -627,7 +569,6 @@ real, dimension(:),      intent(in)     :: pref
           Constants_lsc%do_ncar_microphys = .false.
           Constants_lsc%do_ncar_MG2 = .false.
           do_predicted_ice_number = .true.
-          Constants_lsc%do_lin_cld_microphys = .false.
         else if (trim(microphys_scheme) == 'mg_ncar') then
           Constants_lsc%do_rk_microphys = .false.
           Constants_lsc%do_mg_microphys = .false.
@@ -635,7 +576,6 @@ real, dimension(:),      intent(in)     :: pref
           Constants_lsc%do_ncar_microphys = .false.
           Constants_lsc%do_ncar_MG2 = .false.
           do_predicted_ice_number = .true.
-          Constants_lsc%do_lin_cld_microphys = .false.
         else if (trim(microphys_scheme) == 'ncar') then
           Constants_lsc%do_rk_microphys = .false.
           Constants_lsc%do_mg_microphys = .false.
@@ -643,7 +583,6 @@ real, dimension(:),      intent(in)     :: pref
           Constants_lsc%do_ncar_microphys = .true.
           Constants_lsc%do_ncar_MG2 = .false.
           do_predicted_ice_number = .true.
-          Constants_lsc%do_lin_cld_microphys = .false.
        else if (trim(microphys_scheme) == 'mg2') then
           Constants_lsc%do_rk_microphys = .false.
           Constants_lsc%do_mg_microphys = .false.
@@ -651,17 +590,6 @@ real, dimension(:),      intent(in)     :: pref
           Constants_lsc%do_ncar_microphys = .false.
           Constants_lsc%do_ncar_MG2 = .true.
           do_predicted_ice_number = .true.
-          Constants_lsc%do_lin_cld_microphys = .false.
-        else if (trim(microphys_scheme) == 'lin') then
-          Constants_lsc%do_rk_microphys = .false.
-          Constants_lsc%do_mg_microphys = .false.
-          Constants_lsc%do_mg_ncar_microphys = .false.
-          Constants_lsc%do_ncar_microphys = .false.
-          Constants_lsc%do_ncar_MG2 = .false.
-          Constants_lsc%do_lin_cld_microphys = .true.
-! this version of lin could not be active with prog drop number (and thus
-!   with predicted ice number)
-          do_predicted_ice_number = .false.
         else
           call error_mesg ('lscloud_driver_init', &
                 'invalid expression supplied for nml variable &
@@ -688,17 +616,6 @@ real, dimension(:),      intent(in)     :: pref
         endif
 
 !------------------------------------------------------------------------
-!    call strat_cloud_init to do initialization there. Call is only needed
-!    when executing legacy strat_cloud code.
-!------------------------------------------------------------------------
-        if (do_legacy_strat_cloud) then
-          call mpp_clock_begin ( strat_init_clock)
-          call strat_cloud_init (Nml_mp, Nml_lsc, Exch_ctrl,   &
-                                                       Physics_control)
-          call mpp_clock_end ( strat_init_clock)
-        endif
-
-!------------------------------------------------------------------------
 !    call lscloud_debug_init to initialize the debug module.
 !------------------------------------------------------------------------
         call mpp_clock_begin (debug_init_clock)
@@ -719,9 +636,7 @@ real, dimension(:),      intent(in)     :: pref
         call mpp_clock_end (lscloud_types_init_clock)
 
 !------------------------------------------------------------------------
-!    initialize aerosol module unless doing legacy strat_cloud. in that 
-!    case, this functionality is included within the legacy strat_cloud
-!    module.
+!    initialize aerosol module 
 !------------------------------------------------------------------------
         call mpp_clock_begin (aerosol_cloud_init_clock)
         call aerosol_cloud_init (Constants_lsc, Nml_lsc, Nml_mp, Exch_ctrl)
@@ -742,7 +657,7 @@ real, dimension(:),      intent(in)     :: pref
         call mpp_clock_begin ( microphysics_init_clock)
         call ls_cloud_microphysics_init   &
                      (Nml_mp, Constants_lsc, Physics_control, id, jd,   &
-                      kd, Time,axes, pref, Nml_lsc, Exch_ctrl)
+                      kd, Time,axes, Nml_lsc, Exch_ctrl)
         call mpp_clock_end ( microphysics_init_clock)
 
 !------------------------------------------------------------------------
@@ -756,7 +671,6 @@ real, dimension(:),      intent(in)     :: pref
         Constants_lsc%do_ncar_microphys = .false.
         Constants_lsc%do_ncar_MG2 = .false.
         do_predicted_ice_number = .false.
-        Constants_lsc%do_lin_cld_microphys = .false.
         Constants_lsc%dqa_activation = .false.
         Constants_lsc%total_activation = .false.
 
@@ -822,12 +736,7 @@ subroutine lscloud_driver_time_vary (dt)
 
 real,                    intent(in) :: dt
 
-!------------------------------------------------------------------------
-!    if legacy strat_cloud code is being executed, there is no separate 
-!    time-varying routine to set time-dependent, spatially constant
-!    variables, so this routine is skipped.
-!------------------------------------------------------------------------
-      if (doing_prog_clouds .and. (.not. do_legacy_strat_cloud) ) then
+      if (doing_prog_clouds) then
 
 !-----------------------------------------------------------------------
 !    set the current time step (in case it varies with time).
@@ -983,33 +892,12 @@ type(aerosol_type),          intent(in), optional :: Aerosol
 !              SCHEMES USING PROGNOSTIC CLOUD VARIABLES
 !
 !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
-
-        if (do_legacy_strat_cloud) then    
-
-!---------------------------------------------------------------------
-!    start clock to time the legacy strat_cloud code.
-!---------------------------------------------------------------------
-          call mpp_clock_begin (stratcloud_clock)
-          call strat_cloud    &
-                (Lsdiag_mp, Lsdiag_mp_control, Time, is, ie, js, je, dt,  &
-                 C2ls_mp, Atmos_state, Cloud_state, Input_mp, Tend_mp,   &
-                 Cloud_processes, Removal_mp, Particles, Precip_state,   &
-                 Aerosol = Aerosol)
-
-!---------------------------------------------------------------------
-!    stop clock for the legacy strat_cloud code.
-!---------------------------------------------------------------------
-          call mpp_clock_end (stratcloud_clock)
-
 !----------------------------------------------------------------------
-!    if legacy code not being executed, then macrophysics and microphysics
+!    Macrophysics and microphysics
 !    are being treated in separate modules. For the macrophysics, current
 !    choices are tiedtke (tiedtke_macrophysics = .T.), or clubb 
 !    macrophysics (do_clubb ==2).
 !----------------------------------------------------------------------
-        else
-
 !------------------------------------------------------------------------
 !    if tiedtke clouds are active, calculate needed svp arrays, initialize 
 !    some debug option fields, make sure the cloud tracer arrays are 
@@ -1134,7 +1022,7 @@ type(aerosol_type),          intent(in), optional :: Aerosol
                              Cloud_state%qni_upd*Atmos_state%airdens*1.e-6
             endif
           endif
-
+          
 !-----------------------------------------------------------------------
 !    when prognostic clouds are active, call ls_cloud_microphysics to 
 !    compute the cloud microphysical effects using the requested 
@@ -1142,7 +1030,6 @@ type(aerosol_type),          intent(in), optional :: Aerosol
 !    a) rotstayn-klein, b) MG (from Marc Salzmann, c) mg-ncar, a
 !    newer version of the MG code with those changes made by Marc,
 !    d) ncar, the latest available ncar microphysics version ,
-!    e) lin_cld_microphysics.
 !-----------------------------------------------------------------------
           if (doing_prog_clouds)  then
 
@@ -1180,8 +1067,6 @@ type(aerosol_type),          intent(in), optional :: Aerosol
                 Precip_state, Cloud_processes, Tend_mp, Removal_mp) 
             call mpp_clock_end (detail_diag_clock)
           endif
-
-        endif  ! (do_legacy_strat_cloud)
 
 
 !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1283,7 +1168,7 @@ subroutine lscloud_driver_end
 
 !------------------------------------------------------------------------
 
-      integer :: lscalecond_term_clock, strat_term_clock,   &
+      integer :: lscalecond_term_clock, &
                  polysvp_term_clock, aerosol_cloud_term_clock,  &
                  macrophysics_term_clock,  microphysics_term_clock, &
                  lscloud_netcdf_term_clock
@@ -1298,9 +1183,6 @@ subroutine lscloud_driver_end
 !------------------------------------------------------------------------
       lscalecond_term_clock = mpp_clock_id(   &
                  '   Lscloud_driver: lscale_cond:Termination' , &
-                                               grain=CLOCK_MODULE_DRIVER )
-      strat_term_clock = mpp_clock_id(   &
-                 '   Lscloud_driver: strat_cloud:Termination' , &
                                                grain=CLOCK_MODULE_DRIVER )
       polysvp_term_clock = mpp_clock_id(   &
                  '   Lscloud_driver: polysvp:Termination' , &
@@ -1323,11 +1205,6 @@ subroutine lscloud_driver_end
 !    termination.
 !-----------------------------------------------------------------------
       if (doing_prog_clouds) then 
-        if (Nml_lsc%do_legacy_strat_cloud) then
-          call mpp_clock_begin ( strat_term_clock)
-          call strat_cloud_end 
-          call mpp_clock_end ( strat_term_clock)
-        else
           if (Constants_lsc%tiedtke_macrophysics) then
             call mpp_clock_begin ( polysvp_term_clock)
             call polysvp_end
@@ -1349,7 +1226,6 @@ subroutine lscloud_driver_end
             call lscloud_netcdf_end
             call mpp_clock_end ( lscloud_netcdf_term_clock)
           endif
-        endif
       else  ! (doing_prog_clouds)
         if (do_lsc) then
           call mpp_clock_begin ( lscalecond_term_clock )
@@ -3384,21 +3260,13 @@ type(precip_state_type), intent(inout) :: Precip_state
       Tend_mp%qtnd_wet = Tend_mp%qtnd
       if (doing_prog_clouds) then
 !bqx
-        if (Constants_lsc%do_lin_cld_microphys) then
-         Tend_mp%qtnd_wet = Tend_mp%qtnd_wet + Tend_mp%q_tnd(:,:,:,nql) +  &
-                                               Tend_mp%q_tnd(:,:,:,nqr) +  &
-                                               Tend_mp%q_tnd(:,:,:,nqi) +  &
-                                               Tend_mp%q_tnd(:,:,:,nqs) +  &
-                                               Tend_mp%q_tnd(:,:,:,nqg) 
-        else
          Tend_mp%qtnd_wet = Tend_mp%qtnd_wet + Tend_mp%q_tnd(:,:,:,nql) +  &
                                                Tend_mp%q_tnd(:,:,:,nqi)
-        endif
 
 !-----------------------------------------------------------------------
 !    sum up the precipitation formed over timestep.
 !-----------------------------------------------------------------------
-        if (Constants_lsc%do_lin_cld_microphys .or. Constants_lsc%do_ncar_MG2 ) then
+        if (Constants_lsc%do_ncar_MG2 ) then
           C2ls_mp%cloud_wet = Input_mp%tracer(:,:,:,nqr) +   &
                               Input_mp%tracer(:,:,:,nqs) +   &
                               Input_mp%tracer(:,:,:,nqg)
