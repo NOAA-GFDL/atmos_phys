@@ -96,7 +96,6 @@ use ras_mod,                only: ras_end, ras_init, ras
 use dry_adj_mod,            only: dry_adj, dry_adj_init
 use detr_ice_num_mod,       only: detr_ice_num, detr_ice_num_init,   &
                                   detr_ice_num_end
-use rh_clouds_mod,          only: do_rh_clouds, rh_clouds_sum
 use cu_mo_trans_mod,        only: cu_mo_trans_init, cu_mo_trans,   &
                                   cu_mo_trans_end
 use moz_hook_mod,           only: moz_hook
@@ -319,8 +318,6 @@ logical :: limit_conv_cloud_frac   ! total convective cloud area in a box
 logical :: include_donmca_in_cosp  ! assuming mca is included inside of 
                                    ! the donner scheme, are its contri-
                                    ! butions to be seen by COSP ?
-logical :: do_rh_clouds_BM         ! are rh clouds to be included in the
-                                   ! Betts-Miller scheme ? 
 logical :: do_bm                   ! the basic bm scheme is active ?
 logical :: do_bmmass               ! the mass flux version of bm 
                                    ! is active ?
@@ -596,7 +593,6 @@ real, dimension(:),            intent(in)    :: pref
       limit_conv_cloud_frac = Nml_mp%limit_conv_cloud_frac
       do_dryadj = Nml_mp%do_dryadj
       include_donmca_in_cosp = Nml_mp%include_donmca_in_cosp
-      do_rh_clouds_BM = Nml_mp%do_rh_clouds
       do_bm = Nml_mp%do_bm
       do_bmmass = Nml_mp%do_bmmass
       do_bmomp  = Nml_mp%do_bmomp 
@@ -5355,7 +5351,7 @@ type(mp_tendency_type), intent(inout) :: Tend_mp
       real, dimension(size(Input_mp%qin,1), size(Input_mp%qin,2)) ::    &
                           bmflag, klzbs, invtaubmt, invtaubmq, cape, cin
       type(conv_tendency_type) :: BM_tend
-      logical :: used, alpha
+      logical :: used
       integer :: ix, jx, kx
 
 !---------------------------------------------------------------------
@@ -5379,7 +5375,6 @@ type(mp_tendency_type), intent(inout) :: Tend_mp
 !                 output from betts-miller parameterization
 !   used          logical used to indicate data has been received by
 !                 diag_manager_mod
-!   alpha         logical indicating whether do_rh_clouds is .true.
 !   ix, jx, kx    physics window dimesnsions
 !---------------------------------------------------------------------
 
@@ -5465,24 +5460,6 @@ type(mp_tendency_type), intent(inout) :: Tend_mp
       BM_tend%qtnd = BM_tend%qtnd*dtinv
       BM_tend%rain= BM_tend%rain*dtinv
       BM_tend%snow= BM_tend%snow*dtinv
-
-!-------------------------------------------------------------------------
-!    compute rh clouds if they are active with betts-miller. first 
-!    calculate the relative humidity, then pass it to rh_clouds_mod to be
-!    stored till needed.
-!-------------------------------------------------------------------------
-      if (do_rh_clouds_BM) then
-        alpha = do_rh_clouds()
-        if (alpha) then
-          call rh_calc   &
-               (Input_mp%pfull, Input_mp%tin, Input_mp%qin, RH, do_simple)
-          call rh_clouds_sum (is, js, RH) 
-        else
-          call error_mesg ('convection_driver', &
-                 'rh_clouds_mod is being used without initialization', &
-                                                               FATAL)
-        endif
-      end if
 
 !-----------------------------------------------------------------------
 !    save desired betts-miller diagnostics.
