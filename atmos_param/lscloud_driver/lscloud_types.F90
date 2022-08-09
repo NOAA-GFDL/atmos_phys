@@ -329,7 +329,6 @@ end type lscloud_debug_type
 
 type lscloud_nml_type
 
-  logical :: do_legacy_strat_cloud
   real    :: Dmin
   real    :: cfact
   integer :: super_ice_opt
@@ -544,7 +543,6 @@ type lsc_constants_type
                                      do_mg_ncar_microphys,       &
                                      do_ncar_microphys,          &
                                      do_ncar_MG2,                &
-                                     do_lin_cld_microphys,       &
                                      tiedtke_macrophysics,       &
                                      dqa_activation,             &
                                      total_activation               

@@ -81,7 +81,6 @@ logical :: use_updated_profiles_for_clubb = .false.
 real       :: qmin
 logical    :: do_liq_num, do_ice_num
 integer    :: do_clubb
-logical    :: do_lin_cld_microphys
 logical    :: do_pdf_clouds
 logical    :: tiedtke_macrophysics
 logical    :: do_mg_microphys, do_mg_ncar_microphys, do_ncar_microphys
@@ -153,7 +152,6 @@ type(exchange_control_type), intent(in)     :: Exch_ctrl
       do_liq_num = Exch_ctrl%do_liq_num
       do_ice_num = Exch_ctrl%do_ice_num
       do_clubb = Exch_ctrl%do_clubb
-      do_lin_cld_microphys = Constants_lsc%do_lin_cld_microphys
       do_pdf_clouds = Nml_lsc%do_pdf_clouds
       tiedtke_macrophysics = Constants_lsc%tiedtke_macrophysics
       do_mg_microphys = Constants_lsc%do_mg_microphys
@@ -172,14 +170,12 @@ type(exchange_control_type), intent(in)     :: Exch_ctrl
       nqg    = Physics_control%nqg   
 
 !------------------------------------------------------------------------
-!    if doing prognostic clouds, then either tiedtke, clubb or lin
-!    microphysics must be activated.
+!    if doing prognostic clouds, then either tiedtke, clubb microphysics must be activated.
 !------------------------------------------------------------------------
-      if (.not. tiedtke_macrophysics .and. do_clubb /= 2 .and. &
-          .not. do_lin_cld_microphys) then
+      if (.not. tiedtke_macrophysics .and. do_clubb /= 2 ) then
         call error_mesg ('ls_cloud_macrophysics_mod', &
               'with prognostic clouds one must activate either clubb, &
-               &lin or tiedtke to include large-scale condensation', FATAL)
+               or tiedtke to include large-scale condensation', FATAL)
       endif
 
 !------------------------------------------------------------------------

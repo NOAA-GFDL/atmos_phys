@@ -520,7 +520,7 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
 !    call lscloud_driver_init to initialize the large-scale cloud scheme.
 !-----------------------------------------------------------------------
       call lscloud_driver_init (domain, id,jd,kd, axes, Time, Exch_ctrl, Nml_mp, &
-                                 Physics_control, lon, lat, phalf, pref)
+                                 Physics_control, lon, lat, phalf)
  
 !-----------------------------------------------------------------------
 !   initialize quantities for diagnostics output 

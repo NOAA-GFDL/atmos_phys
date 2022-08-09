@@ -6,7 +6,6 @@
 !         ---------------------------------------
 !         OPTIONS AVAILABLE:
 !             Rotstayn-Klein microphysics (this used in old strat_cloud)
-!             Lin microphysics         
 !             MG microphysics (as developed by M. Salzmann)
 !             MG-NCAR microphysics (an early version of NCAR microphysics)
 !             NCAR microphysics version 1.5 (became available in 2012)
@@ -55,10 +54,6 @@ use moist_proc_utils_mod,  only: mp_input_type, mp_output_type,  &
 
 ! physics modules
 
-use lin_cld_microphys_mod, only: lin_cld_microphys_init, &
-                                 setup_con,   &
-                                 lin_cld_microphys_driver, &
-                                 lin_cld_microphys_end
 use lscloud_debug_mod,     only: write_debug_output
 use rotstayn_klein_mp_mod, only: rotstayn_klein_microp, &
                                  rotstayn_klein_microp_init,  &
@@ -97,9 +92,6 @@ character(len=128) :: tagname = '$Name: $'
 !--------------------------------------------------------------------------
 !---namelist---------------------------------------------------------------
  
-real    :: lin_microphys_top_press = 10.E2
-                                      ! top pressure level at which Lin
-                                      ! microphysics will be calculated
 logical :: mass_cons = .true.         ! should we ensure water mass 
                                       ! conservation by adjusting precip 
                                       ! to balance column water 
@@ -128,7 +120,7 @@ real    :: ice_num_eros_fac = 1.0
 
 logical :: do_cleanup = .true.
 namelist / ls_cloud_microphysics_nml /   &
-                               lin_microphys_top_press, mass_cons, &
+                               mass_cons, &
                                override_liq_num, override_ice_num, &
                                use_Meyers, use_Cooper, init_date, &
                                micro_begin_sec, top_lev, &
@@ -138,7 +130,7 @@ namelist / ls_cloud_microphysics_nml /   &
                                
 !-------------------- clock definitions --------------------------------
 
-integer  :: rk_micro_clock, lin_micro_clock, ncar_micro_clock
+integer  :: rk_micro_clock, ncar_micro_clock
 
 !----------------------------------------------------------------------
 !    module variables retrieved from other modules
@@ -146,7 +138,6 @@ integer  :: rk_micro_clock, lin_micro_clock, ncar_micro_clock
 real    :: qmin
 integer :: do_clubb
 logical :: limit_conv_cloud_frac
-logical :: do_lin_cld_microphys
 integer :: super_ice_opt
 logical :: do_pdf_clouds
 logical :: doing_prog_clouds
@@ -166,8 +157,6 @@ integer, parameter          :: r8 = selected_real_kind(12)
 integer                     :: current_days0, current_sec0   
                                   ! variables related to delayed initiation
                                   ! of microphysics
-integer                     :: ktop   
-                                  ! top layer index for Lin Micro-Physics
 
 
 
@@ -184,7 +173,7 @@ logical            :: module_is_initialized = .false.
 
 subroutine ls_cloud_microphysics_init  (    &
                      Nml_mp, Constants_lsc, Physics_control, &
-                     id, jd, kd, Time, axes, pref, Nml_lsc, Exch_ctrl)
+                     id, jd, kd, Time, axes, Nml_lsc, Exch_ctrl)
 
 !------------------------------------------------------------------------
 
@@ -194,7 +183,6 @@ type(physics_control_type),  intent(in)    :: Physics_control
 integer,                     intent(in)    :: id, jd, kd
 integer,                     intent(in)    :: axes(4)
 type(time_type),             intent(in)    :: Time
-real, dimension(:),          intent(in)    :: pref
 type(lscloud_nml_type),      intent(in)    :: Nml_lsc
 type(exchange_control_type), intent(in)    :: Exch_ctrl
 
@@ -204,8 +192,7 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
       type(time_type)      :: Time_init
       character(len=128)   :: errstring ! Output status: non-blank for 
                                         ! error return
-      integer              :: k
-      integer              :: rk_micro_init_clock, lin_micro_init_clock, &
+      integer              :: rk_micro_init_clock, &
                               ncar_micro_init_clock
 
 !-----------------------------------------------------------------------
@@ -218,7 +205,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
       qmin = Exch_ctrl%qmin
       do_clubb = Exch_ctrl%do_clubb
       limit_conv_cloud_frac = Nml_mp%limit_conv_cloud_frac
-      do_lin_cld_microphys = Constants_lsc%do_lin_cld_microphys
       super_ice_opt = Nml_lsc%super_ice_opt
       do_pdf_clouds = Nml_lsc%do_pdf_clouds
       doing_prog_clouds = Exch_ctrl%doing_prog_clouds
@@ -252,10 +238,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
         rk_micro_init_clock = mpp_clock_id(   &
                '   Ls_cld_micro: rk_micro:Initialization' , &
                                                 grain=CLOCK_MODULE_DRIVER )
-      else if (do_lin_cld_microphys) then
-        lin_micro_init_clock = mpp_clock_id(     &
-               '   Ls_cld_micro: lin_micro:Initialization' , &
-                                                grain=CLOCK_MODULE_DRIVER )
       else if (do_mg_microphys) then
         ncar_micro_init_clock = mpp_clock_id(    &
                '   Ls_cld_micro: mg_micro:Initialization' , &
@@ -277,10 +259,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
       if (do_rk_microphys) then
         rk_micro_clock = mpp_clock_id(   &
                '   Ls_cld_micro: rk_micro' , &
-                                                grain=CLOCK_MODULE_DRIVER )
-      else if (do_lin_cld_microphys) then
-        lin_micro_clock = mpp_clock_id(     &
-               '   Ls_cld_micro: lin_micro' , &
                                                 grain=CLOCK_MODULE_DRIVER )
       else if (do_mg_microphys) then
         ncar_micro_clock = mpp_clock_id(    &
@@ -350,34 +328,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
           call mpp_clock_end   (rk_micro_init_clock)
 
 !-----------------------------------------------------------------------
-!  lin cloud microphysics
-!-----------------------------------------------------------------------
-        else if (do_lin_cld_microphys) then
-          call mpp_clock_begin (lin_micro_init_clock)
-          if (Exch_ctrl%do_liq_num) call error_mesg   &
-              ('ls_cloud_microphysics/ls_cloud_microphysics_init',  &
-               'do_lin_cld_microphys cannot be active with prognostic &
-                                     &droplet scheme (do_liq_num)', FATAL)
-          call lin_cld_microphys_init    &
-                 (id, jd, kd, axes, Time, Physics_control%hydrostatic,  &
-                                         Physics_control%phys_hydrostatic)
-
-!------------------------------------------------------------------------
-!    define top model level at which Lin microphysics is active (10 hPa).
-!------------------------------------------------------------------------
-          ktop     = 1
-          do k = 1, kd
-            if (pref(k) > lin_microphys_top_press) then
-              ktop    = k
-              exit
-            endif
-          enddo
-          if (mpp_pe() == mpp_root_pe()) &
-                write(*,*) 'Top layer for lin_cld_microphys=',   &
-                                                  ktop, pref(ktop)
-          call mpp_clock_end   (lin_micro_init_clock)
-
-!-----------------------------------------------------------------------
 !  morrison-gettelman microphysics (as done by M. Salzmann)
 !-----------------------------------------------------------------------
         else if (do_mg_microphys) then
@@ -433,14 +383,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
                                                                      FATAL)
         endif
       endif  ! (doing_prog_clouds)
-
-!-----------------------------------------------------------------------
-!    even if Lin cloud microphysics is not active, still need to 
-!    initialize its tables.
-!-----------------------------------------------------------------------
-      if (.not. do_lin_cld_microphys) then
-        call setup_con
-      endif
 
 !-------------------------------------------------------------------------
 !    get namelist initial time from namelist to determine whether 
@@ -1380,7 +1322,7 @@ subroutine ls_cloud_microphysics_end
 
 !------------------------------------------------------------------------
 
-      integer   :: rk_micro_term_clock, lin_micro_term_clock, &
+      integer   :: rk_micro_term_clock, &
                    ncar_micro_term_clock
 
 !------------------------------------------------------------------------
@@ -1393,10 +1335,6 @@ subroutine ls_cloud_microphysics_end
       if (do_rk_microphys) then
         rk_micro_term_clock = mpp_clock_id(   &
                '   Ls_cld_micro: rk_micro:Termination' , &
-                                                grain=CLOCK_MODULE_DRIVER )
-      else if (do_lin_cld_microphys) then
-        lin_micro_term_clock = mpp_clock_id(     &
-               '   Ls_cld_micro: lin_micro:Termination' , &
                                                 grain=CLOCK_MODULE_DRIVER )
       else if (do_mg_microphys) then
         ncar_micro_term_clock = mpp_clock_id(    &
@@ -1424,10 +1362,6 @@ subroutine ls_cloud_microphysics_end
         call mpp_clock_begin (ncar_micro_term_clock)
         call morrison_gettelman_microp_end 
         call mpp_clock_end   (ncar_micro_term_clock)
-      else if (do_lin_cld_microphys) then
-        call mpp_clock_begin (lin_micro_term_clock)
-        call lin_cld_microphys_end
-        call mpp_clock_end   (lin_micro_term_clock)
       else if (do_mg_ncar_microphys ) then
         call mpp_clock_begin (ncar_micro_term_clock)
         call mmicro_end
