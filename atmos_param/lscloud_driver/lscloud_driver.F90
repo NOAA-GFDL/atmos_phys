@@ -53,8 +53,6 @@ use lscloud_netcdf_mod,    only: lscloud_netcdf, lscloud_netcdf_init, &
                                  lscloud_netcdf_end
 
 ! other atmos_param modules
-use rh_clouds_mod,         only: rh_clouds_init, rh_clouds_sum, &
-                                 rh_clouds_end
 use physics_radiation_exch_mod,        &
                            only: cloud_scheme_data_type,   &
                                  exchange_control_type
@@ -271,7 +269,6 @@ real     :: qmin
 logical  :: do_ice_num
 integer  :: do_clubb
 logical  :: limit_conv_cloud_frac
-logical  :: do_rh_clouds
 logical  :: module_is_initialized = .false.
 logical  :: doing_prog_clouds
 logical  :: do_lsc
@@ -346,7 +343,6 @@ real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
       do_clubb   = Exch_ctrl%do_clubb  
 
       limit_conv_cloud_frac = Nml_mp%limit_conv_cloud_frac
-      do_rh_clouds = Nml_mp%do_rh_clouds
       do_lsc = Nml_mp%do_lsc
       do_simple = Nml_mp%do_simple
       doing_prog_clouds = Exch_ctrl%doing_prog_clouds
@@ -682,13 +678,6 @@ real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
         if (do_lsc) then
           call mpp_clock_begin (lscalecond_init_clock)
           call lscale_cond_init ()
-
-!----------------------------------------------------------------------
-!    initialize the rh_clouds module, if needed.
-!----------------------------------------------------------------------
-          if (Nml_mp%do_rh_clouds) then
-            call rh_clouds_init (domain, id, jd, kd)
-          endif
           call mpp_clock_end   (lscalecond_init_clock)
         endif
       endif ! (doing_prog_clouds)
@@ -1230,9 +1219,6 @@ subroutine lscloud_driver_end
         if (do_lsc) then
           call mpp_clock_begin ( lscalecond_term_clock )
           call lscale_cond_end()
-          if (do_rh_clouds) then
-            call rh_clouds_end
-          endif 
           call mpp_clock_end   ( lscalecond_term_clock )
         endif
       endif  ! (doing_prog_clouds)
@@ -3194,18 +3180,6 @@ real,                        intent(in)     :: dtinv
         Cld_props%rain      = Precip_state%lsc_rain
         Cld_props%snow_size = Precip_state%lsc_snow_size
         Cld_props%rain_size = Precip_state%lsc_rain_size
-      endif
-
-!--------------------------------------------------------------------
-!    if rh_clouds is active, call rh_calc to determine the grid box
-!    relative humidity. call rh_clouds_sum to pass this field to 
-!    rh_clouds_mod so it may be used to determine the grid boxes which
-!    will contain clouds for the radiation package.
-!---------------------------------------------------------------------
-      if (do_lsc .and. do_rh_clouds) then            
-        call rh_calc (Input_mp%pfull, Input_mp%tin, Input_mp%qin, rh, &
-                        do_simple)
-        call rh_clouds_sum (is, js, rh)
       endif
 
 !----------------------------------------------------------------------

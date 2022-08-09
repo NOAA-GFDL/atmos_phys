@@ -143,9 +143,6 @@ private combined_MP_diagnostics, MP_alloc, MP_dealloc, create_Nml_mp, &
 !   do_simple = switch to turn on alternative definition of specific 
 !                humidity. When true, specific humidity = 
 !                (rdgas/rvgas)*esat/pressure
-!   do_rh_clouds = switch to turn on/off simple relative humidity cloud 
-!                scheme
-!                [logical, default: do_rh_clouds=false ]
 !   pdepth   = boundary layer depth in pascals for determining mean
 !                temperature tfreeze (used for snowfall determination)
 !                [real, default =150.e2 Pa]
@@ -179,7 +176,6 @@ logical :: do_bm=.false.
 logical :: do_bmmass =.false.
 logical :: do_bmomp  =.false.
 logical :: do_simple =.false.
-logical :: do_rh_clouds=.false.
 real    :: pdepth = 150.e2
 logical :: limit_conv_cloud_frac = .false.
 logical :: include_donmca_in_cosp = .true.
@@ -188,12 +184,10 @@ logical :: use_sub_seasalt = .false.
 real    :: sea_salt_scale = 0.1
 real    :: om_to_oc = 1.67
 logical :: do_height_adjust = .false.
-   logical :: do_diag_clouds=.false.
 
 namelist /moist_processes_nml/ do_unified_clouds, do_lsc, do_mca, do_ras,   &
                   do_uw_conv, do_donner_deep, do_dryadj, do_bm,             &
-                  do_bmmass, do_bmomp, do_simple, do_rh_clouds,             &
-                  do_diag_clouds,                         &
+                  do_bmmass, do_bmomp, do_simple,                           &
                   pdepth, limit_conv_cloud_frac, include_donmca_in_cosp,    &
                   use_online_aerosol, use_sub_seasalt, sea_salt_scale,      &
                   om_to_oc, do_height_adjust
@@ -424,18 +418,6 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
 !   namelists.
 !----------------------------------------------------------------------
       call create_Nml_mp 
-
-!-----------------------------------------------------------------------
-!   consistency checks for thes namelist variables
-!-----------------------------------------------------------------------
-      if ( (do_rh_clouds) .and. doing_prog_clouds ) &
-        call error_mesg ('moist_processes_init', &
-       'rh_clouds cannot be active when prognostic clouds are', FATAL)
-
-      if (do_donner_deep .and. do_rh_clouds) &  
-           call error_mesg ('moist_processes_init',  &
-            'Cannot currently activate donner_deep_mod with rh_clouds', &
-                                                                   FATAL)
 
 !-------------------------------------------------------------------------
 !   initialize quantities for global precip field
@@ -1654,29 +1636,23 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
 !    relative humidity:         
 !---------------------------------------------------------------------
       if (id_rh > 0) then
-        if (.not. (       do_rh_clouds                           )) then 
-          call rh_calc (Input_mp%pfull, Input_mp%tin(:,:,:),  &
-                   Input_mp%qin(:,:,:), RH(:,:,:), do_simple )
-           used = send_data (id_rh, rh*100., Time, is, js, 1)
-        endif
+        call rh_calc (Input_mp%pfull, Input_mp%tin(:,:,:),  &
+            Input_mp%qin(:,:,:), RH(:,:,:), do_simple )
+        used = send_data (id_rh, rh*100., Time, is, js, 1)
       endif
 
 !---------------------------------------------------------------------
 !    relative humidity (CMIP formulation):         
 !---------------------------------------------------------------------
       if (id_rh_cmip > 0) then
-        if (.not. (       do_rh_clouds                           )) then
-          call rh_calc (Input_mp%pfull, input_mp%tin, Input_mp%qin, RH, &
-                                   .false.,      do_cmip=.true.)
-          used = send_data (id_rh_cmip, rh*100., Time, is, js, 1)
-        endif
+        call rh_calc (Input_mp%pfull, input_mp%tin, Input_mp%qin, RH, &
+            .false.,      do_cmip=.true.)
+        used = send_data (id_rh_cmip, rh*100., Time, is, js, 1)
       endif
 
     if (query_cmip_diag_id(ID_hur)) then
-      if (.not. (do_rh_clouds .or. do_diag_clouds)) then
-        call rh_calc (Input_mp%pfull, input_mp%tin, Input_mp%qin, RH, &
-                                        .false., do_cmip=.true.)
-      endif
+      call rh_calc (Input_mp%pfull, input_mp%tin, Input_mp%qin, RH, &
+          .false., do_cmip=.true.)
       used = send_cmip_data_3d (ID_hur, rh*100., Time, is, js, 1, phalf=log(Input_mp%phalf))
     endif
 
@@ -2197,7 +2173,6 @@ subroutine create_Nml_mp
       Nml_mp%pdepth = pdepth
       Nml_mp%include_donmca_in_cosp  = include_donmca_in_cosp
       Nml_mp%do_simple = do_simple
-      Nml_mp%do_rh_clouds = do_rh_clouds
       Nml_mp%do_donner_deep = do_donner_deep
       Nml_mp%do_bm =  do_bm  
       Nml_mp%do_bmmass = do_bmmass
@@ -2682,7 +2657,6 @@ subroutine moist_processes_restart(timestamp)
   character(len=*), intent(in), optional :: timestamp
  
 ! if (doing_prog_clouds)       call strat_cloud_restart(timestamp)
-! if (do_diag_clouds) call diag_cloud_restart(timestamp)
 !  if (do_donner_deep) call donner_deep_restart(timestamp)
   call convection_driver_restart (timestamp)
 
