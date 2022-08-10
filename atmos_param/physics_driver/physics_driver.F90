@@ -1850,6 +1850,11 @@ real,  dimension(:,:,:), intent(out)  ,optional :: diffm, difft
 
 !---------------------------------------------------------------------
 
+      if (do_radiation) then
+        radturbten(is:ie,js:je,:) = radturbten(is:ie,js:je,:) + Rad_flux_block%tdt_rad(:,:,:)
+        surf_diff%tdt_rad(is:ie,js:je,:)=Rad_flux_block%tdt_rad(:,:,:) !miz
+      endif
+      
 #ifdef SCM
 ! Option to add SCM radiative tendencies from forcing to Rad_flux_block%tdt_lw
 ! and radturbten
