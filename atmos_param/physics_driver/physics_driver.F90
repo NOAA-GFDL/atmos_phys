@@ -480,7 +480,6 @@ real,    dimension(:,:,:), allocatable        :: temp_last, q_last
 integer                                :: vers
 integer                                :: now_doing_strat = 0
 integer                                :: now_doing_entrain = 0
-integer                                :: now_doing_edt = 0
 real, allocatable                      :: r_convect(:,:)
 
 type(aerosol_time_vary_type)           :: Aerosol_cld
@@ -499,7 +498,6 @@ logical   :: do_check_args = .true.   ! argument dimensions should
                                       ! be checked ?
 logical   :: module_is_initialized = .false.
                                       ! module has been initialized ?
-logical   :: doing_edt                ! edt_mod has been activated ?
 logical   :: doing_entrain            ! entrain_mod has been activated ?
 logical   :: doing_uw_conv            ! uw_conv shallow cu mod has been 
                                       ! activated ?
@@ -962,7 +960,7 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       call mpp_clock_begin ( turb_init_clock )
       call vert_turb_driver_init (physics_domain, lonb, latb, id, jd, kd, axes, Time, &
                                   Exch_ctrl, Physics%control,  &
-                                  doing_edt, doing_entrain, do_clubb)
+                                  doing_entrain, do_clubb)
       call mpp_clock_end ( turb_init_clock )
 
 !-----------------------------------------------------------------------
@@ -3261,12 +3259,6 @@ subroutine physics_driver_register_restart_scalars (Restart, Phy_restart)
        now_doing_strat = 0
     endif
 
-    if(doing_edt) then
-       now_doing_edt = 1
-    else
-       now_doing_edt = 0
-    endif
-
     if(doing_entrain) then
        now_doing_entrain = 1
     else
@@ -3279,18 +3271,15 @@ subroutine physics_driver_register_restart_scalars (Restart, Phy_restart)
 
   call register_restart_field(Phy_restart, 'vers',          vers, dim_names)
   call register_restart_field(Phy_restart, 'doing_strat',   now_doing_strat, dim_names)
-  call register_restart_field(Phy_restart, 'doing_edt',     now_doing_edt, dim_names)
   call register_restart_field(Phy_restart, 'doing_entrain', now_doing_entrain, dim_names)
 
   if (.not. Phy_restart%is_readonly) then !If not reading the file,
     call register_variable_attribute(Phy_restart, "vers", "long_name", "vers", str_len=len_trim("vers"))
     call register_variable_attribute(Phy_restart, "doing_strat", "long_name", "doing_strat", str_len=len_trim("doing_strat"))
-    call register_variable_attribute(Phy_restart, "doing_edt", "long_name", "doing_edt", str_len=len_trim("doing_edt"))
     call register_variable_attribute(Phy_restart, "doing_entrain", "long_name", "doing_entrain", str_len=len_trim("doing_entrain"))
 
     call register_variable_attribute(Phy_restart, "vers", "units", "none", str_len=4)
     call register_variable_attribute(Phy_restart, "doing_strat", "units", "none", str_len=4)
-    call register_variable_attribute(Phy_restart, "doing_edt", "units", "none", str_len=4)
     call register_variable_attribute(Phy_restart, "doing_entrain", "units", "none", str_len=4)
   endif
 

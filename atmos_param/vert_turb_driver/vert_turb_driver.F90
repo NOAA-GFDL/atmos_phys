@@ -8,9 +8,6 @@ module vert_turb_driver_mod
 !         choose either:
 !              1) mellor-yamada 2.5 (with tke)
 !              2) non-local K scheme
-!              3) entrainment and diagnostic turbulence (edt) from
-!                 Bretherton and Grenier
-!
 !-----------------------------------------------------------------------
 !---------------- modules ---------------------
 
@@ -22,8 +19,6 @@ use      my25_turb_mod, only: my25_turb_init, my25_turb_end,  &
 use       tke_turb_mod, only: tke_turb_init, tke_turb_end, tke_turb
 
 use    diffusivity_mod, only: diffusivity, molecular_diff
-
-use            edt_mod, only: edt_init, edt, edt_end
 
 use physics_radiation_exch_mod, only: exchange_control_type
 use  physics_types_mod, only: physics_control_type
@@ -106,7 +101,6 @@ logical            :: module_is_initialized = .false.
  logical :: do_tke_turb      = .false.
  logical :: do_diffusivity         = .false.
  logical :: do_molecular_diffusion = .false.
- logical :: do_edt                 = .false.
  logical :: do_stable_bl     = .false.
  logical :: do_entrain    = .false.
  logical :: do_simple = .false. 
@@ -138,7 +132,7 @@ logical            :: module_is_initialized = .false.
                                  do_tke_turb, &
                                  gust_scheme, constant_gust,          &
                                  do_molecular_diffusion, do_stable_bl, &
-                                 do_diffusivity, do_edt, do_entrain, &
+                                 do_diffusivity, do_entrain, &
                                  gust_factor, do_simple, wp2_min, &
                                  alternate_zpbl   ! cjg: PBL depth mods
 
@@ -418,28 +412,7 @@ if (do_mellor_yamada) then
                        u_star, b_star, z_pbl, diff_m, diff_t, &
                        kbot = kbot)
 
-!---------------------------
-else if (do_edt) then
-!----------------------------
-
-!    ----- time step for prognostic tke calculation -----
-      call get_time (Time_next-Time, sec, day)
-      dt_tke = real(sec+day*86400)
- 
-
-      tke = 0.0
-
-    call edt(is,ie,js,je,dt_tke,Time_next,tdtlw, u_star,b_star,q_star, &
-             tt,qq,  &
-             qlin,qiin,qain,uu,vv,z_full,p_full,z_half,p_half,stbltop, &
-             diff_m,diff_t,z_pbl,kbot=kbot,tke=tke)
-
-
- endif
- 
-
-
- 
+end if
 !------------------------------------------------------------------
 ! --- boundary layer entrainment parameterization
 
@@ -562,24 +535,6 @@ if (do_mellor_yamada .or. do_tke_turb) then
          used = send_data ( id_lscale_0, el0, Time_next, is, js )
       endif
 
-end if
-
-if (do_edt) then 
-    
-!     --- set up local mask for fields with surface data ---
-    if ( present(mask) ) then
-          lmask(:,:,1)        = .true.
-          lmask(:,:,2:nlev+1) = mask(:,:,1:nlev) > 0.5
-     else   
-        lmask = .true.
-       endif
-
-!------- tke --------------------------------
-      if ( id_tke > 0 ) then
-        used = send_data ( id_tke, tke, Time_next, is, js, 1,     &
-                          mask=lmask )
-      endif
- 
 end if
 
 !-->cjg: addition for new PBL depth diagnostic
@@ -752,7 +707,7 @@ end subroutine vert_turb_driver
 
 subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
                                   Exch_ctrl, Physics_control, &
-                                  doing_edt, doing_entrain, do_clubb_in)
+                                  doing_entrain, do_clubb_in)
 
 !-----------------------------------------------------------------------
    type(domain2D), target,      intent(in)    :: domain !< Atmosphere domain
@@ -761,7 +716,7 @@ subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
    type(exchange_control_type), intent(in) :: Exch_ctrl
    type(physics_control_type), intent(in) :: Physics_control
    type(time_type), intent(in) :: Time
-   logical,         intent(out) :: doing_edt, doing_entrain
+   logical,         intent(out) :: doing_entrain
 
 !-->h1g
    integer, optional,    intent(in)    :: do_clubb_in
@@ -809,11 +764,6 @@ subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
          call error_mesg ( 'vert_turb_driver_mod', 'cannot activate '//&
               'tke_turb with mellor_yamada', FATAL)
  
-       if (do_molecular_diffusion .and. do_edt)  &
-         call error_mesg ( 'vert_turb_driver_mod', 'cannot activate '//&
-           'molecular diffusion with EDT', FATAL)
-
-
 !----------------------------------------------------
 !   get the number of prognostic tracers
 !   use later to determine prognostic vs. diagnostic
@@ -870,8 +820,6 @@ subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
 
       if (do_stable_bl)     call stable_bl_turb_init ( axes, Time )
 
-      if (do_edt)           call edt_init (domain, lonb, latb, axes,Time,id,jd,kd)
-
       if (do_entrain)       call entrain_init (lonb, latb, axes,Time,id,jd,kd)
       
 !-----------------------------------------------------------------------
@@ -911,15 +859,6 @@ if (do_mellor_yamada .or. do_tke_turb) then
    register_diag_field ( mod_name, 'lscale_0', axes(1:2), Time,   &
                         'master length scale',  'm'               )
 endif
-
- if (do_edt) then
- 
-   id_tke = &
-   register_diag_field ( mod_name, 'tke', axes(half), Time,      &
-                         'turbulent kinetic energy',  'm2/s2'   , &
-                         missing_value=missing_value               )
- 
-  end if
 
    id_z_pbl = &
    register_diag_field ( mod_name, 'z_pbl', axes(1:2), Time,       &
@@ -1032,7 +971,6 @@ endif
 
 !-----------------------------------------------------------------------
 
-   doing_edt = do_edt
    doing_entrain = do_entrain
    module_is_initialized =.true.
 
@@ -1048,7 +986,6 @@ subroutine vert_turb_driver_end
 !-----------------------------------------------------------------------
       if (do_mellor_yamada) call my25_turb_end
       if (do_tke_turb)      call tke_turb_end
-      if (do_edt) call edt_end
       if (do_entrain) call entrain_end
       module_is_initialized =.false.
 

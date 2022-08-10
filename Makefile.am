@@ -112,7 +112,6 @@ libatmos_phys_la_SOURCES = ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.F9
     ${top_srcdir}/atmos_param/radiation/driver/shortwave_driver.F90 \
     ${top_srcdir}/atmos_param/radiation/driver/radiation_driver_diag.F90 \
     ${top_srcdir}/atmos_param/radiation/driver/radiation_driver.F90 \
-    ${top_srcdir}/atmos_param/edt/edt.F90 \
     ${top_srcdir}/atmos_param/convection_driver/convection_utilities.F90 \
     ${top_srcdir}/atmos_param/convection_driver/detr_ice_num.F90 \
     ${top_srcdir}/atmos_param/convection_driver/convection_driver.F90 \
@@ -687,7 +686,6 @@ ${top_builddir}/atmos_param/radiation/driver/radiation_driver.lo: ${top_srcdir}/
      ${top_srcdir}/atmos_param/radiation/radiative_gases/radiative_gases.lo \
      ${top_srcdir}/atmos_param/radiation/radiative_gases/radiative_gases_types.lo \
      ${top_srcdir}/atmos_param/radiation/driver/radiation_driver_diag.lo
-${top_builddir}/atmos_param/edt/edt.lo: ${top_srcdir}/atmos_param/edt/edt.F90
 ${top_builddir}/atmos_param/convection_driver/convection_utilities.lo: ${top_srcdir}/atmos_param/convection_driver/convection_utilities.F90
 ${top_builddir}/atmos_param/convection_driver/detr_ice_num.lo: ${top_srcdir}/atmos_param/convection_driver/detr_ice_num.F90 \
      ${top_srcdir}/atmos_param/lscloud_driver/lscloud_constants.lo
@@ -1414,7 +1412,6 @@ ${top_builddir}/atmos_param/vert_turb_driver/vert_turb_driver.lo: ${top_srcdir}/
      ${top_srcdir}/atmos_param/my25_turb/my25_turb.lo \
      ${top_srcdir}/atmos_param/tke_turb/tke_turb.lo \
      ${top_srcdir}/atmos_param/diffusivity/diffusivity.lo \
-     ${top_srcdir}/atmos_param/edt/edt.lo \
      ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo \
      ${top_srcdir}/atmos_param/physics_driver/physics_types.lo \
      ${top_srcdir}/atmos_param/shallow_conv/shallow_conv.lo \
@@ -1599,7 +1596,6 @@ solar_data_driver_mod.mod: ${top_srcdir}/atmos_param/radiation/driver/solar_data
 shortwave_driver_mod.mod: ${top_srcdir}/atmos_param/radiation/driver/shortwave_driver.lo
 radiation_driver_diag_mod.mod: ${top_srcdir}/atmos_param/radiation/driver/radiation_driver_diag.lo
 radiation_driver_mod.mod: ${top_srcdir}/atmos_param/radiation/driver/radiation_driver.lo
-edt_mod.mod: ${top_srcdir}/atmos_param/edt/edt.lo
 convection_utilities_mod.mod: ${top_srcdir}/atmos_param/convection_driver/convection_utilities.lo
 detr_ice_num_mod.mod: ${top_srcdir}/atmos_param/convection_driver/detr_ice_num.lo
 convection_driver_mod.mod: ${top_srcdir}/atmos_param/convection_driver/convection_driver.lo
@@ -1901,7 +1897,6 @@ include_HEADERS = atmos_nudge_mod.mod \
     shortwave_driver_mod.mod \
     radiation_driver_diag_mod.mod \
     radiation_driver_mod.mod \
-    edt_mod.mod \
     convection_utilities_mod.mod \
     detr_ice_num_mod.mod \
     convection_driver_mod.mod \
@@ -1928,7 +1923,6 @@ include_HEADERS = atmos_nudge_mod.mod \
     simple_pdf_mod.mod \
     cldwat2m_micro_mod.mod \
     cldwat2m_micro.mod \
-    clouds_mod.mod \
     damping_driver_mod.mod \
     vert_diff_driver_mod.mod \
     moist_processes_mod.mod \
