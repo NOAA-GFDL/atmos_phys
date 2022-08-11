@@ -34,13 +34,13 @@
                             nfs = 3, & ! number of "fixed" species
                             relcnt = 0, & ! number of relationship species
                             grpcnt = 0, & ! number of group members
-                            imp_nzcnt = 1025, & ! number of non-zero implicit matrix entries
+                            imp_nzcnt = 1170, & ! number of non-zero implicit matrix entries
                             rod_nzcnt = 0, & ! number of non-zero rodas matrix entries
                             extcnt = 0, & ! number of species with external forcing
-                            clscnt1 = 9, & ! number of species in explicit class
+                            clscnt1 = 0, & ! number of species in explicit class
                             clscnt2 = 0, & ! number of species in hov class
                             clscnt3 = 0, & ! number of species in ebi class
-                            clscnt4 = 101, & ! number of species in implicit class
+                            clscnt4 = 110, & ! number of species in implicit class
                             clscnt5 = 0, & ! number of species in rodas class
                             indexm = 1, & ! index of total atm density in invariant array
                             ncol_abs = 2, & ! number of column densities
@@ -85,12 +85,12 @@
 !--------------------------------------------------------------
       implicit none
       integer :: astat
-      explicit%clscnt = 9
-      explicit%indprd_cnt = 56
-      implicit%clscnt = 101
-      implicit%lin_rxt_cnt = 97
-      implicit%nln_rxt_cnt = 168
-      implicit%indprd_cnt = 3
+      explicit%clscnt = 0
+      explicit%indprd_cnt = 0
+      implicit%clscnt = 110
+      implicit%lin_rxt_cnt = 83
+      implicit%nln_rxt_cnt = 184
+      implicit%indprd_cnt = 1
       implicit%iter_max = 11
       rodas%clscnt = 0
       rodas%lin_rxt_cnt = 0

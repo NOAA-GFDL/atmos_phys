@@ -38,11 +38,12 @@ use                    fms_mod, only : write_version_number, &
                                        WARNING, &
                                        NOTE
 use         tropchem_types_mod, only : tropchem_opt, tropchem_diag, tropchem_types_init, missing_value
-use           time_manager_mod, only : time_type, &
+use           time_manager_mod, only : time_type,print_date, &
                                        get_date, &
                                        set_date, &
                                        set_time, &
                                        days_in_year, &
+                                       days_in_month, &
                                        real_to_time_type, &
                                        time_type_to_real, &
                                        operator(+), operator(-)
@@ -142,6 +143,7 @@ public  tropchem_driver, tropchem_driver_init,  &
 !-----------------------------------------------------------------------
 type,public :: field_init_type
    character(len=64), pointer :: field_names(:)
+   real, pointer :: scale_emis(:)
 end type field_init_type
 
 
@@ -248,10 +250,16 @@ logical            :: modulate_frac_ic = .false. !modulate the fraction of acids
 
 real               :: NO2_SO2_max = -999 !NO2 max concentration below which gso2 is scaled by NO2/NO2_SO2_max
 
+integer, parameter :: max_scale_emis_fields = 10
+real               :: scale_emis_field_values(max_scale_emis_fields)
+character(len=64)  :: scale_emis_field_names(max_scale_emis_fields)
+
 
 type(tropchem_diag),  save :: trop_diag
 type(tropchem_opt),   save :: trop_option
 type (domain2D), pointer :: tropchem_domain !< Atmosphere domain
+
+
 
 
 integer :: n_hno3d, n_so4d
@@ -322,7 +330,8 @@ namelist /tropchem_driver_nml/    &
                                het_chem_bug1, rh_het_max, &
                                modulate_frac_ic, &
                                min_t_sfc_cld_chem, &
-                               NO2_SO2_max
+                               NO2_SO2_max, &
+                               scale_emis_field_names, scale_emis_field_values
 
 
 integer                     :: nco2 = 0
@@ -348,11 +357,13 @@ type(interpolate_type), save :: airc_default
 type(field_init_type),dimension(pcnstm1) :: emis_field_names, &
                                             emis3d_field_names
 logical, dimension(pcnstm1) :: has_ubc = .false., &
-                               has_lbc = .false., &
-                               fixed_lbc_time = .false.
+     has_lbc    = .false., &
+     has_lbc_2d = .false., &
+     fixed_lbc_time = .false.
 type(time_type), dimension(pcnstm1) :: lbc_entry
-logical, dimension(pcnstm1) :: has_airc = .false.
-character(len=64),dimension(pcnstm1) :: ub_names, airc_names
+logical, dimension(pcnstm1) :: has_airc = .false., lbc_dry=.false.
+character(len=64),dimension(pcnstm1) :: ub_names, airc_names,lbc_names
+real, dimension(pcnstm1) :: lbc_factor
 real, parameter :: small = 1.e-50
 integer :: sphum_ndx=0, cl_ndx=0, clo_ndx=0, hcl_ndx=0, hocl_ndx=0, clono2_ndx=0, &
            cl2o2_ndx=0, cl2_ndx=0, clno2_ndx=0, br_ndx=0, bro_ndx=0, hbr_ndx=0, &
@@ -422,6 +433,7 @@ type :: lb_type
    type(time_type), dimension(:), pointer :: gas_time
 end type lb_type
 type(lb_type), dimension(pcnstm1) :: lb
+type(interpolate_type),dimension(pcnstm1), save :: lbc_interp
 
 type :: co2_type
    logical                                :: use_fix_value
@@ -581,7 +593,7 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
    real, dimension(size(r,1),size(r,2),size(r,3)) :: sulfate_data
 !  real, dimension(size(r,1),size(r,2),size(r,3)) :: ub_temp,rno
    real, dimension(size(r,1),size(r,2),size(r,3),maxinv) :: inv_data
-   real, dimension(size(r,1),size(r,2)) :: emis
+   real, dimension(size(r,1),size(r,2)) :: emis, r_lb_2d
    real, dimension(size(r,1),size(r,2), pcnstm1) :: emisz
    real, dimension(size(r,1),size(r,2),size(r,3)) :: emis3d, xactive_emis
    real, dimension(size(r,1),size(r,2),size(r,3)) :: age, cly0, cly, cly_ratio, &
@@ -600,7 +612,7 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
    real, dimension(size(r,1),size(r,2),size(r,3)) :: tend_tmp, extra_h2o
    real, dimension(pcnstm1) :: r_lb
    real, dimension(size(land,1), size(land,2)) :: oro ! 0 and 1 rep. of land
-   real, dimension(size(r,1),size(r,2)) :: coszen_local, fracday_local
+   real, dimension(size(r,1),size(r,2)) :: coszen_local, fracday_local, scale_dry_lbc
    real :: rrsun_local
    real, dimension(size(r,1),size(r,2),size(r,3),pcnstm1) :: prod, loss
    real, dimension(size(r,1),size(r,2),size(r,3)):: prodox, lossox
@@ -613,13 +625,12 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
    real :: solar_phase
    real :: solflxband(num_solar_bands)
    type(psc_type) :: psc
-   type(time_type) :: lbc_Time
    !f1p
    !trop diag arrays
    real, dimension(size(r,1),size(r,2),size(r,3),trop_diag%nb_diag) :: trop_diag_array
    type(time_type) :: co2_time
    character(len=32) :: tracer_name, noytracer
-
+   type(time_type) :: lbc_time
 !-----------------------------------------------------------------------
 
 !<ERROR MSG="tropchem_driver_init must be called first." STATUS="FATAL">
@@ -667,12 +678,12 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
             call read_2D_emis_data( inter_emis(n), emis, Time, Time_next, &
                  emis_field_names(n)%field_names, &
                  diurnal_emis(n), coszen, half_day, lon, &
-                 is, js, has_xactive_emis(n),'ocean')
+                 is, js, has_xactive_emis(n),emis_field_names(n)%scale_emis,'ocean')
          else
             call read_2D_emis_data( inter_emis(n), emis, Time, Time_next, &
                  emis_field_names(n)%field_names, &
                  diurnal_emis(n), coszen, half_day, lon, &
-                 is, js, has_xactive_emis(n))
+                 is, js, has_xactive_emis(n),emis_field_names(n)%scale_emis)
          end if
          if ( land_does_emission(n) ) then
             emis = emis * ( 1. - land )
@@ -721,7 +732,7 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
          call read_3D_emis_data( inter_emis3d(n), emis3d, Time, Time_next,phalf, &
                                  emis3d_field_names(n)%field_names, &
                                  diurnal_emis3d(n), coszen, half_day, lon, &
-                                 is, js, id_emis3d(n) )
+                                 is, js, id_emis3d(n), emis3d_field_names(n)%scale_emis )
 
          emis_source(:,:,:,n) = emis_source(:,:,:,n) &
                               + emis3d(:,:,:)/pwt(:,:,:) * emis_cons
@@ -1156,19 +1167,52 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
 !     ... apply lower boundary condition
 !-----------------------------------------------------------------------
       if(has_lbc(n)) then
-         if (fixed_lbc_time(n)) then
-            lbc_Time = lbc_entry(n)
+         if (.not.has_lbc_2d(n)) then
+            if (fixed_lbc_time(n)) then
+               lbc_Time = lbc_entry(n)
+            else
+               lbc_Time = Time
+            end if
+            call time_interp( lbc_Time, lb(n)%gas_time(:), frac, index1, index2 )
+            r_lb(n) = lb(n)%gas_value(index1) + frac*( lb(n)%gas_value(index2) - lb(n)%gas_value(index1))
+            if(id_lb(n)>0) then
+               used = send_data(id_lb(n), r_lb(n), Time_next)
+            end if
+            scale_dry_lbc = 1.            
+            do k=1,size(chem_dt,3)
+               if (lbc_dry(n)) then
+                  scale_dry_lbc = (1.-r_temp(:,:,k,sphum_ndx))
+               end if
+               !r_temp is in vmr
+               where (pfull(:,:,k) > lb_pres)
+                  chem_dt(:,:,k,indices(n)) = (r_lb(n)*scale_dry_lbc - r(:,:,k,indices(n))) / relaxed_dt_lbc
+               end where
+            end do                        
          else
-            lbc_Time = Time
+            if (fixed_lbc_time(n)) then
+               lbc_Time = lbc_entry(n)
+            else
+               lbc_Time = Time
+            end if
+                        
+            call interpolator(lbc_interp(n), lbc_time, r_lb_2d, trim(lbc_names(n)), is,js)
+            r_lb_2d = r_lb_2d*lbc_factor(n)
+            if (id_lb(n)>0) then
+               used = send_data(id_lb(n), r_lb_2d, Time_next, is_in=is, js_in=js)   
+            end if
+            scale_dry_lbc = 1.
+            do k=1,size(chem_dt,3)
+               if (lbc_dry(n)) then
+                  scale_dry_lbc = (1.-r_temp(:,:,k,sphum_ndx))
+               end if
+               !r_temp is in vmr
+               where (pfull(:,:,k) > lb_pres)
+                  chem_dt(:,:,k,indices(n)) = (r_lb_2d*scale_dry_lbc - r(:,:,k,indices(n))) / relaxed_dt_lbc
+               end where
+            end do
+            
          end if
-         call time_interp( lbc_Time, lb(n)%gas_time(:), frac, index1, index2 )
-         r_lb(n) = lb(n)%gas_value(index1) + frac*( lb(n)%gas_value(index2) - lb(n)%gas_value(index1) )
-         if(id_lb(n)>0) then
-            used = send_data(id_lb(n), r_lb(n), Time_next)
-         end if
-         where (pfull(:,:,:) > lb_pres)
-            chem_dt(:,:,:,indices(n)) = (r_lb(n) - r(:,:,:,indices(n))) / relaxed_dt_lbc
-         endwhere
+         
       end if
 
    end do
@@ -2056,9 +2100,14 @@ end if
       lbc_entry(i) = get_base_time()
       if( query_method('lower_bound', MODEL_ATMOS,indices(i),name,control) ) then
          if( trim(name)=='file' ) then
+
+            flag_spec = parse(control,'dry',specname)
+            if (flag_spec>0) lbc_dry(i) = .true.
+            
             flag_file = parse(control, 'file', filename)
             flag_spec = parse(control, 'factor', scale_factor)
             flag_fixed = parse(control, 'fixed_year', fixed_year)
+            
             if( flag_file > 0 ) then
                lb_files(i) = 'INPUT/' // trim(filename)
                if( file_exists(lb_files(i)) ) then
@@ -2088,14 +2137,56 @@ end if
                      diy = days_in_year (Year_t)
                      extra_seconds = (fixed_year - year)*diy*SECONDS_PER_DAY
                      lbc_entry(i) = Year_t + set_time(NINT(extra_seconds), 0)
-                  end if
+                  end if                  
                else
                   call error_mesg ('tropchem_driver_init', &
                                    'Failed to find input file '//trim(lb_files(i)), FATAL)
                end if
             else
-               call error_mesg ('tropchem_driver_init', 'Tracer '//trim(lowercase(tracnam(i)))// &
-                                ' has lower_bound specified without a filename', FATAL)
+               flag_file = parse(control, 'file_nc', filename)
+               lb_files(i) =  trim(filename)
+               if (flag_file>0) then
+                  if( file_exists('INPUT/' // lb_files(i)) ) then
+                     call interpolator_init( lbc_interp(i), trim(lb_files(i)), lonb_mod, latb_mod, &
+                          data_out_of_bounds=(/CONSTANT/),      &
+                          vert_interp=(/INTERP_WEIGHTED_P/) )
+                     has_lbc_2d(i) = .True.
+
+                     flag_spec = parse(control, 'factor',scale_factor)
+                     
+                     if(flag_spec > 0) then
+                        lbc_factor(i) = scale_factor
+                     else
+                        lbc_factor(i) = 1.
+                     end if
+                     
+                     flag_spec = parse(control, 'name',specname)
+                     
+                     if(flag_spec > 0) then
+                        lbc_names(i) = trim(specname)
+                     else
+                        lbc_names(i) = trim(lowercase(tracnam(i)))
+                     end if
+
+                     if (mpp_root_pe().eq.mpp_pe()) write(*,*) 'fixed_year',flag_fixed,fixed_year
+                     
+                     if( flag_fixed > 0 ) then                        
+                        fixed_lbc_time(i) = .true.
+                        year = INT(fixed_year)
+                        Year_t = set_date(year,1,1,0,0,0)
+                        diy = days_in_year (Year_t)
+                        extra_seconds = (fixed_year - year)*diy*SECONDS_PER_DAY
+                        lbc_entry(i) = Year_t + set_time(NINT(extra_seconds), 0)
+                     end if
+                     
+                  else
+                     call error_mesg ('tropchem_driver_init', &
+                          'Failed to find input file '//trim(lb_files(i))//' '//trim(control)//' '//tracnam(i), FATAL)
+                  end if
+               else
+                  call error_mesg ('tropchem_driver_init', 'Tracer '//trim(lowercase(tracnam(i)))// &
+                       ' has lower_bound specified without a filename', FATAL)
+               end if
             end if
             has_lbc(i) = .true.
          end if
@@ -2191,7 +2282,7 @@ end if
             extra_seconds = (input_time - year)*diy*SECONDS_PER_DAY
             co2_t%gas_time(n) = Year_t + set_time(NINT(extra_seconds), 0)
          end do
-         close(flb)
+         close(flb)         
          if (co2_scale_factor .gt. 0) then
             co2_t%gas_value = co2_t%gas_value * co2_scale_factor
          end if
@@ -2243,6 +2334,9 @@ end if
             write(logunit,*)'Lower BC from file: ',trim(lb_files(i))
             if (fixed_lbc_time(i)) then
                write(logunit,*) '... with fixed year'
+            end if
+            if (has_lbc_2d(i)) then
+               write(logunit,*) '... with 2d file'
             end if
          end if
          if(conc_files(i) /= '') then
@@ -2298,7 +2392,7 @@ end if
                                    strat_chem_age_factor, strat_chem_dclydt_factor, &
                                    set_min_h2o_strat, ch4_filename, ch4_scale_factor, &
                                    fixed_lbc_time(ch4_ndx), lbc_entry(ch4_ndx), &
-                                   cfc_lbc_filename, time_varying_cfc_lbc, cfc_lbc_dataset_entry )
+                                   cfc_lbc_filename, time_varying_cfc_lbc, cfc_lbc_dataset_entry)
 !--lwh
    id_dclydt      = register_diag_field( module_name, 'cly_chem_dt', axes(1:3), Time, 'cly_chem_dt', 'VMR/s' )
    id_dclydt_chem = register_diag_field( module_name, 'cly_chem_dt_diag', axes(1:3), Time, 'cly_chem_dt_diag', 'VMR/s' )
@@ -2519,8 +2613,18 @@ end if
          id_ub(i) = 0
       end if
       if( has_lbc(i) ) then
-         id_lb(i) = register_diag_field( module_name, trim(tracnam(i))//'_lbc', &
-                                         Time, trim(tracnam(i))//'_lbc','VMR' )
+         if ( lbc_dry(i) ) then
+            fld=' dry'
+         else
+            fld=''
+         end if
+         if (has_lbc_2d(i)) then
+            id_lb(i) = register_diag_field( module_name, trim(tracnam(i))//'_lbc', axes(1:2), &
+                 Time, trim(tracnam(i))//'_lbc','VMR'//trim(fld) )            
+         else
+            id_lb(i) = register_diag_field( module_name, trim(tracnam(i))//'_lbc', &
+                 Time, trim(tracnam(i))//'_lbc','VMR'//trim(fld) )
+         end if
       else
          id_lb(i) = 0
       end if
@@ -2656,9 +2760,10 @@ end function tropchem_driver_init
 
 subroutine tropchem_driver_time_vary (Time)
 
-type(time_type), intent(in) :: Time
+      type(time_type), intent(in) :: Time
+      type(time_type) :: lbc_time
 
-      integer :: yr, mo,day, hr,min, sec
+      integer :: yr, mo,day, hr,min, sec, mo_yr, dum, dayspmn
       integer :: n
 
 
@@ -2698,6 +2803,18 @@ type(time_type), intent(in) :: Time
           call obtain_interpolator_time_slices (ub(n), Time)
         endif
       end do
+
+      do n=1,size(has_lbc,1)
+         if (has_lbc_2d(n)) then
+            if (fixed_lbc_time(n)) then
+               lbc_Time = lbc_entry(n)
+            else
+               lbc_Time = Time
+            end if            
+            call obtain_interpolator_time_slices (lbc_interp(n), lbc_time)
+         end if
+      end do
+     
 
       call strat_chem_dcly_dt_time_vary (Time)
 
@@ -2754,6 +2871,12 @@ subroutine tropchem_driver_endts
         endif
       end do
 
+      do n=1,size(has_lbc_2d,1)
+         if (has_lbc_2d(n)) then
+            call unset_interpolator_time_flag(lbc_interp(n))
+         end if
+      end do
+
       call strat_chem_dcly_dt_endts
 
 
@@ -2796,12 +2919,13 @@ end subroutine tropchem_driver_end
 subroutine read_2D_emis_data( emis_type, emis, Time, Time_next, &
                               field_names, &
                               Ldiurnal, coszen, half_day, lon, &
-                              is, js, skip_biogenic_emis, skip_field )
+                              is, js, skip_biogenic_emis, scale_emis, skip_field )
 
    type(interpolate_type),intent(inout) :: emis_type
    real, dimension(:,:),intent(out) :: emis
    type(time_type),intent(in) :: Time, Time_next
    character(len=*),dimension(:), intent(in) :: field_names
+   real,dimension(:), intent(in) :: scale_emis
    character(len=*), intent(in), optional :: skip_field
    logical, intent(in) :: Ldiurnal
    real, dimension(:,:), intent(in) :: coszen, half_day, lon
@@ -2813,7 +2937,8 @@ subroutine read_2D_emis_data( emis_type, emis, Time, Time_next, &
    real, dimension(size(emis,1),size(emis,2)) :: temp_data
    real :: diurnal_scale_factor, gmt, iso_on, iso_off, dayfrac
    real :: local_angle, factor_tmp
-
+   integer :: n
+   
    emis(:,:) = 0.
    temp_data(:,:) = 0.
    do k = 1,size(field_names)
@@ -2825,6 +2950,7 @@ subroutine read_2D_emis_data( emis_type, emis, Time, Time_next, &
          else
             call interpolator(emis_type,Time,temp_data,field_names(k),is,js)
          end if
+         temp_data = temp_data*scale_emis(k)
       end if
       emis(:,:) = emis(:,:) + temp_data(:,:)
    end do
@@ -2877,13 +3003,14 @@ end subroutine read_2D_emis_data
 subroutine read_3D_emis_data( emis_type, emis, Time, Time_next, phalf, &
                               field_names, &
                               Ldiurnal, coszen, half_day, lon, &
-                              is, js, id_emis_diag )
+                              is, js, id_emis_diag, scale_emis )
 
    type(interpolate_type),intent(inout) :: emis_type
    real, dimension(:,:,:),intent(in) :: phalf
    real, dimension(:,:,:),intent(out) :: emis
    type(time_type),intent(in) :: Time, Time_next
    character(len=*),dimension(:), intent(in) :: field_names
+   real,dimension(:), intent(in) :: scale_emis
    logical, intent(in) :: Ldiurnal
    real, dimension(:,:), intent(in) :: coszen, half_day, lon
    integer, intent(in) :: is, js
@@ -2900,7 +3027,7 @@ subroutine read_3D_emis_data( emis_type, emis, Time, Time_next, phalf, &
    temp_data(:,:,:) = 0.
    do k = 1,size(field_names)
       call interpolator(emis_type,Time,phalf,temp_data,field_names(k),is,js)
-      emis(:,:,:) = emis(:,:,:) + temp_data(:,:,:)
+      emis(:,:,:) = emis(:,:,:) + temp_data(:,:,:)*scale_emis(k)
    end do
    if (Ldiurnal) then
       do j=1,size(emis,2)
@@ -3016,10 +3143,13 @@ subroutine init_emis_data( emis_type, model, method_type, pos, file_name, &
    integer        , intent(in)  :: axes(4)
    type(time_type), intent(in)  :: Time
 
-   character(len=64) :: name, control
+   character(len=128) :: name, control
    integer :: nfields
-   integer :: flag_name, flag_file, flag_diurnal
+   integer :: flag_name, flag_file, flag_diurnal, flag_scale
    character(len=64) :: emis_name, emis_file, control_diurnal
+
+   integer :: n,n2
+   real    :: scale_emis
 
    flag = .false.
    diurnal = .false.
@@ -3048,10 +3178,31 @@ subroutine init_emis_data( emis_type, model, method_type, pos, file_name, &
                                  vert_interp=(/INTERP_WEIGHTED_P/) )
          call query_interpolator(emis_type,nfields=nfields)
          allocate(field_type%field_names(nfields))
+         allocate(field_type%scale_emis(nfields))         
          call query_interpolator(emis_type,field_names=field_type%field_names)
+         do n=1,nfields
+            field_type%scale_emis(n) = 1.
+
+            flag_scale = parse(control, field_type%field_names(n), scale_emis)
+            if (flag_scale > 0) then
+               field_type%scale_emis(n) = scale_emis
+            else
+               do n2=1,max_scale_emis_fields
+                  if (trim(field_type%field_names(n)).eq.trim(scale_emis_field_names(n2))) then
+                     field_type%scale_emis(n) = scale_emis_field_values(n2)
+                  end if
+               end do
+            end if
+
+            if (mpp_root_pe().eq.mpp_pe()) write(*,40) field_type%field_names(n), &
+                 field_type%scale_emis(n)
+            
+         end do         
       end if
       if ( present(land_does_emis) )  land_does_emis  = (index(lowercase(name),'land:lm3')>0)
    end if
+
+40 format (A,F5.3)
 end subroutine init_emis_data
 !</SUBROUTINE>
 
