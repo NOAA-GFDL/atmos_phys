@@ -242,24 +242,6 @@ end interface
 !  <DATA NAME="diffusion_smooth" UNITS="" TYPE="logical" DIM="" DEFAULT=".t     rue.">
 !   diffusion coefficients should be smoothed in time?
 !  </DATA>
-!  <DATA NAME="do_grey_radiation" UNITS="" TYPE="logical" DIM="" DEFAULT=".false.">
-!   do grey radiation scheme?
-! rif:(09/10/09) In Grey radiation we are computing just the total   
-! SW radiation. We need to divide it into 4 components
-! to go through the Coupler and Ice modules. Sum[R(i)*SW] = SW  
-!  </DATA>
-!  <DATA NAME="R1" UNITS="" TYPE="real" DIM="" DEFAULT="0.25">
-!   component  number 1 of SW radiation with grey radiation scheme
-!  </DATA>
-!  <DATA NAME="R2" UNITS="" TYPE="real" DIM="" DEFAULT="0.25">
-!   component  number 1 of SW radiation with grey radiation scheme
-!  </DATA>
-!  <DATA NAME="R3" UNITS="" TYPE="real" DIM="" DEFAULT="0.25">
-!   component  number 1 of SW radiation with grey radiation scheme
-!  </DATA>
-!  <DATA NAME="R4" UNITS="" TYPE="real" DIM="" DEFAULT="0.25">
-!   component  number 1 of SW radiation with grey radiation scheme
-!  </DATA>
 !  <DATA NAME="override_aerosols_cloud" UNITS="" TYPE="logical" DIM="" DEFA     ULT=".false.">
 !   use offline aerosols for cloud calculation
 !   (via data_override in aerosol_driver)?
@@ -343,11 +325,6 @@ logical :: do_moist_processes = .true.
 real    :: tau_diff = 3600.    
 real    :: diff_min = 1.e-3   
 logical :: diffusion_smooth = .true.
-logical :: do_grey_radiation = .false.
-real    :: R1 = 0.25
-real    :: R2 = 0.25
-real    :: R3 = 0.25
-real    :: R4 = 0.25
 logical :: override_aerosols_cloud = .false.
 logical :: l_host_applies_sfc_fluxes = .true.
 real    :: qmin = 1.0e-10
@@ -370,7 +347,6 @@ namelist / physics_driver_nml / do_radiation, do_clubb,  do_cosp, &
                                 do_modis_yim, donner_meso_is_largescale, &
                                 do_moist_processes, tau_diff,      &
                                 diff_min, diffusion_smooth, &
-                                do_grey_radiation, R1, R2, R3, R4,  &
                                 override_aerosols_cloud,    &
                                 l_host_applies_sfc_fluxes, &
                                 qmin, N_land, N_ocean, do_liq_num,  &
@@ -480,7 +456,6 @@ real,    dimension(:,:,:), allocatable        :: temp_last, q_last
 integer                                :: vers
 integer                                :: now_doing_strat = 0
 integer                                :: now_doing_entrain = 0
-integer                                :: now_doing_edt = 0
 real, allocatable                      :: r_convect(:,:)
 
 type(aerosol_time_vary_type)           :: Aerosol_cld
@@ -499,7 +474,6 @@ logical   :: do_check_args = .true.   ! argument dimensions should
                                       ! be checked ?
 logical   :: module_is_initialized = .false.
                                       ! module has been initialized ?
-logical   :: doing_edt                ! edt_mod has been activated ?
 logical   :: doing_entrain            ! entrain_mod has been activated ?
 logical   :: doing_uw_conv            ! uw_conv shallow cu mod has been 
                                       ! activated ?
@@ -649,7 +623,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       integer          ::  moist_processes_init_clock, damping_init_clock,&
                            turb_init_clock, diff_init_clock, &
                            aerosol_init_clock, &
-                           grey_radiation_init_clock , &
                            tracer_init_clock
       real, dimension(:,:,:),   allocatable :: phalf
       real, dimension(:,:,:,:), allocatable :: trs
@@ -671,7 +644,7 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
 !       ndum          dummy argument
 !       x_clock_init  clock for timing the initialization of process x
 !                     where x is moist_processes, damping, turb, diff,
-!                     aerosol, grey_radiation, tracer 
+!                     aerosol, tracer 
 !-----------------------------------------------------------------------
 
 !---------------------------------------------------------------------
@@ -697,8 +670,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
 !--------------------------------------------------------------------
 !    consistency checks for namelist options
 !--------------------------------------------------------------------
-      if(do_radiation .and. do_grey_radiation) & 
-        call error_mesg('physics_driver_init','do_radiation and do_grey_radiation cannot both be .true.',FATAL)
       if (do_cosp .and. .not. do_radiation) &
         call error_mesg('physics_driver_init',  &
             'do_radiation must be .true. if do_cosp is .true.',FATAL)
@@ -764,9 +735,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
                  grain=CLOCK_MODULE_DRIVER )
       aerosol_init_clock       =       &
         mpp_clock_id( '   Physics_driver_init: Aerosol: Initialization', &
-                       grain=CLOCK_MODULE_DRIVER )
-      grey_radiation_init_clock       =       &
-        mpp_clock_id( '   Physics_driver_init: Grey Radiation: Initialization', &
                        grain=CLOCK_MODULE_DRIVER )
       tracer_init_clock          =      &
         mpp_clock_id( '   Physics_driver_init: Tracer: Initialization',    &
@@ -962,7 +930,7 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       call mpp_clock_begin ( turb_init_clock )
       call vert_turb_driver_init (physics_domain, lonb, latb, id, jd, kd, axes, Time, &
                                   Exch_ctrl, Physics%control,  &
-                                  doing_edt, doing_entrain, do_clubb)
+                                  doing_entrain, do_clubb)
       call mpp_clock_end ( turb_init_clock )
 
 !-----------------------------------------------------------------------
@@ -982,15 +950,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
         call mpp_clock_end ( aerosol_init_clock )
       endif ! do_moist_processes
 
-!----------------------------------------------------------------------
-!    if grey_radiation is active, initialize that module.
-!----------------------------------------------------------------------
-      if(do_grey_radiation) then
-         call mpp_clock_begin ( grey_radiation_init_clock )
-         call grey_radiation_init(axes, Time) 
-         call mpp_clock_end ( grey_radiation_init_clock )
-      endif
-        
 !-----------------------------------------------------------------------
 !    initialize atmos_tracer_driver_mod.
 !-----------------------------------------------------------------------
@@ -1891,19 +1850,11 @@ real,  dimension(:,:,:), intent(out)  ,optional :: diffm, difft
 
 !---------------------------------------------------------------------
 
-!rab      if(do_grey_radiation) then !rif:(09/10/09) 
-!rab        call grey_radiation(is, js, Time, Time_next, lat, lon, phalfgrey, albedo, t_surf_rad, t, tdt, flux_sw, flux_lw)
-!rab        coszen = 1.0
-!rab        flux_sw_dir     = R1*flux_sw
-!rab        flux_sw_dif     = R2*flux_sw
-!rab        flux_sw_vis_dir = R3*flux_sw
-!rab        flux_sw_vis_dif = R4*flux_sw
-!rab      endif
-
       if (do_radiation) then
         radturbten(is:ie,js:je,:) = radturbten(is:ie,js:je,:) + Rad_flux_block%tdt_rad(:,:,:)
         surf_diff%tdt_rad(is:ie,js:je,:)=Rad_flux_block%tdt_rad(:,:,:) !miz
       endif
+      
 #ifdef SCM
 ! Option to add SCM radiative tendencies from forcing to Rad_flux_block%tdt_lw
 ! and radturbten
@@ -2521,17 +2472,15 @@ real,dimension(:,:),    intent(inout)             :: gust
 
 !-----------------------------------------------------------------------
 !    call aerosol driver to obtain aerosol data needed in condensation 
-!    calculations. if using grey radiation, this data is not needed.
+!    calculations.
 !-----------------------------------------------------------------------
-        if (.NOT. do_grey_radiation) then
-          pflux(:,:,1) = 0.0E+00
-          do k=2,size(p_full,3)
-            pflux(:,:,k) = 0.5E+00*(p_full(:,:,k-1) + p_full(:,:,k))
-          end do
-          pflux(:,:,size(p_full,3)+1) = p_full(:,:,size(p_full,3))
-          call aerosol_driver (is, js, Time, r, p_half, pflux, &
-                             Aerosol_cld,Aerosol, override_aerosols_cloud)
-        endif
+        pflux(:,:,1) = 0.0E+00
+        do k=2,size(p_full,3)
+          pflux(:,:,k) = 0.5E+00*(p_full(:,:,k-1) + p_full(:,:,k))
+        end do
+        pflux(:,:,size(p_full,3)+1) = p_full(:,:,size(p_full,3))
+        call aerosol_driver (is, js, Time, r, p_half, pflux, &
+            Aerosol_cld,Aerosol, override_aerosols_cloud)
 
 !------------------------------------------------------------------------
 !   set up pointers to the module variables that are transferred between
@@ -2619,7 +2568,7 @@ real,dimension(:,:),    intent(inout)             :: gust
 !    if the Aerosol derived type variable component arrays were allocated, 
 !    call aerosol_dealloc to deallocate them.
 !----------------------------------------------------------------------
-        if (.not. do_grey_radiation) call aerosol_dealloc (Aerosol)
+        call aerosol_dealloc (Aerosol)
 
       !------ CMIP diagnostics (tendencies due to physics) ------
       if (query_cmip_diag_id(ID_tntmp) .or. query_cmip_diag_id(ID_tnhusmp)) then
@@ -2853,7 +2802,7 @@ type(block_control_type), intent(in) :: Atm_block
 integer :: n, nb, nc, ibs, ibe, jbs, jbe
 integer :: moist_processes_term_clock, damping_term_clock, turb_term_clock, &
            diff_term_clock, aerosol_term_clock, clubb_term_clock, &
-           grey_radiation_term_clock, tracer_term_clock, cosp_term_clock
+           tracer_term_clock, cosp_term_clock
 
 !---------------------------------------------------------------------
 !    verify that the module is initialized.
@@ -2884,9 +2833,6 @@ integer :: moist_processes_term_clock, damping_term_clock, turb_term_clock, &
       if (do_moist_processes) &
       aerosol_term_clock       =       &
         mpp_clock_id( '   Phys_driver_term: Aerosol: Termination', &
-                       grain=CLOCK_MODULE_DRIVER )
-      grey_radiation_term_clock       =       &
-        mpp_clock_id( '   Phys_driver_term: Grey Radiation: Termination', &
                        grain=CLOCK_MODULE_DRIVER )
       tracer_term_clock          =      &
         mpp_clock_id( '   Phys_driver_term: Tracer: Termination',    &
@@ -2957,10 +2903,6 @@ integer :: moist_processes_term_clock, damping_term_clock, turb_term_clock, &
         call aerosol_end (Aerosol_cld)
         call mpp_clock_end ( aerosol_term_clock )
       endif
-
-      call mpp_clock_begin ( grey_radiation_term_clock )
-      if(do_grey_radiation) call grey_radiation_end 
-      call mpp_clock_end ( grey_radiation_term_clock )
 
       if (do_moist_processes) then  
         call mpp_clock_begin ( moist_processes_term_clock )
@@ -3261,12 +3203,6 @@ subroutine physics_driver_register_restart_scalars (Restart, Phy_restart)
        now_doing_strat = 0
     endif
 
-    if(doing_edt) then
-       now_doing_edt = 1
-    else
-       now_doing_edt = 0
-    endif
-
     if(doing_entrain) then
        now_doing_entrain = 1
     else
@@ -3279,18 +3215,15 @@ subroutine physics_driver_register_restart_scalars (Restart, Phy_restart)
 
   call register_restart_field(Phy_restart, 'vers',          vers, dim_names)
   call register_restart_field(Phy_restart, 'doing_strat',   now_doing_strat, dim_names)
-  call register_restart_field(Phy_restart, 'doing_edt',     now_doing_edt, dim_names)
   call register_restart_field(Phy_restart, 'doing_entrain', now_doing_entrain, dim_names)
 
   if (.not. Phy_restart%is_readonly) then !If not reading the file,
     call register_variable_attribute(Phy_restart, "vers", "long_name", "vers", str_len=len_trim("vers"))
     call register_variable_attribute(Phy_restart, "doing_strat", "long_name", "doing_strat", str_len=len_trim("doing_strat"))
-    call register_variable_attribute(Phy_restart, "doing_edt", "long_name", "doing_edt", str_len=len_trim("doing_edt"))
     call register_variable_attribute(Phy_restart, "doing_entrain", "long_name", "doing_entrain", str_len=len_trim("doing_entrain"))
 
     call register_variable_attribute(Phy_restart, "vers", "units", "none", str_len=4)
     call register_variable_attribute(Phy_restart, "doing_strat", "units", "none", str_len=4)
-    call register_variable_attribute(Phy_restart, "doing_edt", "units", "none", str_len=4)
     call register_variable_attribute(Phy_restart, "doing_entrain", "units", "none", str_len=4)
   endif
 
