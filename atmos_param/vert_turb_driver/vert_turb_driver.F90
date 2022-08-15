@@ -18,8 +18,6 @@ use      my25_turb_mod, only: my25_turb_init, my25_turb_end,  &
 
 use       tke_turb_mod, only: tke_turb_init, tke_turb_end, tke_turb
 
-use    diffusivity_mod, only: diffusivity, molecular_diff
-
 use physics_radiation_exch_mod, only: exchange_control_type
 use  physics_types_mod, only: physics_control_type
 
@@ -99,8 +97,6 @@ logical            :: module_is_initialized = .false.
  logical :: do_shallow_conv  = .false.
  logical :: do_mellor_yamada = .true.
  logical :: do_tke_turb      = .false.
- logical :: do_diffusivity         = .false.
- logical :: do_molecular_diffusion = .false.
  logical :: do_stable_bl     = .false.
  logical :: do_entrain    = .false.
  logical :: do_simple = .false. 
@@ -131,8 +127,8 @@ logical            :: module_is_initialized = .false.
  namelist /vert_turb_driver_nml/ do_shallow_conv, do_mellor_yamada, &
                                  do_tke_turb, &
                                  gust_scheme, constant_gust,          &
-                                 do_molecular_diffusion, do_stable_bl, &
-                                 do_diffusivity, do_entrain, &
+                                 do_stable_bl, &
+                                 do_entrain, &
                                  gust_factor, do_simple, wp2_min, &
                                  alternate_zpbl   ! cjg: PBL depth mods
 
@@ -391,26 +387,6 @@ if (do_mellor_yamada) then
 ! write(outunit,101) 'diff_t           ', mpp_chksum(diff_t)
 ! write(outunit,101) 'z_pbl            ', mpp_chksum(z_pbl)
 !<--cjg debug
-
-!---------------------------
- else if (do_diffusivity) then
-!--------------------------------------------------------------------
-!----------- compute molecular diffusion, if desired  ---------------
-
-    if (do_molecular_diffusion) then
-      call molecular_diff (tt, p_half, diff_m, diff_t)
-    else
-      diff_m = 0.0
-      diff_t = 0.0
-    endif
-
-!---------------------------
-!------------------- non-local K scheme --------------
-
-
-    call diffusivity ( tt, qq, uu, vv, p_full, p_half, z_full, z_half,   &
-                       u_star, b_star, z_pbl, diff_m, diff_t, &
-                       kbot = kbot)
 
 end if
 !------------------------------------------------------------------
@@ -752,14 +728,6 @@ subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
          ('vert_turb_driver_mod', 'invalid value for namelist '//&
           'variable GUST_SCHEME', FATAL)
 
-      if (do_molecular_diffusion .and. do_mellor_yamada)  &
-         call error_mesg ( 'vert_turb_driver_mod', 'cannot activate '//&
-              'molecular diffusion with mellor_yamada', FATAL)
- 
-      if (do_molecular_diffusion .and. do_tke_turb)  &
-         call error_mesg ( 'vert_turb_driver_mod', 'cannot activate '//&
-              'molecular diffusion with tke_turb', FATAL)
- 
       if (do_tke_turb .and. do_mellor_yamada)  &
          call error_mesg ( 'vert_turb_driver_mod', 'cannot activate '//&
               'tke_turb with mellor_yamada', FATAL)
