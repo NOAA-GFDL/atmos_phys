@@ -139,7 +139,6 @@ libatmos_phys_la_SOURCES = ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.F9
     ${top_srcdir}/atmos_param/vert_diff_driver/vert_diff_driver.F90 \
     ${top_srcdir}/atmos_param/moist_processes/moist_processes.F90 \
     ${top_srcdir}/atmos_param/moist_processes/moist_processes_utils.F90 \
-    ${top_srcdir}/atmos_param/my25_turb/my25_turb.F90 \
     ${top_srcdir}/atmos_param/cosp/cosp_modis_simulator.F90 \
     ${top_srcdir}/atmos_param/cosp/cosp_driver.F90 \
     ${top_srcdir}/atmos_param/cosp/cosp_misr_simulator.F90 \
@@ -818,7 +817,6 @@ ${top_builddir}/atmos_param/moist_processes/moist_processes.lo: ${top_srcdir}/at
      ${top_srcdir}/atmos_shared/atmos_cmip_diag/atmos_cmip_diag.lo
 ${top_builddir}/atmos_param/moist_processes/moist_processes_utils.lo: ${top_srcdir}/atmos_param/moist_processes/moist_processes_utils.F90 \
      ${top_srcdir}/atmos_param/lscloud_driver/lscloud_types.lo
-${top_builddir}/atmos_param/my25_turb/my25_turb.lo: ${top_srcdir}/atmos_param/my25_turb/my25_turb.F90
 ${top_builddir}/atmos_param/cosp/cosp_modis_simulator.lo: ${top_srcdir}/atmos_param/cosp/cosp_modis_simulator.F90 \
      ${top_srcdir}/atmos_param/cosp/cosp_constants.lo \
      ${top_srcdir}/atmos_param/cosp/cosp_types.lo \
@@ -1407,7 +1405,6 @@ ${top_builddir}/atmos_param/clubb/CLUBB_core/variables_diagnostic_module.lo: ${t
      ${top_srcdir}/atmos_param/clubb/CLUBB_core/constants_clubb.lo \
      ${top_srcdir}/atmos_param/clubb/CLUBB_core/parameters_model.lo
 ${top_builddir}/atmos_param/vert_turb_driver/vert_turb_driver.lo: ${top_srcdir}/atmos_param/vert_turb_driver/vert_turb_driver.F90 \
-     ${top_srcdir}/atmos_param/my25_turb/my25_turb.lo \
      ${top_srcdir}/atmos_param/tke_turb/tke_turb.lo \
      ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo \
      ${top_srcdir}/atmos_param/physics_driver/physics_types.lo \
@@ -1622,7 +1619,6 @@ damping_driver_mod.mod: ${top_srcdir}/atmos_param/damping_driver/damping_driver.
 vert_diff_driver_mod.mod: ${top_srcdir}/atmos_param/vert_diff_driver/vert_diff_driver.lo
 moist_processes_mod.mod: ${top_srcdir}/atmos_param/moist_processes/moist_processes.lo
 moist_proc_utils_mod.mod: ${top_srcdir}/atmos_param/moist_processes/moist_processes_utils.lo
-my25_turb_mod.mod: ${top_srcdir}/atmos_param/my25_turb/my25_turb.lo
 mod_cosp_modis_simulator.mod: ${top_srcdir}/atmos_param/cosp/cosp_modis_simulator.lo
 cosp_driver_mod.mod: ${top_srcdir}/atmos_param/cosp/cosp_driver.lo
 mod_cosp_misr_simulator.mod: ${top_srcdir}/atmos_param/cosp/cosp_misr_simulator.lo
@@ -1922,7 +1918,6 @@ include_HEADERS = atmos_nudge_mod.mod \
     vert_diff_driver_mod.mod \
     moist_processes_mod.mod \
     moist_proc_utils_mod.mod \
-    my25_turb_mod.mod \
     mod_cosp_modis_simulator.mod \
     cosp_driver_mod.mod \
     mod_cosp_misr_simulator.mod \

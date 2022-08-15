@@ -6,15 +6,10 @@ module vert_turb_driver_mod
 !       driver for compuing vertical diffusion coefficients
 !
 !         choose either:
-!              1) mellor-yamada 2.5 (with tke)
 !              2) non-local K scheme
 !-----------------------------------------------------------------------
 !---------------- modules ---------------------
 
-
-use      my25_turb_mod, only: my25_turb_init, my25_turb_end,  &
-                              my25_turb, tke_surf, get_tke,   &
-                              my25_turb_restart
 
 use       tke_turb_mod, only: tke_turb_init, tke_turb_end, tke_turb
 
@@ -61,8 +56,6 @@ private
 !---------------- interfaces ---------------------
 
 public   vert_turb_driver_init, vert_turb_driver_end, vert_turb_driver
-public   vert_turb_driver_restart
-
 
 !-----------------------------------------------------------------------
 !--------------------- version number ----------------------------------
@@ -95,11 +88,9 @@ logical            :: module_is_initialized = .false.
 !-------------------- namelist -----------------------------------------
 
  logical :: do_shallow_conv  = .false.
- logical :: do_mellor_yamada = .true.
  logical :: do_tke_turb      = .false.
  logical :: do_stable_bl     = .false.
  logical :: do_entrain    = .false.
- logical :: do_simple = .false. 
 
  character(len=24) :: gust_scheme  = 'constant' ! valid schemes are:
                                                 !   => 'constant'
@@ -124,12 +115,12 @@ logical            :: module_is_initialized = .false.
                                              ! and ( diff_m_stab > diff_min  or diff_t_stab > diff_min)
 !<--h1g, 2012-07-16 
  
- namelist /vert_turb_driver_nml/ do_shallow_conv, do_mellor_yamada, &
+ namelist /vert_turb_driver_nml/ do_shallow_conv, &
                                  do_tke_turb, &
-                                 gust_scheme, constant_gust,          &
+                                 gust_scheme, constant_gust, &
                                  do_stable_bl, &
                                  do_entrain, &
-                                 gust_factor, do_simple, wp2_min, &
+                                 gust_factor, wp2_min, &
                                  alternate_zpbl   ! cjg: PBL depth mods
 
 !-------------------- diagnostics fields -------------------------------
@@ -284,53 +275,8 @@ real   , dimension(size(diff_t,1),size(diff_t,2), &
 ! initiallize variables   
    vspblcap = 0.0   
    
-!-----------------------------------------------------------------------
-if (do_mellor_yamada) then
-
-!    ----- virtual temp ----------
-     ape(:,:,:)=(p_full(:,:,:)*p00inv)**(-kappa)
-     if(do_simple) then 
-       thv(:,:,:)=tt(:,:,:)*ape(:,:,:)
-     else
-       thv(:,:,:)=tt(:,:,:)*(qq(:,:,:)*d608+1.0)*ape(:,:,:)
-     endif  
-     if (present(mask)) where (mask < 0.5) thv = 200.
-
- endif
-
 !---------------------------
- if (do_mellor_yamada) then
-!---------------------------
-
-!    ----- time step for prognostic tke calculation -----
-     call get_time (Time_next-Time, sec, day)
-     dt_tke = real(sec+day*86400)
-
-!    --------------------- update tke-----------------------------------
-!    ---- compute surface tke --------
-!    ---- compute tke, master length scale (el0),  -------------
-!    ---- length scale (el), and vert mix coeffs (diff_t,diff_m) ----
-
-     call tke_surf  (is, js, u_star, kbot=kbot)
-
-
-
-     if ( id_z_pbl > 0 .or. id_bldep > 0 ) then
-     !------ compute pbl depth from k_profile if diagnostic needed -----
-     call my25_turb (is, js, dt_tke, frac_land, p_half, p_full, thv, uu, vv, &
-                     z_half, z_full, rough,   &
-                     el0, el, diff_m, diff_t, &
-                     mask=mask, kbot=kbot, &
-                     ustar=u_star,bstar=b_star,h=z_pbl)
-     else
-     call my25_turb (is, js, dt_tke, frac_land, p_half, p_full, thv, uu, vv, &
-                     z_half, z_full, rough,   &
-                     el0, el, diff_m, diff_t, &
-                     mask=mask, kbot=kbot)
-     end if
-
-!---------------------------
- else if (do_tke_turb) then
+ if (do_tke_turb) then
 !---------------------------
 
 !-->cjg debug
@@ -483,7 +429,7 @@ end if
 !-----------------------------------------------------------------------
 !------------------------ diagnostics section --------------------------
 
-if (do_mellor_yamada .or. do_tke_turb) then
+if (do_tke_turb) then
 
 !     --- set up local mask for fields with surface data ---
       if ( present(mask) ) then
@@ -728,10 +674,6 @@ subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
          ('vert_turb_driver_mod', 'invalid value for namelist '//&
           'variable GUST_SCHEME', FATAL)
 
-      if (do_tke_turb .and. do_mellor_yamada)  &
-         call error_mesg ( 'vert_turb_driver_mod', 'cannot activate '//&
-              'tke_turb with mellor_yamada', FATAL)
- 
 !----------------------------------------------------
 !   get the number of prognostic tracers
 !   use later to determine prognostic vs. diagnostic
@@ -774,8 +716,6 @@ subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
 
 !----------------------------------------------------------------------
 
-      if (do_mellor_yamada) call my25_turb_init (domain, id, jd, kd)
-
       if (do_tke_turb) then
         ntke = get_tracer_index ( MODEL_ATMOS, 'tke' )
         ! tke must be a diagnostic tracer
@@ -811,7 +751,7 @@ subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
         'geopotential height relative to surface at half levels', &
         'meters' , missing_value=missing_value    )
 
-if (do_mellor_yamada .or. do_tke_turb) then
+if (do_tke_turb) then
 
    id_tke = &
    register_diag_field ( mod_name, 'tke', axes(half), Time,      &
@@ -952,7 +892,6 @@ end subroutine vert_turb_driver_init
 subroutine vert_turb_driver_end
 
 !-----------------------------------------------------------------------
-      if (do_mellor_yamada) call my25_turb_end
       if (do_tke_turb)      call tke_turb_end
       if (do_entrain) call entrain_end
       module_is_initialized =.false.
@@ -960,25 +899,6 @@ subroutine vert_turb_driver_end
 !-----------------------------------------------------------------------
 
 end subroutine vert_turb_driver_end
-
-!#######################################################################
-! <SUBROUTINE NAME="vert_turb_driver_restart">
-!
-! <DESCRIPTION>
-! write out restart file.
-! Arguments: 
-!   timestamp (optional, intent(in)) : A character string that represents the model time, 
-!                                      used for writing restart. timestamp will append to
-!                                      the any restart file name as a prefix. 
-! </DESCRIPTION>
-!
-subroutine vert_turb_driver_restart(timestamp)
-  character(len=*), intent(in), optional :: timestamp
-
-   if (do_mellor_yamada) call my25_turb_restart(timestamp)
-end subroutine vert_turb_driver_restart
-! </SUBROUTINE> NAME="vert_turb_driver_restart"
-
 
 !-->cjg: addition for new PBL depth diagnostic
 
