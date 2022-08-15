@@ -134,8 +134,7 @@ use  moist_processes_mod,    only: moist_processes,    &
 
 use vert_turb_driver_mod,    only: vert_turb_driver,  &
                                    vert_turb_driver_init,  &
-                                   vert_turb_driver_end, &
-                                   vert_turb_driver_restart
+                                   vert_turb_driver_end
 
 use vert_diff_driver_mod,    only: vert_diff_driver_down,  &
                                    vert_diff_driver_up,    &
@@ -2980,7 +2979,6 @@ subroutine physics_driver_restart(timestamp)
      call error_mesg('physics_driver_mod', 'Writing netCDF formatted restart file: RESTART/physics_driver.res.nc', NOTE)
   endif
   call physics_driver_netcdf(timestamp)
-  call vert_turb_driver_restart(timestamp)
 
   call moist_processes_restart(timestamp)
   call damping_driver_restart(timestamp)
