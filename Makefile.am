@@ -65,7 +65,6 @@ libatmos_phys_la_SOURCES = ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.F9
     ${top_srcdir}/atmos_shared/tracer_driver/aer_ccn_act/aerosol_params.F90 \
     ${top_srcdir}/atmos_param/physics_driver/physics_types.F90 \
     ${top_srcdir}/atmos_param/physics_driver/physics_driver.F90 \
-    ${top_srcdir}/atmos_param/diffusivity/diffusivity.F90 \
     ${top_srcdir}/atmos_param/topo_drag/topo_drag.F90 \
     ${top_srcdir}/atmos_param/macrophysics/ls_cloud_macrophysics.F90 \
     ${top_srcdir}/atmos_param/macrophysics/tiedtke_macro.F90 \
@@ -505,7 +504,6 @@ ${top_builddir}/atmos_param/physics_driver/physics_driver.lo: ${top_srcdir}/atmo
      ${top_srcdir}/atmos_param/vert_turb_driver/vert_turb_driver.lo \
      ${top_srcdir}/atmos_param/vert_diff_driver/vert_diff_driver.lo \
      ${top_srcdir}/atmos_param/damping_driver/damping_driver.lo 
-${top_builddir}/atmos_param/diffusivity/diffusivity.lo: ${top_srcdir}/atmos_param/diffusivity/diffusivity.F90
 ${top_builddir}/atmos_param/topo_drag/topo_drag.lo: ${top_srcdir}/atmos_param/topo_drag/topo_drag.F90
 ${top_builddir}/atmos_param/macrophysics/ls_cloud_macrophysics.lo: ${top_srcdir}/atmos_param/macrophysics/ls_cloud_macrophysics.F90 \
      ${top_srcdir}/atmos_param/physics_driver/physics_types.lo \
@@ -1411,7 +1409,6 @@ ${top_builddir}/atmos_param/clubb/CLUBB_core/variables_diagnostic_module.lo: ${t
 ${top_builddir}/atmos_param/vert_turb_driver/vert_turb_driver.lo: ${top_srcdir}/atmos_param/vert_turb_driver/vert_turb_driver.F90 \
      ${top_srcdir}/atmos_param/my25_turb/my25_turb.lo \
      ${top_srcdir}/atmos_param/tke_turb/tke_turb.lo \
-     ${top_srcdir}/atmos_param/diffusivity/diffusivity.lo \
      ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo \
      ${top_srcdir}/atmos_param/physics_driver/physics_types.lo \
      ${top_srcdir}/atmos_param/shallow_conv/shallow_conv.lo \
@@ -1549,7 +1546,6 @@ ice_nucl_mod.mod: ${top_srcdir}/atmos_shared/tracer_driver/aer_ccn_act/ice_nucl.
 aerosol_params_mod.mod: ${top_srcdir}/atmos_shared/tracer_driver/aer_ccn_act/aerosol_params.lo
 physics_types_mod.mod: ${top_srcdir}/atmos_param/physics_driver/physics_types.lo
 physics_driver_mod.mod: ${top_srcdir}/atmos_param/physics_driver/physics_driver.lo
-diffusivity_mod.mod: ${top_srcdir}/atmos_param/diffusivity/diffusivity.lo
 topo_drag_mod.mod: ${top_srcdir}/atmos_param/topo_drag/topo_drag.lo
 ls_cloud_macrophysics_mod.mod: ${top_srcdir}/atmos_param/macrophysics/ls_cloud_macrophysics.lo
 tiedtke_macro_mod.mod: ${top_srcdir}/atmos_param/macrophysics/tiedtke_macro.lo
@@ -1850,7 +1846,6 @@ include_HEADERS = atmos_nudge_mod.mod \
     aerosol_params_mod.mod \
     physics_types_mod.mod \
     physics_driver_mod.mod \
-    diffusivity_mod.mod \
     topo_drag_mod.mod \
     ls_cloud_macrophysics_mod.mod \
     tiedtke_macro_mod.mod \
