@@ -6066,7 +6066,7 @@ logical,                        intent(in)    :: do_segment1, do_segment2
                       Input_mp%ustar, Input_mp%bstar, Input_mp%qstar,  &
                       Input_mp%land, Input_mp%coldT, Aerosol,   &
                       Input_mp%lat, Input_mp%lon, Input_mp%cush, &
-                      Phys_mp_exch%tke, doing_prog_clouds,  &
+                      doing_prog_clouds,  &
                       Conv_results%conv_calc_completed,   &
                       Conv_results%available_cf_for_uw, Uw_tend%ttnd,    &
                       Uw_tend%qtnd, Uw_tend%qltnd, Uw_tend%qitnd, &

@@ -91,7 +91,6 @@ use mpp_domains_mod,    only: domain2D
       real, dimension(:,:  ), pointer :: qdt_lhf     => null() 
       real, dimension(:,:  ), pointer :: hmint       => null() 
       real, dimension(:,:  ), pointer :: cgust       => null() 
-      real, dimension(:,:  ), pointer :: tke         => null() 
       real, dimension(:,:  ), pointer :: pblhto      => null() 
       real, dimension(:,:  ), pointer :: rkmo        => null() 
       real, dimension(:,:  ), pointer :: taudpo     => null() 
@@ -102,7 +101,6 @@ use mpp_domains_mod,    only: domain2D
       real, dimension(:,:,:), pointer :: qtsrc_prev => null() 
       real, dimension(:,:,:), pointer ::  cape_prev => null() 
       real, dimension(:,:,:), pointer ::   cin_prev => null() 
-      real, dimension(:,:,:), pointer ::   tke_prev => null() 
  end type phys_mp_exch_type
 
 public Phys2cosp_type

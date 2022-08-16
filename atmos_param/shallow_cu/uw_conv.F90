@@ -156,8 +156,6 @@ MODULE UW_CONV_MOD
   !!              1: omit min/max checks, apply filling (using sjl_fillz), no scaling
   !!              2: omit min/max checks, no filling (apply scaling to avoid negatives)
 
-  logical :: use_turb_tke = .false.  !h1g, 2015-08-11
-
   NAMELIST / uw_conv_nml / iclosure, rkm_sh1, rkm_sh, cldhgt_max, plev_cin, plev_omg, eis_max,eis_min,do_peff_land, &
        do_deep, idpchoice, do_coldT, do_lands, do_uwcmt, do_varying_rpen, do_new_convcld, do_mse_budget, rpen_choice, &
        do_fast, do_ice, do_ppen, do_forcedlifting, do_gust_qt, use_new_let, do_hlflx_zero, do_new_qnact, do_2nd_act, N0, &
@@ -166,7 +164,7 @@ MODULE UW_CONV_MOD
        do_auto_aero, do_rescale, do_rescale_t, wrel_min, do_debug, tmax0, do_conv_micro_N, &
        cush_ref, do_prog_gust, tau_gust, geff, cgust0, cgust_max, sigma0,  do_qctflx_zero, do_detran_zero, &
        duration, do_subcloud_flx, do_new_subflx, src_choice, gqt_choice,   &
-       zero_out_conv_area, tracer_check_type, use_turb_tke, use_lcl_only, do_new_pevap, plev_for, stop_at_let, &
+       zero_out_conv_area, tracer_check_type, use_lcl_only, do_new_pevap, plev_for, stop_at_let, &
        use_pblhttke_avg, use_hlqtsrc_avg, use_capecin_avg, reproduce_old_version, do_plev_umf, plev_umf, shallow_umf_thresh, &
        do_eis_limit, do_eis_limitn, do_lts_limit, do_lts_limitn
 
@@ -321,7 +319,7 @@ MODULE UW_CONV_MOD
              id_pct_uwc, id_pcb_uwc, id_pct_uws, id_pcb_uws, id_pct_uwd, id_pcb_uwd,   &
              id_cqa_uwc, id_cql_uwc, id_cqi_uwc, id_cqn_uwc, id_cltc_uwc,              &
              id_cqa_uws, id_cql_uws, id_cqi_uws, id_cqn_uws,                           &
-       id_cin_uwc, id_cbmf_uwc, id_tke_uwc, id_tkep_uwc, id_plcl_uwc, id_zlcl_uwc, id_zinv_uwc,  &
+       id_cin_uwc, id_cbmf_uwc, id_tke_uwc, id_plcl_uwc, id_zlcl_uwc, id_zinv_uwc,  &
        id_cush_uws,  id_plfc_uwc, id_enth_uwc,  &
        id_qldt_uwc, id_qidt_uwc, id_qadt_uwc, id_qndt_uwc, id_qtdt_uwc, id_cmf_uwc, &
        id_qldt_uws, id_qidt_uws, id_qadt_uws, id_qndt_uws, id_qtdt_uws, id_cmf_uws, id_wuo_uws,  &
@@ -818,8 +816,6 @@ contains
          'Release level updraft fraction from uw_conv', 'none' )
     id_tke_uwc = register_diag_field ( mod_name, 'tke_uwc', axes(1:2), Time, &
          'PBL mean TKE from uw_conv', 'm2/s2' )
-    id_tkep_uwc = register_diag_field ( mod_name, 'tkep_uwc', axes(1:2), Time, &
-         'prognostic estimate of PBL mean TKE from uw_conv', 'm2/s2' )
     id_plcl_uwc = register_diag_field (mod_name,'plcl_uwc', axes(1:2), Time, &
          'LCL pressure from uw_conv', 'hPa' )
     id_zlcl_uwc = register_diag_field (mod_name,'zlcl_uwc', axes(1:2), Time, &
@@ -1094,7 +1090,7 @@ contains
 
   SUBROUTINE uw_conv(is, js, Time, tb, qv, ub, vb, pmid,pint,zmid,zint, & !input
        qtr, omega, delt, pblht, ustar, bstar, qstar, land,              & !input
-       coldT, asol, lat, lon, cush, tkep, do_strat,                     & !input
+       coldT, asol, lat, lon, cush, do_strat,                           & !input
        skip_calculation, max_available_cf,                              & !input
        tten, qvten, qlten, qiten, qaten, qnten,                         & !output
        uten, vten, rain, snow, cmf, liq_pflx,                           & !output
@@ -1159,7 +1155,7 @@ contains
     real, intent(out), dimension(:,:,:)  :: liq_pflx   ! liq precipitation flux removed from a layer
     real, intent(out), dimension(:,:,:)  :: ice_pflx   ! solid precipitation flux removed from a layer
     real, intent(out), dimension(:,:)    :: rain, snow
-    real, intent(inout), dimension(:,:)  :: cbmfo, gusto, tkep! cloud-base mass flux
+    real, intent(inout), dimension(:,:)  :: cbmfo, gusto      ! cloud-base mass flux
     real, intent(in),  dimension(:,:,:,:)  :: tracers         ! env. tracers
     real, intent(out), dimension(:,:,:,:)  :: trtend          ! calculated tracer tendencies
     real, intent(out), dimension(:,:,:)  :: uw_wetdep       ! calculated wet depostion for tracers
@@ -1744,8 +1740,6 @@ contains
           sd%lon       = lon(i,j)*180/3.1415926
 
           sd%numx      = numx
-
-          if (use_turb_tke ) sd%tke = tkep(i,j)   !h1g, 2015-08-11
 
           call extend_sd_k(sd, pblht(i,j), do_ice, Uw_p)
 
@@ -2614,7 +2608,6 @@ contains
     used = send_data( id_fcrh_uwd, (crho*feq_d),       Time, is, js )
     used = send_data( id_pblht_uwc,(pblht),            Time, is, js )
     used = send_data( id_tke_uwc,  (tkeo),             Time, is, js )
-    used = send_data( id_tkep_uwc, (tkep),             Time, is, js )
     used = send_data( id_cbmf_uwc, (cbmfo),            Time, is, js )
     used = send_data( id_wrel_uwc, (wrelo),            Time, is, js )
     used = send_data( id_ufrc_uwc, (ufrco),            Time, is, js )
