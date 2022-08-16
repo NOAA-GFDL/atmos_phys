@@ -16,8 +16,6 @@ use       tke_turb_mod, only: tke_turb_init, tke_turb_end, tke_turb
 use physics_radiation_exch_mod, only: exchange_control_type
 use  physics_types_mod, only: physics_control_type
 
-use   shallow_conv_mod, only: shallow_conv_init, shallow_conv
-
 use stable_bl_turb_mod, only: stable_bl_turb_init, stable_bl_turb
 
 use        entrain_mod, only: entrain_init, entrain, entrain_end
@@ -87,7 +85,6 @@ logical            :: module_is_initialized = .false.
 !-----------------------------------------------------------------------
 !-------------------- namelist -----------------------------------------
 
- logical :: do_shallow_conv  = .false.
  logical :: do_tke_turb      = .false.
  logical :: do_stable_bl     = .false.
  logical :: do_entrain    = .false.
@@ -115,8 +112,7 @@ logical            :: module_is_initialized = .false.
                                              ! and ( diff_m_stab > diff_min  or diff_t_stab > diff_min)
 !<--h1g, 2012-07-16 
  
- namelist /vert_turb_driver_nml/ do_shallow_conv, &
-                                 do_tke_turb, &
+ namelist /vert_turb_driver_nml/ do_tke_turb, &
                                  gust_scheme, constant_gust, &
                                  do_stable_bl, &
                                  do_entrain, &
@@ -126,7 +122,7 @@ logical            :: module_is_initialized = .false.
 !-------------------- diagnostics fields -------------------------------
 
 integer :: id_tke,    id_lscale, id_lscale_0, id_z_pbl, id_gust,  &
-           id_diff_t, id_diff_m, id_diff_sc, id_z_full, id_z_half,&
+           id_diff_t, id_diff_m, id_z_full, id_z_half,            &
            id_uwnd,   id_vwnd,   id_diff_t_stab, id_diff_m_stab,  &
            id_diff_t_entr, id_diff_m_entr,                        &
            id_z_Ri_025, id_tref, id_qref, id_rh_Ri_025  ! cjg: PBL depth mods, h1g, add RH diagnostics at Ri_025, 2015-04-02
@@ -189,8 +185,7 @@ real   , dimension(size(t,1),size(t,2),size(t,3))   :: RH_3D_tmp   ! h1g: 3D rel
 
 real   , dimension(size(t,1),size(t,2))             :: el0, vspblcap
 real   , dimension(size(diff_t,1),size(diff_t,2), &
-                                  size(diff_t,3))   :: diff_sc,     &
-                                                       diff_t_stab, &
+                                  size(diff_t,3))   :: diff_t_stab, &
                                                        diff_m_stab, &
        diff_t_entr, &
        diff_m_entr, &
@@ -405,14 +400,6 @@ end if
     endif
    
 !-----------------------------------------------------------------------
-!------------------ shallow convection ???? ----------------------------
-
-   if (do_shallow_conv) then
-        call shallow_conv (tt, qq, p_full, p_half, diff_sc, kbot)
-        diff_t = diff_t + diff_sc
-   endif
-
-!-----------------------------------------------------------------------
 !------------- define gustiness ------------
 
      if ( trim(gust_scheme) == 'constant' ) then
@@ -513,7 +500,7 @@ end if
 
 !------- output diffusion coefficients ---------
 
-  if ( id_diff_t > 0 .or. id_diff_m > 0 .or. id_diff_sc > 0 .or. &
+  if ( id_diff_t > 0 .or. id_diff_m > 0 .or.                     &
        id_diff_t_stab > 0 .or. id_diff_m_stab > 0 .or.           &
        id_diff_t_entr > 0 .or. id_diff_m_entr > 0 .or.           &
        query_cmip_diag_id(ID_edt) .or. query_cmip_diag_id(ID_evu) ) then
@@ -542,14 +529,6 @@ end if
       if (id_diff_m > 0) used = send_data ( id_diff_m, diag3, Time_next, is, js, 1, mask=lmask )
       if (query_cmip_diag_id(ID_evu)) used = send_cmip_data_3d (ID_evu, diag3, Time_next, is, js, 1, mask=lmask)
    endif
-
-!------- diffusion coefficient for shallow conv -------
- if (do_shallow_conv) then
-   if ( id_diff_sc > 0 ) then
-      diag3(:,:,1:nlev) = diff_sc(:,:,1:nlev)
-      used = send_data ( id_diff_sc, diag3, Time_next, is, js, 1, mask=lmask)
-   endif
- endif
 
 !------- diffusion coefficients for stable boudary layer -------
    if (do_stable_bl) then
@@ -724,8 +703,6 @@ subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
         call tke_turb_init (lonb, latb, axes, Time, id, jd, kd)
       end if
 
-      if (do_shallow_conv)  call shallow_conv_init (kd)
-
       if (do_stable_bl)     call stable_bl_turb_init ( axes, Time )
 
       if (do_entrain)       call entrain_init (lonb, latb, axes,Time,id,jd,kd)
@@ -820,16 +797,7 @@ endif
                       'Eddy Diffusivity Coefficient for Temperature Variable', 'm2 s-1', &
                        standard_name='atmosphere_heat_diffusivity', &
                        interp_method = 'conserve_order1', axis='half' )
-                     
-
-if (do_shallow_conv) then
-
-   id_diff_sc = &
-   register_diag_field ( mod_name, 'diff_sc', axes(half), Time,      &
-                        'vert diff coeff for shallow conv', 'm2/s' , &
-                        missing_value=missing_value               )
-endif
-
+ 
 if (do_stable_bl) then
   id_diff_t_stab = &
     register_diag_field ( mod_name, 'diff_t_stab', axes(half), Time,       &

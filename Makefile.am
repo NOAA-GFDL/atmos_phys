@@ -124,7 +124,6 @@ libatmos_phys_la_SOURCES = ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.F9
     ${top_srcdir}/atmos_param/lscloud_driver/lscloud_driver.F90 \
     ${top_srcdir}/atmos_param/lscloud_driver/polysvp.F90 \
     ${top_srcdir}/atmos_param/lscloud_driver/check_nan.F90 \
-    ${top_srcdir}/atmos_param/shallow_conv/shallow_conv.F90 \
     ${top_srcdir}/atmos_param/stable_bl_turb/stable_bl_turb.F90 \
     ${top_srcdir}/atmos_param/microphysics/morrison_gettelman_microp.F90 \
     ${top_srcdir}/atmos_param/microphysics/gamma_mg.F90 \
@@ -741,7 +740,6 @@ ${top_builddir}/atmos_param/lscloud_driver/polysvp.lo: ${top_srcdir}/atmos_param
      ${top_srcdir}/atmos_param/lscloud_driver/lscloud_constants.lo \
      ${top_srcdir}/atmos_param/lscloud_driver/lscloud_types.lo
 ${top_builddir}/atmos_param/lscloud_driver/check_nan.lo: ${top_srcdir}/atmos_param/lscloud_driver/check_nan.F90
-${top_builddir}/atmos_param/shallow_conv/shallow_conv.lo: ${top_srcdir}/atmos_param/shallow_conv/shallow_conv.F90
 ${top_builddir}/atmos_param/stable_bl_turb/stable_bl_turb.lo: ${top_srcdir}/atmos_param/stable_bl_turb/stable_bl_turb.F90
 ${top_builddir}/atmos_param/microphysics/morrison_gettelman_microp.lo: ${top_srcdir}/atmos_param/microphysics/morrison_gettelman_microp.F90 \
      ${top_srcdir}/atmos_param/lscloud_driver/polysvp.lo \
@@ -1408,7 +1406,6 @@ ${top_builddir}/atmos_param/vert_turb_driver/vert_turb_driver.lo: ${top_srcdir}/
      ${top_srcdir}/atmos_param/tke_turb/tke_turb.lo \
      ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo \
      ${top_srcdir}/atmos_param/physics_driver/physics_types.lo \
-     ${top_srcdir}/atmos_param/shallow_conv/shallow_conv.lo \
      ${top_srcdir}/atmos_param/stable_bl_turb/stable_bl_turb.lo \
      ${top_srcdir}/atmos_param/entrain/entrain.lo \
      ${top_srcdir}/atmos_param/moist_processes/moist_processes_utils.lo \
@@ -1602,7 +1599,6 @@ lscloud_types_mod.mod: ${top_srcdir}/atmos_param/lscloud_driver/lscloud_types.lo
 lscloud_driver_mod.mod: ${top_srcdir}/atmos_param/lscloud_driver/lscloud_driver.lo
 polysvp_mod.mod: ${top_srcdir}/atmos_param/lscloud_driver/polysvp.lo
 check_nan_mod.mod: ${top_srcdir}/atmos_param/lscloud_driver/check_nan.lo
-shallow_conv_mod.mod: ${top_srcdir}/atmos_param/shallow_conv/shallow_conv.lo
 stable_bl_turb_mod.mod: ${top_srcdir}/atmos_param/stable_bl_turb/stable_bl_turb.lo
 morrison_gettelman_microp_mod.mod: ${top_srcdir}/atmos_param/microphysics/morrison_gettelman_microp.lo
 gamma_mg_mod.mod: ${top_srcdir}/atmos_param/microphysics/gamma_mg.lo
@@ -1901,7 +1897,6 @@ include_HEADERS = atmos_nudge_mod.mod \
     lscloud_driver_mod.mod \
     polysvp_mod.mod \
     check_nan_mod.mod \
-    shallow_conv_mod.mod \
     stable_bl_turb_mod.mod \
     morrison_gettelman_microp_mod.mod \
     gamma_mg_mod.mod \
