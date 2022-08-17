@@ -11,8 +11,6 @@ module vert_turb_driver_mod
 !---------------- modules ---------------------
 
 
-use       tke_turb_mod, only: tke_turb_init, tke_turb_end, tke_turb
-
 use physics_radiation_exch_mod, only: exchange_control_type
 use  physics_types_mod, only: physics_control_type
 
@@ -65,19 +63,13 @@ logical            :: module_is_initialized = .false.
 !-----------------------------------------------------------------------
  real, parameter :: p00    = 1000.0E2
  real, parameter :: p00inv = 1./p00
- real, parameter :: d622   = rdgas/rvgas
- real, parameter :: d378   = 1.-d622
- real, parameter :: d608   = d378/d622
 
 !---------------- private data -------------------
 
  real :: gust_zi = 1000.   ! constant for computed gustiness (meters)
 
  integer :: nql, nqi, nqa    !  tracer indices for stratiform clouds
- integer :: ntke             !  tracer index for TKE
  integer :: ntp              !  number of prognostic tracers
-
- integer         :: outunit
 
  logical :: doing_prog_clouds
  logical :: use_tau
@@ -85,7 +77,6 @@ logical            :: module_is_initialized = .false.
 !-----------------------------------------------------------------------
 !-------------------- namelist -----------------------------------------
 
- logical :: do_tke_turb      = .false.
  logical :: do_stable_bl     = .false.
  logical :: do_entrain    = .false.
 
@@ -112,8 +103,7 @@ logical            :: module_is_initialized = .false.
                                              ! and ( diff_m_stab > diff_min  or diff_t_stab > diff_min)
 !<--h1g, 2012-07-16 
  
- namelist /vert_turb_driver_nml/ do_tke_turb, &
-                                 gust_scheme, constant_gust, &
+ namelist /vert_turb_driver_nml/ gust_scheme, constant_gust, &
                                  do_stable_bl, &
                                  do_entrain, &
                                  gust_factor, wp2_min, &
@@ -121,7 +111,7 @@ logical            :: module_is_initialized = .false.
 
 !-------------------- diagnostics fields -------------------------------
 
-integer :: id_tke,    id_lscale, id_lscale_0, id_z_pbl, id_gust,  &
+integer :: id_z_pbl, id_gust,                                     &
            id_diff_t, id_diff_m, id_z_full, id_z_half,            &
            id_uwnd,   id_vwnd,   id_diff_t_stab, id_diff_m_stab,  &
            id_diff_t_entr, id_diff_m_entr,                        &
@@ -147,7 +137,7 @@ subroutine vert_turb_driver (is, js, Time, Time_next, dt, tdtlw,       &
                              lat, convect,                             &
                              u, v, t, q, r, um, vm, tm, qm, rm, rdiag, &
                              udt, vdt, tdt, qdt, rdt, diff_t, diff_m,  &
-                             gust, z_pbl, mask, kbot, tke_avg          )  ! h1g: output averaged TKE within PBL  
+                             gust, z_pbl, mask, kbot )  ! h1g: output averaged TKE within PBL  
 
 !-----------------------------------------------------------------------
 integer,         intent(in)         :: is, js
@@ -167,23 +157,16 @@ logical, intent(in), dimension(:,:) :: convect
    real, intent(in),optional, dimension(:,:,:) :: mask
 integer, intent(in),optional, dimension(:,:) :: kbot
 
-!---> h1g, 2015-08-11
-  real, intent(out), optional, dimension(:,:) :: tke_avg  !averaged TKE within PBL
-!<--- h1g, 2015-08-11
-
 !-----------------------------------------------------------------------
-real   , dimension(size(t,1),size(t,2),size(t,3))   :: ape, thv
 logical, dimension(size(t,1),size(t,2),size(t,3)+1) :: lmask
-real   , dimension(size(t,1),size(t,2),size(t,3)+1) :: el, diag3
-real   , dimension(size(t,1),size(t,2),size(t,3)+1) :: tke
-real   , dimension(size(t,1),size(t,2))             :: stbltop
+real   , dimension(size(t,1),size(t,2),size(t,3)+1) :: diag3
 real   , dimension(size(t,1),size(t,2))             :: z_Ri_025    ! cjg: PBL depth mods
 
 real   , dimension(size(t,1),size(t,2))             :: RH_Ri_025   ! h1g: relative humidity at Ri_025, 2015-04-02
 
 real   , dimension(size(t,1),size(t,2),size(t,3))   :: RH_3D_tmp   ! h1g: 3D relative humidity, 2015-04-02
 
-real   , dimension(size(t,1),size(t,2))             :: el0, vspblcap
+real   , dimension(size(t,1),size(t,2))             :: vspblcap
 real   , dimension(size(diff_t,1),size(diff_t,2), &
                                   size(diff_t,3))   :: diff_t_stab, &
                                                        diff_m_stab, &
@@ -192,7 +175,6 @@ real   , dimension(size(diff_t,1),size(diff_t,2), &
        use_entr
 real   , dimension(size(t,1),size(t,2),size(t,3))   :: tt, qq, uu, vv
 real   , dimension(size(t,1),size(t,2),size(t,3))   :: qlin, qiin, qain
-real    :: dt_tke
 integer :: ie, je, nlev, sec, day, nt
 integer :: i,j,kk
 logical :: used
@@ -215,7 +197,6 @@ real   , dimension(size(diff_t,1),size(diff_t,2), &
      ie = is + size(p_full,1) - 1
      je = js + size(p_full,2) - 1
 
-     if ( present(tke_avg) ) tke_avg = 0.0   ! h1g, 2015-08-11
 !-----------------------------------------------------------------------
 !---- set up state variable used by this module ----
 
@@ -262,74 +243,12 @@ real   , dimension(size(diff_t,1),size(diff_t,2), &
 
    diff_t = 0.0
    diff_m = 0.0
-   el     = 0.0
-   el0    = 0.0
    z_pbl = -999.0
    
 !-------------------------------------------------------------------
 ! initiallize variables   
    vspblcap = 0.0   
    
-!---------------------------
- if (do_tke_turb) then
-!---------------------------
-
-!-->cjg debug
-!100 format("BEFORE TURB:",A32," = ",Z20)
-!  outunit = stdout()
-! write(outunit,100) 't                ', mpp_chksum(t)
-! write(outunit,100) 'q                ', mpp_chksum(q)
-! write(outunit,100) 'z_full           ', mpp_chksum(z_full)
-! write(outunit,100) 'z_half           ', mpp_chksum(z_half)
-! write(outunit,100) 'qa               ', mpp_chksum(rdiag(:,:,:,nqa))
-! write(outunit,100) 'tke              ', mpp_chksum(rdiag(:,:,:,ntke))
-! write(outunit,100) 'el0              ', mpp_chksum(el0)
-! write(outunit,100) 'el               ', mpp_chksum(el)
-! write(outunit,100) 'diff_m           ', mpp_chksum(diff_m)
-! write(outunit,100) 'diff_t           ', mpp_chksum(diff_t)
-! write(outunit,100) 'z_pbl            ', mpp_chksum(z_pbl)
-!<--cjg debug
-
-!    ----- time step for prognostic tke calculation -----
-     call get_time (Time_next-Time, sec, day)
-     dt_tke = real(sec+day*86400)
-
-!    --------------------- update tke-----------------------------------
-!    ---- compute tke, master length scale (el0),  -------------
-!    ---- length scale (el), and vert mix coeffs (diff_t,diff_m) ----
-
-     if( present(tke_avg) ) then
-      call tke_turb (is, ie, js, je, Time_next, dt_tke, frac_land,      &
-                     p_half, p_full, z_half, z_full,                    &
-                     tt, qq, qain, qlin, qiin, uu, vv,                  &
-                     rough, u_star, b_star,                             &
-                     rdiag(:,:,:,ntke),                                 &
-                     el0, el, diff_m, diff_t, z_pbl, tke_avg=tke_avg)
-     else
-      call tke_turb (is, ie, js, je, Time_next, dt_tke, frac_land,      &
-                     p_half, p_full, z_half, z_full,                    &
-                     tt, qq, qain, qlin, qiin, uu, vv,                  &
-                     rough, u_star, b_star,                             &
-                     rdiag(:,:,:,ntke),                                 &
-                     el0, el, diff_m, diff_t, z_pbl)
-     endif   ! h1g, 2015-08-11
-!-->cjg debug
-!101 format("AFTER TURB: ",A32," = ",Z20)
-!  outunit = stdout()
-! write(outunit,101) 't                ', mpp_chksum(t)
-! write(outunit,101) 'q                ', mpp_chksum(q)
-! write(outunit,101) 'z_full           ', mpp_chksum(z_full)
-! write(outunit,101) 'z_half           ', mpp_chksum(z_half)
-! write(outunit,101) 'qa               ', mpp_chksum(rdiag(:,:,:,nqa))
-! write(outunit,101) 'tke              ', mpp_chksum(rdiag(:,:,:,ntke))
-! write(outunit,101) 'el0              ', mpp_chksum(el0)
-! write(outunit,101) 'el               ', mpp_chksum(el)
-! write(outunit,101) 'diff_m           ', mpp_chksum(diff_m)
-! write(outunit,101) 'diff_t           ', mpp_chksum(diff_t)
-! write(outunit,101) 'z_pbl            ', mpp_chksum(z_pbl)
-!<--cjg debug
-
-end if
 !------------------------------------------------------------------
 ! --- boundary layer entrainment parameterization
 
@@ -415,36 +334,6 @@ end if
 
 !-----------------------------------------------------------------------
 !------------------------ diagnostics section --------------------------
-
-if (do_tke_turb) then
-
-!     --- set up local mask for fields with surface data ---
-      if ( present(mask) ) then
-         lmask(:,:,1)        = .true.
-         lmask(:,:,2:nlev+1) = mask(:,:,1:nlev) > 0.5
-      else
-         lmask = .true.
-      endif
-
-!------- tke --------------------------------
-      if ( id_tke > 0 ) then
-         call get_tke(is,ie,js,je,tke)
-         used = send_data ( id_tke, tke, Time_next, is, js, 1, &
-                            mask=lmask )
-      endif
-
-!------- length scale (at half levels) ------
-      if ( id_lscale > 0 ) then
-         used = send_data ( id_lscale, el, Time_next, is, js, 1,  &
-                            mask=lmask )
-      endif
-
-!------- master length scale -------
-      if ( id_lscale_0 > 0 ) then
-         used = send_data ( id_lscale_0, el0, Time_next, is, js )
-      endif
-
-end if
 
 !-->cjg: addition for new PBL depth diagnostic
 
@@ -695,14 +584,6 @@ subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
 
 !----------------------------------------------------------------------
 
-      if (do_tke_turb) then
-        ntke = get_tracer_index ( MODEL_ATMOS, 'tke' )
-        ! tke must be a diagnostic tracer
-        if (ntke <= ntp) call error_mesg ('vert_turb_driver_mod', &
-                    'tke can not be a prognostic tracer', FATAL)
-        call tke_turb_init (lonb, latb, axes, Time, id, jd, kd)
-      end if
-
       if (do_stable_bl)     call stable_bl_turb_init ( axes, Time )
 
       if (do_entrain)       call entrain_init (lonb, latb, axes,Time,id,jd,kd)
@@ -727,23 +608,6 @@ subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
    register_diag_field ( mod_name, 'z_half', axes(half), Time,    &
         'geopotential height relative to surface at half levels', &
         'meters' , missing_value=missing_value    )
-
-if (do_tke_turb) then
-
-   id_tke = &
-   register_diag_field ( mod_name, 'tke', axes(half), Time,      &
-                        'turbulent kinetic energy',  'm2/s2'   , &
-                        missing_value=missing_value               )
-
-   id_lscale = &
-   register_diag_field ( mod_name, 'lscale', axes(half), Time,    &
-                        'turbulent length scale',  'm'   ,        &
-                        missing_value=missing_value               )
-
-   id_lscale_0 = &
-   register_diag_field ( mod_name, 'lscale_0', axes(1:2), Time,   &
-                        'master length scale',  'm'               )
-endif
 
    id_z_pbl = &
    register_diag_field ( mod_name, 'z_pbl', axes(1:2), Time,       &
@@ -860,7 +724,6 @@ end subroutine vert_turb_driver_init
 subroutine vert_turb_driver_end
 
 !-----------------------------------------------------------------------
-      if (do_tke_turb)      call tke_turb_end
       if (do_entrain) call entrain_end
       module_is_initialized =.false.
 
@@ -923,7 +786,6 @@ real, dimension(size(t,3)) :: Ri
 ! Constants
 real, parameter :: eps = 1.0e-8
 real, parameter :: Ri_crit = 0.25
-real, parameter :: p00 = 1000.0e2
 
 !-----------------------------------------------------------------------
 
@@ -1029,7 +891,6 @@ real, dimension(size(t,3)+1) :: Ri, z
 ! Constants
 real, parameter :: eps = 1.0e-8
 real, parameter :: Ri_crit = 0.25
-real, parameter :: p00 = 1000.0e2
 
 !-----------------------------------------------------------------------
 

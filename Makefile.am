@@ -203,7 +203,6 @@ libatmos_phys_la_SOURCES = ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.F9
     ${top_srcdir}/atmos_param/donner_deep/wet_deposition_0D.F90 \
     ${top_srcdir}/atmos_param/donner_deep/cumulus_closure_k.F90 \
     ${top_srcdir}/atmos_param/dry_adj/dry_adj.F90 \
-    ${top_srcdir}/atmos_param/tke_turb/tke_turb.F90 \
     ${top_srcdir}/atmos_param/mg_drag/mg_drag.F90 \
     ${top_srcdir}/atmos_param/clubb/alt_cloud.F90 \
     ${top_srcdir}/atmos_param/clubb/advance_sclrm_Nd_module.F90 \
@@ -998,7 +997,6 @@ ${top_builddir}/atmos_param/donner_deep/wet_deposition_0D.lo: ${top_srcdir}/atmo
 ${top_builddir}/atmos_param/donner_deep/cumulus_closure_k.lo: ${top_srcdir}/atmos_param/donner_deep/cumulus_closure_k.F90 \
      ${top_srcdir}/atmos_param/donner_deep/donner_types.lo
 ${top_builddir}/atmos_param/dry_adj/dry_adj.lo: ${top_srcdir}/atmos_param/dry_adj/dry_adj.F90
-${top_builddir}/atmos_param/tke_turb/tke_turb.lo: ${top_srcdir}/atmos_param/tke_turb/tke_turb.F90
 ${top_builddir}/atmos_param/mg_drag/mg_drag.lo: ${top_srcdir}/atmos_param/mg_drag/mg_drag.F90
 ${top_builddir}/atmos_param/clubb/alt_cloud.lo: ${top_srcdir}/atmos_param/clubb/alt_cloud.F90
 ${top_builddir}/atmos_param/clubb/advance_sclrm_Nd_module.lo: ${top_srcdir}/atmos_param/clubb/advance_sclrm_Nd_module.F90 \
@@ -1403,7 +1401,6 @@ ${top_builddir}/atmos_param/clubb/CLUBB_core/variables_diagnostic_module.lo: ${t
      ${top_srcdir}/atmos_param/clubb/CLUBB_core/constants_clubb.lo \
      ${top_srcdir}/atmos_param/clubb/CLUBB_core/parameters_model.lo
 ${top_builddir}/atmos_param/vert_turb_driver/vert_turb_driver.lo: ${top_srcdir}/atmos_param/vert_turb_driver/vert_turb_driver.F90 \
-     ${top_srcdir}/atmos_param/tke_turb/tke_turb.lo \
      ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo \
      ${top_srcdir}/atmos_param/physics_driver/physics_types.lo \
      ${top_srcdir}/atmos_param/stable_bl_turb/stable_bl_turb.lo \
@@ -1657,7 +1654,6 @@ fms_donner_mod.mod: ${top_srcdir}/atmos_param/donner_deep/fms_donner.lo
 nonfms_donner_mod.mod: ${top_srcdir}/atmos_param/donner_deep/nonfms_donner.lo
 donner_types_mod.mod: ${top_srcdir}/atmos_param/donner_deep/donner_types.lo
 dry_adj_mod.mod: ${top_srcdir}/atmos_param/dry_adj/dry_adj.lo
-tke_turb_mod.mod: ${top_srcdir}/atmos_param/tke_turb/tke_turb.lo
 mg_drag_mod.mod: ${top_srcdir}/atmos_param/mg_drag/mg_drag.lo
 alt_cloud_mod.mod: ${top_srcdir}/atmos_param/clubb/alt_cloud.lo
 advance_sclrm_nd_module.mod: ${top_srcdir}/atmos_param/clubb/advance_sclrm_Nd_module.lo
@@ -1955,7 +1951,6 @@ include_HEADERS = atmos_nudge_mod.mod \
     nonfms_donner_mod.mod \
     donner_types_mod.mod \
     dry_adj_mod.mod \
-    tke_turb_mod.mod \
     mg_drag_mod.mod \
     alt_cloud_mod.mod \
     advance_sclrm_nd_module.mod \

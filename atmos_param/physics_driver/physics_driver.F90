@@ -441,13 +441,13 @@ integer, dimension(8) :: restart_versions = (/ 1, 2, 3, 4, 5, 6, 7, 8 /)
 real,    dimension(:,:,:), allocatable,target :: diff_cu_mo, diff_t, diff_m
 real,    dimension(:,:,:), allocatable,target :: radturbten
 real,    dimension(:,:)  , allocatable,target :: pbltop, cush, cbmf
-real,    dimension(:,:)  , allocatable,target :: hmint, cgust, tke 
+real,    dimension(:,:)  , allocatable,target :: hmint, cgust
 real,    dimension(:,:)  , allocatable,target :: pblhto, rkmo, taudpo
 logical, dimension(:,:)  , allocatable,target :: convect
 integer, dimension(:,:,:), allocatable,target :: exist_shconv, exist_dpconv
 real,    dimension(:,:,:), allocatable,target :: pblht_prev, hlsrc_prev, &
                                                  qtsrc_prev, cape_prev,  &
-                                                 cin_prev, tke_prev !miz
+                                                 cin_prev
 real,    dimension(:,:,:), allocatable,target ::  diff_t_clubb
 
 real,    dimension(:,:,:), allocatable        :: temp_last, q_last
@@ -967,7 +967,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       allocate ( cbmf       (id, jd) )     ; cbmf=0.0 !miz
       allocate ( hmint      (id, jd) )     ; hmint=0. !miz
       allocate ( cgust      (id, jd) )     ; cgust=0.0 !miz
-      allocate ( tke        (id, jd) )     ; tke  =0.0 !miz
       allocate ( pblhto     (id, jd) )     ; pblhto=0.0 !miz
       allocate ( rkmo       (id, jd) )     ; rkmo=15.0 !miz
       allocate ( taudpo     (id, jd) )     ; taudpo=28800.    !miz
@@ -978,7 +977,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       allocate ( qtsrc_prev  (id, jd,48) ) ; qtsrc_prev   = 0.!miz
       allocate ( cape_prev   (id, jd,48) ) ; cape_prev    = 0.!miz
       allocate ( cin_prev    (id, jd,48) ) ; cin_prev     = 0.!miz
-      allocate ( tke_prev    (id, jd,48) ) ; tke_prev     = 0.!miz
 
       allocate ( convect    (id, jd) )     ; convect = .false.
       allocate ( radturbten (id, jd, kd))  ; radturbten = 0.0
@@ -1078,7 +1076,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       write(outunit,100) 'cbmf                   ', mpp_chksum(cbmf                  )
       write(outunit,100) 'hmint                  ', mpp_chksum(hmint                 )
       write(outunit,100) 'cgust                  ', mpp_chksum(cgust                 )
-      write(outunit,100) 'tke                    ', mpp_chksum(tke                   )
       write(outunit,100) 'pblhto                 ', mpp_chksum(pblhto                )
       write(outunit,100) 'rkmo                   ', mpp_chksum(rkmo                  )
       write(outunit,100) 'taudpo                 ', mpp_chksum(taudpo                )
@@ -1089,7 +1086,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       write(outunit,100) 'qtsrc_prev             ', mpp_chksum(qtsrc_prev            )
       write(outunit,100) 'cape_prev              ', mpp_chksum(cape_prev             )
       write(outunit,100) 'cin_prev               ', mpp_chksum(cin_prev              )
-      write(outunit,100) 'tke_prev               ', mpp_chksum(tke_prev              )
       write(outunit,100) 'diff_t                 ', mpp_chksum(diff_t                )
       write(outunit,100) 'diff_m                 ', mpp_chksum(diff_m                )
       write(outunit,100) 'r_convect              ', mpp_chksum(r_convect             )
@@ -1753,10 +1749,6 @@ real,  dimension(:,:,:), intent(out)  ,optional :: diffm, difft
       real                                   :: dt, alpha, dt2
       logical                                :: used
 
-!---> h1g, 2015-08-11
-      real, dimension(ie-is+1,je-js+1) :: tke_avg
-!<--- h1g, 2015-08-11
-
 !---------------------------------------------------------------------
 !   local variables:
 !
@@ -1906,10 +1898,9 @@ real,  dimension(:,:,:), intent(out)  ,optional :: diffm, difft
                              u, v, t, r(:,:,:,1), r, um, vm,                  &
                              tm, rm(:,:,:,1), rm, rdiag,                      &
                              udt, vdt, tdt, rdt(:,:,:,1), rdt,                &
-                             diff_t_vert, diff_m_vert, gust, z_pbl, tke_avg = tke_avg)
+                             diff_t_vert, diff_m_vert, gust, z_pbl)
      call mpp_clock_end ( turb_clock )
      pbltop(is:ie,js:je) = z_pbl(:,:)
-     tke   (is:ie,js:je) = tke_avg(:,:)
 
       if (id_tdt_phys_turb > 0) then
         used = send_data ( id_tdt_phys_turb, +2.0*tdt(:,:,:), &
@@ -2497,7 +2488,6 @@ real,dimension(:,:),    intent(inout)             :: gust
         Phys_mp_exch%qdt_lhf    => qdt_lhf 
         Phys_mp_exch%hmint      => hmint     (is:ie,js:je  )
         Phys_mp_exch%cgust      => cgust    (is:ie,js:je  )
-        Phys_mp_exch%tke        => tke       (is:ie,js:je  )
         Phys_mp_exch%pblhto     => pblhto    (is:ie,js:je  )
         Phys_mp_exch%rkmo       => rkmo      (is:ie,js:je  )
         Phys_mp_exch%taudpo     => taudpo    (is:ie,js:je  )
@@ -2508,7 +2498,6 @@ real,dimension(:,:),    intent(inout)             :: gust
         Phys_mp_exch%qtsrc_prev    => pblht_prev   (is:ie,js:je,:)
         Phys_mp_exch%cape_prev     => pblht_prev   (is:ie,js:je,:)
         Phys_mp_exch%cin_prev      => pblht_prev   (is:ie,js:je,:)
-        Phys_mp_exch%tke_prev      => pblht_prev   (is:ie,js:je,:)
 
 !-----------------------------------------------------------------------
 !    call moist processes to compute moist physics, including convection 
@@ -2743,7 +2732,6 @@ real,dimension(:,:),    intent(inout)             :: gust
       Phys_mp_exch%qdt_lhf => null()
       Phys_mp_exch%hmint   => null()
       Phys_mp_exch%cgust   => null()
-      Phys_mp_exch%tke     => null()
       Phys_mp_exch%pblhto  => null()
       Phys_mp_exch%rkmo    => null()
       Phys_mp_exch%taudpo  => null()
@@ -2754,7 +2742,6 @@ real,dimension(:,:),    intent(inout)             :: gust
       Phys_mp_exch%qtsrc_prev   => null()
       Phys_mp_exch%cape_prev   => null()
       Phys_mp_exch%cin_prev   => null()
-      Phys_mp_exch%tke_prev   => null()
 
 !-----------------------------------------------------------------------
 
@@ -2925,9 +2912,9 @@ integer :: moist_processes_term_clock, damping_term_clock, turb_term_clock, &
 !    deallocate the module variables.
 !---------------------------------------------------------------------
       deallocate (diff_cu_mo, diff_t, diff_m, pbltop, cush, cbmf,  &
-                  hmint, cgust, tke, pblhto, rkmo, taudpo, exist_shconv, &  ! h1g, 2017-01-31
+                  hmint, cgust, pblhto, rkmo, taudpo, exist_shconv, &  ! h1g, 2017-01-31
                   exist_dpconv, & 
-                  pblht_prev, hlsrc_prev, qtsrc_prev, cape_prev, cin_prev, tke_prev, & !h1g, 2017-01-31
+                  pblht_prev, hlsrc_prev, qtsrc_prev, cape_prev, cin_prev, & !h1g, 2017-01-31
                   convect, radturbten, r_convect)
 
       if (do_cosp) then
@@ -3264,7 +3251,6 @@ subroutine physics_driver_register_restart_domain (Restart, Til_restart)
   call register_restart_field(Til_restart, 'cbmf',       cbmf, dim_names_3d, is_optional = .true.)
   call register_restart_field(Til_restart, 'hmint',      hmint, dim_names_3d, is_optional = .true.)
   call register_restart_field(Til_restart, 'cgust',      cgust, dim_names_3d, is_optional = .true.)
-  call register_restart_field(Til_restart, 'tke',        tke, dim_names_3d, is_optional = .true.)
   call register_restart_field(Til_restart, 'pblhto',     pblhto, dim_names_3d, is_optional = .true.)
   call register_restart_field(Til_restart, 'rkmo',       rkmo, dim_names_3d, is_optional = .true.)
   call register_restart_field(Til_restart, 'taudpo',     taudpo, dim_names_3d, is_optional = .true.)
@@ -3275,7 +3261,6 @@ subroutine physics_driver_register_restart_domain (Restart, Til_restart)
   call register_restart_field(Til_restart, 'qtsrc_prev',   qtsrc_prev, dim_names_4d2, is_optional = .true.)
   call register_restart_field(Til_restart, 'cape_prev',    cape_prev, dim_names_4d2, is_optional = .true.)
   call register_restart_field(Til_restart, 'cin_prev',     cin_prev, dim_names_4d2, is_optional = .true.)
-  call register_restart_field(Til_restart, 'tke_prev',     tke_prev, dim_names_4d2, is_optional = .true.)
   call register_restart_field(Til_restart, 'diff_t',     diff_t, dim_names_4d)
   call register_restart_field(Til_restart, 'diff_m',     diff_m, dim_names_4d)
   call register_restart_field(Til_restart, 'convect',    r_convect, dim_names_3d)
