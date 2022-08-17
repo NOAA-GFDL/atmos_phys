@@ -33,7 +33,7 @@ use physics_radiation_exch_mod, only : exchange_control_type
 !   atmos param module
 
 use cloud_rad_mod,       only: cloud_rad_init, cloud_summary3, &
-                               lw_emissivity, sw_optical_properties, &
+                               lw_emissivity, &
                                snow_and_rain
 
 !   cloud radiation shared module
@@ -74,7 +74,7 @@ character(len=128)  :: tagname =  '$Name$'
 
 public          &
           strat_clouds_W_init, strat_clouds_amt, obtain_bulk_lw_strat, &
-          obtain_bulk_sw_strat, strat_clouds_W_end
+          strat_clouds_W_end
 
 !---------------------------------------------------------------------
 !-------- namelist  ---------
@@ -1018,129 +1018,6 @@ type(cldrad_properties_type), intent(inout) :: Cldrad_props
 
 
 end subroutine obtain_bulk_lw_strat
-
-
-
-!#####################################################################
-! <SUBROUTINE NAME="obtain_bulk_sw_strat">
-!  <OVERVIEW>
-!   obtain_bulk_lw_strat defines bulk shortwave cloud radiative 
-!    properties for the klein strat cloud scheme. 
-!  </OVERVIEW>
-!  <DESCRIPTION>
-!   obtain_bulk_lw_strat defines bulk shortwave cloud radiative 
-!    properties for the klein strat cloud scheme.
-!  </DESCRIPTION>
-!  <TEMPLATE>
-!   call obtain_bulk_sw_strat (is, ie, js, je, cosz, Cld_spec, Cldrad_props)
-!  </TEMPLATE>
-!  <IN NAME="is, ie, js, je" TYPE="integer">
-!   starting/ending subdomain i,j indices of data in
-!                   the physics_window being integrated
-!  </IN>
-!  <IN NAME="cosz" TYPE="real">
-!   cosine of the solar zenith angle
-!  </IN>
-!  <IN NAME="Cld_spec" TYPE="cld_specification_type">
-!   cld_specification_type variable containing the 
-!                   cloud specification input fields needed by the 
-!                   radiation package
-!  </IN>
-!  <INOUT NAME="cldrad_properties" TYPE="microphys_type">
-!   cloud radiative properties on model grid
-!  </INOUT>
-! </SUBROUTINE>
-!
-subroutine obtain_bulk_sw_strat (is, ie, js, je, cosz, Cld_spec,   &
-                                 Cldrad_props)
-
-!---------------------------------------------------------------------
-!    obtain_bulk_sw_strat defines bulk shortwave cloud radiative 
-!    properties for the klein strat cloud scheme.
-!---------------------------------------------------------------------
- 
-integer,                      intent(in)    ::  is, ie, js, je
-real, dimension(:,:),         intent(in)    ::  cosz
-type(cld_specification_type), intent(in)    ::  Cld_spec
-type(cldrad_properties_type), intent(inout) ::  Cldrad_props
- 
-!--------------------------------------------------------------------
-!   intent(in) variables:
-!
-!      is,ie,js,je  starting/ending subdomain i,j indices of data in 
-!                   the physics_window being integrated
-!      cosz         cosine of the zenith angle  [ dimensionless ]
-!      Cld_spec     cloud specification arrays defining the 
-!                   location, amount and type (hi, middle, lo)
-!                   of clouds that are present, provides input 
-!                   to this subroutine
-!                   [ cld_specification_type ]
-!
-!   intent(inout) variables:
-!
-!      Cldrad_props      cloud radiative properties on model grid,
-!                        [ cldrad_properties_type ]
-!
-!               the following components of this variable are output 
-!               from this routine:
-!
-!                    %cirabsw   absorptivity of clouds in the 
-!                               infrared frequency band
-!                               [ dimensionless ]
-!                    %cirrfsw   reflectivity of clouds in the 
-!                               infrared frequency band
-!                               [ dimensionless ]
-!                    %cvisrfsw  reflectivity of clouds in the 
-!                               visible frequency band
-!                               [ dimensionless ]
-!
-!---------------------------------------------------------------------
-
-!-------------------------------------------------------------------
-!   local variables:
-
-      integer   :: max_cld
-
-!---------------------------------------------------------------------  
-!   local variables:
-!
-!          max_cld    maximum number of clouds in any column in the
-!                     window
-!
-!----------------------------------------------------------------------
-
-!---------------------------------------------------------------------
-!    be sure module has been initialized.
-!---------------------------------------------------------------------
-      if (.not. module_is_initialized ) then
-        call error_mesg ('strat_clouds_W_mod',   &
-             'module has not been initialized', FATAL )
-      endif
-
-!---------------------------------------------------------------------
-!   find maximum number of clouds in any column in the window.
-!---------------------------------------------------------------------
-      max_cld  = MAXVAL(Cld_spec%ncldsw(:,:))
-
-!---------------------------------------------------------------------
-!    if cloud is present in the window, call sw_optical_properties to 
-!    compute cloud optical properties and then radiative properties. 
-!    otherwise, leave the arrays with their previously initialized 
-!    values.
-!---------------------------------------------------------------------
-      if (max_cld > 0) then
-        call sw_optical_properties (Cld_spec%ncldsw, Cld_spec%lwp,   &
-                                  Cld_spec%iwp, Cld_spec%reff_liq_lim, &
-                                    Cld_spec%reff_ice_lim, cosz,   &
-                                    Cldrad_props%cvisrfsw, &
-                                    Cldrad_props%cirrfsw,  &
-                                    Cldrad_props%cirabsw)
-      endif   
-
-!-------------------------------------------------------------------
-
-
-end subroutine obtain_bulk_sw_strat
 
 !####################################################################
 ! <SUBROUTINE NAME="strat_clouds_W_end">
