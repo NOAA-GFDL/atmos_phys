@@ -32,7 +32,6 @@ public :: vert_diff_init,          &
           gcm_vert_diff,               &
           gcm_vert_diff_down,          &
           gcm_vert_diff_up,            &
-          vert_diff,                   &
           surf_diff_type
 
 !=======================================================================
@@ -630,46 +629,6 @@ end subroutine gcm_vert_diff
 
 !#######################################################################
 
-subroutine vert_diff (delt, xi, t, q, diff, p_half, p_full, z_full, &
-                      flux, dflux_datmos, factor, dt_xi, kbot)
-
-! one-step diffusion of a single field 
-
-real,    intent(in)                          :: delt
-real,    intent(in)   , dimension(:,:,:)     :: xi, t, q, diff, p_half, p_full, z_full
-real,    intent(inout), dimension(:,:)       :: flux
-real,    intent(in)   , dimension(:,:)       :: dflux_datmos
-real,    intent(in)                          :: factor
-real,    intent(inout), dimension(:,:,:)     :: dt_xi
-
-integer, intent(in)   , dimension(:,:), optional :: kbot
-
-real, dimension(size(xi,1),size(xi,2),size(xi,3)  ) :: mu, nu
-real, dimension(size(xi,1),size(xi,2),size(xi,3)-1) :: e, f
-
-real, dimension(size(xi,1),size(xi,2))  :: mu_delt_n, nu_n, e_n1,  &
-                                           f_delt_n1, delta_xi_n
-
-!-----------------------------------------------------------------------
-
- call compute_mu    (p_half, mu)
-
- call compute_nu    (diff, p_half, p_full, z_full, t, q, nu) 
-
- call vert_diff_down &
-     (delt, mu, nu, xi, dt_xi, e, f, mu_delt_n, nu_n, e_n1,  &
-      f_delt_n1, delta_xi_n, kbot)
-
- call diff_surface (mu_delt_n, nu_n, e_n1, f_delt_n1,     &
-                    dflux_datmos, flux, factor, delta_xi_n)
-
- call vert_diff_up (delt, e, f, delta_xi_n, dt_xi, kbot)
-
-end subroutine vert_diff
-
-
-!#######################################################################
-
 subroutine uv_vert_diff (delt, mu, nu, u, v,  &
                          dtau_du, dtau_dv, tau_u, tau_v, dt_u, dt_v, dt_t, &
                           delta_u_n, delta_v_n, dissipative_heat, kbot )
@@ -859,68 +818,6 @@ character(len=128) :: scheme
 
 end subroutine tr_vert_diff
 
-!#######################################################################
-
-subroutine vert_diff_down &
-      (delt, mu, nu, tr, dt_tr, e, f, mu_delt_n, nu_n,  &
-       e_n1, f_delt_n1, delta_tr_n, kbot)
-
-!-----------------------------------------------------------------------
-
-real,    intent(in)                         :: delt
-real,    intent(in)    , dimension(:,:,:)   :: mu, nu
-real,    intent(in)    , dimension(:,:,:)   :: tr
-real,    intent(inout) , dimension(:,:,:)   :: dt_tr
-real,    intent(out)   , dimension(:,:,:)   :: e
-real,    intent(out)   , dimension(:,:,:)   :: f
-real,    intent(out)   , dimension(:,:)     :: mu_delt_n, nu_n, e_n1
-real,    intent(out)   , dimension(:,:)     :: f_delt_n1, delta_tr_n
-
-integer, intent(in),    dimension(:,:), optional :: kbot
-
-real, dimension(size(tr,1),size(tr,2),size(tr,3)) :: a, b, c, g
-
-integer :: i, j, kb, nlev
-
-!-----------------------------------------------------------------------
-
- call explicit_tend (mu, nu, tr, dt_tr)
-
- call compute_e  (delt, mu, nu, e, a, b, c, g)
-
- call compute_f (dt_tr, b, c, g, f)
-
-
- if (present(kbot)) then
-    do j=1,size(tr,2)
-    do i=1,size(tr,1)
-        kb = kbot(i,j)
-        mu_delt_n(i,j) =  mu(i,j,kb  )*delt
-             nu_n(i,j) =  nu(i,j,kb  )
-             e_n1(i,j) =   e(i,j,kb-1)
-    enddo
-    enddo
-    do j=1,size(tr,2)
-    do i=1,size(tr,1)
-        kb = kbot(i,j)
-         f_delt_n1(i,j) =     f(i,j,kb-1)*delt
-        delta_tr_n(i,j) = dt_tr(i,j,kb  )*delt
-    enddo
-    enddo
- else
-        nlev = size(mu,3)
-        mu_delt_n(:,:) =       mu(:,:,nlev  )*delt
-             nu_n(:,:) =       nu(:,:,nlev  )
-             e_n1(:,:) =        e(:,:,nlev-1)
-        f_delt_n1(:,:) =        f(:,:,nlev-1)*delt
-       delta_tr_n(:,:) =    dt_tr(:,:,nlev  )*delt
- endif
-
-
-
-!-----------------------------------------------------------------------
-
-end subroutine vert_diff_down
 
 !#######################################################################
 
