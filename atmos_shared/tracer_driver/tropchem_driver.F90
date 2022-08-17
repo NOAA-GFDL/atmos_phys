@@ -333,7 +333,8 @@ namelist /tropchem_driver_nml/    &
                                modulate_frac_ic, &
                                min_t_sfc_cld_chem, &
                                NO2_SO2_max, &
-                               scale_emis_field_names, scale_emis_field_values
+                               scale_emis_field_names, scale_emis_field_values, &
+                               do_terpene_emis_bug
 
 
 integer                     :: nco2 = 0
