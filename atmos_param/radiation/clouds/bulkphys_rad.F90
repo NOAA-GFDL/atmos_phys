@@ -33,8 +33,7 @@ use cloudrad_types_mod, only: cld_specification_type, &
                               cloudrad_control_type
 
 use strat_clouds_W_mod,     only: strat_clouds_W_init, &
-                                  obtain_bulk_lw_strat, &
-                                  obtain_bulk_sw_strat
+                                  obtain_bulk_lw_strat
 
 !BW use rh_based_clouds_mod,    only: rh_based_clouds_init, &
 !BW                                   obtain_bulk_sw_rh,   &
@@ -65,7 +64,7 @@ character(len=128)  :: tagname =  '$Name$'
 
 public                                            &
           bulkphys_rad_init, bulkphys_lw_driver,  &
-          bulkphys_sw_driver, bulkphys_rad_end
+          bulkphys_rad_end
 
 !---------------------------------------------------------------------
 !-------- namelist  ---------
@@ -272,147 +271,6 @@ type(cloudrad_control_type), intent(in) :: Cldrad_control
 
 
 end subroutine bulkphys_rad_init
-
-
-!#################################################################
-
-! <SUBROUTINE NAME="bulkphys_sw_driver">
-!  <OVERVIEW>
-!    bulkphys_sw_driver obtains bulk shortwave cloud radiative
-!    properties for the active cloud scheme.
-!   
-!  </OVERVIEW>
-!  <DESCRIPTION>
-!    bulkphys_sw_driver obtains bulk shortwave cloud radiative
-!    properties for the active cloud scheme.
-!   
-!  </DESCRIPTION>
-!  <TEMPLATE>
-!   call bulkphys_sw_driver (is, ie, js, je, cosz, Cld_spec,   &
-!                Cldrad_props)
-!
-!  </TEMPLATE>
-!  <IN NAME="is" TYPE="integer">
-!      is,ie,js,je  starting/ending subdomain i,j indices of data in
-!                   the physics_window being integrated
-! 
-!  </IN>
-!  <IN NAME="ie" TYPE="integer">
-! 
-!  </IN>
-!  <IN NAME="js" TYPE="integer">
-! 
-!  </IN>
-!  <IN NAME="je" TYPE="integer">
-! 
-!  </IN>
-!  <IN NAME="cosz" TYPE="real">
-!      cosz         cosine of the zenith angle [ dimensionless ]
-! 
-!  </IN>
-!  <IN NAME="Cld_spec" TYPE="cld_specification_type">
-!      Cld_spec     cloud specification arrays defining the
-!                   location, amount and type (hi, middle, lo)
-!                   of clouds that are present, provides input
-!                   to this subroutine
-!                   [ cld_specification_type ]
-! 
-!  </IN>
-!  <INOUT NAME="Cldrad_props" TYPE="cldrad_properties_type">
-!      Cldrad_props      cloud radiative properties on model grid,
-!                        [ cldrad_properties_type ]
-!
-!               the following components of this variable are output
-!               from this routine:
-!
-!                    %cirabsw   absorptivity of clouds in the
-!                               infrared frequency band
-!                               [ dimensionless ]
-!                    %cirrfsw   reflectivity of clouds in the
-!                               infrared frequency band
-!                               [ dimensionless ]
-!                    %cvisrfsw  reflectivity of clouds in the
-!                               visible frequency band
-!                               [ dimensionless ]
-! 
-!  </INOUT>
-! </SUBROUTINE>
-!
-subroutine bulkphys_sw_driver (is, ie, js, je, cosz, Cldrad_control, &
-                               Cld_spec, Cldrad_props)
-
-!---------------------------------------------------------------------
-!    bulkphys_sw_driver obtains bulk shortwave cloud radiative 
-!    properties for the active cloud scheme.
-!---------------------------------------------------------------------
- 
-integer,                      intent(in)    :: is, ie, js, je
-real,    dimension(:,:),      intent(in)    :: cosz
-type(cloudrad_control_type),  intent(in)    :: Cldrad_control
-type(cld_specification_type), intent(in)    :: Cld_spec
-type(cldrad_properties_type), intent(inout) :: Cldrad_props
-
-!---------------------------------------------------------------------
-!   intent(in) variables:
-!
-!      is,ie,js,je  starting/ending subdomain i,j indices of data in 
-!                   the physics_window being integrated
-!      cosz         cosine of the zenith angle [ dimensionless ]
-!      Cld_spec     cloud specification arrays defining the 
-!                   location, amount and type (hi, middle, lo)
-!                   of clouds that are present, provides input 
-!                   to this subroutine
-!                   [ cld_specification_type ]
-!
-!   intent(inout) variables:
-!
-!      Cldrad_props      cloud radiative properties on model grid,
-!                        [ cldrad_properties_type ]
-!
-!               the following components of this variable are output 
-!               from this routine:
-!
-!                    %cirabsw   absorptivity of clouds in the 
-!                               infrared frequency band
-!                               [ dimensionless ]
-!                    %cirrfsw   reflectivity of clouds in the 
-!                               infrared frequency band
-!                               [ dimensionless ]
-!                    %cvisrfsw  reflectivity of clouds in the 
-!                               visible frequency band
-!                               [ dimensionless ]
-!
-!---------------------------------------------------------------------
-
-!-------------------------------------------------------------------
-!   local variables:
-
-      integer     ::    i, j, k       ! do-loop indices
-
-!---------------------------------------------------------------------
-!    call obtain_bulk_sw_rh to obtain the cloud-radiative properties 
-!    for rh_based_clouds.
-!---------------------------------------------------------------------
-!BW   if (Cldrad_control%do_rh_clouds) then
-!BW     call obtain_bulk_sw_rh (is, ie, js, je, cosz, Cld_spec,   &
-!BW                             Cldrad_props)
-
-!--------------------------------------------------------------------
-!    call obtain_bulk_sw_strat to define the cloud radiative properties
-!    for the klein prognostic cloud scheme.
-!---------------------------------------------------------------------
-!BW   else if (Cldrad_control%do_strat_clouds) then
-      if (Cldrad_control%do_strat_clouds) then
-        call obtain_bulk_sw_strat (is, ie, js, je, cosz, Cld_spec,   &
-                                   Cldrad_props)
-
-      endif
-
-!----------------------------------------------------------------------
- 
-
-end subroutine bulkphys_sw_driver
-
 
 
 !####################################################################
