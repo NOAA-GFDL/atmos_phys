@@ -254,6 +254,8 @@ integer, parameter :: max_scale_emis_fields = 10
 real               :: scale_emis_field_values(max_scale_emis_fields)
 character(len=64)  :: scale_emis_field_names(max_scale_emis_fields)
 
+logical            :: do_terpene_emis_bug   = .false. !error double counting biogenic terpene emissions
+
 
 type(tropchem_diag),  save :: trop_diag
 type(tropchem_opt),   save :: trop_option
@@ -331,7 +333,8 @@ namelist /tropchem_driver_nml/    &
                                modulate_frac_ic, &
                                min_t_sfc_cld_chem, &
                                NO2_SO2_max, &
-                               scale_emis_field_names, scale_emis_field_values
+                               scale_emis_field_names, scale_emis_field_values, &
+                               do_terpene_emis_bug
 
 
 integer                     :: nco2 = 0
@@ -2061,10 +2064,10 @@ end if
 !-----------------------------------------------------------------------
 !     ... Interactive emissions
 !-----------------------------------------------------------------------
-      if ( trim(tracnam(i))=="DMS") then
-      call init_xactive_emis( MODEL_ATMOS, 'xactive_emissions', indices(i), tracnam(i), &
-                              axes, Time, lonb_mod, latb_mod, phalf, &
-                              has_xactive_emis(i), id_xactive_emis(i), mask )
+      if ( .not. do_terpene_emis_bug .or. trim(tracnam(i))=="DMS" ) then
+         call init_xactive_emis( MODEL_ATMOS, 'xactive_emissions', indices(i), tracnam(i), &
+                                 axes, Time, lonb_mod, latb_mod, phalf, &
+                                 has_xactive_emis(i), id_xactive_emis(i), mask )
       endif
 !-----------------------------------------------------------------------
 !     ... Upper boundary condition
