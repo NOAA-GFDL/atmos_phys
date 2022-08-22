@@ -32,8 +32,7 @@ use cloudrad_types_mod, only: cld_specification_type, &
                               cldrad_properties_type, &
                               cloudrad_control_type
 
-use strat_clouds_W_mod,     only: strat_clouds_W_init, &
-                                  obtain_bulk_lw_strat
+use strat_clouds_W_mod,     only: strat_clouds_W_init
 
 !BW use rh_based_clouds_mod,    only: rh_based_clouds_init, &
 !BW                                   obtain_bulk_sw_rh,   &
@@ -63,7 +62,7 @@ character(len=128)  :: tagname =  '$Name$'
 !-------  interfaces --------
 
 public                                            &
-          bulkphys_rad_init, bulkphys_lw_driver,  &
+          bulkphys_rad_init,                      &
           bulkphys_rad_end
 
 !---------------------------------------------------------------------
@@ -271,135 +270,6 @@ type(cloudrad_control_type), intent(in) :: Cldrad_control
 
 
 end subroutine bulkphys_rad_init
-
-
-!####################################################################
-
-! <SUBROUTINE NAME="bulkphys_lw_driver">
-!  <OVERVIEW>
-!    bulkphys_lw_driver defines bulk longwave cloud radiative
-!    properties for the active cloud scheme.
-!   
-!  </OVERVIEW>
-!  <DESCRIPTION>
-!    bulkphys_lw_driver defines bulk longwave cloud radiative
-!    properties for the active cloud scheme.
-!   
-!  </DESCRIPTION>
-!  <TEMPLATE>
-!   call bulkphys_lw_driver (is, ie, js, je, Cld_spec, Cldrad_props)
-!
-!  </TEMPLATE>
-!  <IN NAME="is" TYPE="integer">
-!      is,ie,js,je  starting/ending subdomain i,j indices of data in
-!                   the physics_window being integrated
-! 
-!  </IN>
-!  <IN NAME="ie" TYPE="integer">
-! 
-!  </IN>
-!  <IN NAME="js" TYPE="integer">
-! 
-!  </IN>
-!  <IN NAME="je" TYPE="integer">
-! 
-!  </IN>
-!  <IN NAME="Cld_spec" TYPE="cld_specification_type">
-!      Cld_spec          cloud specification arrays defining the
-!                        location, amount and type (hi, middle, lo)
-!                        of clouds that are present, provides input
-!                        to this subroutine
-!                        [ cld_specification_type ]
-! 
-!  </IN>
-!  <INOUT NAME="Cldrad_props" TYPE="cldrad_properties_type">
-!      Cldrad_props      cloud radiative properties on model grid,
-!                        [ cldrad_properties_type ]
-!
-!               the following components of this variable are output
-!               from this routine:
-!
-!                    %emrndlw   longwave cloud emissivity for
-!                               randomly overlapped clouds
-!                               in each of the longwave
-!                               frequency bands  [ dimensionless ]
-!                    %emmxolw   longwave cloud emissivity for
-!                               maximally overlapped clouds
-!                               in each of the longwave
-!                               frequency bands  [ dimensionless ]
-! 
-!  </INOUT>
-! </SUBROUTINE>
-!
-subroutine bulkphys_lw_driver (is, ie, js, je, Cldrad_control, &
-                               Cld_spec, Cldrad_props)
-
-!---------------------------------------------------------------------
-!    bulkphys_lw_driver defines bulk longwave cloud radiative 
-!    properties for the active cloud scheme.
-!---------------------------------------------------------------------
-
-integer,                      intent(in)    :: is, ie, js, je
-type(cloudrad_control_type),  intent(in)    :: Cldrad_control
-type(cld_specification_type), intent(in)    :: Cld_spec
-type(cldrad_properties_type), intent(inout) :: Cldrad_props
-
-!--------------------------------------------------------------------
-!   intent(in) variables:
-!
-!      is,ie,js,je  starting/ending subdomain i,j indices of data in 
-!                   the physics_window being integrated
-!      Cld_spec          cloud specification arrays defining the 
-!                        location, amount and type (hi, middle, lo)
-!                        of clouds that are present, provides input 
-!                        to this subroutine
-!                        [ cld_specification_type ]
-!
-!   intent(inout) variables:
-!
-!      Cldrad_props      cloud radiative properties on model grid,
-!                        [ cldrad_properties_type ]
-!
-!               the following components of this variable are output 
-!               from this routine:
-!
-!                    %emrndlw   longwave cloud emissivity for 
-!                               randomly overlapped clouds
-!                               in each of the longwave 
-!                               frequency bands  [ dimensionless ]
-!                    %emmxolw   longwave cloud emissivity for 
-!                               maximally overlapped clouds
-!                               in each of the longwave 
-!                               frequency bands  [ dimensionless ]
-!
-!---------------------------------------------------------------------
-
-!-------------------------------------------------------------------
-!   local variables:
-
-      integer    :: i, j, k      ! do-loop indices
-
-!------------------------------------------------------------------
-!    call obtain_bulk_lw_rh to define long-wave cloud emissivity for
-!    rh_based_clouds_mod.
-!-------------------------------------------------------------------
-!BW   if (Cldrad_control%do_rh_clouds) then
-!BW     call obtain_bulk_lw_rh (is, ie, js, je, Cld_spec, Cldrad_props)
-
-!-------------------------------------------------------------------
-!    call obtain_bulk_lw_strat to define long-wave cloud emissivity for
-!    strat_clouds_mod.
-!-------------------------------------------------------------------
-!BW   else if (Cldrad_control%do_strat_clouds) then
-      if (Cldrad_control%do_strat_clouds) then
-        call obtain_bulk_lw_strat (is, ie, js, je, Cld_spec, Cldrad_props)
-
-      endif
-
-!---------------------------------------------------------------------
-
-
-end subroutine bulkphys_lw_driver
 
 
 !###################################################################
