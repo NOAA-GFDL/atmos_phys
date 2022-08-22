@@ -17,29 +17,7 @@
 !      The cloud radiation module condenses the cloud information 
 !     provided by the stratiform cloud scheme and converts it into
 !     the areas covered by, the water paths and the effective particle 
-!     sizes of liquid and ice. This cloud information is stored into 
-!     cloud blocks which are assumed to be randomly overlapped (done 
-!     in CLOUD_ORGANIZE subroutine). From these, the single-scattering 
-!     albedo, asymmetry parameter, and optical depth for the two short 
-!     wave bands and the longwave cloud emissivity for each cloud are 
-!     calculated in the subroutine CLOUD_OPTICAL_PROPERTIES. Finally, 
-!     the subroutine CLOUD_RAD takes the shortwave cloud properties 
-!     and converts them using the Delta-Eddington solution to albedo 
-!     and absorption in each of the shortwave bands.
-!
-!     In CLOUD_OPTICAL_PROPERTIES, the parameterization of Slingo (1989)
-!     and Ebert and Curry (1992) are used for the shortwave properties of 
-!     liquid and ice clouds, respectively.  For the longwave cloud 
-!     emissivity, the empirical observation result of Stephens (1978) is
-!     used for liquid clouds whereas the parameterization of Ebert and
-!     Curry (1992) is used for ice clouds.
-!
-!     In CLOUD_ORGANIZE, the effective radius for liquid clouds is 
-!     calculated using the parameterization of Martin et al. (1994)
-!     whereas the effective radius of ice clouds is parameterized using
-!     that of Donner et al. (1997).
-!
-!  
+!     sizes of liquid and ice. 
 ! </DESCRIPTION>
 !
 
@@ -244,9 +222,6 @@ private
 !         ive particle sizes for use in determining bulk properties and
 !         concentrations and drop sizes if microphysically-based prop-
 !         erties are desired.
-!    (b)  subroutine lw_emissivity returns the long wave cloud emis-
-!         sivity when using non-microphysically-based cloud radiative
-!         properties.
 !---------------------------------------------------------------------
 
 !---------------------------------------------------------------------
@@ -260,13 +235,7 @@ character(len=128) :: tagname = '$Name$'
 !--------- interfaces --------
 
 public     &
-         cloud_rad_init, cloud_rad_end, cloud_summary3, snow_and_rain, &
-!!!!!!!!!!  OUTDATED INTERFACES !!!!!!!!!!!!!
-!
-         lw_emissivity
-!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
+         cloud_rad_init, cloud_rad_end, cloud_summary3, snow_and_rain
 !---------------------------------------------------------------------
 !    public subroutines:
 !
@@ -1650,40 +1619,6 @@ real,    dimension(:,:,:), intent(out), optional  :: conc_drop_org,  &
 
         size_drop_org = 2.*reff_liq
 
-#ifdef SKIP
-!---------------------------------------------------------------------
-!    if cloud ice is present (above qmin) compute cloud ice path and 
-!    crystal size, and, if a microphysics-based scheme is active, the 
-!    ice concentration and mean crystal size.
-!---------------------------------------------------------------------
-        do k=1,size(ql,3)
-          do j=1,size(ql,2)
-            do i=1,size(ql,1)
-              if (qi(i,j,k) .gt. qmin) then
-
-!---------------------------------------------------------------------
-!    if ice is present, compute the ice water path.
-!---------------------------------------------------------------------
-                iwp(i,j,k) = qi(i,j,k)*(phalf(i,j,k+1) - phalf(i,j,k))/ &
-                                                             GRAV/qa(i,j,k)
-                          
-!----------------------------------------------------------------------
-!    if microphysical properties are desired, calculate the ice con-
-!    centration. units of concentration are in g / m**3.
-!----------------------------------------------------------------------
-                conc_ice_org (i,j,k) =     &
-                      1000.*qi(i,j,k)*(phalf(i,j,k+1) - phalf(i,j,k))/ &
-                      RDGAS/tkel(i,j,k)/log(phalf(i,j,k+1)/   &
-                      MAX(phalf(i,j,k), pfull(i,j,1)))/ qa(i,j,k)
-              else
-                iwp(i,j,k) = 0.
-                conc_ice_org(i,j,k) = 0.
-              endif            
-            end do
-          end do
-        end do
-#endif
-
 !------------------------------------------------------------------------
 !    call define_ice_particle_size to compute the effective radius 
 !    and /or the effective crystal size to be used by the radiation 
@@ -1741,21 +1676,6 @@ real,    dimension(:,:,:), intent(out), optional  :: conc_drop_org,  &
             end do
           end do
         end do
-
-#ifdef SKIP
-      do k=1,size(ql,3)
-        do j=1,size(ql,2)
-          do i=1,size(ql,1)
-            if (qi(i,j,k) .gt. qmin) then
-              iwp(i,j,k) = qi(i,j,k)*(phalf(i,j,k+1) - phalf(i,j,k))/ &
-                                                           GRAV/qa(i,j,k)
-            else
-              iwp(i,j,k) = 0.
-            endif            
-          end do
-        end do
-      end do
-#endif
 
       do k=1,size(ql,3)
         do j=1,size(ql,2)
@@ -2227,136 +2147,7 @@ real,    intent(out), optional :: size_ice_org
 end subroutine define_ice_particle_size
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-!!!!END OF CURRENTLY VALID ROUTINES  --- THOSE WHICH FOLLOW ARE 
-!!!           CURRENTLY NOT USABLE IN FMS.
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-
 !#####################################################################
-
-!#####################################################################
-
-! <SUBROUTINE NAME="lw_emissivity">
-!  <OVERVIEW>
-!   
-!    Subroutine lw_emissivity computes the longwave cloud emissivity 
-!    using the cloud mass absorption coefficient and the water path.
-!
-!  </OVERVIEW>
-!  <DESCRIPTION>
-!   
-!  </DESCRIPTION>
-!  <TEMPLATE>
-!   call lw_emissivity (is, js, lwp, iwp, reff_liq, reff_ice,   &
-!                       nclds, em_lw)
-!
-!  </TEMPLATE>
-!  <IN NAME="is" TYPE="integer">
-!     Starting subdomain i index of data 
-!     in the physics_window being integrated
-!  </IN>
-!  <IN NAME="js" TYPE="integer">
-!     Starting subdomain j index of data 
-!     in the physics_window being integrated
-!  </IN>
-!  <IN NAME="lwp" TYPE="real">
-!     Liquid water path [ kg / m**2 ]
-!  </IN>
-!  <IN NAME="iwp" TYPE="real">
-!     Ice water path [ kg / m**2 ]
-!  </IN>
-!  <IN NAME="reff_liq" TYPE="real">
-!     Effective cloud drop radius used with
-!     bulk cloud physics scheme [ microns ]
-!  </IN>
-!  <IN NAME="reff_ice" TYPE="real">
-!     Effective ice crystal radius used with
-!     bulk cloud physics scheme [ microns ]
-!  </IN>
-!  <IN NAME="nclds" TYPE="integer">
-!     Number of random overlapping clouds in column
-!  </IN>
-!  <OUT NAME="em_lw" TYPE="real">
-!     longwave cloud emmissivity [ dimensionless ]
-!  </OUT>
-! </SUBROUTINE>
-!
-subroutine lw_emissivity (is, js, lwp, iwp, reff_liq, reff_ice,   &
-                          nclds, em_lw)
-
-!---------------------------------------------------------------------
-!    subroutine lw_emissivity computes the longwave cloud emissivity 
-!    using the cloud mass absorption coefficient and the water path.
-!---------------------------------------------------------------------
-
-integer,                 intent(in)   ::  is,js
-real, dimension(:,:,:),  intent(in)   ::  lwp, iwp, reff_liq, reff_ice
-integer, dimension(:,:), intent(in)   ::  nclds
-real, dimension(:,:,:),  intent(out)  ::  em_lw
-
-
-!--------------------------------------------------------------------
-!   intent(in) variables:
-!
-!        is,js           starting subdomain i,j indices of data 
-!                        in the physics_window being integrated     
-!        lwp             liquid water path [ kg / m**2 ]
-!        iwp             ice water path [ kg / m**2 ]
-!        reff_liq        effective cloud drop radius  used with
-!                        bulk cloud physics scheme [ microns ]
-!        reff_ice        effective ice crystal radius used with
-!                        bulk cloud physics scheme [ microns ]
-!        nclds           number of random overlapping clouds in column
-!
-!    intent(out) variables:
-!
-!        em_lw           longwave cloud emmissivity [ dimensionless ]
-!
-!---------------------------------------------------------------------
-
-!---------------------------------------------------------------------
-!   local variables:
-
-      real, dimension (size(em_lw,1), size(em_lw,2),                 &
-                                      size(em_lw,3)) ::  k_liq, k_ice
-
-!---------------------------------------------------------------------
-!   local variables:
-!     
-!     k_liq             liquid cloud mass absorption coefficient for 
-!                       longwave portion of spectrum 
-!                       [ m**2 / kg condensate ]
-!     k_ice             ice cloud mass absorption coefficient for 
-!                       longwave portion of spectrum 
-!                       [ m**2 / kg condensate ]
-!     i,j,k             do-loop indices
-!
-!---------------------------------------------------------------------
-              
-!----------------------------------------------------------------------
-!    compute longwave emissivity, including contributions from both the
-!    ice and liquid cloud particles present.
-!----------------------------------------------------------------------
-      k_liq = 140.
-      k_ice = 4.83591 + 1758.511/reff_ice       
- 
-      em_lw = 1. - exp(-1.*( k_liq*lwp +  k_ice*iwp))
-
-!----------------------------------------------------------------------
-
-
-    
-end subroutine lw_emissivity                   
 
                   end module cloud_rad_mod
 

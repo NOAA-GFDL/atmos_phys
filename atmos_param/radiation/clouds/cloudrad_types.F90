@@ -161,7 +161,6 @@ public cloudrad_control_type
 type cloudrad_control_type
     logical :: do_pred_cld_microphys
     logical :: do_presc_cld_microphys
-    logical :: do_bulk_microphys
     logical :: do_sw_micro
     logical :: do_lw_micro
     logical :: do_strat_clouds
