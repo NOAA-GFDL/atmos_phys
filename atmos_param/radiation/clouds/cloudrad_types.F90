@@ -67,8 +67,6 @@ type cld_specification_type
                                          iwp=>NULL(),  &
                                          reff_liq=>NULL(),   &
                                          reff_ice=>NULL(), &
-                                         reff_liq_lim=>NULL(),   &
-                                         reff_ice_lim=>NULL(), &
                                          liq_frac=>NULL(), &
                                          cloud_water=>NULL(), &
                                          cloud_ice=>NULL(),  &
@@ -417,8 +415,6 @@ integer :: n, nswcb, nlwcb
       allocate (Cld_spec%lwp            (ix, jx, kx) )
       allocate (Cld_spec%reff_liq       (ix, jx, kx) )
       allocate (Cld_spec%reff_ice       (ix, jx, kx) )
-      allocate (Cld_spec%reff_liq_lim   (ix, jx, kx) )
-      allocate (Cld_spec%reff_ice_lim   (ix, jx, kx) )
       allocate (Cld_spec%reff_liq_micro (ix, jx, kx) )
       allocate (Cld_spec%reff_ice_micro (ix, jx, kx) )
 !BW   allocate (Cld_spec%tau            (ix, jx, kx, num_slingo_bands) )
@@ -442,8 +438,6 @@ integer :: n, nswcb, nlwcb
       Cld_spec%iwp(:,:,:)            = 0.0
       Cld_spec%reff_liq(:,:,:)       = 10.0
       Cld_spec%reff_ice(:,:,:)       = 30.0
-      Cld_spec%reff_liq_lim(:,:,:)   = 10.0
-      Cld_spec%reff_ice_lim(:,:,:)   = 30.0
       Cld_spec%reff_liq_micro(:,:,:) = 10.0
       Cld_spec%reff_ice_micro(:,:,:) = 30.0
       Cld_spec%liq_frac(:,:,:)       = 0.0
@@ -526,8 +520,6 @@ type(cloudrad_control_type),   intent(in)    :: Cldrad_control
       deallocate (Cld_spec%iwp            )
       deallocate (Cld_spec%reff_liq       )
       deallocate (Cld_spec%reff_ice       )
-      deallocate (Cld_spec%reff_liq_lim   )
-      deallocate (Cld_spec%reff_ice_lim   )
       deallocate (Cld_spec%reff_liq_micro )
       deallocate (Cld_spec%reff_ice_micro )
       deallocate (Cld_spec%liq_frac       )
