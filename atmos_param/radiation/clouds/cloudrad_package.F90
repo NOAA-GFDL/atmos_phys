@@ -36,8 +36,7 @@ use cloudrad_diagnostics_mod, only: cloudrad_diagnostics_init, &
                                     cloudrad_diagnostics_end
 
 use bulkphys_rad_mod,         only: bulkphys_rad_init, &
-                                    bulkphys_rad_end, &
-                                    bulkphys_lw_driver
+                                    bulkphys_rad_end
 
 use microphys_rad_mod,        only: lwemiss_calc, comb_cldprops_calc, &
                                     microphys_rad_init, &
@@ -673,8 +672,6 @@ if (Cldrad_control%do_strat_clouds) then
                                       Cloud_microphys(strat_index),  &
                                       Micro_rad_props=Microrad_props(strat_index))
           endif
-        else
-          call bulkphys_lw_driver (is, ie, js, je, Cldrad_control, Cld_spec, Cldrad_props)
         endif
 !BW     if (Cldrad_control%do_sw_micro) then
           if (Cldrad_control%do_ica_calcs) then

@@ -33,7 +33,6 @@ use physics_radiation_exch_mod, only : exchange_control_type
 !   atmos param module
 
 use cloud_rad_mod,       only: cloud_rad_init, cloud_summary3, &
-                               lw_emissivity, &
                                snow_and_rain
 
 !   cloud radiation shared module
@@ -73,7 +72,7 @@ character(len=128)  :: tagname =  '$Name$'
 !-------  interfaces --------
 
 public          &
-          strat_clouds_W_init, strat_clouds_amt, obtain_bulk_lw_strat, &
+          strat_clouds_W_init, strat_clouds_amt, &
           strat_clouds_W_end
 
 !---------------------------------------------------------------------
@@ -886,138 +885,6 @@ type(aerosol_type),           intent(in)        :: Aerosol
 
 end subroutine strat_clouds_amt  
 
-
-!#####################################################################
-! <SUBROUTINE NAME="obtain_bulk_lw_strat">
-!  <OVERVIEW>
-!   obtain_bulk_lw_strat defines bulk longwave cloud radiative 
-!    properties for the klein strat cloud scheme. 
-!  </OVERVIEW>
-!  <DESCRIPTION>
-!   obtain_bulk_lw_strat defines bulk longwave cloud radiative 
-!    properties for the klein strat cloud scheme.
-!  </DESCRIPTION>
-!  <TEMPLATE>
-!   call obtain_bulk_lw_strat (is, ie, js, je, Cld_spec, Cldrad_props)
-!  </TEMPLATE>
-!  <IN NAME="is, ie, js, je" TYPE="integer">
-!   starting/ending subdomain i,j indices of data in
-!                   the physics_window being integrated
-!  </IN>
-!  <IN NAME="Cld_spec" TYPE="cld_specification_type">
-!   cld_specification_type variable containing the 
-!                   cloud specification input fields needed by the 
-!                   radiation package
-!  </IN>
-!  <INOUT NAME="cldrad_properties" TYPE="microphys_type">
-!   cloud radiative properties on model grid
-!  </INOUT>
-! </SUBROUTINE>
-!
-subroutine obtain_bulk_lw_strat (is, ie, js, je, Cld_spec, Cldrad_props)
-
-!---------------------------------------------------------------------
-!    obtain_bulk_lw_strat defines bulk longwave cloud radiative 
-!    properties for the klein strat cloud scheme.
-!---------------------------------------------------------------------
-
-integer,                      intent(in)    :: is, ie, js, je
-type(cld_specification_type), intent(in)    :: Cld_spec
-type(cldrad_properties_type), intent(inout) :: Cldrad_props
-
-!--------------------------------------------------------------------
-!   intent(in) variables:
-!
-!      is,ie,js,je  starting/ending subdomain i,j indices of data in 
-!                   the physics_window being integrated
-!      Cld_spec     cloud specification arrays defining the 
-!                   location, water paths and effective particle
-!                   sizes of clouds that are present, provides 
-!                   input to this subroutine
-!                   [ cld_specification_type ]
-!
-!   intent(inout) variables:
-!
-!      Cldrad_props      cloud radiative properties on model grid,
-!                        [ cldrad_properties_type ]
-!
-!               the following components of this variable are output 
-!               from this routine:
-!
-!                    %emrndlw   longwave cloud emissivity for 
-!                               randomly overlapped clouds
-!                               in each of the longwave
-!                               frequency bands  [ dimensionless ]
-!                    %emmxolw   longwave cloud emissivity for 
-!                               maximally overlapped clouds
-!                               in each of the longwave 
-!                               frequency bands  [ dimensionless ]
-!
-!---------------------------------------------------------------------
- 
-!-------------------------------------------------------------------
-!   local variables:
-
-      real, dimension (size(Cld_spec%lwp,1), size(Cld_spec%lwp,2),  &
-                       size(Cld_spec%lwp,3)) :: emcld
-
-      integer       :: max_cld
-      integer       :: i, j, k
-
-!-------------------------------------------------------------------
-!   local variables:
-!
-!         emcld      longwave cloud emissivity [ dimensionless ]
-!         max_cld    maximum number of clouds in any column in the
-!                    window
-!         i,j,k      do-loop indices
-!
-!--------------------------------------------------------------------
-
-!---------------------------------------------------------------------
-!    be sure module has been initialized.
-!---------------------------------------------------------------------
-      if (.not. module_is_initialized ) then
-        call error_mesg ('strat_clouds_W_mod',   &
-             'module has not been initialized', FATAL )
-      endif
-
-!---------------------------------------------------------------------
-!   find maximum number of clouds in any column in the window.
-!---------------------------------------------------------------------
-      max_cld = MAXVAL(Cld_spec%ncldsw(:,:))
-
-!---------------------------------------------------------------------
-!    if cloud is present in the window, call lw_emissivity to compute 
-!    the longwave emissivity. otherwise, leave the emissivity arrays 
-!    with their previously initialized values.
-!---------------------------------------------------------------------
-      if (max_cld > 0) then
-!---------------------------------------------------------------------
-!    call lw_emissivity to obtain the longwave cloud emissivity.
-!---------------------------------------------------------------------
-        call lw_emissivity (is, js, Cld_spec%lwp, Cld_spec%iwp,  &
-                         Cld_spec%reff_liq_lim, Cld_spec%reff_ice_lim,&
-                            Cld_spec%ncldsw, emcld)
-
-!---------------------------------------------------------------------
-!    define both the random and max overlap cloud emissivities to be
-!    that value returned from lw_emissivity.
-!-------------------------------------------------------------------
-        do k=1,size(Cld_spec%lwp,3)
-          do j=1,size(Cld_spec%lwp,2)
-            do i=1,size(Cld_spec%lwp,1)
-              Cldrad_props%emrndlw(i,j,k,:,1) = emcld(i,j,k)
-              Cldrad_props%emmxolw(i,j,k,:,1) = emcld(i,j,k)
-            end do
-          end do
-        end do
-      endif
-
-!--------------------------------------------------------------------
-
-
-end subroutine obtain_bulk_lw_strat
 
 !####################################################################
 ! <SUBROUTINE NAME="strat_clouds_W_end">
