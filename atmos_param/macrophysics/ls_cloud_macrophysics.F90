@@ -1,4 +1,3 @@
-
                     module ls_cloud_macrophysics_mod
 
 !-----------------------------------------------------------------------
@@ -8,7 +7,7 @@
 !
 !                ---------------------------------------
 !                      OPTIONS AVAILABLE:
-!               a) Tiedtke stratiform prognostic cloud scheme 
+!               a) Tiedtke stratiform prognostic cloud scheme
 !               b) CLUBB
 !
 !-----------------------------------------------------------------------
@@ -55,7 +54,7 @@ private
 
 public   ls_cloud_macrophysics_init, ls_cloud_macrophysics, &
          ls_cloud_macrophysics_end, ls_cloud_macrophysics_time_vary
-  
+
 
 !-----------------------------------------------------------------------
 !-------------------- private data -------------------------------------
@@ -66,7 +65,7 @@ character(len=128) :: tagname = '$Name: $'
 
 
 !-------------------- namelist data (private) --------------------------
- 
+
 !---------------- namelist variable definitions ------------------------
 
 logical :: use_updated_profiles_for_clubb = .false.
@@ -83,7 +82,7 @@ logical    :: do_liq_num, do_ice_num
 integer    :: do_clubb
 logical    :: do_pdf_clouds
 logical    :: tiedtke_macrophysics
-logical    :: do_mg_microphys, do_mg_ncar_microphys, do_ncar_microphys
+logical    :: do_mg_microphys, do_ncar_microphys
 integer    :: nsphum, nql, nqi, nqa, nqn, nqni, nqr, nqs, nqg
 
 !-------------------- clock definitions --------------------------------
@@ -128,7 +127,7 @@ type(exchange_control_type), intent(in)     :: Exch_ctrl
       integer :: tiedtke_init_clock, clubb_init_clock
 
 !-----------------------------------------------------------------------
- 
+
       if (module_is_initialized) return
 
 !-----------------------------------------------------------------------
@@ -143,10 +142,10 @@ type(exchange_control_type), intent(in)     :: Exch_ctrl
         logunit = stdlog()
         if ( mpp_pe() == mpp_root_pe() ) &
                          write ( logunit, nml=ls_cloud_macrophysics_nml )
-      endif 
+      endif
 
 !-------------------------------------------------------------------------
-!    save control variables obtained from derived type inputs which will 
+!    save control variables obtained from derived type inputs which will
 !    be needed in this module.
 !-------------------------------------------------------------------------
       do_liq_num = Exch_ctrl%do_liq_num
@@ -155,19 +154,18 @@ type(exchange_control_type), intent(in)     :: Exch_ctrl
       do_pdf_clouds = Nml_lsc%do_pdf_clouds
       tiedtke_macrophysics = Constants_lsc%tiedtke_macrophysics
       do_mg_microphys = Constants_lsc%do_mg_microphys
-      do_mg_ncar_microphys = Constants_lsc%do_mg_ncar_microphys
       do_ncar_microphys = Constants_lsc%do_ncar_microphys
       qmin = Exch_ctrl%qmin
 
       nsphum = Physics_control%nsphum
-      nql    = Physics_control%nql   
-      nqi    = Physics_control%nqi   
-      nqa    = Physics_control%nqa   
-      nqn    = Physics_control%nqn   
-      nqni   = Physics_control%nqni   
-      nqr    = Physics_control%nqr   
-      nqs    = Physics_control%nqs   
-      nqg    = Physics_control%nqg   
+      nql    = Physics_control%nql
+      nqi    = Physics_control%nqi
+      nqa    = Physics_control%nqa
+      nqn    = Physics_control%nqn
+      nqni   = Physics_control%nqni
+      nqr    = Physics_control%nqr
+      nqs    = Physics_control%nqs
+      nqg    = Physics_control%nqg
 
 !------------------------------------------------------------------------
 !    if doing prognostic clouds, then either tiedtke, clubb microphysics must be activated.
@@ -225,7 +223,7 @@ type(exchange_control_type), intent(in)     :: Exch_ctrl
 
 !----------------------------------------------------------------------
 
-end subroutine ls_cloud_macrophysics_init 
+end subroutine ls_cloud_macrophysics_init
 
 
 
@@ -265,19 +263,19 @@ type(mp_lsdiag_type),       intent(inout)        :: Lsdiag_mp
 type(mp_lsdiag_control_type),intent(inout)       :: Lsdiag_mp_control
 type(atmos_state_type),     intent(inout)        :: Atmos_state
 type(cloud_state_type),     intent(inout)        :: Cloud_state
-type(particles_type),       intent(inout)        :: Particles 
+type(particles_type),       intent(inout)        :: Particles
 type(precip_state_type),    intent(inout)        :: Precip_state
 type(cloud_processes_type), intent(inout)        :: Cloud_processes
-type(aerosol_type),         intent(in)           :: Aerosol           
+type(aerosol_type),         intent(in)           :: Aerosol
 real, dimension(:,:,:,size(Output_mp%rdt,4)+1:),     &
                             intent(inout)        ::  rdiag
-                       
+
 
 !-----------------------------------------------------------------------
 !   local variables:
 
       integer :: idim, jdim, kdim
-    
+
 !--------------------------------------------------------------------------
 !    define window dimensions.
 !--------------------------------------------------------------------------
@@ -290,7 +288,7 @@ real, dimension(:,:,:,size(Output_mp%rdt,4)+1:),     &
 !         A. CLUBB PARAMETERIZATION
 !
 !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
- 
+
       if (do_clubb == 2) then
         call mpp_clock_begin (clubb_clock)
 
@@ -342,7 +340,7 @@ real, dimension(:,:,:,size(Output_mp%rdt,4)+1:),     &
                                    C2ls_mp%convective_humidity_ratio_clubb)
 
 !--------------------------------------------------------------------------
-!    return convective tendencies to the total accumulated tendencies if 
+!    return convective tendencies to the total accumulated tendencies if
 !    they were previously removed.
 !--------------------------------------------------------------------------
         if (.not. use_updated_profiles_for_clubb ) then
@@ -366,29 +364,28 @@ real, dimension(:,:,:,size(Output_mp%rdt,4)+1:),     &
 
 !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 !
-!       B. TIEDTKE PROGNOSTIC CLOUD SCHEME  
+!       B. TIEDTKE PROGNOSTIC CLOUD SCHEME
 !
 !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
       else if (tiedtke_macrophysics) then
 
 !------------------------------------------------------------------------
-!    save the adjusted and realizable cloud area and cloud area tendency  
-!    (before this steps macrophysics contribution is calculated) for 
-!    use in the NCAR-based microphysics schemes.  
+!    save the adjusted and realizable cloud area and cloud area tendency
+!    (before this steps macrophysics contribution is calculated) for
+!    use in the NCAR-based microphysics schemes.
 !------------------------------------------------------------------------
         call mpp_clock_begin (tiedtke_clock)
         if (do_mg_microphys .or. &
-            do_ncar_microphys .or. &
-            do_mg_ncar_microphys) then
+            do_ncar_microphys) then
           Cloud_state%qa_upd_0 = Cloud_state%qa_upd
           Cloud_state%SA_0 = Cloud_State%SA_out
         endif
 
 !--------------------------------------------------------------------------
 !   if the tiedtke scheme is active, determine aerosol available for use as
-!   condensation nuclei, then call tiedtke_macro to calculate the changes 
-!   in the large-scale cloud amount and area, and then call 
+!   condensation nuclei, then call tiedtke_macro to calculate the changes
+!   in the large-scale cloud amount and area, and then call
 !   tiedtke_macro_diagnostics to save relevant diagnostics.
 !--------------------------------------------------------------------------
         call mpp_clock_begin (active_clock)
@@ -425,7 +422,7 @@ end subroutine ls_cloud_macrophysics
 
 !######################################################################
 
-subroutine ls_cloud_macrophysics_end 
+subroutine ls_cloud_macrophysics_end
 
 !------------------------------------------------------------------------
       integer :: tiedtke_term_clock, clubb_term_clock
@@ -441,9 +438,9 @@ subroutine ls_cloud_macrophysics_end
                                                 grain=CLOCK_MODULE_DRIVER )
       if (tiedtke_macrophysics) then
         call mpp_clock_begin ( tiedtke_term_clock )
-        call tiedtke_macro_end 
+        call tiedtke_macro_end
         call mpp_clock_end   ( tiedtke_term_clock )
-  
+
       else if (do_clubb == 2) then
         call mpp_clock_begin ( clubb_term_clock )
         call clubb_end
@@ -461,4 +458,3 @@ end subroutine ls_cloud_macrophysics_end
 
 
                  end module ls_cloud_macrophysics_mod
-

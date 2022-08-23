@@ -13,7 +13,7 @@ public lscloud_types_init
 
 public diag_id_type, diag_pt_type, lscloud_debug_type, &
        lscloud_nml_type, atmos_state_type, particles_type,   &
-       cloud_state_type, precip_state_type, cloud_processes_type,    & 
+       cloud_state_type, precip_state_type, cloud_processes_type,    &
        lsc_constants_type
 
 !----------------------------------------------------------------------
@@ -56,10 +56,10 @@ TYPE diag_id_type
   integer :: SI3d, qidt_dep, qidt_subl, qidt_fall, qidt_eros, qidt_melt, &
              qidt_melt2, qidt_fill, qidt_tiny, qidt_destr, qidt_qvdep, qidt_auto,  &
              qidt_accr, qidt_accrs, ice_adj,  qidt_rain2ice, SI_imb
-  integer :: SI2d, qi_dep_col, qi_subl_col, qi_fall_col, qi_eros_col,  &    
+  integer :: SI2d, qi_dep_col, qi_subl_col, qi_fall_col, qi_eros_col,  &
              qi_melt_col, qi_melt2_col, qi_fill_col, qi_tiny_col, qi_destr_col,  &
              qi_qvdep_col, qi_auto_col, qi_accr_col, qi_accrs_col,  &
-           ice_adj_col, qi_rain2ice_col,  SI_imb_col  
+           ice_adj_col, qi_rain2ice_col,  SI_imb_col
 
 !  rain variables
   integer :: qrdt_fill, qr_fill_col,  qrdt_destr, qr_destr_col, qrdt_tiny, qr_tiny_col
@@ -99,7 +99,7 @@ TYPE diag_id_type
              qnidt_nucclim1, qnidt_nucclim2, qnidt_sedi,             &
              qnidt_melt, qnidt_size_adj, qnidt_fill2,                &
              qnidt_super, qnidt_ihom, qnidt_destr, qnidt_rain2ice,   &
-             qnidt_cleanup, qnidt_cleanup2, qnidt_nsacwi, SNi_imb  
+             qnidt_cleanup, qnidt_cleanup2, qnidt_nsacwi, SNi_imb
   integer :: SNi2d, qni_fill_col, qni_tiny_col, qni_nnuccd_col, qni_nsubi_col, &
              qni_nerosi_col, qni_auto_col, qni_accr_col, qni_nprci_col, qni_nprai_col, &
              qni_nucclim1_col, qni_nucclim2_col, qni_sedi_col, &
@@ -114,12 +114,12 @@ TYPE diag_id_type
              rhcrit, rhcrit_min, rhiin, rhlin, cfin, imass7,     &
              ni_dust, ni_sulf, ni_bc, ndust1, ndust2, ndust3,  &
              ndust4, ndust5, dust_berg_flag, subgrid_w_variance
- 
+
 !  rain diagnostics
 
   integer :: rain3d, qrout, rain_clr, rain_cld, a_rain_clr, a_rain_cld, &
              rain_evap, rain_freeze, srfrain_accrs, srfrain_freez,  &
-             srfrain_evap, rain_inst, rain_sedi, & 
+             srfrain_evap, rain_inst, rain_sedi, &
              rain_evap_col, rain_freeze_col,  &
              srfrain_accrs_col, srfrain_freez_col, srfrain_evap_col, &
              rain_inst_col, rain_sedi_col, &
@@ -151,7 +151,7 @@ TYPE diag_id_type
 
 !  temperature diagnostics
 
-  integer ::  ST3d, ST_imb 
+  integer ::  ST3d, ST_imb
   integer ::  ST2d, ST_imb_col
 
 !  vapor diagnostics
@@ -160,7 +160,7 @@ TYPE diag_id_type
              qdt_cond, qdt_deposition, qdt_eros_l, qdt_eros_i,        &
              qdt_qv_on_qi, qdt_sedi_ice2vapor, qdt_sedi_liquid2vapor,  &
              qdt_super_sat_rm, qdt_destr, qdt_cleanup_liquid,  &
-             qdt_cleanup_ice, qdt_snow_sublim, qdt_snow2vapor, SQ_imb  
+             qdt_cleanup_ice, qdt_snow_sublim, qdt_snow2vapor, SQ_imb
   integer :: SQ2d, q_liquid_init_col, q_ice_init_col, q_tiny_col,  q_rain_evap_col, &
              q_cond_col, q_deposition_col, q_eros_l_col, q_eros_i_col, &
              q_qv_on_qi_col, q_sedi_ice2vapor_col, q_sedi_liquid2vapor_col,&
@@ -237,7 +237,7 @@ TYPE diag_pt_type
              qnidt_nucclim1, qnidt_nucclim2, qnidt_sedi,             &
              qnidt_melt, qnidt_size_adj, qnidt_fill2,                &
              qnidt_super, qnidt_ihom, qnidt_destr,  qnidt_rain2ice,  &
-             qnidt_cleanup, qnidt_cleanup2, qnidt_nsacwi, SNi_imb  
+             qnidt_cleanup, qnidt_cleanup2, qnidt_nsacwi, SNi_imb
 
 !  aerosol diagnostics
 
@@ -245,7 +245,7 @@ TYPE diag_pt_type
              rhcrit, rhcrit_min, rhiin, rhlin, cfin, imass7,     &
              ni_dust, ni_sulf, ni_bc, ndust1, ndust2, ndust3,  &
              ndust4, ndust5, dust_berg_flag, subgrid_w_variance
- 
+
 !  rain diagnostics
   integer :: rain3d, qrout, rain_clr, rain_cld, a_rain_clr, a_rain_cld, &
              rain_evap, rain_freeze, srfrain_accrs, srfrain_freez,  &
@@ -263,7 +263,7 @@ TYPE diag_pt_type
              neg_snow
 
 !  snow number diagnostics
-  integer :: snow_num_inst,  snow_num_sedi, snow_num_melt, snow_num_adj 
+  integer :: snow_num_inst,  snow_num_sedi, snow_num_melt, snow_num_adj
 
 
 
@@ -273,7 +273,7 @@ TYPE diag_pt_type
 
 !  temperature diagnostics
 
-  integer ::  ST3d, ST_imb 
+  integer ::  ST3d, ST_imb
 
 !  vapor diagnostics
 
@@ -281,7 +281,7 @@ TYPE diag_pt_type
              qdt_cond, qdt_deposition, qdt_eros_l, qdt_eros_i,        &
              qdt_qv_on_qi, qdt_sedi_ice2vapor, qdt_sedi_liquid2vapor,  &
              qdt_super_sat_rm, qdt_destr, qdt_cleanup_liquid,  &
-             qdt_cleanup_ice, qdt_snow_sublim, qdt_snow2vapor, SQ_imb  
+             qdt_cleanup_ice, qdt_snow_sublim, qdt_snow2vapor, SQ_imb
 
 !   miscellaneous diagnostics
 
@@ -300,7 +300,7 @@ type lscloud_debug_type
 !    variables related to debugging options.
 !-----------------------------------------------------------------------
 ! otun               ! file where debug output is written
-! debugo  
+! debugo
 ! debugo0 = .false.  ! small output
 ! debugo4 = .false.  ! when true, nrefuse will be output
 ! ncall   = 1        ! timestep counter of calls to strat_cloud
@@ -336,9 +336,9 @@ type lscloud_nml_type
   logical :: do_dust_berg
   logical :: do_pdf_clouds
   logical :: pdf_org
-  integer :: betaP 
-  real :: qthalfwidth 
-  integer :: nsublevels 
+  integer :: betaP
+  real :: qthalfwidth
+  integer :: nsublevels
   integer :: kmap
   integer :: kord
 
@@ -359,7 +359,7 @@ type atmos_state_type
 
   real, dimension(:,:,:), pointer ::  &
                                         airdens        =>NULL(), &
-                                        tn             =>NULL(), & 
+                                        tn             =>NULL(), &
                                         qvn            =>NULL(), &
                                         qs             =>NULL(), &
                                         dqsdT          =>NULL(), &
@@ -379,7 +379,7 @@ end type atmos_state_type
 
 !##########################################################################
 
-type  particles_type 
+type  particles_type
 
 ! drop1           number conc                     [1/cm^3]
 ! drop2           mass concentration              [1/kg]
@@ -400,7 +400,7 @@ type  particles_type
                                         imass1         => NULL(), &
                                         totalmass1     => NULL()
 
-end type particles_type 
+end type particles_type
 
 
 !########################################################################
@@ -409,7 +409,7 @@ type cloud_state_type
 
 !       ql_upd         updated value of ql             kg condensate/
 !                                                      kg air
-!       
+!
 !       qi_upd         updated value of qi             kg condensate/
 !                                                      kg air
 !
@@ -434,7 +434,7 @@ type cloud_state_type
                                         qn_upd         =>NULL(), &
                                         qni_upd        =>NULL(), &
                                         qnr_upd        =>NULL(), &
-                                        qns_upd        =>NULL(), &   
+                                        qns_upd        =>NULL(), &
                                         ql_mean        =>NULL(), &
                                         qr_mean        =>NULL(), &
                                         qi_mean        =>NULL(), &
@@ -444,7 +444,7 @@ type cloud_state_type
                                         qn_mean        =>NULL(), &
                                         qni_mean       =>NULL(), &
                                         qnr_mean       =>NULL(), &
-                                        qns_mean       =>NULL(), & 
+                                        qns_mean       =>NULL(), &
                                         ql_in          =>NULL(), &
                                         qr_in          =>NULL(), &
                                         qi_in          =>NULL(), &
@@ -454,7 +454,7 @@ type cloud_state_type
                                         qn_in          =>NULL(), &
                                         qni_in         =>NULL(), &
                                         qnr_in         =>NULL(), &
-                                        qns_in         =>NULL(), & 
+                                        qns_in         =>NULL(), &
                                         SL_out         =>NULL(), &
                                         SI_out         =>NULL(), &
                                         SA_out         =>NULL(), &
@@ -470,7 +470,7 @@ type cloud_state_type
                                         qcvar_clubb    =>NULL()
 
 end type cloud_state_type
- 
+
 
 !#########################################################################
 
@@ -486,11 +486,11 @@ type precip_state_type
                                         qsout3d_mg     =>NULL()
 
   real, dimension(:,:), pointer   ::   &
-       
+
                                         precip         =>NULL(), &
                                         surfrain       =>NULL(), &
                                         surfsnow       =>NULL()
-             
+
 end type precip_state_type
 
 
@@ -514,8 +514,8 @@ type cloud_processes_type
 !                      non-convective condensation.    kg air
 !       qvg            equilibrium value of water      kg vapor /
 !                      vapor in the clear portion      kg air
-!                      of the grid box that PDF 
-!                      clouds wants                          
+!                      of the grid box that PDF
+!                      clouds wants
 !
 
   real, dimension(:,:,:), pointer ::   &
@@ -539,13 +539,12 @@ type lsc_constants_type
 
   logical                         ::                             &
                                      do_rk_microphys,            &
-                                     do_mg_microphys,            &       
-                                     do_mg_ncar_microphys,       &
+                                     do_mg_microphys,            &
                                      do_ncar_microphys,          &
                                      do_ncar_MG2,                &
                                      tiedtke_macrophysics,       &
                                      dqa_activation,             &
-                                     total_activation               
+                                     total_activation
 
 end type lsc_constants_type
 

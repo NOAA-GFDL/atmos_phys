@@ -41,7 +41,7 @@ use moist_proc_utils_mod,      only :  mp_input_type, mp_conv2ls_type, &
                                        mp_lsdiag_control_type
 use physics_radiation_exch_mod, only : exchange_control_type
 
-implicit none 
+implicit none
 private
 
 !--------------------------------------------------------------------------
@@ -66,19 +66,19 @@ integer :: rh_act_opt = 2           ! option as to which rh to use for ice
                                     ! box when the cloudy part of grid box
                                     ! is less than cf_thresh_nucl; use grid
                                     ! box mean otherwise.
-real    :: sea_salt_scale_onl = 1.  ! scaling factor to convert seasalt 
+real    :: sea_salt_scale_onl = 1.  ! scaling factor to convert seasalt
                                     ! aerosol tracer to seasalt available
                                     ! for use as condensation nuclei
 logical :: reproduce_rk = .true.    ! option to force use of same entries in
                                     ! aerosol activation tables as were used
-                                    ! in legacy code; new code fixes an 
+                                    ! in legacy code; new code fixes an
                                     ! index offset error.
 real    :: var_limit_ice = -999.    ! lower limit to the vertical velocity
                                     ! variance of the pdf used for ice
-                                    ! nucleation; default value implies 
+                                    ! nucleation; default value implies
                                     ! that no limit is imposed.
 real    :: cf_thresh_nucl = 0.98    ! threshold cloud fraction below which
-                                    ! the rh of the non-cloudy portion of 
+                                    ! the rh of the non-cloudy portion of
                                     ! the gribox is used in determining
                                     ! ice nucleation (when rh_act_opt is >1)
 !  <DATA NAME="var_limit" UNITS=" (m**2)/(s**2)" TYPE="real" DEFAULT="0.0">
@@ -94,7 +94,7 @@ integer :: up_strat_opt = 1
 logical ::  use_Fan2019_ice_nucl = .false.
 logical ::  do_sum_homo_het_Fan = .true.     ! h1g, 2020-06-01
 
-logical ::  include_all_dust_bins = .false.  ! h1g, 2020-06-01 
+logical ::  include_all_dust_bins = .false.  ! h1g, 2020-06-01
 logical ::  include_Ni_bc         = .false.  ! h1g, 2020-07-03
 logical ::  include_Ni_sulf       = .false.  ! h1g, 2020-07-03
 
@@ -124,13 +124,13 @@ real    :: qmin
 logical :: do_liq_num
 logical :: do_ice_num
 logical :: do_ice_nucl_wpdf
-logical :: do_dust_berg      
+logical :: do_dust_berg
 logical :: use_online_aerosol
-logical :: use_sub_seasalt       
+logical :: use_sub_seasalt
 real    :: sea_salt_scale
 real    :: om_to_oc
 logical :: do_pdf_clouds
-logical :: do_mg_microphys, do_mg_ncar_microphys, do_ncar_microphys, do_ncar_MG2
+logical :: do_mg_microphys, do_ncar_microphys, do_ncar_MG2
 logical :: total_activation
 
 logical :: debug
@@ -171,7 +171,6 @@ type(exchange_control_type), intent(in) :: Exch_ctrl
       om_to_oc = Nml_mp%om_to_oc
       do_pdf_clouds = Nml_lsc%do_pdf_clouds
       do_mg_microphys = Constants_lsc%do_mg_microphys
-      do_mg_ncar_microphys = Constants_lsc%do_mg_ncar_microphys
       do_ncar_microphys = Constants_lsc%do_ncar_microphys
 
       do_ncar_MG2 =Constants_lsc%do_ncar_MG2
@@ -200,12 +199,11 @@ type(exchange_control_type), intent(in) :: Exch_ctrl
 !-------------------------------------------------------------------------
 !    define offset into aerosol activation tables.
 !-------------------------------------------------------------------------
-      IF (.NOT. (do_mg_microphys .OR.   & 
-                 do_ncar_microphys .OR.   & 
-                 do_mg_ncar_microphys)  & 
+      IF (.NOT. (do_mg_microphys .OR.   &
+                 do_ncar_microphys )  &
                                        .AND. reproduce_rk) THEN
         wpdf_offs =0
-      ELSE 
+      ELSE
         wpdf_offs = 1
       END IF
 
@@ -255,8 +253,8 @@ integer,                    intent(in)     :: idim, jdim, kdim
 type(mp_lsdiag_type),       intent(inout)  :: Lsdiag_mp
 type(mp_lsdiag_control_type), intent(inout):: Lsdiag_mp_control
 type(atmos_state_type),     intent(inout)  :: Atmos_state
-type(particles_type),       intent(inout)  :: Particles  
-TYPE(aerosol_type),         INTENT (in)    :: Aerosol  
+type(particles_type),       intent(inout)  :: Particles
+TYPE(aerosol_type),         INTENT (in)    :: Aerosol
 
 
 !-------------------------------------------------------------------------
@@ -264,7 +262,7 @@ TYPE(aerosol_type),         INTENT (in)    :: Aerosol
       INTEGER :: i, j, k
 
 !---------------------------------------------------------------------
-!    call aerosol_effects to determine aerosol fields that will impact the 
+!    call aerosol_effects to determine aerosol fields that will impact the
 !    cloud / ice droplet numbers and the bergeron process, if these effects
 !    have been activated.
 !---------------------------------------------------------------------
@@ -275,7 +273,7 @@ TYPE(aerosol_type),         INTENT (in)    :: Aerosol
                               Atmos_state%pthickness, &
                               Particles%concen_dust_sub,&
                               Particles%totalmass1, Particles%imass1, &
-                              Aerosol, Lsdiag_mp%diag_4d,  & 
+                              Aerosol, Lsdiag_mp%diag_4d,  &
                               Lsdiag_mp_control%diag_id,   &
                               Lsdiag_mp_control%diag_pt       )
       endif
@@ -303,8 +301,8 @@ TYPE(aerosol_type),         INTENT (in)    :: Aerosol
                        Nfact_du5*Particles%imass1(i,j,k,12)*rbar_du5 ) / &
                                        MAX (Particles%ndust(i,j,k),1.e-10)
           end do
-        end do        
-      end do        
+        end do
+      end do
       call mpp_clock_end (aero_dust)
 
 
@@ -325,7 +323,7 @@ integer,                    intent(in)     :: idim, jdim, kdim, n_diag_4d
 type(atmos_state_type),     intent(inout)  :: Atmos_state
 type(mp_input_type),        intent(in)     :: Input_mp
 type(mp_conv2ls_type),      intent(in)     :: c2ls_mp
-type(particles_type),       intent(inout)  :: Particles  
+type(particles_type),       intent(inout)  :: Particles
 REAL, DIMENSION(:,:,:),     INTENT(IN )    :: qa_upd
 REAL, DIMENSION( :,:,:,0:), INTENT(INOUT ) :: diag_4d
 TYPE(diag_id_type),         intent(in)     :: diag_id
@@ -346,7 +344,7 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
 !-------------------------------------------------------------------------
 !    do the following calculations if droplet number is being predicted:
 !-------------------------------------------------------------------------
-      if (do_liq_num) then 
+      if (do_liq_num) then
 
 !-------------------------------------------------------------------------
 !    compute the relevant upward velocity for droplet / ice activation.
@@ -378,11 +376,11 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
         call mpp_clock_end (aero_loop1)
 
 !-------------------------------------------------------------------------
-!    define the layer thickness and variance of the vertical velocity. 
+!    define the layer thickness and variance of the vertical velocity.
 !    call aer_ccn_act_wpdf_m to determine number of activated droplets.
 !    this call need not be made if the activation vertical velocity is
 !    downward, the rotstayn-klein microphysics is active, and pdf_clouds
-!    are not activated; in such a case, no particles are activated. 
+!    are not activated; in such a case, no particles are activated.
 !-------------------------------------------------------------------------
 
         call mpp_clock_begin (aero_loop2)
@@ -393,10 +391,9 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
                 if ( (do_pdf_clouds) .or.  &
                    (do_mg_microphys)  .or.  &
                    (do_ncar_microphys)  .or.  &
-                   (do_mg_ncar_microphys)  .or.  &
                    ( do_ncar_MG2 ) .or. &
 ! cjg: total activation for RK
-                   (total_activation) .or.  &  
+                   (total_activation) .or.  &
                    (up_strat(i,j,k) >= 0.0) )  then
                   thickness(i,j,k) = Input_mp%pmass(i,j,k)/  &
                                                 Atmos_state%airdens(i,j,k)
@@ -408,7 +405,7 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
                   if(diag_id%subgrid_w_variance > 0)   &
                         diag_4d(i,j,k,diag_pt%subgrid_w_variance) =   &
                                                            wp2(i,j,k)**0.5
-               
+
                   call aer_ccn_act_wpdf_m   &
                      (Input_mp%tin(i,j,k), Input_mp%pfull(i,j,k), &
                       up_strat(i,j,k), wp2(i,j,k), wpdf_offs,   &
@@ -416,7 +413,7 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
                                                    Particles%drop1(i,j,k))
 
                 else
-                  Particles%drop1(i,j,k) = 0.                
+                  Particles%drop1(i,j,k) = 0.
                 endif
               end do
             end do
@@ -462,16 +459,16 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
                   call ice_nucl_wpdf_Fan (   &
                           Input_mp%tin(i,j,k), &
                           Input_mp%pfull(i,j,k), &
-                          up_strat(i,j,k), wp2i(i,j,k),  & 
-                          Particles%concen_dust_sub(i,j,k), &                   
+                          up_strat(i,j,k), wp2i(i,j,k),  &
+                          Particles%concen_dust_sub(i,j,k), &
                           Particles%crystal1(i,j,k),        & !Particles%crystal1(i,j,k): homogeneous nucleated ice
                           Ni_dust(i,j,k) )
-                  if ( do_sum_homo_het_Fan ) & 
+                  if ( do_sum_homo_het_Fan ) &
                       Particles%crystal1(i,j,k) = Particles%crystal1(i,j,k) + Ni_dust(i,j,k)
                 endif
               enddo
             enddo
-          enddo  
+          enddo
         endif
 !<--- h1g, 2020-06-01
 
@@ -503,11 +500,11 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
                     call ice_nucl_wpdf_Fan (   &
                           Input_mp%tin(i,j,k), &
                           Input_mp%pfull(i,j,k), &
-                          up_strat(i,j,k), wp2i(i,j,k),  & 
-                          Particles%concen_dust_sub(i,j,k), &                   
+                          up_strat(i,j,k), wp2i(i,j,k),  &
+                          Particles%concen_dust_sub(i,j,k), &
                           Particles%crystal1(i,j,k),        &!Particles%crystal1(i,j,k): homogeneous nucleated ice
                           Ni_dust(i,j,k) )
-                    if ( do_sum_homo_het_Fan ) & 
+                    if ( do_sum_homo_het_Fan ) &
                       Particles%crystal1(i,j,k) = Particles%crystal1(i,j,k) + Ni_dust(i,j,k)
 
 !------------------------------------------------------------------------
@@ -524,8 +521,8 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
                     qvsi(i,j,k) = 0.622 *esit(i,j,k)/qs_d(i,j,k)
 
 !------------------------------------------------------------------------
-!    define the relative humidities wrt ice and liquid to be used in the 
-!    calculation of ice nuclei activation. it may vary based on the nml 
+!    define the relative humidities wrt ice and liquid to be used in the
+!    calculation of ice nuclei activation. it may vary based on the nml
 !    variable rh_act_opt.
 !------------------------------------------------------------------------
                     IF (rh_act_opt .EQ. 1) THEN
@@ -554,7 +551,7 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
 !-------------------------------------------------------------------------
                     call ice_nucl_wpdf (    &
                           Input_mp%tin(i,j,k), u_i(i,j,k), u_l(i,j,k),&
-                          up_strat(i,j,k), wp2i(i,j,k),  & 
+                          up_strat(i,j,k), wp2i(i,j,k),  &
                           Input_mp%zfull(i,j,k),    &
                           Particles%totalmass1(i,j,k,:), &
                           Particles%imass1(i,j,k,:), n_totmass, n_imass, &
@@ -565,9 +562,9 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
                           ni_dust_tmp, ni_bc(i,j,k))
 
 
-                    if ( include_Ni_bc ) &      
+                    if ( include_Ni_bc ) &
                       Particles%crystal1(i,j,k) = Particles%crystal1(i,j,k) + ni_bc(i,j,k)
-                    if ( include_Ni_sulf ) &      
+                    if ( include_Ni_sulf ) &
                       Particles%crystal1(i,j,k) = Particles%crystal1(i,j,k) + ni_sulf(i,j,k)
 
                   else
@@ -585,8 +582,8 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
                     qvsi(i,j,k) = 0.622 *esit(i,j,k)/qs_d(i,j,k)
 
 !------------------------------------------------------------------------
-!    define the relative humidities wrt ice and liquid to be used in the 
-!    calculation of ice nuclei activation. it may vary based on the nml 
+!    define the relative humidities wrt ice and liquid to be used in the
+!    calculation of ice nuclei activation. it may vary based on the nml
 !    variable rh_act_opt.
 !------------------------------------------------------------------------
                     IF (rh_act_opt .EQ. 1) THEN
@@ -630,7 +627,7 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
 !-------------------------------------------------------------------------
                     call ice_nucl_wpdf (    &
                           Input_mp%tin(i,j,k), u_i(i,j,k), u_l(i,j,k),&
-                          up_strat(i,j,k), wp2i(i,j,k),  & 
+                          up_strat(i,j,k), wp2i(i,j,k),  &
                           Input_mp%zfull(i,j,k),    &
                           Particles%totalmass1(i,j,k,:), &
                           Particles%imass1(i,j,k,:), n_totmass, n_imass, &
@@ -646,20 +643,20 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
                     ni_dust(i,j,k) = 0.
                     ni_bc  (i,j,k) = 0.
                     cf(i,j,k) = missing_value
-                    u_i(i,j,k) =  missing_value            
+                    u_i(i,j,k) =  missing_value
                     u_l(i,j,k) =  missing_value
-                  endif  ! Input_mp%tin(i,j,k) .LT. tfreeze - 5. 
+                  endif  ! Input_mp%tin(i,j,k) .LT. tfreeze - 5.
 
 !-------------------------------------------------------------------------
-!    define the critical relative humidity that was used for ice nuclei 
+!    define the critical relative humidity that was used for ice nuclei
 !    activation, averaged over all spectral intervals (rh_crit). also define
 !    the minimum value from any of the spectral regions (rh_crit_min).
 !-------------------------------------------------------------------------
-                IF (Input_mp%tin(i,j,k) .LT. 250.) THEN 
+                IF (Input_mp%tin(i,j,k) .LT. 250.) THEN
                   Atmos_state%rh_crit(i,j,k) =     &
-                                      MAX(Atmos_state%rh_crit(i,j,k), 1.) 
+                                      MAX(Atmos_state%rh_crit(i,j,k), 1.)
                   Atmos_state%rh_crit_min(i,j,k) =  &
-                                  MAX(Atmos_state%rh_crit_min(i,j,k), 1.) 
+                                  MAX(Atmos_state%rh_crit_min(i,j,k), 1.)
 
 !-------------------------------------------------------------------------
 !    if debugging is active, and the minimum is over 250%, output relevant
@@ -688,36 +685,36 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
 !    define various desired diagnostics.
 !-------------------------------------------------------------------------
 
-          if ( diag_id%imass7 > 0 )    &   
+          if ( diag_id%imass7 > 0 )    &
                   diag_4d(:,:,:,diag_pt%imass7) = Particles%imass1(:,:,:,7)
 
           if(diag_id%potential_crystals > 0)   &
                   diag_4d(:,:,:,diag_pt%potential_crystals) =  &
                                                        Particles%crystal1
 
-          if ( diag_id%rhcrit > 0 )     &  
+          if ( diag_id%rhcrit > 0 )     &
                   diag_4d(:,:,:,diag_pt%rhcrit) = 100.*Atmos_state%rh_crit
 
-          if ( diag_id%rhcrit_min > 0 )     &  
+          if ( diag_id%rhcrit_min > 0 )     &
                   diag_4d(:,:,:,diag_pt%rhcrit_min) =   &
                                             100.*Atmos_state%rh_crit_min
 
-          if ( diag_id%ndust1 > 0 )     &  
+          if ( diag_id%ndust1 > 0 )     &
                   diag_4d(:,:,:,diag_pt%ndust1) = Nfact_du1 *   &
                                                   Particles%imass1(:,:,:,8)
 
-          if ( diag_id%ndust2 > 0 )     &  
+          if ( diag_id%ndust2 > 0 )     &
                   diag_4d(:,:,:,diag_pt%ndust2) = Nfact_du2 *    &
                                                   Particles%imass1(:,:,:,9)
 
-          if ( diag_id%ndust3 > 0 )     &  
+          if ( diag_id%ndust3 > 0 )     &
                   diag_4d(:,:,:,diag_pt%ndust3) = Nfact_du3 *   &
                                                 Particles%imass1(:,:,:,10)
-         
-          if ( diag_id%ndust4 > 0 )     &  
+
+          if ( diag_id%ndust4 > 0 )     &
                   diag_4d(:,:,:,diag_pt%ndust4) = Nfact_du4 *   &
                                                 Particles%imass1(:,:,:,11)
-    
+
           if ( diag_id%ndust5 > 0 )    &
                   diag_4d(:,:,:,diag_pt%ndust5) = Nfact_du5 *  &
                                                 Particles%imass1(:,:,:,12)
@@ -727,7 +724,7 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
 
           if ( diag_id%ni_bc > 0 ) diag_4d(:,:,:,diag_pt%ni_bc) = ni_bc
 
-          if ( diag_id%ni_sulf > 0 )      & 
+          if ( diag_id%ni_sulf > 0 )      &
                   diag_4d(:,:,:,diag_pt%ni_sulf) = ni_sulf
 
           if (rh_act_opt .ne. 1) then
@@ -777,7 +774,7 @@ REAL, DIMENSION(idim,jdim,kdim),           INTENT(in )   :: pthickness
 REAL, DIMENSION(idim,jdim,kdim),           INTENT(inout) :: concen_dust_sub
 REAL, DIMENSION(idim,jdim,kdim,n_totmass), INTENT(inout) :: totalmass1
 REAL, DIMENSION(idim,jdim,kdim,n_imass),   INTENT(inout) :: imass1
-TYPE(aerosol_type),                        INTENT (in)   :: Aerosol  
+TYPE(aerosol_type),                        INTENT (in)   :: Aerosol
 REAL, DIMENSION(idim,jdim,kdim,0:n_diag_4d),    &
                                            INTENT(INOUT) :: diag_4d
 TYPE(diag_id_type),                        intent(in)    :: diag_id
@@ -794,7 +791,7 @@ TYPE(diag_pt_type),                        intent(in)    :: diag_pt
 
 
 !-------------------------------------------------------------------------
-!    initialize local accumulation arrays. 
+!    initialize local accumulation arrays.
 !-------------------------------------------------------------------------
       if (use_online_aerosol) then
         do k=1,kdim
@@ -815,7 +812,7 @@ TYPE(diag_pt_type),                        intent(in)    :: diag_pt
 !-------------------------------------------------------------------------
       if (do_liq_num) then
         if (use_online_aerosol) then
-          do na = 1,size(Aerosol%aerosol,4)               
+          do na = 1,size(Aerosol%aerosol,4)
             if (trim(Aerosol%aerosol_names(na)) == 'so4' .or. &
                 trim(Aerosol%aerosol_names(na)) == 'so4_anthro' .or.&
                 trim(Aerosol%aerosol_names(na)) == 'so4_natural' .or. &
@@ -844,12 +841,12 @@ TYPE(diag_pt_type),                        intent(in)    :: diag_pt
 !-----------------------------------------------------------------------
 ! h1g, 2015-09-18
 !    for fast aerosol, seasalt and dust names are changed from seasalt1,
-!    seasalt2, ... dust1, dust2, ... to seasalt_aitken, ..., 
+!    seasalt2, ... dust1, dust2, ... to seasalt_aitken, ...,
 !    dust_mode1_of_2
 !-----------------------------------------------------------------------
             else if(trim(Aerosol%aerosol_names(na)) == 'seasalt1' &
                  .or.trim(Aerosol%aerosol_names(na)) ==   &
-                                             'seasalt_aitken' ) then 
+                                             'seasalt_aitken' ) then
               do k=1,kdim
                 do j=1,jdim
                   do i=1,idim
@@ -889,7 +886,7 @@ TYPE(diag_pt_type),                        intent(in)    :: diag_pt
                 end do
               end do
 
-            else if(trim(Aerosol%aerosol_names(na)) == 'seasalt4' ) then 
+            else if(trim(Aerosol%aerosol_names(na)) == 'seasalt4' ) then
               do k=1,kdim
                 do j=1,jdim
                   do i=1,idim
@@ -912,8 +909,8 @@ TYPE(diag_pt_type),                        intent(in)    :: diag_pt
                   end do
                 end do
               end do
-             
-            else if(trim(Aerosol%aerosol_names(na)) == 'bcphilic') then 
+
+            else if(trim(Aerosol%aerosol_names(na)) == 'bcphilic') then
               do k=1,kdim
                 do j=1,jdim
                   do i=1,idim
@@ -925,7 +922,7 @@ TYPE(diag_pt_type),                        intent(in)    :: diag_pt
                 end do
               end do
 
-            else if(trim(Aerosol%aerosol_names(na)) == 'bcphobic' ) then 
+            else if(trim(Aerosol%aerosol_names(na)) == 'bcphobic' ) then
               do k=1,kdim
                 do j=1,jdim
                   do i=1,idim
@@ -956,7 +953,7 @@ TYPE(diag_pt_type),                        intent(in)    :: diag_pt
                 end do
               end do
 
-            else if(trim(Aerosol%aerosol_names(na)) == 'dust2' ) then   
+            else if(trim(Aerosol%aerosol_names(na)) == 'dust2' ) then
               do k=1,kdim
                 do j=1,jdim
                   do i=1,idim
@@ -975,7 +972,7 @@ TYPE(diag_pt_type),                        intent(in)    :: diag_pt
                 end do
               end do
 
-            else if(trim(Aerosol%aerosol_names(na)) == 'dust3' ) then 
+            else if(trim(Aerosol%aerosol_names(na)) == 'dust3' ) then
               do k=1,kdim
                 do j=1,jdim
                   do i=1,idim
@@ -997,7 +994,7 @@ TYPE(diag_pt_type),                        intent(in)    :: diag_pt
               do k=1,kdim
                 do j=1,jdim
                   do i=1,idim
-                    imass1(i,j,k,11) = Aerosol%aerosol(i,j,k,na)/   &   
+                    imass1(i,j,k,11) = Aerosol%aerosol(i,j,k,na)/   &
                                                          pthickness(i,j,k)
 !--> h1g, 2020-06-01
                     if ( do_dust_berg .and. include_all_dust_bins ) then
@@ -1014,7 +1011,7 @@ TYPE(diag_pt_type),                        intent(in)    :: diag_pt
               do k=1,kdim
                 do j=1,jdim
                   do i=1,idim
-                    imass1(i,j,k,12) = Aerosol%aerosol(i,j,k,na)/ &      
+                    imass1(i,j,k,12) = Aerosol%aerosol(i,j,k,na)/ &
                                                          pthickness(i,j,k)
 
 !--> h1g, 2020-06-01
@@ -1030,7 +1027,7 @@ TYPE(diag_pt_type),                        intent(in)    :: diag_pt
 
             endif
           end do
-          
+
           do k=1,kdim
             do j=1,jdim
               do i=1,idim
@@ -1052,17 +1049,17 @@ TYPE(diag_pt_type),                        intent(in)    :: diag_pt
                                              0.7273*totalmass1(i,j,k,1)/  &
                                                     pthickness(i,j,k)*1.0e9
                 endif
-         
+
                 if (diag_id%seasalt_sub > 0) then
                   diag_4d(i,j,k,diag_pt%seasalt_sub) =    &
                                                   concen_ss_sub(i,j,k)/  &
                                                     pthickness(i,j,k)*1.0e9
-                endif 
+                endif
                 if (diag_id%seasalt_sup > 0) then
                   diag_4d(i,j,k, diag_pt%seasalt_sup) =    &
                                                  concen_ss_sup(i,j,k)/  &
                                                     pthickness(i,j,k)*1.0e9
-                endif 
+                endif
               end do
             end do
            end do
@@ -1129,7 +1126,7 @@ TYPE(diag_pt_type),                        intent(in)    :: diag_pt
           do j=1,jdim
             do i=1,idim
 ! submicron dust concentration (ug/m3) (NO. 2 to NO. 4)
-              imass1(i,j,k,7) = imass1(i,j,k,7)/pthickness(i,j,k)*1.0e9 
+              imass1(i,j,k,7) = imass1(i,j,k,7)/pthickness(i,j,k)*1.0e9
             end do
           end do
         end do
@@ -1141,7 +1138,7 @@ TYPE(diag_pt_type),                        intent(in)    :: diag_pt
             do j=1,jdim
               do i=1,idim
                 concen_dust_sub(i,j,k) = concen_dust_sub(i,j,k)/ &
-                                                   pthickness(i,j,k)*1.0e9 
+                                                   pthickness(i,j,k)*1.0e9
               end do
             end do
           end do
@@ -1151,7 +1148,7 @@ TYPE(diag_pt_type),                        intent(in)    :: diag_pt
           do k=1,kdim
             do j=1,jdim
               do i=1,idim
-!RSH the 1.0e12 factor here is to counter the  1.0e-12 factor applied 
+!RSH the 1.0e12 factor here is to counter the  1.0e-12 factor applied
 ! above to totalmass1. The 1.0e9 factor (kg -> ug) is already in totalmass1.
                 diag_4d(i,j,k,diag_pt%om) = totalmass1(i,j,k,2)*1.0e12
               end do
