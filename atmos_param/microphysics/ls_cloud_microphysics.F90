@@ -7,7 +7,6 @@
 !         OPTIONS AVAILABLE:
 !             Rotstayn-Klein microphysics (this used in old strat_cloud)
 !             MG microphysics (as developed by M. Salzmann)
-!             NCAR microphysics version 1.5 (became available in 2012)
 !             NCAR microphysics version 2.0 (became available? )
 !
 !-----------------------------------------------------------------------
@@ -61,9 +60,6 @@ use morrison_gettelman_microp_mod,     &
                            only: morrison_gettelman_microp, &
                                  morrison_gettelman_microp_init, &
                                  morrison_gettelman_microp_end
-use micro_mg_mod,          only: micro_mg_init, micro_mg_get_cols,&
-                                 micro_mg_tend
-
 use micro_mg2_mod,         only: micro_mg2_init, micro_mg2_get_cols,&
                                  micro_mg2_tend
 
@@ -141,7 +137,7 @@ logical :: do_pdf_clouds
 logical :: doing_prog_clouds
 real    :: dtcloud, inv_dtcloud
 logical :: do_rk_microphys, do_mg_microphys, &
-           do_ncar_microphys, do_ncar_MG2
+           do_ncar_MG2
 logical :: tiedtke_macrophysics
 logical :: dqa_activation, total_activation
 integer :: nsphum, nql, nqi, nqa, nqn, nqni, nqr, nqs, nqg, nqnr, nqns
@@ -208,7 +204,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
       doing_prog_clouds = Exch_ctrl%doing_prog_clouds
       do_rk_microphys = Constants_lsc%do_rk_microphys
       do_mg_microphys = Constants_lsc%do_mg_microphys
-      do_ncar_microphys = Constants_lsc%do_ncar_microphys
 
       do_ncar_MG2       = Constants_lsc%do_ncar_MG2
 
@@ -239,10 +234,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
         ncar_micro_init_clock = mpp_clock_id(    &
                '   Ls_cld_micro: mg_micro:Initialization' , &
                                                 grain=CLOCK_MODULE_DRIVER)
-      else if (do_ncar_microphys) then
-        ncar_micro_init_clock = mpp_clock_id(    &
-               '   Ls_cld_micro: ncar_micro:Initialization' , &
-                                                grain=CLOCK_MODULE_DRIVER)
       else if (do_ncar_MG2) then
         ncar_micro_init_clock = mpp_clock_id(    &
                '   Ls_cld_micro: ncar_MG2:Initialization' , &
@@ -256,10 +247,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
       else if (do_mg_microphys) then
         ncar_micro_clock = mpp_clock_id(    &
                '   Ls_cld_micro: mg_micro' , &
-                                                grain=CLOCK_MODULE_DRIVER )
-      else if (do_ncar_microphys) then
-        ncar_micro_clock = mpp_clock_id(    &
-               '   Ls_cld_micro: ncar_micro' , &
                                                 grain=CLOCK_MODULE_DRIVER )
       else if (do_ncar_MG2) then
         ncar_micro_clock = mpp_clock_id(    &
@@ -289,12 +276,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
 !-------------------------------------------------------------------------
 !     perform consistency / realizability checks.
 !-------------------------------------------------------------------------
-      if (do_clubb > 0 .and.   &
-             (.not. do_ncar_microphys ) ) then
-        call error_mesg ('ls_cloud_microphys_mod/ls_cloud_microphys_init',&
-        'when clubb is activated, must use microphys_scheme = "ncar"', FATAL)
-      endif
-
       if (override_ice_num == 1) then
         if ( use_Meyers .and. use_Cooper ) &
           call error_mesg (   &
@@ -326,18 +307,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
 !-----------------------------------------------------------------------
 !  latest available ncar microphysics  (ncar v1.5)
 !-----------------------------------------------------------------------
-        else if (do_ncar_microphys) then
-          call mpp_clock_begin (ncar_micro_init_clock)
-          call micro_mg_init (r8, GRAV, RDGAS, RVGAS, CP_AIR, TFREEZE, &
-                              HLV, HLF, Nml_lsc%do_ice_nucl_wpdf,   &
-                              errstring, Exch_ctrl)
-          if (trim(errstring) /= '') then
-            call error_mesg    &
-                  ('ls_cloud_microphysics/ls_cloud_microphysics_init', &
-                                                         errstring, FATAL)
-          endif
-          call mpp_clock_end (ncar_micro_init_clock)
-
 !-----------------------------------------------------------------------
 !  ncar microphysics  (ncar v2.0)
 !-----------------------------------------------------------------------
@@ -530,7 +499,6 @@ real,                        intent(in), dimension(:,:) :: lon, lat
 !  NCAR microphysics (currently 3 flavors)
 !-----------------------------------------------------------------------
       else if (do_mg_microphys   .or. &
-               do_ncar_microphys      .or. &
                do_ncar_MG2         ) then
         call mpp_clock_begin (ncar_micro_clock)
 
@@ -700,8 +668,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
 !-------------------------------------------------------------------------
 !    executed ncar microphysics:
 !-------------------------------------------------------------------------
-          else if (do_ncar_microphys &
-                   .or. do_ncar_MG2 ) then
+          else if (do_ncar_MG2 ) then
 
             rho = Input_mp%pfull/(RDGAS*Atmos_state%tn)
 
@@ -826,155 +793,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
               relvarn(:,:,:) = Cloud_state%relvarn(:,:,:)
             endif
 
-!------------------------------------------------------------------------
-!    if the 'ncar' microphysics (the newest available version of the NCAR
-!    microphysics, adapted for use in FMS by H. Guo and R. Hemler)
-!    is activated, execute the following:
-!------------------------------------------------------------------------
-            if (do_ncar_microphys) then
-
-!------------------------------------------------------------------------
-!    define the topmost model level at which microphysics is to be
-!    calculated (top_lev).  define the number of levels (nlev) over which
-!    microphysics will be calculated (from top_lev to the surface).
-!------------------------------------------------------------------------
-              nlev = kx - top_lev + 1
-
-!-----------------------------------------------------------------------
-!    define additional input fields:
-!    accre_enhann -- accretion enhancement factor
-!    the following are used if an external cirrus microphysics model
-!    is active (eg, NCAR CARMA model)
-!    tnd_qsnown --  snow mass tendency (kg/kg/s)
-!    tnd_nsnown(:,:) ! snow number tendency (#/kg/s)
-!    re_icen(:,:)    ! ice effective radius (m)
-!-----------------------------------------------------------------------
-              accre_enhann(:,:,:) = 1.0
-              tnd_qsnown(:,:,:) = 0.
-              tnd_nsnown(:,:,:) = 0.
-              re_icen(:,:,:) = 0.
-
-!-------------------------------------------------------------------------
-!    execute the microphysics, 1 jrow at a time.
-!-------------------------------------------------------------------------
-              do j=1,jx
-
-!------------------------------------------------------------------------
-!    call subroutine micro_mg_get_cols to identify the columns in which
-!    microphysics will be calculated. only those columns meeting certain
-!    criteria below the specified top_lev will be flagged, and experience
-!    microphysics.
-!------------------------------------------------------------------------
-                call micro_mg_get_cols (   &
-                    ix, nlev, top_lev, Atmos_state%qvn(:,j,:), &
-                    Cloud_state%ql_upd(:,j,:) + dqcdt(:,j,:)*dtcloud, &
-                    Cloud_state%qi_upd(:,j,:) + dqidt(:,j,:)*dtcloud, &
-                    mgncol, mgcols, do_clubb > 0)
-
-!------------------------------------------------------------------------
-!    if debugging is activated, output the temp tendency prior to
-!    microphysics.
-!------------------------------------------------------------------------
-                call write_debug_output (" ST samp bef mg ",   &
-                                                      Tend_mp%ttnd, j=j)
-
-
-!-------------------------------------------------------------------------
-!    call the ncar microphysics routine micro_mg_tend.
-!-------------------------------------------------------------------------
-                call  micro_mg_tend ( &
-                       dqa_activation, total_activation, &
-                       tiedtke_macrophysics, j, jx, mgncol, mgcols,   &
-                       nlev, top_lev, dtcloud, Atmos_state%tn(:,j,:), &
-                       Atmos_state%qvn(:,j,:), Cloud_state%ql_upd(:,j,:), &
-                       Cloud_state%qi_upd(:,j,:),   &
-                       Cloud_state%qn_upd(:,j,:),   &
-                       Cloud_state%qni_upd(:,j,:), relvarn(:,j,:),  &
-                       accre_enhann(:,j,:), Input_mp%pfull(:,j,:),  &
-                       Atmos_state%delp(:,j,:), Input_mp%phalf(:,j,:), &
-                       Cloud_state%qa_upd(:,j,:), liqcldf(:,j,:),   &
-                       icecldf(:,j,:), Cloud_processes%delta_cf(:,j,:), &
-                       D_eros_l(:,j,:), nerosc(:,j,:), D_eros_i(:,j,:),  &
-                       nerosi(:,j,:), dqcdt(:,j,:), dqidt(:,j,:),   &
-                       crystal1(:,j,:), Particles%drop2(:,j,:),&
-                       rbar_dust_4bin(:,j,:,:),  ndust_4bin(:,j,:,:),   &
-                       ST_micro(:,j,:), SQ_micro(:,j,:), SL_micro(:,j,:), &
-                       SI_micro(:,j,:), SN_micro(:,j,:), SNI_micro(:,j,:),&
-                       Precip_state%surfrain(:,j),    &
-                       Precip_state%surfsnow(:,j),&
-                       Precip_state%lsc_snow(:,j,:), &
-                       Removal_mp%rain3d(:,j,:), Removal_mp%snow3d(:,j,:),&
-                       Precip_state%lsc_rain(:,j,:),  &
-                       Precip_state%lsc_rain_size(:,j,:),  &
-                       Precip_state%lsc_snow_size(:,j,:),  &
-                       tnd_qsnown(:,j,:), tnd_nsnown(:,j,:),    &
-                       re_icen(:,j,:), errstring,    &
-                       Cloud_processes%f_snow_berg(:,j,:), &
-                       ssat_disposal(:,j,:), &
-                       Lsdiag_mp_control%n_diag_4d, Lsdiag_mp%diag_4d,  &
-                       Lsdiag_mp_control%diag_id,    &
-                                                 Lsdiag_mp_control%diag_pt)
-
-!------------------------------------------------------------------------
-!   convert from effective radius to diameter for use in radiation.
-!   in mg and mg-ncar, diameter is returned from microphysics routine,
-!   so this step is unneeded.
-!------------------------------------------------------------------------
-                Precip_state%lsc_rain_size(:,j,:) =   &
-                                   2.0*Precip_state%lsc_rain_size(:,j,:)
-                Precip_state%lsc_snow_size(:,j,:) =   &
-                                   2.0*Precip_state%lsc_snow_size(:,j,:)
-
-!-------------------------------------------------------------------------
-!   if an error message was returned from micro_mg_tend output it and
-!   stop execution.
-!-------------------------------------------------------------------------
-                if (trim(errstring) /= '') then
-                  call error_mesg (  &
-                          'moist_processes/ls_cloud_microphysics', &
-                                                         errstring, FATAL)
-                endif
-
-!------------------------------------------------------------------------
-!   if debugging is activated, output the temp tendency after microphysics.
-!------------------------------------------------------------------------
-                call write_debug_output (" ST samp aft mg ",  &
-                                                       Tend_mp%ttnd, j=j)
-
-              end do  ! end of j loop
-
-!------------------------------------------------------------------------
-!    calculate column enthalpy and total water changes
-!    Note: in MG-microphys, temperature tendency is multiplied by Cp_air.
-!------------------------------------------------------------------------
-              enth_micro_col(:,:) = 0.0
-              wat_micro_col(:,:)  = 0.0
-              do j=1,jx
-                do i=1,ix
-                  do k=1,kx
-                    enth_micro_col(i,j) = enth_micro_col(i,j)   +         &
-                        ( ST_micro(i,j,k) - HLV*SL_micro(i,j,k) -   &
-                                         HLS*SI_micro(i,j,k) )*    &
-                                             Atmos_state%delp(i,j,k)/grav
-
-                    wat_micro_col(i,j) = wat_micro_col(i,j)  +            &
-                         ( SQ_micro(i,j,k) + SL_micro(i,j,k) +  &
-                                        SI_micro(i,j,k) )*   &
-                                             Atmos_state%delp(i,j,k)/grav
-                  enddo
-
-                  enth_micro_col(i,j) = enth_micro_col(i,j) +   &
-                                                 (-HLV*1000.0* &
-                                        (Precip_state%surfrain(i,j) -  &
-                                         Precip_state%surfsnow(i,j)) -  &
-                                 HLS*1000.0 * Precip_state%surfsnow(i,j) )
-
-                  wat_micro_col(i,j) = wat_micro_col(i,j) +   &
-                                       Precip_state%surfrain(i,j) *1000.0
-                enddo
-              enddo
-
-            else if (do_ncar_MG2) then
+            if (do_ncar_MG2) then
               nlev = kx
               top_lev = 1
               mgncol = ix
@@ -1109,7 +928,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
                 enddo
               enddo
 
-            endif ! do_ncar_microphys
+            endif !
           endif  ! if do_mg_microphys, elseif do_ncar_microphys & .or. do_ncar_MG2
 
 !------------------------------------------------------------------------
@@ -1238,7 +1057,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
 !-------------------------------------------------------------------------
 !    exit with error if no valid microphysics scheme was specified.
 !-------------------------------------------------------------------------
-      else    ! do rk
+     else    ! do rk
         call error_mesg ('ls_cloud_microphysics/ls_cloud_microphysics', &
               'invalid lscloud_driver_nml microphys_scheme option', FATAL)
       endif    ! (do_rk)
@@ -1273,10 +1092,6 @@ subroutine ls_cloud_microphysics_end
       else if (do_mg_microphys) then
         ncar_micro_term_clock = mpp_clock_id(    &
                '   Ls_cld_micro: mg_micro:Termination' , &
-                                                grain=CLOCK_MODULE_DRIVER)
-      else if (do_ncar_microphys) then
-        ncar_micro_term_clock = mpp_clock_id(    &
-               '   Ls_cld_micro: ncar_micro:Termination' , &
                                                 grain=CLOCK_MODULE_DRIVER)
       endif
 
@@ -1837,8 +1652,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
 !    desired. this constraint has already been imposed with r-k
 !    microphysics, as part of the destruction diagnostic.
 !------------------------------------------------------------------------
-      if (do_ncar_microphys .or. &
-          do_mg_microphys .or. do_ncar_MG2 ) then
+      if (do_mg_microphys .or. do_ncar_MG2 ) then
         if (Lsdiag_mp_control%diag_id%qadt_limits +    &
                          Lsdiag_mp_control%diag_id%qa_limits_col > 0)    &
        Lsdiag_mp%diag_4d(:,:,:,Lsdiag_mp_control%diag_pt%qadt_limits) =   &
