@@ -82,7 +82,6 @@ logical    :: do_liq_num, do_ice_num
 integer    :: do_clubb
 logical    :: do_pdf_clouds
 logical    :: tiedtke_macrophysics
-logical    :: do_mg_microphys, do_ncar_microphys
 integer    :: nsphum, nql, nqi, nqa, nqn, nqni, nqr, nqs, nqg
 
 !-------------------- clock definitions --------------------------------
@@ -153,8 +152,6 @@ type(exchange_control_type), intent(in)     :: Exch_ctrl
       do_clubb = Exch_ctrl%do_clubb
       do_pdf_clouds = Nml_lsc%do_pdf_clouds
       tiedtke_macrophysics = Constants_lsc%tiedtke_macrophysics
-      do_mg_microphys = Constants_lsc%do_mg_microphys
-      do_ncar_microphys = Constants_lsc%do_ncar_microphys
       qmin = Exch_ctrl%qmin
 
       nsphum = Physics_control%nsphum
@@ -370,18 +367,7 @@ real, dimension(:,:,:,size(Output_mp%rdt,4)+1:),     &
 
       else if (tiedtke_macrophysics) then
 
-!------------------------------------------------------------------------
-!    save the adjusted and realizable cloud area and cloud area tendency
-!    (before this steps macrophysics contribution is calculated) for
-!    use in the NCAR-based microphysics schemes.
-!------------------------------------------------------------------------
         call mpp_clock_begin (tiedtke_clock)
-        if (do_mg_microphys .or. &
-            do_ncar_microphys) then
-          Cloud_state%qa_upd_0 = Cloud_state%qa_upd
-          Cloud_state%SA_0 = Cloud_State%SA_out
-        endif
-
 !--------------------------------------------------------------------------
 !   if the tiedtke scheme is active, determine aerosol available for use as
 !   condensation nuclei, then call tiedtke_macro to calculate the changes

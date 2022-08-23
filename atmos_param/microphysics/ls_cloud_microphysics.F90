@@ -56,10 +56,6 @@ use lscloud_debug_mod,     only: write_debug_output
 use rotstayn_klein_mp_mod, only: rotstayn_klein_microp, &
                                  rotstayn_klein_microp_init,  &
                                  rotstayn_klein_microp_end
-use morrison_gettelman_microp_mod,     &
-                           only: morrison_gettelman_microp, &
-                                 morrison_gettelman_microp_init, &
-                                 morrison_gettelman_microp_end
 use micro_mg2_mod,         only: micro_mg2_init, micro_mg2_get_cols,&
                                  micro_mg2_tend
 
@@ -136,8 +132,7 @@ integer :: super_ice_opt
 logical :: do_pdf_clouds
 logical :: doing_prog_clouds
 real    :: dtcloud, inv_dtcloud
-logical :: do_rk_microphys, do_mg_microphys, &
-           do_ncar_MG2
+logical :: do_rk_microphys, do_ncar_MG2
 logical :: tiedtke_macrophysics
 logical :: dqa_activation, total_activation
 integer :: nsphum, nql, nqi, nqa, nqn, nqni, nqr, nqs, nqg, nqnr, nqns
@@ -203,8 +198,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
       do_pdf_clouds = Nml_lsc%do_pdf_clouds
       doing_prog_clouds = Exch_ctrl%doing_prog_clouds
       do_rk_microphys = Constants_lsc%do_rk_microphys
-      do_mg_microphys = Constants_lsc%do_mg_microphys
-
       do_ncar_MG2       = Constants_lsc%do_ncar_MG2
 
       tiedtke_macrophysics = Constants_lsc%tiedtke_macrophysics
@@ -230,10 +223,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
         rk_micro_init_clock = mpp_clock_id(   &
                '   Ls_cld_micro: rk_micro:Initialization' , &
                                                 grain=CLOCK_MODULE_DRIVER )
-      else if (do_mg_microphys) then
-        ncar_micro_init_clock = mpp_clock_id(    &
-               '   Ls_cld_micro: mg_micro:Initialization' , &
-                                                grain=CLOCK_MODULE_DRIVER)
       else if (do_ncar_MG2) then
         ncar_micro_init_clock = mpp_clock_id(    &
                '   Ls_cld_micro: ncar_MG2:Initialization' , &
@@ -243,10 +232,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
       if (do_rk_microphys) then
         rk_micro_clock = mpp_clock_id(   &
                '   Ls_cld_micro: rk_micro' , &
-                                                grain=CLOCK_MODULE_DRIVER )
-      else if (do_mg_microphys) then
-        ncar_micro_clock = mpp_clock_id(    &
-               '   Ls_cld_micro: mg_micro' , &
                                                 grain=CLOCK_MODULE_DRIVER )
       else if (do_ncar_MG2) then
         ncar_micro_clock = mpp_clock_id(    &
@@ -296,17 +281,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
           call rotstayn_klein_microp_init (Nml_lsc, Exch_ctrl)
           call mpp_clock_end   (rk_micro_init_clock)
 
-!-----------------------------------------------------------------------
-!  morrison-gettelman microphysics (as done by M. Salzmann)
-!-----------------------------------------------------------------------
-        else if (do_mg_microphys) then
-          call mpp_clock_begin (ncar_micro_init_clock)
-          call morrison_gettelman_microp_init (Nml_lsc, Exch_ctrl)
-          call mpp_clock_end (ncar_micro_init_clock)
-
-!-----------------------------------------------------------------------
-!  latest available ncar microphysics  (ncar v1.5)
-!-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
 !  ncar microphysics  (ncar v2.0)
 !-----------------------------------------------------------------------
@@ -498,8 +472,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
 !-----------------------------------------------------------------------
 !  NCAR microphysics (currently 3 flavors)
 !-----------------------------------------------------------------------
-      else if (do_mg_microphys   .or. &
-               do_ncar_MG2         ) then
+      else if ( do_ncar_MG2 ) then
         call mpp_clock_begin (ncar_micro_clock)
 
         ST_micro(:,:,:)  = 0.0
@@ -599,76 +572,10 @@ real,                        intent(in), dimension(:,:) :: lon, lat
             end do
           end do
 
-!------------------------------------------------------------------------
-!    if the 'mg' microphysics (the original,produced by M. Salzmann, with
-!    tweaks by H. Guo and R. Hemler) is activated, execute the following:
-!------------------------------------------------------------------------
-          if (do_mg_microphys) then
-
-!-----------------------------------------------------------------------
-!   define activated droplets in units of #/kg (drop1 is in-cloud #/cc).
-!-----------------------------------------------------------------------
-            Particles%drop2 = Particles%drop1*1.e6/Atmos_state%airdens
-
-!-----------------------------------------------------------------------
-!   execute the microphysics, 1 jrow at a time.
-!-----------------------------------------------------------------------
-            do j=1,jx
-
-!------------------------------------------------------------------------
-!    if debugging is activated, output the temp tendency prior to
-!    microphysics.
-!------------------------------------------------------------------------
-              call write_debug_output (" ST samp bef mg ",   &
-                                                       Tend_mp%ttnd, j=j)
-
-!-------------------------------------------------------------------------
-!    call morrison-gettelman (mg) microphysics package.
-!-------------------------------------------------------------------------
-              call morrison_gettelman_microp( &
-                   tiedtke_macrophysics, total_activation,   &
-                   dqa_activation, j ,ix, jx, kx, dtcloud,   &
-                   Input_mp%pfull(:,j,:),  Atmos_state%delp(:,j,:),  &
-                   Atmos_state%tn(:,j,:),  Input_mp%tin(:,j,:),    &
-                   Atmos_state%qvn(:,j,:), Input_mp%qin(:,j,:),  &
-                   Cloud_state%ql_upd(:,j,:), Cloud_state%qi_upd(:,j,:),&
-                   Cloud_state%qn_upd(:,j,:), Cloud_state%qni_upd(:,j,:), &
-                   Cloud_state%qa_upd(:,j,:), dqcdt(:,j,:), dqidt(:,j,:), &
-                   Particles%drop2(:,j,:), Particles%crystal1(:,j,:), &
-                   Particles%rbar_dust(:,j,:), Particles%ndust(:,j,:),  &
-                   Cloud_processes%delta_cf(:,j,:),   &
-                   Cloud_state%qa_upd(:,j,:), Cloud_state%qa_upd_0(:,j,:),&
-                   Cloud_state%SA_0(:,j,:), D_eros_l(:,j,:),  &
-                   nerosc(:,j,:),  D_eros_i(:,j,:), nerosi(:,j,:), &
-                   Atmos_state%gamma(:,j,:), inv_dtcloud,    &
-                   Cloud_state%qa_in(:,j,:), Tend_mp%ttnd(:,j,:),   &
-                   Tend_mp%qtnd(:,j,:), ssat_disposal(:,j,:), &
-                   ST_micro(:,j,:), SQ_micro(:,j,:),&
-                   SL_micro(:,j,:), SI_micro(:,j,:),  &
-                   SN_micro(:,j,:), SNI_micro(:,j,:),&
-                   Cloud_state%SA_out(:,j,:), Removal_mp%rain3d,   &
-                   Removal_mp%snow3d, Precip_state%surfrain(:,j),   &
-                   Precip_state%surfsnow(:,j), &
-                   Precip_state%lsc_rain(:,j,:),   &
-                   Precip_state%lsc_snow(:,j,:), &
-                   Precip_state%lsc_rain_size(:,j,:),   &
-                   Precip_state%lsc_snow_size(:,j,:), &
-                   Cloud_processes%f_snow_berg(:,j,:), &
-                   Lsdiag_mp_control%n_diag_4d, Lsdiag_mp%diag_4d,   &
-                   Lsdiag_mp_control%diag_id, Lsdiag_mp_control%diag_pt)
-
-!------------------------------------------------------------------------
-!    if debugging is activated, output the temp tendency after
-!    microphysics is completed.
-!------------------------------------------------------------------------
-              call write_debug_output  &
-                                  (" ST samp aft mg ", Tend_mp%ttnd, j=j)
-            end do   ! j loop
-
 !-------------------------------------------------------------------------
 !    executed ncar microphysics:
 !-------------------------------------------------------------------------
-          else if (do_ncar_MG2 ) then
+          if (do_ncar_MG2 ) then
 
             rho = Input_mp%pfull/(RDGAS*Atmos_state%tn)
 
@@ -928,8 +835,8 @@ real,                        intent(in), dimension(:,:) :: lon, lat
                 enddo
               enddo
 
-            endif !
-          endif  ! if do_mg_microphys, elseif do_ncar_microphys & .or. do_ncar_MG2
+           endif !
+        endif  ! if do_ncar_MG2
 
 !------------------------------------------------------------------------
 !    adjust precip fields to assure mass conservation and realizable
@@ -1089,10 +996,6 @@ subroutine ls_cloud_microphysics_end
         rk_micro_term_clock = mpp_clock_id(   &
                '   Ls_cld_micro: rk_micro:Termination' , &
                                                 grain=CLOCK_MODULE_DRIVER )
-      else if (do_mg_microphys) then
-        ncar_micro_term_clock = mpp_clock_id(    &
-               '   Ls_cld_micro: mg_micro:Termination' , &
-                                                grain=CLOCK_MODULE_DRIVER)
       endif
 
 !-------------------------------------------------------------------------
@@ -1103,10 +1006,6 @@ subroutine ls_cloud_microphysics_end
         call mpp_clock_begin (rk_micro_term_clock)
         call rotstayn_klein_microp_end
         call mpp_clock_end   (rk_micro_term_clock)
-      else if (do_mg_microphys ) then
-        call mpp_clock_begin (ncar_micro_term_clock)
-        call morrison_gettelman_microp_end
-        call mpp_clock_end   (ncar_micro_term_clock)
       endif
 
       module_is_initialized = .false.
@@ -1652,7 +1551,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
 !    desired. this constraint has already been imposed with r-k
 !    microphysics, as part of the destruction diagnostic.
 !------------------------------------------------------------------------
-      if (do_mg_microphys .or. do_ncar_MG2 ) then
+      if ( do_ncar_MG2 ) then
         if (Lsdiag_mp_control%diag_id%qadt_limits +    &
                          Lsdiag_mp_control%diag_id%qa_limits_col > 0)    &
        Lsdiag_mp%diag_4d(:,:,:,Lsdiag_mp_control%diag_pt%qadt_limits) =   &

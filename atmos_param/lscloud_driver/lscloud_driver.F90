@@ -553,26 +553,18 @@ real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
 !------------------------------------------------------------------------
         if (trim(microphys_scheme) =='rotstayn_klein') then
           Constants_lsc%do_rk_microphys = .true.
-          Constants_lsc%do_mg_microphys = .false.
-          Constants_lsc%do_ncar_microphys = .false.
           Constants_lsc%do_ncar_MG2 = .false.
           do_predicted_ice_number = .false.
         else if (trim(microphys_scheme) == 'morrison_gettelman') then
           Constants_lsc%do_rk_microphys = .false.
-          Constants_lsc%do_mg_microphys = .true.
-          Constants_lsc%do_ncar_microphys = .false.
           Constants_lsc%do_ncar_MG2 = .false.
           do_predicted_ice_number = .true.
         else if (trim(microphys_scheme) == 'ncar') then
           Constants_lsc%do_rk_microphys = .false.
-          Constants_lsc%do_mg_microphys = .false.
-          Constants_lsc%do_ncar_microphys = .true.
           Constants_lsc%do_ncar_MG2 = .false.
           do_predicted_ice_number = .true.
        else if (trim(microphys_scheme) == 'mg2') then
           Constants_lsc%do_rk_microphys = .false.
-          Constants_lsc%do_mg_microphys = .false.
-          Constants_lsc%do_ncar_microphys = .false.
           Constants_lsc%do_ncar_MG2 = .true.
           do_predicted_ice_number = .true.
         else
@@ -651,8 +643,6 @@ real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
       else ! (doing_prog_clouds)
         Constants_lsc%tiedtke_macrophysics = .false.
         Constants_lsc%do_rk_microphys = .false.
-        Constants_lsc%do_mg_microphys = .false.
-        Constants_lsc%do_ncar_microphys = .false.
         Constants_lsc%do_ncar_MG2 = .false.
         do_predicted_ice_number = .false.
         Constants_lsc%dqa_activation = .false.
@@ -2729,23 +2719,6 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
 !    define additional column diagnostics that are not simply the
 !    pressure-depth-weighted sum of the column values:
 !------------------------------------------------------------------------
-
-!------------------------------------------------------------------------
-!       1) cloud ice and cloud liquid fallout for NCAR microphysics:
-!------------------------------------------------------------------------
-      if (Constants_lsc%do_mg_microphys .or.   &
-                               Constants_lsc%do_ncar_microphys) then
-        if (diag_id%cld_liq_imb + diag_id%cld_liq_imb_col > 0) then
-          diag_3d(:,:,diag_pt%cld_liq_imb) =   - ( &
-                diag_3d(:,:,diag_pt%qldt_sedi )  +   &
-                diag_3d(:,:,diag_pt%qdt_sedi_liquid2vapor)  )
-        endif
-        if (diag_id%cld_ice_imb + diag_id%cld_ice_imb_col > 0) then
-          diag_3d(:,:,diag_pt%cld_ice_imb) =   - ( &
-                diag_3d(:,:,diag_pt%qidt_fall )  +   &
-                diag_3d(:,:,diag_pt%qdt_sedi_ice2vapor)  )
-        endif
-      endif
 
 !------------------------------------------------------------------------
 !       2) negative values of rain and snow at the surface

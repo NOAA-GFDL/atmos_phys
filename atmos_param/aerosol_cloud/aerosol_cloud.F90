@@ -130,7 +130,7 @@ logical :: use_sub_seasalt
 real    :: sea_salt_scale
 real    :: om_to_oc
 logical :: do_pdf_clouds
-logical :: do_mg_microphys, do_ncar_microphys, do_ncar_MG2
+logical :: do_ncar_MG2
 logical :: total_activation
 
 logical :: debug
@@ -170,9 +170,6 @@ type(exchange_control_type), intent(in) :: Exch_ctrl
       sea_salt_scale = Nml_mp%sea_salt_scale
       om_to_oc = Nml_mp%om_to_oc
       do_pdf_clouds = Nml_lsc%do_pdf_clouds
-      do_mg_microphys = Constants_lsc%do_mg_microphys
-      do_ncar_microphys = Constants_lsc%do_ncar_microphys
-
       do_ncar_MG2 =Constants_lsc%do_ncar_MG2
 
       total_activation = Constants_lsc%total_activation
@@ -199,9 +196,7 @@ type(exchange_control_type), intent(in) :: Exch_ctrl
 !-------------------------------------------------------------------------
 !    define offset into aerosol activation tables.
 !-------------------------------------------------------------------------
-      IF (.NOT. (do_mg_microphys .OR.   &
-                 do_ncar_microphys )  &
-                                       .AND. reproduce_rk) THEN
+      IF (reproduce_rk) THEN
         wpdf_offs =0
       ELSE
         wpdf_offs = 1
@@ -389,8 +384,6 @@ TYPE(diag_pt_type),         intent(in)     :: diag_pt
             do j=1,jdim
               do i = 1,idim
                 if ( (do_pdf_clouds) .or.  &
-                   (do_mg_microphys)  .or.  &
-                   (do_ncar_microphys)  .or.  &
                    ( do_ncar_MG2 ) .or. &
 ! cjg: total activation for RK
                    (total_activation) .or.  &

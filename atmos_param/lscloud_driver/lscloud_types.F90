@@ -539,8 +539,6 @@ type lsc_constants_type
 
   logical                         ::                             &
                                      do_rk_microphys,            &
-                                     do_mg_microphys,            &
-                                     do_ncar_microphys,          &
                                      do_ncar_MG2,                &
                                      tiedtke_macrophysics,       &
                                      dqa_activation,             &
