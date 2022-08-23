@@ -129,7 +129,6 @@ libatmos_phys_la_SOURCES = ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.F9
 		${top_srcdir}/atmos_param/microphysics/micro_mg2_utils.F90 \
 		${top_srcdir}/atmos_param/microphysics/rotstayn_klein_mp.F90 \
 		${top_srcdir}/atmos_param/microphysics/ls_cloud_microphysics.F90 \
-		${top_srcdir}/atmos_param/microphysics/simple_pdf.F90 \
 		${top_srcdir}/atmos_param/damping_driver/damping_driver.F90 \
 		${top_srcdir}/atmos_param/vert_diff_driver/vert_diff_driver.F90 \
 		${top_srcdir}/atmos_param/moist_processes/moist_processes.F90 \
@@ -757,9 +756,6 @@ ${top_builddir}/atmos_param/microphysics/ls_cloud_microphysics.lo: ${top_srcdir}
 		 ${top_srcdir}/atmos_param/lscloud_driver/lscloud_debug.lo \
 		 ${top_srcdir}/atmos_param/microphysics/rotstayn_klein_mp.lo \
 		 ${top_srcdir}/atmos_param/microphysics/micro_mg2.lo
-${top_builddir}/atmos_param/microphysics/simple_pdf.lo: ${top_srcdir}/atmos_param/microphysics/simple_pdf.F90 \
-		 ${top_srcdir}/atmos_param/cloud_generator/betaDistribution.lo \
-		 ${top_srcdir}/atmos_param/lscloud_driver/lscloud_types.lo
 ${top_builddir}/atmos_param/damping_driver/damping_driver.lo: ${top_srcdir}/atmos_param/damping_driver/damping_driver.F90 \
 		 ${top_srcdir}/atmos_param/mg_drag/mg_drag.lo \
 		 ${top_srcdir}/atmos_param/cg_drag/cg_drag.lo \
@@ -1572,7 +1568,6 @@ micro_mg2_mod.mod: ${top_srcdir}/atmos_param/microphysics/micro_mg2.lo
 micro_mg2_utils.mod: ${top_srcdir}/atmos_param/microphysics/micro_mg2_utils.lo
 rotstayn_klein_mp_mod.mod: ${top_srcdir}/atmos_param/microphysics/rotstayn_klein_mp.lo
 ls_cloud_microphysics_mod.mod: ${top_srcdir}/atmos_param/microphysics/ls_cloud_microphysics.lo
-simple_pdf_mod.mod: ${top_srcdir}/atmos_param/microphysics/simple_pdf.lo
 damping_driver_mod.mod: ${top_srcdir}/atmos_param/damping_driver/damping_driver.lo
 vert_diff_driver_mod.mod: ${top_srcdir}/atmos_param/vert_diff_driver/vert_diff_driver.lo
 moist_processes_mod.mod: ${top_srcdir}/atmos_param/moist_processes/moist_processes.lo
@@ -1863,7 +1858,6 @@ include_HEADERS = atmos_nudge_mod.mod \
 		micro_mg2_utils.mod \
 		rotstayn_klein_mp_mod.mod \
 		ls_cloud_microphysics_mod.mod \
-		simple_pdf_mod.mod \
 		damping_driver_mod.mod \
 		vert_diff_driver_mod.mod \
 		moist_processes_mod.mod \
