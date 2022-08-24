@@ -1,5 +1,3 @@
-#define GFDL_COMPATIBLE_MICROP
-
 module micro_mg2_mod
 
 ! this is ncar routine micro_mg2
@@ -81,7 +79,6 @@ module micro_mg2_mod
 ! 2) saturation vapor pressure and specific humidity over water
 ! 3) svp over ice
 
-#ifdef GFDL_COMPATIBLE_MICROP
 use gamma_mg_mod,              only: gamma =>gamma_mg
 use lscloud_types_mod,         only: diag_id_type, diag_pt_type
 
@@ -93,8 +90,6 @@ use fms_mod,                   only: mpp_pe, error_mesg,  &
                                      mpp_root_pe,  mpp_chksum
 use sat_vapor_pres_mod,         only: lookup_es2, lookup_es3, compute_qs
 use physics_radiation_exch_mod, only : exchange_control_type
-
-#endif
 
 ! Parameters from the utilities module.
 use micro_mg2_utils, only: &
@@ -968,11 +963,9 @@ subroutine micro_mg2_tend (  lon, lat, &
   real(r8) :: npraio(mgncol,nlev)
   real(r8) :: nnuccrio(mgncol,nlev)
 
-#ifdef GFDL_COMPATIBLE_MICROP
   real(r8) :: dum2i(mgncol,nlev)   ! used with ice nuleation
   real(r8) :: dum2l(mgncol,nlev)   ! used with drop nuleation
   real(r8) :: dum2a(mgncol,nlev)   ! used with ice nuleation
-#endif
 
   real(r8) ::  flx(nlev), precip, dum_1D(nlev)
 
@@ -1059,10 +1052,8 @@ subroutine micro_mg2_tend (  lon, lat, &
   ! power of 0.54 following Heymsfield and Bansemer 2007
 
   rhof=(rhosu/rho)**0.54_r8
-#ifdef GFDL_COMPATIBLE_MICROP
   if (.not. rho_factor_in_max_vt) rhof = 1.0
   rhof = MIN (rhof, max_rho_factor_in_vt)
-#endif
 
 ! --->h1g, add namelist variables, 2014-07-01
 ! Zhao et al., ACP 2013, Table 1,
@@ -1313,7 +1304,6 @@ subroutine micro_mg2_tend (  lon, lat, &
   relhum = q / max(qvl, qsmall)
 !<-- h1g, 2019-12-06
 
-#ifdef GFDL_COMPATIBLE_MICROP
 ! --->h1g, 2019-10-25
               dum_30 = 5.0_r8*exp(0.304_r8*( 30.0))
               dum_5  = 5.0_r8*exp(0.304_r8*( 5.0))
@@ -1368,16 +1358,11 @@ subroutine micro_mg2_tend (  lon, lat, &
          ! naai(i,k) = dum2i(i,k)
      end do
      end do
-#endif
 
-
-#ifdef GFDL_COMPATIBLE_MICROP
   dum2l = 0.
-#endif
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 ! droplet activation
-#ifdef GFDL_COMPATIBLE_MICROP
    do k=1,nlev
     do i=1,mgncol
      if ( qc(i,k).ge.qsmall ) then
@@ -1394,7 +1379,6 @@ subroutine micro_mg2_tend (  lon, lat, &
   !   nc(i,k)    = nc(i,k)+npccn2(i,k)*deltat   ! from MG2, additional changes from h1g
     end do
    end do
-#endif
 
 ! ice activation
   if (do_cldice) then
@@ -3916,15 +3900,12 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
   end where
 
 !--> h1g, 2010-01-15, add limits for rain drop radius
-#ifdef GFDL_COMPATIBLE_MICROP
   reff_rain          = max(  30.0_r8, reff_rain          )
   reff_rain          = min( 750.0_r8, reff_rain          )
-#endif
 !<-- h1g, 2010-01-15, add limits for rain drop radius
 
 
 
-#ifdef GFDL_COMPATIBLE_MICROP
 ! diagnostics for water tendencies
 ! water  vapor specific humicity
 
@@ -4103,7 +4084,6 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
         end do
       end do
 
-#endif
 end subroutine micro_mg2_tend
 
 

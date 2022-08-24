@@ -6,7 +6,6 @@
 !         ---------------------------------------
 !         OPTIONS AVAILABLE:
 !             Rotstayn-Klein microphysics (this used in old strat_cloud)
-!             MG microphysics (as developed by M. Salzmann)
 !             NCAR microphysics version 2.0 (became available? )
 !
 !-----------------------------------------------------------------------
@@ -100,7 +99,6 @@ integer, dimension(6) :: init_date = (/ 1, 1, 1, 0, 0, 0 /)
 real    :: micro_begin_sec  = 0.0     ! begin microphysics this many
                                       ! seconds after init_date
 integer :: top_lev = 1                ! topmost level for ncar microphysics
-real    :: min_precip_needing_adjustment     = 0.0
 real    :: lowest_allowed_precip = 0.0
 logical :: use_ndust = .false.
 real    :: accretion_scale = 1.0
@@ -113,7 +111,7 @@ namelist / ls_cloud_microphysics_nml /   &
                                mass_cons, &
                                override_liq_num, override_ice_num, &
                                use_Meyers, use_Cooper, init_date, &
-                               micro_begin_sec, top_lev, &
+                               micro_begin_sec, &
                                min_precip_needing_adjustment, &
                                lowest_allowed_precip, use_ndust, accretion_scale, &
                                do_cleanup, liq_num_eros_fac, ice_num_eros_fac   !h1g, 2020-06-22
@@ -470,7 +468,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
         call mpp_clock_end   (rk_micro_clock)
 
 !-----------------------------------------------------------------------
-!  NCAR microphysics (currently 3 flavors)
+!  NCAR microphysics
 !-----------------------------------------------------------------------
       else if ( do_ncar_MG2 ) then
         call mpp_clock_begin (ncar_micro_clock)
@@ -575,8 +573,6 @@ real,                        intent(in), dimension(:,:) :: lon, lat
 !-------------------------------------------------------------------------
 !    executed ncar microphysics:
 !-------------------------------------------------------------------------
-          if (do_ncar_MG2 ) then
-
             rho = Input_mp%pfull/(RDGAS*Atmos_state%tn)
 
 !------------------------------------------------------------------------
@@ -700,9 +696,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
               relvarn(:,:,:) = Cloud_state%relvarn(:,:,:)
             endif
 
-            if (do_ncar_MG2) then
               nlev = kx
-              top_lev = 1
               mgncol = ix
               accre_enhann(:,:,:) = accretion_scale  ! accretion enhancement factor
 
@@ -834,9 +828,6 @@ real,                        intent(in), dimension(:,:) :: lon, lat
                                        Precip_state%surfrain(i,j) *1000.0
                 enddo
               enddo
-
-           endif !
-        endif  ! if do_ncar_MG2
 
 !------------------------------------------------------------------------
 !    adjust precip fields to assure mass conservation and realizable
