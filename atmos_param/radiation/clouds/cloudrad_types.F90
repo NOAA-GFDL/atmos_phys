@@ -1,10 +1,9 @@
-
 module cloudrad_types_mod
 
 !--------------------------------------------------------------------
 
-implicit none 
-private 
+implicit none
+private
 
 !--------------------------------------------------------------------
 !---- public data structures ----
@@ -30,7 +29,7 @@ public cld_specification_type
 !                     differing with sw parameterization band [ dimensionless ]
 !    %crndlw_band     amount of randomly overlapped longwave clouds,
 !                     differing with lw parameterization band [ dimensionless ]
-!    %hi_cloud        logical mask for high clouds 
+!    %hi_cloud        logical mask for high clouds
 !    %mid_cloud       logical mask for middle clouds
 !    %low_cloud       logical mask for low clouds
 !    %ice_cloud       logical mask for ice clouds
@@ -40,13 +39,13 @@ public cld_specification_type
 !                     bulk cloud physics scheme [ microns ]
 !    %reff_ice        effective ice crystal radius used with
 !                     bulk cloud physics scheme [ microns ]
-!    %reff_liq_micro  effective cloud drop radius used with 
+!    %reff_liq_micro  effective cloud drop radius used with
 !                     microphysically based scheme [ microns ]
 !    %reff_ice_micro  effective ice crystal radius used with
 !                     microphysically based scheme [ microns ]
 !    %tau             extinction optical path  [ dimensionless ]
 !    %liq_frac        fraction of cloud in a box which is liquid [ dimensionless ]
-!    %cld_thickness   number of model layers contained in cloud  
+!    %cld_thickness   number of model layers contained in cloud
 !    %cloud_water     liquid cloud content [ kg liq / kg air ]
 !    %cloud_ice       ice cloud content [ kg ice / kg air ]
 !    %cloud_area      saturated volume fraction [ dimensionless ]
@@ -109,14 +108,14 @@ public cldrad_properties_type
 !  The components of the cldrad_properties_type structure are:
 !
 !     %emmxolw    longwave cloud emissivity for maximally overlapped clouds
-!                 [ dimensionless ] 
+!                 [ dimensionless ]
 !     %emrndlw    longwave cloud emissivity for randomly overlapped clouds
 !                 [ dimensionless ]
 !     %abscoeff   combined absorption coefficient for clouds in each of the
 !                 longwave frequency bands [ km**(-1) ]
 !
 !     %cldext     parameterization band values of the cloud extinction coefficient
-!                 [ km**(-1) ]   
+!                 [ km**(-1) ]
 !     %cldsct     parameterization band values of the cloud scattering coefficient
 !                 [ km**(-1) ]
 !     %cldasymm   parameterization band values of the asymmetry factor
@@ -158,7 +157,6 @@ public cloudrad_control_type
 
 type cloudrad_control_type
     logical :: do_pred_cld_microphys
-    logical :: do_presc_cld_microphys
     logical :: do_sw_micro
     logical :: do_lw_micro
     logical :: do_strat_clouds
@@ -251,7 +249,7 @@ integer, dimension(:,:,:,:), pointer ::  stoch_cloud_type=>NULL()
 
 !  In practice, we allocate a single set of columns for the
 !  stochastic clouds, then point to sections of the larger array
-!  with the lw_ and sw_ pointer arrays. 
+!  with the lw_ and sw_ pointer arrays.
 !  i.e., lw_stoch_conc_ice => stoch_conc_ice(:, :, :, 1:numLwBands)
 
 real, dimension(:,:,:,:), pointer :: lw_stoch_conc_ice=>NULL(),   &
@@ -291,7 +289,7 @@ public microrad_properties_type
 !  The components of the microrad_structure are:
 !
 !     %cldext    parameterization band values of the cloud extinction coefficient
-!                [ km**(-1) ]   
+!                [ km**(-1) ]
 !     %cldsct    parameterization band values of the cloud scattering coefficient
 !                [ km**(-1) ]
 !     %cldasymm  parameterization band values of the asymmetry factor
@@ -349,17 +347,17 @@ integer :: n, nswcb, nlwcb
       allocate ( Cld_spec%camtsw (ix, jx, kx ) )
       allocate ( Cld_spec%cmxolw (ix, jx, kx ) )
       allocate ( Cld_spec%crndlw (ix, jx, kx ) )
-      allocate ( Cld_spec%ncldsw (ix, jx     ) )  
-      allocate ( Cld_spec%nmxolw (ix, jx     ) )  
-      allocate ( Cld_spec%nrndlw (ix, jx     ) )  
+      allocate ( Cld_spec%ncldsw (ix, jx     ) )
+      allocate ( Cld_spec%nmxolw (ix, jx     ) )
+      allocate ( Cld_spec%nrndlw (ix, jx     ) )
       Cld_spec%cmxolw(:,:,:) = 0.0
       Cld_spec%crndlw(:,:,:) = 0.0
       Cld_spec%camtsw(:,:,:) = 0.0
-      Cld_spec%nmxolw (:,:)  = 0  
-      Cld_spec%nrndlw (:,:)  = 0  
-      Cld_spec%ncldsw (:,:)  = 0  
+      Cld_spec%nmxolw (:,:)  = 0
+      Cld_spec%nrndlw (:,:)  = 0
+      Cld_spec%ncldsw (:,:)  = 0
 
-      if (Cldrad_control%do_stochastic_clouds) then 
+      if (Cldrad_control%do_stochastic_clouds) then
         ! shortwave
         allocate ( Cld_spec%camtsw_band           (ix, jx, kx, nswcb) )
         allocate ( Cld_spec%ncldsw_band           (ix, jx,     nswcb) )
@@ -462,11 +460,11 @@ end subroutine cloud_spec_alloc
 !####################################################################
 ! <SUBROUTINE NAME="cloud_spec_dealloc">
 !  <OVERVIEW>
-!    cloud_spec_dealloc deallocates the component arrays of the 
+!    cloud_spec_dealloc deallocates the component arrays of the
 !    cld_specification_type structure Cld_spec
 !  </OVERVIEW>
 !  <DESCRIPTION>
-!    cloud_spec_dealloc deallocates the component arrays of the 
+!    cloud_spec_dealloc deallocates the component arrays of the
 !    cld_specification_type structure Cld_spec
 !  </DESCRIPTION>
 !  <TEMPLATE>
@@ -476,11 +474,11 @@ end subroutine cloud_spec_alloc
 !   cloud specification properties on model grid,
 !  </INOUT>
 ! </SUBROUTINE>
-! 
+!
 subroutine cloud_spec_dealloc (Cld_spec, Cldrad_control)
 
 !---------------------------------------------------------------------
-!    cloud_spec_dealloc deallocates the component arrays of the 
+!    cloud_spec_dealloc deallocates the component arrays of the
 !    cld_specification_type structure Cld_spec
 !----------------------------------------------------------------------
 
@@ -594,7 +592,7 @@ type(cloudrad_control_type), intent(in)    :: Cldrad_control
       Cloud_microphys%droplet_number(:,:,:) = 0.0
 
 !---------------------------------------------------------------------
-!    allocate the arrays unique to the large-scale stratiform clouds 
+!    allocate the arrays unique to the large-scale stratiform clouds
 !---------------------------------------------------------------------
       if (trim(scheme_name) == 'strat_cloud' .or. trim(scheme_name) == 'diag') then
 
@@ -648,10 +646,10 @@ type(cloudrad_control_type), intent(in)    :: Cldrad_control
 
       ! allocate arrays to store large-scale cloud diagnostics
         if (trim(scheme_name) == 'diag') then
-          allocate(Cloud_microphys%lsc_cldamt        (ix, jx, kx)) 
-          allocate(Cloud_microphys%lsc_conc_drop     (ix, jx, kx)) 
-          allocate(Cloud_microphys%lsc_size_drop     (ix, jx, kx)) 
-          allocate(Cloud_microphys%lsc_droplet_number(ix, jx, kx)) 
+          allocate(Cloud_microphys%lsc_cldamt        (ix, jx, kx))
+          allocate(Cloud_microphys%lsc_conc_drop     (ix, jx, kx))
+          allocate(Cloud_microphys%lsc_size_drop     (ix, jx, kx))
+          allocate(Cloud_microphys%lsc_droplet_number(ix, jx, kx))
           Cloud_microphys%lsc_cldamt    = 0.0
           Cloud_microphys%lsc_conc_drop = 0.0
           Cloud_microphys%lsc_size_drop = 0.0
@@ -726,7 +724,7 @@ type(cloudrad_control_type), intent(in)    :: Cldrad_control
       deallocate (Cloud_microphys%droplet_number )
 
 !---------------------------------------------------------------------
-!    deallocate the arrays unique to the large-scale stratiform clouds 
+!    deallocate the arrays unique to the large-scale stratiform clouds
 !---------------------------------------------------------------------
       if (trim(Cloud_microphys%scheme_name) == 'strat_cloud' .or. Cloud_microphys%use_for_diag) then
 
@@ -818,7 +816,7 @@ integer :: nlwcb, nswcb
       Cldrad_props%cldemiss = 0.0
 
 !---------------------------------------------------------------------
-!    allocate and initialize the microphysically-based shortwave cloud 
+!    allocate and initialize the microphysically-based shortwave cloud
 !    radiative properties.
 !---------------------------------------------------------------------
       if (Cldrad_control%do_ica_calcs) then
@@ -897,4 +895,3 @@ end subroutine microrad_properties_dealloc
 !####################################################################
 
 end module cloudrad_types_mod
-
