@@ -74,7 +74,6 @@ libatmos_phys_la_SOURCES = ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.F9
     ${top_srcdir}/atmos_param/radiation/clouds/strat_clouds_W.F90 \
     ${top_srcdir}/atmos_param/radiation/clouds/isccp_clouds.F90 \
     ${top_srcdir}/atmos_param/radiation/clouds/get_random_number_stream.F90 \
-    ${top_srcdir}/atmos_param/radiation/clouds/bulkphys_rad.F90 \
     ${top_srcdir}/atmos_param/radiation/clouds/uw_clouds_W.F90 \
     ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_driver.F90 \
     ${top_srcdir}/atmos_param/radiation/clouds/cloud_spec.F90 \
@@ -534,9 +533,6 @@ ${top_builddir}/atmos_param/radiation/clouds/strat_clouds_W.lo: ${top_srcdir}/at
 ${top_builddir}/atmos_param/radiation/clouds/isccp_clouds.lo: ${top_srcdir}/atmos_param/radiation/clouds/isccp_clouds.F90
 ${top_builddir}/atmos_param/radiation/clouds/get_random_number_stream.lo: ${top_srcdir}/atmos_param/radiation/clouds/get_random_number_stream.F90 \
      ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_types.lo
-${top_builddir}/atmos_param/radiation/clouds/bulkphys_rad.lo: ${top_srcdir}/atmos_param/radiation/clouds/bulkphys_rad.F90 \
-     ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_types.lo \
-     ${top_srcdir}/atmos_param/radiation/clouds/strat_clouds_W.lo
 ${top_builddir}/atmos_param/radiation/clouds/uw_clouds_W.lo: ${top_srcdir}/atmos_param/radiation/clouds/uw_clouds_W.F90 \
      ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo \
      ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_types.lo
@@ -564,7 +560,6 @@ ${top_builddir}/atmos_param/radiation/clouds/cloudrad_diagnostics.lo: ${top_srcd
 ${top_builddir}/atmos_param/radiation/clouds/cloudrad_package.lo: ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_package.F90 \
      ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_types.lo \
      ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_diagnostics.lo \
-     ${top_srcdir}/atmos_param/radiation/clouds/bulkphys_rad.lo \
      ${top_srcdir}/atmos_param/radiation/clouds/microphys_rad.lo
 ${top_builddir}/atmos_param/radiation/longwave/longwave_tables.lo: ${top_srcdir}/atmos_param/radiation/longwave/longwave_tables.F90 \
      ${top_srcdir}/atmos_param/radiation/longwave/longwave_utilities.lo \
@@ -1546,7 +1541,6 @@ microphys_rad_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/microphys_rad.
 strat_clouds_w_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/strat_clouds_W.lo
 isccp_clouds_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/isccp_clouds.lo
 random_number_streams_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/get_random_number_stream.lo
-bulkphys_rad_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/bulkphys_rad.lo
 uw_clouds_w_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/uw_clouds_W.lo
 cloudrad_driver_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_driver.lo
 cloud_spec_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/cloud_spec.lo
@@ -1843,7 +1837,6 @@ include_HEADERS = atmos_nudge_mod.mod \
     strat_clouds_w_mod.mod \
     isccp_clouds_mod.mod \
     random_number_streams_mod.mod \
-    bulkphys_rad_mod.mod \
     uw_clouds_w_mod.mod \
     cloudrad_driver_mod.mod \
     cloud_spec_mod.mod \

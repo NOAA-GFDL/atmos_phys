@@ -35,9 +35,6 @@ use cloudrad_diagnostics_mod, only: cloudrad_diagnostics_init, &
                                     cloudrad_netcdf, &
                                     cloudrad_diagnostics_end
 
-use bulkphys_rad_mod,         only: bulkphys_rad_init, &
-                                    bulkphys_rad_end
-
 use microphys_rad_mod,        only: lwemiss_calc, comb_cldprops_calc, &
                                     microphys_rad_init, &
                                     microphys_rad_end, &
@@ -285,10 +282,8 @@ type(cloudrad_control_type), intent(inout) ::  Cldrad_control
 !    if microphys_form asks for predicted microphysics, then either
 !    strat or donner deep clouds must be activated, and either one or 
 !    both of do_lw_micro and do_sw_micro must be .true..  if these
-!    conditions are met, set do_pred_cld_microphys to .true.. if only
-!    one of do_sw_micro and do_lw_micro are true, then also set 
-!    do_bulk_microphys to .true. so that the bulk scheme initialization
-!    may be completed. if  neither do_lw_micro or do_sw_micro are .true.
+!    conditions are met, set do_pred_cld_microphys to .true..
+!    if  neither do_lw_micro or do_sw_micro are .true.
 !    or if a different cloud scheme has been activated, stop execution 
 !    with an error message.
 !---------------------------------------------------------------------
@@ -298,10 +293,6 @@ type(cloudrad_control_type), intent(inout) ::  Cldrad_control
           if (Cldrad_control%do_sw_micro .and. &
               Cldrad_control%do_lw_micro) then
             Cldrad_control%do_pred_cld_microphys = .true.
-          else if (Cldrad_control%do_sw_micro .or.    &
-                   Cldrad_control%do_lw_micro) then
-            Cldrad_control%do_pred_cld_microphys = .true.
-            Cldrad_control%do_bulk_microphys = .true.
           else
             call error_mesg( 'cloudrad_package_mod',  &
              ' not using microphysics -- set microphys_form '//&
@@ -317,9 +308,7 @@ type(cloudrad_control_type), intent(inout) ::  Cldrad_control
 !    if prescribed microphysics are requested, make sure the cloud 
 !    scheme requested has the capability of using the microphysical
 !    properties, and that either the sw or lw scheme requested is 
-!    microphysically based. if only one of do_sw_micro and do_lw_micro
-!    is .true., then set do_bulk_microphys to .true., so that the bulk
-!    scheme may be initialized. if neither is .true. or if a cloud
+!    microphysically based.  if neither is .true. or if a cloud
 !    scheme has been requested that cannot use prescribed microphysics,
 !    stop execution with an error message.
 !---------------------------------------------------------------------
@@ -329,10 +318,6 @@ type(cloudrad_control_type), intent(inout) ::  Cldrad_control
           if (Cldrad_control%do_sw_micro .and.    &
               Cldrad_control%do_lw_micro) then
             Cldrad_control%do_presc_cld_microphys = .true.
-          else if (Cldrad_control%do_sw_micro .or.     &
-                   Cldrad_control%do_lw_micro) then
-            Cldrad_control%do_presc_cld_microphys = .true.
-            Cldrad_control%do_bulk_microphys = .true.
           else
             call error_mesg( 'cloudrad_package_mod',  &
                 ' not using microphysics -- set microphys_form '//&
@@ -349,8 +334,7 @@ type(cloudrad_control_type), intent(inout) ::  Cldrad_control
 !    has not been requested (must use predicted cloud microphysics
 !    for that scheme -- all others can be run without microphysics).  
 !    also verify that the lw and sw schemes requested are not micro-
-!    physically_based. if all is ok, set do_bulk_microphys to .true.; 
-!    if not ok, write an error message and stop.
+!    physically_based.  if not ok, write an error message and stop.
 !---------------------------------------------------------------------
       else if (trim(microphys_form) == 'none') then
         if (Cldrad_control%do_donner_deep_clouds .or.  &
@@ -363,8 +347,6 @@ type(cloudrad_control_type), intent(inout) ::  Cldrad_control
             call error_mesg ('cloudrad_package_mod', &
                'must specify microphys_form when using microphysica'//&
                 'lly-based cld rad scheme', FATAL)
-          else
-              Cldrad_control%do_bulk_microphys = .true.
           endif
         endif
 
@@ -393,16 +375,6 @@ type(cloudrad_control_type), intent(inout) ::  Cldrad_control
         call microphys_rad_init ( min_cld_drop_rad, max_cld_drop_rad, &
                                   min_cld_ice_size, max_cld_ice_size, &
                                   axes, Time, lonb, latb, Cldrad_control )
-      endif
-
-!---------------------------------------------------------------------
-!    if a bulk physics scheme is to be used, call bulkphys_rad_init. 
-!---------------------------------------------------------------------
-      if (Cldrad_control%do_bulk_microphys) then
-        call bulkphys_rad_init (min_cld_drop_rad, max_cld_drop_rad, &
-                                min_cld_ice_size, max_cld_ice_size, &
-                                pref, lonb, latb, &
-                                Cldrad_control)
       endif
 
 !-------------------------------------------------------------------
@@ -620,22 +592,9 @@ real, dimension(:,:,:,:,:),   intent(out)              :: cldsct, cldext, cldasy
         !Microrad_props(n)%alloc (ix, jx, kx, Cldrad_control)
       enddo
 
-!--------------------------------------------------------------------
-!    if bulkphys_rad routines are needed, limit the condensate sizes
-!    to that range acceptable for the radiative parameterizations.
-!--------------------------------------------------------------------
-      if (Cldrad_control%do_lw_micro .and. &
-          Cldrad_control%do_sw_micro ) then 
-      else
-        Cld_spec%reff_liq_lim = MAX(MIN(Cld_spec%reff_liq,  &
-                                  max_cld_drop_rad), min_cld_drop_rad)
-        Cld_spec%reff_ice_lim = MAX(MIN(Cld_spec%reff_ice,  &
-                                  max_cld_ice_size), min_cld_ice_size)
-      endif
-
 !----------------------------------------------------------------------
 !    if a cloud scheme is activated (in contrast to running without any
-!    clouds), call either the microphysically-based or bulkphysics-based
+!    clouds), call the microphysically-based
 !    modules to define the cloud lw and sw radiative properties. if the
 !    model is being run with do_no_clouds = .true., exit from this 
 !    routine, leaving the cloud radiative property variables as they 
@@ -865,10 +824,6 @@ type(cloudrad_control_type), intent(in) :: Cldrad_control
           Cldrad_control%do_pred_cld_microphys) then
         call microphys_rad_end
       endif
-      if (Cldrad_control%do_bulk_microphys) then
-        call bulkphys_rad_end
-      endif
-
 !---------------------------------------------------------------------
 !    mark the module as not initialized.
 !---------------------------------------------------------------------
