@@ -99,6 +99,7 @@ integer, dimension(6) :: init_date = (/ 1, 1, 1, 0, 0, 0 /)
 real    :: micro_begin_sec  = 0.0     ! begin microphysics this many
                                       ! seconds after init_date
 integer :: top_lev = 1                ! topmost level for ncar microphysics
+real    :: min_precip_needing_adjustment     = 0.0      
 real    :: lowest_allowed_precip = 0.0
 logical :: use_ndust = .false.
 real    :: accretion_scale = 1.0
