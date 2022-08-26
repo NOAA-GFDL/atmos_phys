@@ -1,13 +1,10 @@
-
-#define GFDL_COMPATIBLE_MICROP
-
 module micro_mg2_mod
 
 ! this is ncar routine micro_mg2
 
 !---------------------------------------------------------------------------------
 ! Purpose:
-!   MG microphysics version 2, prognostic precipitation. 
+!   MG microphysics version 2, prognostic precipitation.
 !       point for the development of MG2
 !
 ! Author: Andrew Gettelman, Hugh Morrison.
@@ -82,7 +79,6 @@ module micro_mg2_mod
 ! 2) saturation vapor pressure and specific humidity over water
 ! 3) svp over ice
 
-#ifdef GFDL_COMPATIBLE_MICROP
 use gamma_mg_mod,              only: gamma =>gamma_mg
 use lscloud_types_mod,         only: diag_id_type, diag_pt_type
 
@@ -91,12 +87,9 @@ use fms_mod,                   only: mpp_pe, error_mesg,  &
                                      FATAL, &
                                      stdlog, write_version_number, &
                                      check_nml_error, &
-                                     mpp_root_pe,  mpp_chksum 
-!use simple_pdf_mod,            only: simple_pdf
+                                     mpp_root_pe,  mpp_chksum
 use sat_vapor_pres_mod,         only: lookup_es2, lookup_es3, compute_qs
 use physics_radiation_exch_mod, only : exchange_control_type
-
-#endif
 
 ! Parameters from the utilities module.
 use micro_mg2_utils, only: &
@@ -214,12 +207,12 @@ real       :: max_rho_factor_in_vt = 1.0
 
 logical :: nccons = .false.
 logical :: nicons = .false.
- 
+
 ! parameters for specified ice and droplet number concentration
 ! note: these are local in-cloud values, not grid-mean
-real(r8) :: ncnst = 100.e6_r8    ! droplet num concentration when 
+real(r8) :: ncnst = 100.e6_r8    ! droplet num concentration when
                                  ! nccons=.true. (m-3)
-real(r8) :: ninst = 0.1e6_r8     ! ice num concentration when 
+real(r8) :: ninst = 0.1e6_r8     ! ice num concentration when
                                  ! nicons=.true. (m-3)
 ! <---h1g, 2012-06-12
 logical           :: liu_in = .false.
@@ -229,7 +222,7 @@ logical           :: liu_in = .false.
 logical           :: use_Meyers = .false.
 ! Ni (/m3) = 1000 * exp( (12.96* [(esl-esi)/esi]) - 0.639 )
 !  Figure 9.3 of Rogers and Yau (1998) shows the nearly linear
-!       variation of [(esl-esi)/esi] from 0. at 273.16K to 0.5 at 
+!       variation of [(esl-esi)/esi] from 0. at 273.16K to 0.5 at
 !       233.16K.  Analytically this is parameterized as (tfreeze-T)/80.
 !
 !  Ni (/m3) = 1000 * exp( 12.96* (tfreeze-T)/80 - 0.639 )
@@ -274,18 +267,18 @@ real(r8), parameter :: mi0l_min = 4._r8/3._r8*pi*rhow*(4.e-6_r8)**3
 
 real              ::  rhmini=0.80     ! minimum rh for ice cld fraction > 0
 logical           ::  microp_uniform = .false.
-                                      ! .true. = configure uniform for 
-                                      ! sub-columns 
-                                      ! .false. = use w/o sub-columns 
-                                      ! (default) 
+                                      ! .true. = configure uniform for
+                                      ! sub-columns
+                                      ! .false. = use w/o sub-columns
+                                      ! (default)
 logical           ::  do_cldice = .true.
                                       ! .true. = do all processes (default)
-                                      ! .false. = skip all processes 
+                                      ! .false. = skip all processes
                                       ! affecting cloud ice
 logical           ::  do_ice_nucl_wpdf
 logical           ::  clubb_active
 logical           ::  do_Ni_linear_interp = .false.
-logical           ::  do_implicit_fall    = .false. 
+logical           ::  do_implicit_fall    = .false.
 
 
 logical           ::  do_qc_implicit_fall    = .true.
@@ -322,7 +315,7 @@ logical            ::  use_const_ELI     = .false.    ! --> h1g, 2020-04-16
 real(r8)           ::  ELI_RK = 0.7                   ! --> h1g, 2020-04-16
 logical            ::  use_FanAndCooper  = .false.    ! --> h1g, 2020-04-18
 real(r8)           ::  sublim_factor = 0.0
-real(r8)           ::  ice_nucl_factor = 1.0 
+real(r8)           ::  ice_nucl_factor = 1.0
 
 namelist / micro_mg2_nml /   &
                  max_rho_factor_in_vt, &
@@ -341,9 +334,9 @@ namelist / micro_mg2_nml /   &
                  use_Fan2019, Nice_max_Fan, &
                  do_qc_implicit_fall,  do_qi_implicit_fall, do_qr_implicit_fall, do_qs_implicit_fall, &
                  do_liq_num_adjust, do_liq_num_riming, do_cotton_auto, rthresh, do_HM_splinter,       & ! h1g, 2020-03-06
-                 remove_super_RK, use_const_ELI, ELI_RK, use_FanAndCooper, sublim_factor, &  ! h1g, 2020-04-18 
+                 remove_super_RK, use_const_ELI, ELI_RK, use_FanAndCooper, sublim_factor, &  ! h1g, 2020-04-18
                  ice_nucl_factor, vfac_drop, vfac_ice, do_liq_num_ihom, micro_mg_bergs_eff_factor, &  ! h1g, 2020-06-22
-                 do_ice_num_adjust, icld_cri, evap_subl_fac, ice_sublim_factor     ! h1g, 2020-07-06                
+                 do_ice_num_adjust, icld_cri, evap_subl_fac, ice_sublim_factor     ! h1g, 2020-07-06
 
 !===============================================================================
 contains
@@ -351,19 +344,19 @@ contains
 
 subroutine micro_mg2_init( &
      kind, gravit, rair, rh2o, cpair,    &
-     tmelt_in, latvap, latice,           &     
+     tmelt_in, latvap, latice,           &
     ! rhmini_in, microp_uniform_in, do_cldice_in, &
      do_ice_nucl_wpdf_in, errstring, Exch_ctrl)
-  
-  !----------------------------------------------------------------------- 
-  ! 
-  ! Purpose: 
-  ! initialize constants for MG microphysics
-  ! 
-  ! Author: Andrew Gettelman Dec 2005
-  ! 
+
   !-----------------------------------------------------------------------
-  
+  !
+  ! Purpose:
+  ! initialize constants for MG microphysics
+  !
+  ! Author: Andrew Gettelman Dec 2005
+  !
+  !-----------------------------------------------------------------------
+
   integer,  intent(in)  :: kind         ! Kind used for reals
   real(r8), intent(in)  :: gravit
   real(r8), intent(in)  :: rair
@@ -374,10 +367,10 @@ subroutine micro_mg2_init( &
   real(r8), intent(in)  :: latice
 
   logical, intent(in) :: do_ice_nucl_wpdf_in
-  type(exchange_control_type), intent(in) :: Exch_ctrl   
+  type(exchange_control_type), intent(in) :: Exch_ctrl
 
   character(128), intent(out) :: errstring    ! Output status (non-blank for error return)
- 
+
   INTEGER   :: io, ierr, logunit
 
   !-----------------------------------------------------------------------
@@ -461,16 +454,16 @@ subroutine micro_mg2_tend (  lon, lat, &
       ncn,                          nin,                          &
       qrn,                          qsn,                          &
       nrn,                          nsn,                          &
-      relvar,              accre_enhan,                           &     
+      relvar,              accre_enhan,                           &
       p,                   pdel,       zhalf,                     &
       cldn,               liqcldf,            icecldf,            &
       delta_cf, D_eros_l, nerosc, D_eros_i, nerosi, dqcdt, dqidt, &
-      naai,               npccn,                                  & 
+      naai,               npccn,                                  &
       rndst,              nacon,  &
       tlat,               qvlat,  &
       qctend,             qitend, &
       nctend,             nitend, &
-      qrtend,             qstend, & 
+      qrtend,             qstend, &
       nrtend,             nstend, &
       prect,              preci,  &
       qsout,             rflx,    sflx,    &
@@ -520,14 +513,14 @@ subroutine micro_mg2_tend (  lon, lat, &
   real(r8), intent(in) :: icecldf(mgncol,nlev)   ! ice cloud fraction (no units)
 
 
-  real(r8), intent(in) :: delta_cf(mgncol,nlev)   
-  real(r8), intent(inout) :: D_eros_l(mgncol,nlev)   
-  real(r8), intent(inout) :: nerosc(mgncol,nlev)   
-  real(r8), intent(inout) :: D_eros_i(mgncol,nlev)   
-  real(r8), intent(inout) :: nerosi(mgncol,nlev)   
-  real(r8), intent(inout) :: dqcdt(mgncol,nlev)   
-  real(r8), intent(inout) :: dqidt(mgncol,nlev)   
-    
+  real(r8), intent(in) :: delta_cf(mgncol,nlev)
+  real(r8), intent(inout) :: D_eros_l(mgncol,nlev)
+  real(r8), intent(inout) :: nerosc(mgncol,nlev)
+  real(r8), intent(inout) :: D_eros_i(mgncol,nlev)
+  real(r8), intent(inout) :: nerosi(mgncol,nlev)
+  real(r8), intent(inout) :: dqcdt(mgncol,nlev)
+  real(r8), intent(inout) :: dqidt(mgncol,nlev)
+
   ! used for scavenging
   ! Inputs for aerosol activation
   real(r8), intent(inout) :: naai(mgncol,nlev)     ! ice nucleation number (from microp_aero_ts) (1/kg)
@@ -565,12 +558,12 @@ subroutine micro_mg2_tend (  lon, lat, &
   real(r8), intent(out) :: reff_snow(mgncol,nlev)    ! snow effective radius (micron)
 
   character(128),   intent(out) :: errstring        ! output status (non-blank for error return)
-  real(r8), intent(out) :: f_snow_berg  (mgncol,nlev) ! ratio of bergeron 
-                                                     ! production of qi to 
-                                                     ! sum of bergeron, 
+  real(r8), intent(out) :: f_snow_berg  (mgncol,nlev) ! ratio of bergeron
+                                                     ! production of qi to
+                                                     ! sum of bergeron,
                                                      ! riming and freezing
   real(r8), intent(out) :: ssat_disposal(mgncol,nlev)
-                                 ! disposition of supersaturation at end 
+                                 ! disposition of supersaturation at end
                                  ! of step; 0.= no ssat, 1.= liq, 2.=ice)
   INTEGER,INTENT(IN) :: n_diag_4d
   REAL, dimension( mgncol,jdim, nlev, 0:n_diag_4d ), INTENT(INOUT) ::  diag_4l
@@ -935,11 +928,11 @@ subroutine micro_mg2_tend (  lon, lat, &
 
 !  these variables are only used in the GFDL implementation
 
-  real(r8) :: cmelo(mgncol,nlev)   ! liquid condensation           
-  real(r8) :: eroslo(mgncol,nlev)  ! liquid erosion                
-  real(r8) :: erosio(mgncol,nlev)  ! ice erosion                
-  real(r8) :: preo(mgncol,nlev)    ! rain evaporation 
-  real(r8) :: prdso(mgncol,nlev)   ! snow sublimation 
+  real(r8) :: cmelo(mgncol,nlev)   ! liquid condensation
+  real(r8) :: eroslo(mgncol,nlev)  ! liquid erosion
+  real(r8) :: erosio(mgncol,nlev)  ! ice erosion
+  real(r8) :: preo(mgncol,nlev)    ! rain evaporation
+  real(r8) :: prdso(mgncol,nlev)   ! snow sublimation
   real(r8) :: npccn2(mgncol,nlev)   ! ccn activated number tendency (from microp_aero_ts) (1/kg*s)
   logical  :: do_berg1
   logical  :: limit_berg = .false.
@@ -970,11 +963,9 @@ subroutine micro_mg2_tend (  lon, lat, &
   real(r8) :: npraio(mgncol,nlev)
   real(r8) :: nnuccrio(mgncol,nlev)
 
-#ifdef GFDL_COMPATIBLE_MICROP
   real(r8) :: dum2i(mgncol,nlev)   ! used with ice nuleation
   real(r8) :: dum2l(mgncol,nlev)   ! used with drop nuleation
   real(r8) :: dum2a(mgncol,nlev)   ! used with ice nuleation
-#endif
 
   real(r8) ::  flx(nlev), precip, dum_1D(nlev)
 
@@ -993,7 +984,7 @@ subroutine micro_mg2_tend (  lon, lat, &
 
   t  = tn
   q  = qn
-  qc = qcn 
+  qc = qcn
   nc = ncn
   qi = qin
   ni = nin
@@ -1061,21 +1052,19 @@ subroutine micro_mg2_tend (  lon, lat, &
   ! power of 0.54 following Heymsfield and Bansemer 2007
 
   rhof=(rhosu/rho)**0.54_r8
-#ifdef GFDL_COMPATIBLE_MICROP
   if (.not. rho_factor_in_max_vt) rhof = 1.0
   rhof = MIN (rhof, max_rho_factor_in_vt)
-#endif
 
 ! --->h1g, add namelist variables, 2014-07-01
-! Zhao et al., ACP 2013, Table 1, 
-! ai: 350-1400 (s^-1);     as: 5.86-23.44 (m^0.59 s^-1)  
+! Zhao et al., ACP 2013, Table 1,
+! ai: 350-1400 (s^-1);     as: 5.86-23.44 (m^0.59 s^-1)
 ! IceFallFac: 0.5 -- 2;    SnowFallFac: 0.5 -- 2
   arn=ar*rhof
   asn=as* SnowFallFac* rhof
   acn=g*rhow/(18._r8*mu)
   ain=ai * IceFallFac*(rhosu/rho)**0.35_r8
   ajn=aj * (rhosu/rho)**0.35_r8
-  
+
   diag_4l(:,j,:,diag_pt%qidt_tiny)  = 0.0
   diag_4l(:,j,:,diag_pt%qnidt_tiny) = 0.0
   diag_4l(:,j,:,diag_pt%qrdt_tiny)  = 0.0
@@ -1174,8 +1163,8 @@ subroutine micro_mg2_tend (  lon, lat, &
   pracstot=0._r8
   meltsdttot=0._r8
   frzrdttot=0._r8
-  mnuccdtot=0._r8 
- 
+  mnuccdtot=0._r8
+
   rflx=0._r8
   sflx=0._r8
   lflx=0._r8
@@ -1312,10 +1301,9 @@ subroutine micro_mg2_tend (  lon, lat, &
     end do
   end do
 
-  relhum = q / max(qvl, qsmall) 
+  relhum = q / max(qvl, qsmall)
 !<-- h1g, 2019-12-06
 
-#ifdef GFDL_COMPATIBLE_MICROP
 ! --->h1g, 2019-10-25
               dum_30 = 5.0_r8*exp(0.304_r8*( 30.0))
               dum_5  = 5.0_r8*exp(0.304_r8*( 5.0))
@@ -1327,40 +1315,40 @@ subroutine micro_mg2_tend (  lon, lat, &
           if (t(i,k).lt. icenuct       ) then
 
             if ( liu_in .or. use_Fan2019 ) then
-              dum2i(i,k) = naai(i,k)              
+              dum2i(i,k) = naai(i,k)
               if ( lat(i)*180.0/3.14159 > 60.0 ) dum2i(i,k) = dum2i(i,k) * ice_nucl_factor  ! h1g,  2019-12-17
 
 ! --->h1g, 2014-05-30 add Meyers ice nucleation formula (Only temperature dependent)
             elseif ( use_Meyers ) then
                dum2i(i,k) =  (exp(12.96* (tmelt -t(i,k))/80 - 0.639)) *1000._r8
                dum2i(i,k)= ( dum2i(i,k) )/rho(i,k) ! convert from m-3 to kg-1
-! <--- h1g,  2014-05-30 
+! <--- h1g,  2014-05-30
 
 ! <--  h1g,  2020-04-18
             elseif ( use_FanAndCooper ) then
                 dum2i(i,k) = 2.74 * concen_dust_sub(i,k) * exp(0.412_r8*(tmelt-t(i,k)))
                 dum2i(i,k) = min( dum2i(i,k), Nice_max_Fan*1000._r8 )
-                dum2i(i,k) = dum2i(i,k) * p(i,k)/ 95000.             
+                dum2i(i,k) = dum2i(i,k) * p(i,k)/ 95000.
                 dum2i(i,k)= dum2i(i,k)/rho(i,k) ! convert from m-3 to kg-1
-            
+
                 dum_tmp = 0.005_r8*exp(0.304_r8*(tmelt-t(i,k)))*1000._r8
                 dum_tmp = min( dum_tmp, 5.0_r8*exp(0.304_r8*(-tc_cooper)))
                 dum_tmp = dum_tmp/rho(i,k) ! convert from m-3 to kg-1
-                dum2i(i,k)= dum2i(i,k) + dum_tmp 
+                dum2i(i,k)= dum2i(i,k) + dum_tmp
 ! -->  h1g,  2020-04-18
 
-            else               
+            else
 ! cooper curve (factor of 1000 is to convert from L-1 to m-3)
               dum2i(i,k)=0.005_r8*exp(0.304_r8*(tmelt-t(i,k)))*1000._r8
 ! put limit on number of nucleated crystals, set to number at T=-30 C
 ! cooper (limit to value at -35 C)
-              dum2i(i,k)= min(dum2i(i,k),5.0_r8*exp(0.304_r8*(-tc_cooper)))  
+              dum2i(i,k)= min(dum2i(i,k),5.0_r8*exp(0.304_r8*(-tc_cooper)))
 
 ! --->h1g, 2019-10-25
               dum_tmp = dum_5 + (dum_30-dum_5)/25.0*( tmelt-t(i,k) - 5.0)
               if ( do_Ni_linear_interp ) &
               dum2i(i,k)= max(dum2i(i,k), dum_tmp )
-! <---h1g, 2019-10-25            
+! <---h1g, 2019-10-25
 
               dum2i(i,k)=dum2i(i,k)/rho(i,k) ! convert from m-3 to kg-1
             endif
@@ -1370,23 +1358,18 @@ subroutine micro_mg2_tend (  lon, lat, &
          ! naai(i,k) = dum2i(i,k)
      end do
      end do
-#endif
 
-  
-#ifdef GFDL_COMPATIBLE_MICROP
   dum2l = 0.
-#endif
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 ! droplet activation
-#ifdef GFDL_COMPATIBLE_MICROP
    do k=1,nlev
     do i=1,mgncol
      if ( qc(i,k).ge.qsmall ) then
        dum2l(i,k) = max(0._r8, npccn  (i,k))
 
-!RSH npccn2 is the change in droplet number on this step. In the 
-! non-GFDL_COMPATIBLE_MICROP, this is not calculated since the input 
+!RSH npccn2 is the change in droplet number on this step. In the
+! non-GFDL_COMPATIBLE_MICROP, this is not calculated since the input
 ! droplet number already includes the newly activated droplets.
         npccn2(i,k) = ((dum2l(i,k) - nc(i,k)/cldm(i,k))/tau_act_liq )*cldm(i,k)
         npccn2(i,k) = max(0._r8,npccn2(i,k))
@@ -1396,7 +1379,6 @@ subroutine micro_mg2_tend (  lon, lat, &
   !   nc(i,k)    = nc(i,k)+npccn2(i,k)*deltat   ! from MG2, additional changes from h1g
     end do
    end do
-#endif
 
 ! ice activation
   if (do_cldice) then
@@ -1466,7 +1448,7 @@ subroutine micro_mg2_tend (  lon, lat, &
         end if
 
      end do
-  end do 
+  end do
 
 
   do k=1,nlev
@@ -1490,7 +1472,7 @@ subroutine micro_mg2_tend (  lon, lat, &
 
               minstrf(i,k) = dum*qr(i,k)
               ninstrf(i,k) = dum*nr(i,k)
-              
+
               ! heating tendency
               dum1 = xlf*minstrf(i,k)/deltat
               tlat(i,k)=tlat(i,k)+dum1
@@ -1504,7 +1486,7 @@ subroutine micro_mg2_tend (  lon, lat, &
            end if
         end if
      end do
-  end do 
+  end do
 
 
   do k=1,nlev
@@ -1578,7 +1560,7 @@ subroutine micro_mg2_tend (  lon, lat, &
 
     endif
 
-        
+
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   ! get size distribution parameters based on in-cloud cloud water
   ! these calculations also ensure consistency between number and mixing ratio
@@ -1615,7 +1597,7 @@ subroutine micro_mg2_tend (  lon, lat, &
         nric(:,k)=0._r8
      end where
 
-    ! make sure number concentration is a positive number to avoid 
+    ! make sure number concentration is a positive number to avoid
     ! taking root of negative later
 
     nric(:,k)=max(nric(:,k),0._r8)
@@ -1625,13 +1607,13 @@ subroutine micro_mg2_tend (  lon, lat, &
     call size_dist_param_basic(mg_ice_props, qiic(:,k), niic(:,k), &
           lami(:,k), mgncol, n0=n0i(:,k))
 
-     ! Alternative autoconversion 
+     ! Alternative autoconversion
      if (do_cotton_auto ) then
        call cotton_liq_autoconversion(.false., qcic(:,k), &
           ncic(:,k), rho(:,k), relvar(:,k), rthresh, prc(:,k), nprc(:,k), nprc1(:,k), mgncol)
      elseif (do_sb_physics) then
        call sb2001v2_liq_autoconversion(pgam(:,k),qcic(:,k),ncic(:,k), &
-            qric(:,k),rho(:,k),relvar(:,k),prc(:,k),nprc(:,k),nprc1(:,k), mgncol)     
+            qric(:,k),rho(:,k),relvar(:,k),prc(:,k),nprc(:,k),nprc1(:,k), mgncol)
      endif
 
 
@@ -1642,7 +1624,7 @@ subroutine micro_mg2_tend (  lon, lat, &
     if (do_cldice) then
        call ice_autoconversion(t(:,k), qiic(:,k), lami(:,k), n0i(:,k), &
             dcs, prci(:,k), nprci(:,k), mgncol)
-           
+
     else
        ! Add in the particles that we have already converted to snow, and
        ! don't do any further autoconversion of ice.
@@ -1798,7 +1780,7 @@ subroutine micro_mg2_tend (  lon, lat, &
 
      if (do_sb_physics) then
        call sb2001v2_accre_cld_water_rain(qcic(:,k), ncic(:,k), qric(:,k), &
-            rho(:,k), relvar(:,k), pra(:,k), npra(:,k), mgncol)     
+            rho(:,k), relvar(:,k), pra(:,k), npra(:,k), mgncol)
      else
        call accrete_cloud_water_rain(microp_uniform, qric(:,k), qcic(:,k), &
             ncic(:,k), relvar(:,k), pra(:,k), npra(:,k), mgncol)
@@ -1819,7 +1801,7 @@ subroutine micro_mg2_tend (  lon, lat, &
            prai(:,k) = 0._r8
            nprai(:,k) = 0._r8
      end if
-              
+
      call evaporate_sublimate_precip(t(:,k), rho(:,k), &
           dv(:,k), mu(:,k), sc(:,k), q(:,k), qvl(:,k), qvi(:,k), &
           lcldm(:,k), precip_frac(:,k), arn(:,k), asn(:,k), qcic(:,k), qiic(:,k), &
@@ -1873,7 +1855,7 @@ subroutine micro_mg2_tend (  lon, lat, &
 
         dum = ((prc(i,k)+pra(i,k)+mnuccc(i,k)+mnucct(i,k)+msacwi(i,k)+ &
              psacws(i,k)+bergs(i,k))*lcldm(i,k)+berg(i,k))*deltat
-  
+
         if (dum.gt.qc(i,k)+dqcdt(i,k)*deltat+D_eros_l(i,k)*deltat) then
 
            ratio = (qc(i,k)/deltat+ max(dqcdt(i,k),0.0))/((prc(i,k)+pra(i,k)+mnuccc(i,k)+mnucct(i,k)+ &
@@ -1889,7 +1871,7 @@ subroutine micro_mg2_tend (  lon, lat, &
            D_eros_l(i,k) = D_eros_l(i,k)*ratio
            if( dqcdt(i,k) < 0.0 ) dqcdt(i,k)=dqcdt(i,k)*ratio
            qcrat(i,k) = ratio
-           if( ratio > 1) print*,'error ratio>1 in conservation of qc', i,k,ratio 
+           if( ratio > 1) print*,'error ratio>1 in conservation of qc', i,k,ratio
            if( ratio < 0) print*,'error ratio<0 in conservation of qc', i,k,ratio
          else
            qcrat(i,k) = 1._r8
@@ -1996,8 +1978,8 @@ subroutine micro_mg2_tend (  lon, lat, &
           if (pre(i,k) < 0._r8 .and. qr(i,k) > qsmall) then
             nsubr(i,k) = max(-nr(i,k)/deltat, pre(i,k)*nr(i,k)/qr(i,k))
           else
-            nsubr(i,k) = 0._r8              
-          endif 
+            nsubr(i,k) = 0._r8
+          endif
         else
         ! neglect evaporation of nr, allow_rain_num_evap = .false. h1g, 2017-02-27
            nsubr(i,k) = 0._r8
@@ -2039,12 +2021,12 @@ subroutine micro_mg2_tend (  lon, lat, &
 
               if( dqidt(i,k) < 0.0 ) dqidt(i,k)=dqidt(i,k)*ratio
               if( ratio > 1) print*,"error ratio>1 in conservation of qi",i,k,ratio
-              if( ratio < 0) then 
+              if( ratio < 0) then
                 print*,"error ratio<0 in conservation of qi",i,k, lon(i), lat(i), it
                 print*,"dum=", dum, qi(i,k), dqidt(i,k), D_eros_i(i,k), deltat
                 print*,"conv of qi",  -mnuccc(i,k), -mnucct(i,k), -mnudep(i,k), -msacwi(i,k), lcldm(i,k)
                 print*, "==", prci(i,k), prai(i,k), icldm(i,k), -mnuccri(i,k), precip_frac(i,k)
-                print*, "+++", -ice_sublim(i,k), -vap_dep(i,k), -berg(i,k), -mnuccd(i,k) 
+                print*, "+++", -ice_sublim(i,k), -vap_dep(i,k), -berg(i,k), -mnuccd(i,k)
                endif
 
               prci(i,k) = prci(i,k)*ratio
@@ -2113,7 +2095,7 @@ subroutine micro_mg2_tend (  lon, lat, &
             dum = max(-1._r8,dum)
             nsubs(i,k) = dum*ns(i,k)/deltat
           else
-            nsubs(i,k)=0._r8         
+            nsubs(i,k)=0._r8
           endif
         else
         ! neglect sublimation of ns, allow_snow_num_sublimation = .false. h1g, 2019-12-03
@@ -2151,7 +2133,7 @@ subroutine micro_mg2_tend (  lon, lat, &
            if ( ttmp .lt.-150.0+273.15 .or. ttmp .gt.90+273.15)  &
  write(*,'(a, i4, 2f9.4, 15e12.3)') 'MG2: bad temperature@2117', k, lon(i), lat(i),   &
             ttmp, t(i,k), pre(i,k), precip_frac(i,k), prds(i,k),vap_dep(i,k), ice_sublim(i,k), mnuccd(i,k), &
-            qtmp, q(i,k), p(i,k)   
+            qtmp, q(i,k), p(i,k)
 
            ! use rhw to allow ice supersaturation
            call compute_qs(ttmp, p(i,k), qvn, q = q(i,k),   &
@@ -2201,7 +2183,7 @@ subroutine micro_mg2_tend (  lon, lat, &
 
         ! get tendencies due to microphysical conversion processes
         !==========================================================
-        ! note: tendencies are multiplied by appropriate cloud/precip 
+        ! note: tendencies are multiplied by appropriate cloud/precip
         ! fraction to get grid-scale values
         ! note: vap_dep is already grid-average values
 
@@ -2234,7 +2216,7 @@ subroutine micro_mg2_tend (  lon, lat, &
              psacws(i,k)-bergs(i,k))*lcldm(i,k)-berg(i,k)
 
         if (do_cldice) then
-! Note by h1g 2017-02-24, mnudep = 0.0 be default ( use_hetfrz_classnuc = .false.  ) 
+! Note by h1g 2017-02-24, mnudep = 0.0 be default ( use_hetfrz_classnuc = .false.  )
            qitend(i,k) = qitend(i,k)+dqidt(i,k)+D_eros_i(i,k)+ &
                 (mnuccc(i,k)+mnucct(i,k)+mnudep(i,k)+msacwi(i,k))*lcldm(i,k)+(-prci(i,k)- &
                 prai(i,k))*icldm(i,k)+vap_dep(i,k)+berg(i,k)+ice_sublim(i,k)+ &
@@ -2304,9 +2286,9 @@ subroutine micro_mg2_tend (  lon, lat, &
         bergtot(i,k) = bergtot(i,k)+berg(i,k)
         prcitot(i,k) = prcitot(i,k)+prci(i,k)*icldm(i,k)
         praitot(i,k) = praitot(i,k)+prai(i,k)*icldm(i,k)
-        
+
         pracstot(i,k) = pracstot(i,k)+pracs(i,k)*precip_frac(i,k)
-        mnuccrtot(i,k) = mnuccrtot(i,k)+mnuccr(i,k)*precip_frac(i,k)        
+        mnuccrtot(i,k) = mnuccrtot(i,k)+mnuccr(i,k)*precip_frac(i,k)
         mnuccritot(i,k) = mnuccritot(i,k)+mnuccri(i,k)*precip_frac(i,k)  ! h1g, 2020-02-11
 
         nctend(i,k) = nctend(i,k)+nerosc(i,k)*lcldm(i,k) + npccn2(i,k) + &
@@ -2337,8 +2319,8 @@ subroutine micro_mg2_tend (  lon, lat, &
         !================================================================
 
 ! ---> h1g, 2017-03-03
-        IF (diag_id%qnidt_nucclim1 + diag_id%qni_nucclim1_col > 0) & 
-          diag_4l(i,j,k,diag_pt%qnidt_nucclim1)  = nitend(i,k) 
+        IF (diag_id%qnidt_nucclim1 + diag_id%qni_nucclim1_col > 0) &
+          diag_4l(i,j,k,diag_pt%qnidt_nucclim1)  = nitend(i,k)
 
         if (do_cldice .and. nitend(i,k).gt.0._r8.and.ni(i,k)+nitend(i,k)*deltat.gt.nimax(i,k)) then
          !  nitend(i,k)=max(0._r8,(nimax(i,k)-ni(i,k))/deltat)
@@ -2516,15 +2498,15 @@ subroutine micro_mg2_tend (  lon, lat, &
            ! particles (blend over 18-20 um)
            irad = 1.5_r8 / lami(i,k) * 1e6_r8
            ifrac = min(1._r8, max(0._r8, (irad - 18._r8) / 2._r8))
- 
+
            if (ifrac .lt. 1._r8) then
-              vtrmi(i,k) = ifrac * vtrmi(i,k) + & 
+              vtrmi(i,k) = ifrac * vtrmi(i,k) + &
                  (1._r8 - ifrac) * &
                  min(ajn(i,k)*gamma_bj_plus4/(6._r8*lami(i,k)**bj), &
                  1.2_r8*rhof(i,k))
 
               fi(i,k) = g*rho(i,k)*vtrmi(i,k)
-              fni(i,k) = ifrac * fni(i,k) + & 
+              fni(i,k) = ifrac * fni(i,k) + &
                  (1._r8 - ifrac) * &
                  g*rho(i,k)* &
                  min(ajn(i,k)*gamma_bj_plus1/lami(i,k)**bj,1.2_r8*rhof(i,k))
@@ -2625,7 +2607,7 @@ if ( do_implicit_fall ) then
       qctend(i,k)  = qctend(i,k)   + (dum_1D(k) - dumc(i,k))/deltat
     enddo
     if ( precip .ge. 0.0 ) then  !h1g, 2019-11-26, ensure numerical stability
-      prect(i) = prect(i)+precip/g/deltat/1000._r8  
+      prect(i) = prect(i)+precip/g/deltat/1000._r8
     endif
   enddo
 
@@ -2697,7 +2679,7 @@ if ( do_implicit_fall ) then
 
  ! snow water (mass) sedimentation
   do i=1,mgncol
-    dum_1D(:) = dums(i,:)    
+    dum_1D(:) = dums(i,:)
     call implicit_fall ( deltat, 1, nlev, zhalf(i,:) , fs(i,:), pdel(i,:), dum_1D, precip, flx)
     do k=1,nlev
        if ( flx(k) .ge. qsmall ) sflx(i,k+1) = sflx(i,k+1) + flx(k)/g/deltat !h1g, 2019-11-26, ensure numerical stability
@@ -2813,7 +2795,7 @@ else
            ! for output
            qisevap(i,k)=qisevap(i,k)-(faltndqie-faltndi)/nstep
            tlat(i,k)=tlat(i,k)+(faltndqie-faltndi)*xxls/nstep
-  
+
            dumi(i,k) = dumi(i,k)-faltndi*deltat/nstep
            dumni(i,k) = dumni(i,k)-faltndni*deltat/nstep
 
@@ -2918,7 +2900,7 @@ else
           maxval( fr(i,:)*pdel_inv(i,:)), &
           maxval(fnr(i,:)*pdel_inv(i,:))) &
           * deltat)
-     
+
 
     ! loop over sedimentation sub-time step to ensure stability
      !==============================================================
@@ -3065,7 +3047,7 @@ endif
   nstend1 = nstend1 + nstend
   ns = ns + nstend*deltat
 
-!--> h1g, 2019-12-12, remove tiny or negative hydrometeor mass or number 
+!--> h1g, 2019-12-12, remove tiny or negative hydrometeor mass or number
 !--> in order to avoid numerical instability
   do k=1, nlev
     do i=1, mgncol
@@ -3074,7 +3056,7 @@ endif
             diag_4l(i,j,k,diag_pt%qidt_tiny) =           &
             diag_4l(i,j,k,diag_pt%qidt_tiny) - qi(i,k)/deltat
         qitend1(i,k)     = qitend1(i,k) - qi(i,k)/deltat
-        qi(i,k)          = 0.0  
+        qi(i,k)          = 0.0
 
         qvlat1(i,k)      = qvlat1(i,k) + qi(i,k)/deltat
         q(i,k)           = q(i,k)      + qi(i,k)
@@ -3105,7 +3087,7 @@ endif
             diag_4l(i,j,k,diag_pt%qsdt_tiny) - qs(i,k)/deltat
 
         qstend1(i,k)     = qstend1(i,k) - qs(i,k)/deltat
-        qs(i,k)          = 0.0  
+        qs(i,k)          = 0.0
 
         qvlat1(i,k)      = qvlat1(i,k) + qs(i,k)/deltat
         q(i,k)           = q(i,k)      + qs(i,k)
@@ -3135,7 +3117,7 @@ endif
             diag_4l(i,j,k,diag_pt%qldt_tiny) =           &
             diag_4l(i,j,k,diag_pt%qldt_tiny) - qc(i,k)/deltat
         qctend1(i,k)     = qctend1(i,k) - qc(i,k)/deltat
-        qc(i,k)          = 0.0  
+        qc(i,k)          = 0.0
 
         qvlat1(i,k)      = qvlat1(i,k) + qc(i,k)/deltat
         q(i,k)           = q(i,k)      + qc(i,k)
@@ -3187,7 +3169,7 @@ endif
       endif
     enddo
   enddo
-  
+
 !<-- h1g, 2019-12-12
 
 
@@ -3214,7 +3196,7 @@ endif
 end do substepping ! iter loop, sub-step
   deltat = deltatin
 
-prect  = prect/real(iter) 
+prect  = prect/real(iter)
 preci  = preci/real(iter)
 
 lflx   = lflx /real(iter)
@@ -3232,12 +3214,12 @@ diag_4l(:,j,:,diag_pt%qnidt_sedi)    = diag_4l(:,j,:,diag_pt%qnidt_sedi) /real(i
 diag_4l(:,j,:,diag_pt%rain_num_sedi) = diag_4l(:,j,:,diag_pt%rain_num_sedi)/real(iter)
 diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real(iter)
 
-  ! assign variables back to start-of-timestep values before updating after sub-steps 
+  ! assign variables back to start-of-timestep values before updating after sub-steps
   !================================================================================
 
   t  = tn
   q  = qn
-  qc = qcn 
+  qc = qcn
   nc = ncn
   qi = qin
   ni = nin
@@ -3280,7 +3262,7 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
   nrout = nrout/real(iter)
   nsout = nsout/real(iter)
 
-  ! divide trop_mozart variables by number of sub-steps to get average over time step 
+  ! divide trop_mozart variables by number of sub-steps to get average over time step
   !================================================================================
 
   nevapr = nevapr/real(iter)
@@ -3326,11 +3308,11 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
   npccno = npccno/real(iter)     ! h1g, 2020-03-09
   nprc1o = nprc1o/real(iter)     ! h1g, 2020-03-09
   nprao  = nprao/real(iter)      ! h1g, 2020-03-09
-  nerosco= nerosco/real(iter)    ! h1g, 2020-03-09 
-  nnuccco= nnuccco/real(iter)    ! h1g, 2020-03-09 
-  nnuccto= nnuccto/real(iter)    ! h1g, 2020-03-09 
-  npsacwso= npsacwso/real(iter)  ! h1g, 2020-03-09 
-  nsubco  = nsubco/real(iter)    ! h1g, 2020-03-09 
+  nerosco= nerosco/real(iter)    ! h1g, 2020-03-09
+  nnuccco= nnuccco/real(iter)    ! h1g, 2020-03-09
+  nnuccto= nnuccto/real(iter)    ! h1g, 2020-03-09
+  npsacwso= npsacwso/real(iter)  ! h1g, 2020-03-09
+  nsubco  = nsubco/real(iter)    ! h1g, 2020-03-09
 
   nnuccdo    = nnuccdo/real(iter)    ! h1g, 2020-06-29
   nerosio    = nerosio/real(iter)    ! h1g, 2020-06-30
@@ -3350,7 +3332,7 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
   if (diag_id%rain_inst + diag_id%rain_inst_col > 0)    &
              diag_4l(:,j,:,diag_pt%rain_inst )  = diag_4l(:,j,:,diag_pt%rain_inst )/real(iter)
   if (diag_id%rain_num_inst + diag_id%rain_num_inst_col > 0)    &
-             diag_4l(:,j,:,diag_pt%rain_num_inst )  = diag_4l(:,j,:,diag_pt%rain_num_inst )/real(iter) 
+             diag_4l(:,j,:,diag_pt%rain_num_inst )  = diag_4l(:,j,:,diag_pt%rain_num_inst )/real(iter)
 
 
 
@@ -3415,7 +3397,7 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
 
               qstend(i,k)=qstend(i,k)-dum*dums(i,k)/deltat
               nstend(i,k)=nstend(i,k)-dum*dumns(i,k)/deltat
-              qrtend(i,k)=qrtend(i,k)+dum*dums(i,k)/deltat  
+              qrtend(i,k)=qrtend(i,k)+dum*dums(i,k)/deltat
               nrtend(i,k)=nrtend(i,k)+dum*dumns(i,k)/deltat
 
               if (diag_id%snow_melt  + diag_id%snow_melt_col > 0) &
@@ -3425,7 +3407,7 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
 
               dum1=-xlf*dum*dums(i,k)/deltat
               tlat(i,k)=tlat(i,k)+dum1
- 
+
               meltsdttot(i,k)=meltsdttot(i,k) + dum1
            end if
         end if
@@ -3571,7 +3553,7 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
                     diag_4l(i,j,k,diag_pt%qndt_ihom) =  nctend(i,k)
 
                  ! assume 25 micron mean volume radius of homogeneously frozen droplets
-                 ! consistent with size of detrained ice in stratiform.F90                 
+                 ! consistent with size of detrained ice in stratiform.F90
                  nitend(i,k)=nitend(i,k)+dum*3._r8*dumc(i,k)/(4._r8*3.14_r8*1.563e-14_r8* &
                       500._r8)/deltat
                  qctend(i,k)=((1._r8-dum)*dumc(i,k)-qc(i,k))/deltat
@@ -3598,8 +3580,8 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
                                 (4._r8*3.14_r8*1.563e-14_r8*500._r8)/deltat
               end if
            end if
-        enddo 
-     enddo 
+        enddo
+     enddo
      ! remove any excess over-saturation, which is possible due to non-linearity when adding
      ! together all microphysical processes
      !-----------------------------------------------------------------
@@ -3613,7 +3595,7 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
 
            if ( ttmp .lt.-150.0+273.15 .or. ttmp .gt.90+273.15)  &
  write(*,'(a,6f8.2)') 'MG2: bad temperature@2930',   &
-            ttmp, t(i,k), tlat(i,k)/cpp*deltat, tlat(i,k), cpp, deltat 
+            ttmp, t(i,k), tlat(i,k)/cpp*deltat, tlat(i,k), cpp, deltat
 
           ! use rhw to allow ice supersaturation
            call compute_qs(ttmp, p(i,k), qvn, q = q(i,k),   &
@@ -3643,7 +3625,7 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
                    !-------------------------------------------------------
                 else if (ttmp < 238.15_r8) then
                    dum1=1.0_r8
-                   if ( tiedtke_macrophysics ) ssat_disposal(i,k) = 2._r8 
+                   if ( tiedtke_macrophysics ) ssat_disposal(i,k) = 2._r8
                 else
                    dum1=(268.15_r8-ttmp)/30._r8
                    if ( tiedtke_macrophysics ) ssat_disposal(i,k) = 2._r8
@@ -3662,8 +3644,8 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
               qvres(i,k)=-dum
               tlat(i,k)=tlat(i,k)+dum*(1._r8-dum1)*xxlv+dum*dum1*xxls
            end if
-        enddo 
-     enddo 
+        enddo
+     enddo
   end if
 
   ! calculate effective radius for pass to radiation code
@@ -3724,8 +3706,8 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
                  nitend(i,k)=(dumni(i,k)*icldm(i,k)-ni(i,k))/deltat
 
                   if (diag_id%qnidt_size_adj + diag_id%qni_size_adj_col  > 0)    &
-                      diag_4l(i,j,k,diag_pt%qnidt_size_adj)  = nitend(i,k)   & 
-                                                             - diag_4l(i,j,k,diag_pt%qnidt_size_adj) 
+                      diag_4l(i,j,k,diag_pt%qnidt_size_adj)  = nitend(i,k)   &
+                                                             - diag_4l(i,j,k,diag_pt%qnidt_size_adj)
               end if
 
               effi(i,k) = 1.5_r8/lami(i,k)*1.e6_r8
@@ -3830,7 +3812,7 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
 
              if (diag_id%rain_num_adj + diag_id%rain_num_adj_col > 0)    &
               diag_4l(:,j,:,diag_pt%rain_num_adj)  = nrtend(i,k)-diag_4l(:,j,:,diag_pt%rain_num_adj)
-             
+
            end if
 
         end if
@@ -3918,15 +3900,12 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
   end where
 
 !--> h1g, 2010-01-15, add limits for rain drop radius
-#ifdef GFDL_COMPATIBLE_MICROP
   reff_rain          = max(  30.0_r8, reff_rain          )
   reff_rain          = min( 750.0_r8, reff_rain          )
-#endif
 !<-- h1g, 2010-01-15, add limits for rain drop radius
 
 
 
-#ifdef GFDL_COMPATIBLE_MICROP
 ! diagnostics for water tendencies
 ! water  vapor specific humicity
 
@@ -3951,8 +3930,8 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
               diag_4l(:,j,:,diag_pt%qldt_freez2) =   &
                                           -(mnuccctot(:,:) + mnuccttot(:,:) )
       sum_freeze2(:,:) =  mnuccctot(:,:) + mnuccttot(:,:)
-      if (diag_id%qldt_accrs  + diag_id%ql_accrs_col > 0) & 
-              diag_4l(:,j,:,diag_pt%qldt_accrs)  = -psacwstot(:,:) 
+      if (diag_id%qldt_accrs  + diag_id%ql_accrs_col > 0) &
+              diag_4l(:,j,:,diag_pt%qldt_accrs)  = -psacwstot(:,:)
       sum_rime(:,:) =  psacwstot(:,:)
       if (diag_id%qldt_HM_splinter + diag_id%ql_HM_splinter_col > 0)&
               diag_4l(:,j,:,diag_pt%qldt_HM_splinter)  = -msacwitot(:,:)
@@ -3970,7 +3949,7 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
       sum_cond(:,:) = max(cmeitot(:,:),0._r8)
 
       if (diag_id%qldt_cond + diag_id%ql_cond_col > 0) &
-              diag_4l(:,j,:,diag_pt%qldt_cond)  =  max(cmelo(:,:), 0._r8) 
+              diag_4l(:,j,:,diag_pt%qldt_cond)  =  max(cmelo(:,:), 0._r8)
       if (diag_id%qldt_evap  + diag_id%ql_evap_col > 0) &
               diag_4l(:,j,:,diag_pt%qldt_evap)  =   &
                                            - max(-1._r8*cmelo(:,:),0._r8)
@@ -4002,7 +3981,7 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
              diag_4l(:,j,:,diag_pt%qidt_accr) = -praitot(:,:)
       if (diag_id%qidt_rain2ice  + diag_id%qi_rain2ice_col > 0) &
              diag_4l(:,j,:,diag_pt%qidt_rain2ice) =  diag_4l(:,j,:,diag_pt%qidt_rain2ice) &
-                                                    + mnuccritot(:,:) 
+                                                    + mnuccritot(:,:)
       IF ( diag_id%qidt_fall  + diag_id%qi_fall_col > 0 ) &
               diag_4l(:,j,1:nlev,diag_pt%qidt_fall) = qisedten(:,1:nlev)
       IF ( diag_id%ice_adj  +  diag_id%ice_adj_col > 0 ) &
@@ -4047,26 +4026,26 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
       if (diag_id%qndt_pra + diag_id%qn_pra_col > 0)    &
              diag_4l(:,j,:,diag_pt%qndt_pra)  = nprao(:,:)
       if (diag_id%qndt_auto + diag_id%qn_auto_col > 0)    &
-              diag_4l(:,j,:,diag_pt%qndt_auto)  = nprc1o(:,:) 
+              diag_4l(:,j,:,diag_pt%qndt_auto)  = nprc1o(:,:)
       if (diag_id%qndt_freez + diag_id%qn_freez_col > 0)    &
-             diag_4l(:,j,:,diag_pt%qndt_freez)  = nnuccco(:,:) 
+             diag_4l(:,j,:,diag_pt%qndt_freez)  = nnuccco(:,:)
       if (diag_id%qndt_contact_frz + diag_id%qn_contact_frz_col > 0)    &
-             diag_4l(:,j,:,diag_pt%qndt_contact_frz)  = nnuccto(:,:) 
+             diag_4l(:,j,:,diag_pt%qndt_contact_frz)  = nnuccto(:,:)
       if (diag_id%qndt_sacws + diag_id%qn_sacws_col > 0)    &
-             diag_4l(:,j,:,diag_pt%qndt_sacws)  = npsacwso(:,:) 
+             diag_4l(:,j,:,diag_pt%qndt_sacws)  = npsacwso(:,:)
       if (diag_id%qndt_evap + diag_id%qn_evap_col > 0)    &
-             diag_4l(:,j,:,diag_pt%qndt_evap)  = nsubco(:,:) 
+             diag_4l(:,j,:,diag_pt%qndt_evap)  = nsubco(:,:)
 
-! ---> ice number 
+! ---> ice number
       if (diag_id%qnidt_nnuccd +  diag_id%qni_nnuccd_col > 0)    &
              diag_4l(:,j,:,diag_pt%qnidt_nnuccd)  =  nnuccdo(:,:)
       if (diag_id%qnidt_nsacwi> 0)    &
-             diag_4l(:,j,:,diag_pt%qnidt_nsacwi)  =  nsacwio  
-     
+             diag_4l(:,j,:,diag_pt%qnidt_nsacwi)  =  nsacwio
+
       if (diag_id%qnidt_nsubi  + diag_id%qni_nsubi_col  > 0)    &
              diag_4l(:,j,:,diag_pt%qnidt_nsubi)  = nsubio(:,:)
      if (diag_id%qnidt_nerosi  + diag_id%qni_nerosi_col  > 0)    &
-             diag_4l(:,j,:,diag_pt%qnidt_nerosi)  = nerosio 
+             diag_4l(:,j,:,diag_pt%qnidt_nerosi)  = nerosio
       if (diag_id%qnidt_auto  + diag_id%qni_auto_col  > 0)    &
              diag_4l(:,j,:,diag_pt%qnidt_auto)  = nprcio
       if (diag_id%qnidt_accr  + diag_id%qni_accr_col  > 0)    &
@@ -4077,7 +4056,7 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
 
 !10/23/13: NOTE: STILL NEEDS CONVERSION !!!!
 !RSH:
-!   calculate fraction of total ice / snow creation that requires 
+!   calculate fraction of total ice / snow creation that requires
 !   ice-forming nuclei
       do k=1,nlev
         do i=1,mgncol
@@ -4105,7 +4084,6 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
         end do
       end do
 
-#endif
 end subroutine micro_mg2_tend
 
 
@@ -4214,72 +4192,71 @@ end subroutine micro_mg2_get_cols
 ! =======================================================================
 
 subroutine implicit_fall (dt, ktop, kbot, ze, vt, dp, q, precip, m1)
-    
+
     implicit none
-    
+
     integer, intent (in) :: ktop, kbot
-    
+
     real(r8), intent (in) :: dt
-    
+
     real(r8), intent (in), dimension (ktop:kbot + 1) :: ze
-    
+
     real(r8), intent (in), dimension (ktop:kbot) :: vt, dp
-    
+
     real(r8), intent (inout), dimension (ktop:kbot) :: q
-    
+
     real(r8), intent (out), dimension (ktop:kbot) :: m1
-    
+
     real(r8), intent (out) :: precip
-    
+
     real(r8), dimension (ktop:kbot) :: dz, qm, dd
-    
+
     integer :: k
-    
+
     do k = ktop, kbot
         dz (k) = ze (k) - ze (k + 1)
         dd (k) = dt * vt (k)
         q (k) = q (k) * dp (k)
     enddo
-    
+
     ! -----------------------------------------------------------------------
     ! sedimentation: non - vectorizable loop
     ! -----------------------------------------------------------------------
-    
+
     qm (ktop) = q (ktop) / (dz (ktop) + dd (ktop))
     do k = ktop + 1, kbot
         qm (k) = (q (k) + dd (k - 1) * qm (k - 1)) / (dz (k) + dd (k))
     enddo
-    
+
     ! -----------------------------------------------------------------------
     ! qm is density at this stage
     ! -----------------------------------------------------------------------
-    
+
     do k = ktop, kbot
         qm (k) = qm (k) * dz (k)
     enddo
-    
+
     ! -----------------------------------------------------------------------
     ! output mass fluxes: non - vectorizable loop
     ! -----------------------------------------------------------------------
-    
+
     m1 (ktop) = q (ktop) - qm (ktop)
     do k = ktop + 1, kbot
         m1 (k) = m1 (k - 1) + q (k) - qm (k)
     enddo
     precip = m1 (kbot)
-    
+
     ! -----------------------------------------------------------------------
     ! update:
     ! -----------------------------------------------------------------------
-    
+
     do k = ktop, kbot
         q (k) = qm (k) / dp (k)
     enddo
-    
+
 end subroutine implicit_fall
 
 
 
 
 end module micro_mg2_mod
-

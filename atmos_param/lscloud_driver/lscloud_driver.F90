@@ -9,7 +9,7 @@
 !             calls bulk large-scale condensation routine if requested
 !             calls cloud macrophysics driver
 !             calls cloud microphysics driver
-!             computes tracer removal in ls clouds by wet deposition  
+!             computes tracer removal in ls clouds by wet deposition
 !             outputs large-scale cloud diagnostics and budget terms
 !
 !-----------------------------------------------------------------------
@@ -42,7 +42,7 @@ use lscloud_debug_mod,     only: lscloud_debug_init, lscloud_debug, &
                                  lscloud_debug_setup
 use lscloud_types_mod,     only: diag_id_type, diag_pt_type, &
                                  lscloud_types_init, &
-                                 lscloud_nml_type, & 
+                                 lscloud_nml_type, &
                                  lsc_constants_type, lscloud_debug_type,&
                                  atmos_state_type, &
                                  particles_type, cloud_state_type, &
@@ -60,16 +60,16 @@ use ls_cloud_macrophysics_mod,      &
                            only: ls_cloud_macrophysics_init,  &
                                  ls_cloud_macrophysics_time_vary, &
                                  ls_cloud_macrophysics, &
-                                 ls_cloud_macrophysics_end 
+                                 ls_cloud_macrophysics_end
 use ls_cloud_microphysics_mod,      &
                            only: ls_cloud_microphysics_init, &
                                  ls_cloud_microphysics_time_vary, &
                                  ls_cloud_microphysics,   &
-                                 ls_cloud_microphysics_end 
+                                 ls_cloud_microphysics_end
 use aerosol_cloud_mod,     only: aerosol_cloud_init, &
                                  determine_available_aerosol, &
-                                 aerosol_cloud_end 
-use moist_proc_utils_mod,  only: column_diag, rh_calc, & 
+                                 aerosol_cloud_end
+use moist_proc_utils_mod,  only: column_diag, rh_calc, &
                                  mp_nml_type, mp_input_type, &
                                  mp_removal_type, mp_tendency_type,  &
                                  mp_conv2ls_type, mp_output_type,   &
@@ -97,7 +97,7 @@ private
 
 public   lscloud_driver_init, lscloud_driver_time_vary,      &
          lscloud_driver, lscloud_driver_endts, lscloud_driver_end
-  
+
 private  diag_field_init, lscloud_alloc,                  &
          impose_realizability, impose_realizability_clubb, &
          detailed_diagnostics, update_fields_and_tendencies,&
@@ -131,7 +131,7 @@ character(len=128) :: tagname = '$Name: $'
 !  </DATA>
 !  <DATA NAME="microphys_scheme" TYPE="character" DEFAULT="rotstayn_klein">
 !   the microphysics scheme being used (currently either
-!   "morrison_gettelman" or "rotstayn_klein" or "mg_ncar" or "ncar")
+!   "rotstayn_klein" or "mg2")
 !  </DATA>
 !  <DATA NAME="macrophys_scheme" TYPE="character" DEFAULT="tiedtke">
 !   the macrophysics scheme being used (currently either
@@ -232,7 +232,7 @@ integer :: lscloud_alloc_clock, realiz_clock, realiz_clubb_clock, &
            detail_diag_clock, update_fields_clock, ls_wetdep_clock, &
            basic_diags_clock, dealloc_clock, adjust_cond_clock, &
            adjust_part_num_clock
-            
+
 
 !-------------------- diagnostics fields -------------------------------
 
@@ -243,12 +243,12 @@ integer :: id_LWP, id_IWP, id_tdt_ls, id_qdt_ls, id_prec_ls, id_snow_ls, &
            id_enth_ls_col, id_wat_ls_col, &
            id_lsc_precip, id_lsc_freq,                           &
            id_lscale_rain3d, id_lscale_snow3d, id_lscale_precip3d
- 
+
 integer :: id_qvout, id_qaout, id_qlout, id_qiout, id_qrout, id_qsout, id_qgout
 integer :: id_qnout, id_qniout, id_qnrout, id_qnsout
 integer :: id_f_snow_berg, id_f_snow_berg_cond, id_f_snow_berg_wtd
 
-integer, dimension(:), allocatable :: id_wet_deposition    
+integer, dimension(:), allocatable :: id_wet_deposition
 
 real :: missing_value = -999.
 character(len=5), private :: mod_name = 'moist'
@@ -306,7 +306,7 @@ real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
 
 ! --- internal variables ---
       integer            :: unit, io, ierr, logunit
-      character(len=128) :: errstring     ! Output status: non-blank for 
+      character(len=128) :: errstring     ! Output status: non-blank for
                                           ! error return
       integer            :: lscalecond_init_clock, &
                             debug_init_clock, polysvp_init_clock, &
@@ -340,7 +340,7 @@ real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
       qcvar = Exch_ctrl%qcvar
       do_liq_num = Exch_ctrl%do_liq_num
       do_ice_num = Exch_ctrl%do_ice_num
-      do_clubb   = Exch_ctrl%do_clubb  
+      do_clubb   = Exch_ctrl%do_clubb
 
       limit_conv_cloud_frac = Nml_mp%limit_conv_cloud_frac
       do_lsc = Nml_mp%do_lsc
@@ -348,13 +348,13 @@ real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
       doing_prog_clouds = Exch_ctrl%doing_prog_clouds
 
       nsphum = Physics_control%nsphum
-      nql    = Physics_control%nql    
-      nqi    = Physics_control%nqi    
-      nqa    = Physics_control%nqa    
-      nqn    = Physics_control%nqn    
-      nqni   = Physics_control%nqni    
-      nqr    = Physics_control%nqr    
-      nqs    = Physics_control%nqs    
+      nql    = Physics_control%nql
+      nqi    = Physics_control%nqi
+      nqa    = Physics_control%nqa
+      nqn    = Physics_control%nqn
+      nqni   = Physics_control%nqni
+      nqr    = Physics_control%nqr
+      nqs    = Physics_control%nqs
       nqg    = Physics_control%nqg
       nqnr   = Physics_control%nqnr
       nqns   = Physics_control%nqns
@@ -454,15 +454,15 @@ real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
 !------------------------------------------------------------------------
       if (doing_prog_clouds) then
 
-!----------------------------------------------------------------------- 
+!-----------------------------------------------------------------------
 !    process namelist.
 !-----------------------------------------------------------------------
         read (input_nml_file, nml=lscloud_driver_nml, iostat=io)
         ierr = check_nml_error(io,'lscloud_driver_nml')
 
-!----------------------------------------------------------------------- 
+!-----------------------------------------------------------------------
 !    write version and namelist to stdlog.
-!-----------------------------------------------------------------------  
+!-----------------------------------------------------------------------
         call write_version_number(Version, Tagname)
         logunit = stdlog()
         if ( mpp_pe() == mpp_root_pe() )  &
@@ -475,7 +475,7 @@ real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
         if (nso2 == NO_TRACER) then
           nso2      = get_tracer_index(MODEL_ATMOS,'so2')
         endif
- 
+
         nso4      = get_tracer_index(MODEL_ATMOS,'simpleSO4')
         if (nso4 == NO_TRACER) then
           nso4      = get_tracer_index(MODEL_ATMOS,'so4')
@@ -493,7 +493,7 @@ real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
         if (do_clubb > 0) then
           Constants_lsc%tiedtke_macrophysics = .false.
         endif
- 
+
 !-----------------------------------------------------------------------
 !   perform realizability checks -- make sure one and only one large-scale
 !   cloud scheme has been activated, and that no untested combinations
@@ -535,7 +535,7 @@ real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
 !    put lscloud_driver_nml variables into a derived type variable for
 !    passing to other modules as needed.
 !-----------------------------------------------------------------------
-        Nml_lsc%Dmin = Dmin 
+        Nml_lsc%Dmin = Dmin
         Nml_lsc%cfact = cfact
         Nml_lsc%super_ice_opt = super_ice_opt
         Nml_lsc%do_ice_nucl_wpdf = do_ice_nucl_wpdf
@@ -553,37 +553,10 @@ real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
 !------------------------------------------------------------------------
         if (trim(microphys_scheme) =='rotstayn_klein') then
           Constants_lsc%do_rk_microphys = .true.
-          Constants_lsc%do_mg_microphys = .false.
-          Constants_lsc%do_mg_ncar_microphys = .false.
-          Constants_lsc%do_ncar_microphys = .false.
           Constants_lsc%do_ncar_MG2 = .false.
           do_predicted_ice_number = .false.
-        else if (trim(microphys_scheme) == 'morrison_gettelman') then
-          Constants_lsc%do_rk_microphys = .false.
-          Constants_lsc%do_mg_microphys = .true.
-          Constants_lsc%do_mg_ncar_microphys = .false.
-          Constants_lsc%do_ncar_microphys = .false.
-          Constants_lsc%do_ncar_MG2 = .false.
-          do_predicted_ice_number = .true.
-        else if (trim(microphys_scheme) == 'mg_ncar') then
-          Constants_lsc%do_rk_microphys = .false.
-          Constants_lsc%do_mg_microphys = .false.
-          Constants_lsc%do_mg_ncar_microphys = .true.
-          Constants_lsc%do_ncar_microphys = .false.
-          Constants_lsc%do_ncar_MG2 = .false.
-          do_predicted_ice_number = .true.
-        else if (trim(microphys_scheme) == 'ncar') then
-          Constants_lsc%do_rk_microphys = .false.
-          Constants_lsc%do_mg_microphys = .false.
-          Constants_lsc%do_mg_ncar_microphys = .false.
-          Constants_lsc%do_ncar_microphys = .true.
-          Constants_lsc%do_ncar_MG2 = .false.
-          do_predicted_ice_number = .true.
        else if (trim(microphys_scheme) == 'mg2') then
           Constants_lsc%do_rk_microphys = .false.
-          Constants_lsc%do_mg_microphys = .false.
-          Constants_lsc%do_mg_ncar_microphys = .false.
-          Constants_lsc%do_ncar_microphys = .false.
           Constants_lsc%do_ncar_MG2 = .true.
           do_predicted_ice_number = .true.
         else
@@ -632,7 +605,7 @@ real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
         call mpp_clock_end (lscloud_types_init_clock)
 
 !------------------------------------------------------------------------
-!    initialize aerosol module 
+!    initialize aerosol module
 !------------------------------------------------------------------------
         call mpp_clock_begin (aerosol_cloud_init_clock)
         call aerosol_cloud_init (Constants_lsc, Nml_lsc, Nml_mp, Exch_ctrl)
@@ -662,18 +635,15 @@ real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
       else ! (doing_prog_clouds)
         Constants_lsc%tiedtke_macrophysics = .false.
         Constants_lsc%do_rk_microphys = .false.
-        Constants_lsc%do_mg_microphys = .false.
-        Constants_lsc%do_mg_ncar_microphys = .false.
-        Constants_lsc%do_ncar_microphys = .false.
         Constants_lsc%do_ncar_MG2 = .false.
         do_predicted_ice_number = .false.
         Constants_lsc%dqa_activation = .false.
         Constants_lsc%total_activation = .false.
 
-!------------------------------------------------------------------------ 
-!    if large-scale bulk condensation is active, initialize it here,   
+!------------------------------------------------------------------------
+!    if large-scale bulk condensation is active, initialize it here,
 !    along with the cloud scheme to be used to obtain a cloud field for
-!    the radiation code to work with.  
+!    the radiation code to work with.
 !------------------------------------------------------------------------
         if (do_lsc) then
           call mpp_clock_begin (lscalecond_init_clock)
@@ -681,10 +651,10 @@ real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
           call mpp_clock_end   (lscalecond_init_clock)
         endif
       endif ! (doing_prog_clouds)
-                                               
+
 !-----------------------------------------------------------------------
 !    call lscloud_netcdf_init to set up the netcdf diagnostic output
-!    requested via the diag_table. 
+!    requested via the diag_table.
 !-----------------------------------------------------------------------
       call mpp_clock_begin ( lscloud_netcdf_init_clock)
       call lscloud_netcdf_init (axes, Time, Lsdiag_mp_control%diag_id,  &
@@ -746,7 +716,7 @@ real,                    intent(in) :: dt
         call ls_cloud_microphysics_time_vary (dtcloud)
         call mpp_clock_end (ls_microphysics_clock)
       endif
- 
+
 !-----------------------------------------------------------------------
 
 
@@ -774,14 +744,14 @@ subroutine lscloud_driver  (is, ie, js, je, Time, dt, lon, lat, Input_mp, &
 !         Input_mp
 !
 !         rdiag
-!  
+!
 !         Tend_mp
 !
 !         C2ls_mp
-! 
+!
 !         Output_mp
-!         
-!         Removal_mp 
+!
+!         Removal_mp
 !
 !         Cld_props
 !
@@ -809,11 +779,11 @@ type(aerosol_type),          intent(in), optional :: Aerosol
 !------------------------------------------------------------------------
       type(atmos_state_type)     :: Atmos_state
       type(cloud_state_type)     :: Cloud_state
-      type(particles_type)       :: Particles 
+      type(particles_type)       :: Particles
       type(precip_state_type)    :: Precip_state
       type(cloud_processes_type) :: Cloud_processes
       type(mp_lsdiag_type)       :: Lsdiag_mp
-  
+
 !------------------------------------------------------------------------
 !   local variables:
 !------------------------------------------------------------------------
@@ -827,9 +797,9 @@ type(aerosol_type),          intent(in), optional :: Aerosol
 !-----------------------------------------------------------------------
 !    define input array sizes.
 !-----------------------------------------------------------------------
-      ix = size(Input_mp%t,1) 
-      jx = size(Input_mp%t,2) 
-      kx = size(Input_mp%t,3) 
+      ix = size(Input_mp%t,1)
+      jx = size(Input_mp%t,2)
+      kx = size(Input_mp%t,3)
       nt = size(Output_mp%rdt,4)
 
 !---------------------------------------------------------------------
@@ -853,7 +823,7 @@ type(aerosol_type),          intent(in), optional :: Aerosol
       Lsdiag_mp%diag_4d_kp1(:,:,:,0:) = 0.
 
 !---------------------------------------------------------------------
-!   reset the tendencies; on input they contain the convective scheme 
+!   reset the tendencies; on input they contain the convective scheme
 !   tendencies.
 !---------------------------------------------------------------------
       Tend_mp%ttnd   = 0.
@@ -884,12 +854,12 @@ type(aerosol_type),          intent(in), optional :: Aerosol
 !----------------------------------------------------------------------
 !    Macrophysics and microphysics
 !    are being treated in separate modules. For the macrophysics, current
-!    choices are tiedtke (tiedtke_macrophysics = .T.), or clubb 
+!    choices are tiedtke (tiedtke_macrophysics = .T.), or clubb
 !    macrophysics (do_clubb ==2).
 !----------------------------------------------------------------------
 !------------------------------------------------------------------------
-!    if tiedtke clouds are active, calculate needed svp arrays, initialize 
-!    some debug option fields, make sure the cloud tracer arrays are 
+!    if tiedtke clouds are active, calculate needed svp arrays, initialize
+!    some debug option fields, make sure the cloud tracer arrays are
 !    consistent and of acceptable magnitude, and define particle
 !    number variables in units needed for later use.
 !------------------------------------------------------------------------
@@ -910,7 +880,7 @@ type(aerosol_type),          intent(in), optional :: Aerosol
             call mpp_clock_end (polysvp_clock)
 
 !-----------------------------------------------------------------------
-!    call lscloud_debug_setup to output header info when the debug 
+!    call lscloud_debug_setup to output header info when the debug
 !    option is active.
 !-----------------------------------------------------------------------
             call mpp_clock_begin (lscloud_debug_clock)
@@ -920,7 +890,7 @@ type(aerosol_type),          intent(in), optional :: Aerosol
 
 !-----------------------------------------------------------------------
 !    call impose_realizability to account for the fact that other processes
-!    may have created negative tracer or extremely small values of tracer 
+!    may have created negative tracer or extremely small values of tracer
 !    fields. start clock to time this subroutine.
 !----------------------------------------------------------------------
             call mpp_clock_begin (realiz_clock)
@@ -931,7 +901,7 @@ type(aerosol_type),          intent(in), optional :: Aerosol
             call mpp_clock_end (realiz_clock)
 
 !------------------------------------------------------------------------
-!    define particle numbers (in units of number / cm**3) after 
+!    define particle numbers (in units of number / cm**3) after
 !    any realizability adjustment.
 !------------------------------------------------------------------------
             if (do_liq_num) then
@@ -942,8 +912,8 @@ type(aerosol_type),          intent(in), optional :: Aerosol
           endif
 
 !------------------------------------------------------------------------
-!    if either tiedtke or clubb macrophysics are active, call 
-!    determine_available_aerosol to determine the available condensation 
+!    if either tiedtke or clubb macrophysics are active, call
+!    determine_available_aerosol to determine the available condensation
 !    nuclei.
 !------------------------------------------------------------------------
           if (Constants_lsc%tiedtke_macrophysics .or. do_clubb == 2) then
@@ -955,8 +925,8 @@ type(aerosol_type),          intent(in), optional :: Aerosol
           endif
 
 !---------------------------------------------------------------------
-!    code is now ready to calculate macrophysics tendencies. start the 
-!    clock for the ls cloud macrophysics code and call 
+!    code is now ready to calculate macrophysics tendencies. start the
+!    clock for the ls cloud macrophysics code and call
 !    ls_cloud_macrophysics to handle grid-scale condensation effects.
 !    either tiedtke or clubb  macrophysics will be employed, dependent on
 !    the nml specification provided.
@@ -966,7 +936,7 @@ type(aerosol_type),          intent(in), optional :: Aerosol
                    is, ie, js, je, Time, dt, rdiag, Input_mp, Output_mp, &
                    Tend_mp, C2ls_mp, Lsdiag_mp_control, Lsdiag_mp, &
                    Atmos_state, Cloud_state, &
-                   Particles, Precip_state, Cloud_processes, Aerosol)    
+                   Particles, Precip_state, Cloud_processes, Aerosol)
 
 !---------------------------------------------------------------------
 !    end the timing of the ls cloud macrophysics code section.
@@ -974,8 +944,8 @@ type(aerosol_type),          intent(in), optional :: Aerosol
           call mpp_clock_end (ls_macrophysics_clock)
 
 !------------------------------------------------------------------------
-!    if  clubb is activated, the input fields are updated and subroutine 
-!    impose_realizability_clubb is called to validate the consistency and 
+!    if  clubb is activated, the input fields are updated and subroutine
+!    impose_realizability_clubb is called to validate the consistency and
 !    magnitude of the cloud tracers before microphysics is calculated.
 !------------------------------------------------------------------------
           if (do_clubb == 2) then
@@ -1002,7 +972,7 @@ type(aerosol_type),          intent(in), optional :: Aerosol
             call mpp_clock_end (realiz_clubb_clock)
 
 !------------------------------------------------------------------------
-!    define particle numbers (in units of number / cm**3) after 
+!    define particle numbers (in units of number / cm**3) after
 !    realizability adjustment.
 !------------------------------------------------------------------------
             if (do_liq_num) then
@@ -1011,10 +981,10 @@ type(aerosol_type),          intent(in), optional :: Aerosol
                              Cloud_state%qni_upd*Atmos_state%airdens*1.e-6
             endif
           endif
-          
+
 !-----------------------------------------------------------------------
-!    when prognostic clouds are active, call ls_cloud_microphysics to 
-!    compute the cloud microphysical effects using the requested 
+!    when prognostic clouds are active, call ls_cloud_microphysics to
+!    compute the cloud microphysical effects using the requested
 !    microphysics scheme:
 !    a) rotstayn-klein, b) MG (from Marc Salzmann, c) mg-ncar, a
 !    newer version of the MG code with those changes made by Marc,
@@ -1053,7 +1023,7 @@ type(aerosol_type),          intent(in), optional :: Aerosol
                 Lsdiag_mp%diag_3d, Lsdiag_mp_control%diag_pt,   &
                 Lsdiag_mp_control%diag_id, &
                 C2ls_mp, Input_mp, Atmos_state, Cloud_state, Particles, &
-                Precip_state, Cloud_processes, Tend_mp, Removal_mp) 
+                Precip_state, Cloud_processes, Tend_mp, Removal_mp)
             call mpp_clock_end (detail_diag_clock)
           endif
 
@@ -1065,8 +1035,8 @@ type(aerosol_type),          intent(in), optional :: Aerosol
 !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 !-----------------------------------------------------------------------
-!    if a non-prognostic cloud scheme is active, then call lscale_cond 
-!    to calculate the temperature and specific humidity tendencies 
+!    if a non-prognostic cloud scheme is active, then call lscale_cond
+!    to calculate the temperature and specific humidity tendencies
 !    related to the latent heat release associated with the removal of
 !    any large-scale "supersaturation".
 !-----------------------------------------------------------------------
@@ -1089,13 +1059,13 @@ type(aerosol_type),          intent(in), optional :: Aerosol
       call mpp_clock_end (update_fields_clock)
 
 !------------------------------------------------------------------------
-!    deallocate the arrays associated with the large-scale 
+!    deallocate the arrays associated with the large-scale
 !    cloud diagnostics.
 !------------------------------------------------------------------------
       deallocate ( Lsdiag_mp%diag_4d )
       deallocate ( Lsdiag_mp%diag_4d_kp1 )
       deallocate ( Lsdiag_mp%diag_3d )
-    
+
 
 !------------------------------------------------------------------------
 !    call compute_ls_wetdep to calculate wet deposition removal by lscloud
@@ -1109,16 +1079,16 @@ type(aerosol_type),          intent(in), optional :: Aerosol
 
 !---------------------------------------------------------------------
 !    output basic diagnostics defining the  model condensate and the
-!    effect of the large-scale cloud/condensation scheme on atmospheric 
+!    effect of the large-scale cloud/condensation scheme on atmospheric
 !    fields.
 !---------------------------------------------------------------------
       call mpp_clock_begin (basic_diags_clock)
       call basic_diagnostics (is, js, Time, Tend_mp, Input_mp, &
-                                                Precip_state, Removal_mp) 
+                                                Precip_state, Removal_mp)
       call mpp_clock_end (basic_diags_clock)
 
 !-------------------------------------------------------------------------
-!    call lscloud_dealloc to deallocate the local derived type variable 
+!    call lscloud_dealloc to deallocate the local derived type variable
 !    components.
 !-------------------------------------------------------------------------
       call mpp_clock_begin (dealloc_clock)
@@ -1130,11 +1100,11 @@ type(aerosol_type),          intent(in), optional :: Aerosol
 !    end the timing of the large-scale condensation code section.
 !---------------------------------------------------------------------
       call mpp_clock_end (lscloud_driver_clock)
- 
+
 !-----------------------------------------------------------------------
 
 
-end subroutine lscloud_driver 
+end subroutine lscloud_driver
 
 
 !########################################################################
@@ -1152,7 +1122,7 @@ end subroutine lscloud_driver_endts
 
 !########################################################################
 
-subroutine lscloud_driver_end 
+subroutine lscloud_driver_end
 
 
 !------------------------------------------------------------------------
@@ -1193,7 +1163,7 @@ subroutine lscloud_driver_end
 !    close the modules which were opened by this module. time their
 !    termination.
 !-----------------------------------------------------------------------
-      if (doing_prog_clouds) then 
+      if (doing_prog_clouds) then
           if (Constants_lsc%tiedtke_macrophysics) then
             call mpp_clock_begin ( polysvp_term_clock)
             call polysvp_end
@@ -1201,14 +1171,14 @@ subroutine lscloud_driver_end
           endif
           if (Constants_lsc%tiedtke_macrophysics .or. do_clubb ==2) then
             call mpp_clock_begin ( aerosol_cloud_term_clock)
-            call aerosol_cloud_end                 
+            call aerosol_cloud_end
             call mpp_clock_end ( aerosol_cloud_term_clock)
           endif
           call mpp_clock_begin ( macrophysics_term_clock)
-          call ls_cloud_macrophysics_end                                
+          call ls_cloud_macrophysics_end
           call mpp_clock_end ( macrophysics_term_clock)
           call mpp_clock_begin ( microphysics_term_clock)
-          call ls_cloud_microphysics_end 
+          call ls_cloud_microphysics_end
           call mpp_clock_end ( microphysics_term_clock)
           if (Constants_lsc%tiedtke_macrophysics .or. do_clubb ==2) then
             call mpp_clock_begin ( lscloud_netcdf_term_clock)
@@ -1289,7 +1259,7 @@ type(time_type),         intent(in) :: Time
         'lscale_snow3d', axes(half), Time, &
         'Snow fall rate from lscale -3D',       'kg(h2o)/m2/s', &
          interp_method = "conserve_order1" )
-   
+
       id_lscale_precip3d= register_diag_field ( mod_name, &
         'lscale_precip3d', axes(1:3), Time, &
         'LS Precip falling out of gridbox',       'kg(h2o)/m2/s' , &
@@ -1320,7 +1290,7 @@ type(time_type),         intent(in) :: Time
         id_q_ls_col = register_diag_field ( mod_name, &
           'q_ls_col', axes(1:2), Time, &
           'Water vapor path tendency from large-scale cond','kg/m2/s' )
-   
+
         id_t_ls_col = register_diag_field ( mod_name, &
           't_ls_col', axes(1:2), Time, &
           'Column static energy tendency from large-scale cond','W/m2' )
@@ -1379,11 +1349,11 @@ type(time_type),         intent(in) :: Time
         id_q_ls_col = register_diag_field ( mod_name, &
           'q_ls_col', axes(1:2), Time, &
           'Water vapor path tendency from strat cloud',   'kg/m2/s' )
-   
+
         id_t_ls_col = register_diag_field ( mod_name, &
           't_ls_col', axes(1:2), Time, &
           'Column static energy tendency from strat cloud','W/m2' )
-   
+
         id_qldt_ls = register_diag_field ( mod_name, &
           'qldt_ls', axes(1:3), Time, &
           'Liquid water tendency from strat cloud',       'kg/kg/s',  &
@@ -1416,7 +1386,7 @@ type(time_type),         intent(in) :: Time
         id_ql_ls_col = register_diag_field ( mod_name, &
           'ql_ls_col', axes(1:2), Time, &
           'Liquid water path tendency from strat cloud',   'kg/m2/s' )
-   
+
         if (do_liq_num) then
           id_qn_ls_col = register_diag_field ( mod_name, &
             'qn_ls_col', axes(1:2), Time, &
@@ -1432,15 +1402,15 @@ type(time_type),         intent(in) :: Time
         id_qi_ls_col = register_diag_field ( mod_name, &
           'qi_ls_col', axes(1:2), Time, &
           'Ice water path tendency from strat cloud',      'kg/m2/s' )
-   
+
         id_qa_ls_col = register_diag_field ( mod_name, &
           'qa_ls_col', axes(1:2), Time, &
           'Cloud mass tendency from strat cloud',          'kg/m2/s' )
-      
+
         id_enth_ls_col = register_diag_field ( mod_name, &
           'enth_ls_col', axes(1:2), Time, &
           'Column enthalpy tendency from strat cloud','W/m2' )
- 
+
         id_wat_ls_col = register_diag_field ( mod_name, &
           'wat_ls_col', axes(1:2), Time, &
           'Column total water tendency from strat cloud','kg/m2/s' )
@@ -1512,8 +1482,8 @@ type(time_type),         intent(in) :: Time
         missing_value=missing_value)
 
 !---------------------------------------------------------------------
-!    register the diagnostics associated with wet deposition of each 
-!    tracer species. 
+!    register the diagnostics associated with wet deposition of each
+!    tracer species.
 !---------------------------------------------------------------------
       allocate (id_wet_deposition(num_prog_tracers))
       id_wet_deposition = -1
@@ -1545,7 +1515,7 @@ type(mp_input_type),        intent(in)    :: Input_mp
 type(mp_conv2ls_type),      intent(in)    :: C2ls_mp
 type(particles_type),       intent(inout) :: Particles
 type(cloud_processes_type), intent(inout) :: Cloud_processes
-type(precip_state_type),    intent(inout) :: Precip_state   
+type(precip_state_type),    intent(inout) :: Precip_state
 type(atmos_state_type),     intent(inout) :: Atmos_state
 type(cloud_state_type),     intent(inout) :: Cloud_state
 
@@ -1557,7 +1527,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       real, dimension(idim,jdim,kdim) :: airdens_aerosol, T_aerosol
 
 !-----------------------------------------------------------------------
-!    allocate and initialize the components of the particles_type 
+!    allocate and initialize the components of the particles_type
 !    variable Particles.
 !-----------------------------------------------------------------------
       allocate (Particles%concen_dust_sub   (idim, jdim, kdim) )
@@ -1573,7 +1543,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       allocate (Particles%N3Di              (idim, jdim, kdim) )
       allocate (Particles%totalmass1        (idim, jdim, kdim, n_totmass) )
       allocate (Particles%imass1            (idim, jdim, kdim, n_imass) )
- 
+
       Particles%concen_dust_sub   = 0.
       Particles%drop1    = 0.
       Particles%drop2    = 0.
@@ -1608,7 +1578,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       allocate  (Cloud_processes%dcond_ls_tot     (idim, jdim, kdim) )
       allocate  (Cloud_processes%delta_cf         (idim, jdim, kdim) )
       allocate  (Cloud_processes%f_snow_berg      (idim, jdim, kdim) )
- 
+
       Cloud_processes%da_ls          = 0.
       Cloud_processes%D_eros         = 0.
       Cloud_processes%qvg            = 0.
@@ -1620,7 +1590,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       Cloud_processes%f_snow_berg    = 0.
 
 !-----------------------------------------------------------------------
-!    allocate and initialize the components of the precip_state_type 
+!    allocate and initialize the components of the precip_state_type
 !    variable Precip_state.
 !-----------------------------------------------------------------------
       allocate (Precip_state%lsc_snow      (idim, jdim, kdim) )
@@ -1646,7 +1616,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
 
 
 !-----------------------------------------------------------------------
-!    allocate and initialize the components of the atmos_state_type 
+!    allocate and initialize the components of the atmos_state_type
 !    variable Atmos_state.
 !-----------------------------------------------------------------------
       allocate (Atmos_state%airdens        (idim, jdim, kdim) )
@@ -1672,11 +1642,11 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       endif
 
 !-----------------------------------------------------------------------
-!    calculate air density.   
+!    calculate air density.
 !-----------------------------------------------------------------------
 
       if (nql == NO_TRACER .or. nqi == NO_TRACER)  then
-        where (C2ls_mp%convective_humidity_ratio .gt. 0.) 
+        where (C2ls_mp%convective_humidity_ratio .gt. 0.)
           Atmos_state%airdens = Input_mp%pfull/(RDGAS*Input_mp%tin*  &
             (1. + (d608*Input_mp%qin/C2ls_mp%convective_humidity_ratio) ))
         elsewhere
@@ -1688,10 +1658,10 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
           airdens_aerosol = Atmos_state%airdens
         endif
       else  ! (NO_TRACER)
-        where (C2ls_mp%convective_humidity_ratio .gt. 0.) 
+        where (C2ls_mp%convective_humidity_ratio .gt. 0.)
           Atmos_state%airdens = Input_mp%pfull/(RDGAS*Input_mp%tin*  &
            (1. + (d608*Input_mp%qin/C2ls_mp%convective_humidity_ratio) -  &
-                Input_mp%tracer(:,:,:,nql) - Input_mp%tracer(:,:,:,nqi))) 
+                Input_mp%tracer(:,:,:,nql) - Input_mp%tracer(:,:,:,nqi)))
         elsewhere
           Atmos_state%airdens = Input_mp%pfull/(RDGAS*Input_mp%tin*  &
            (1.  - Input_mp%tracer(:,:,:,nql) - Input_mp%tracer(:,:,:,nqi)))
@@ -1717,7 +1687,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
             else
               Atmos_state%pthickness(i,j,k) =   &
                  log(Input_mp%phalf(i,j,k+1)/Input_mp%phalf(i,j,k))*  &
-                                      8.314*T_aerosol(i,j,k)/(9.8*0.02888) 
+                                      8.314*T_aerosol(i,j,k)/(9.8*0.02888)
             end if
           end do
         end do
@@ -1736,11 +1706,11 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       do k = 1, kdim
         Atmos_state%delp(:,:,k) =   &
                           Input_mp%phalf(:,:,k+1) - Input_mp%phalf(:,:,k)
-      enddo     
+      enddo
       Atmos_state%U01           = 0.
 
 !-----------------------------------------------------------------------
-!    allocate and initialize the components of the cloud_state_type 
+!    allocate and initialize the components of the cloud_state_type
 !    variable Cloud_state.
 !-----------------------------------------------------------------------
       allocate (Cloud_state%ql_upd    (idim, jdim, kdim) )
@@ -1753,7 +1723,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       allocate (Cloud_state%qnr_upd    (idim, jdim, kdim) )
       allocate (Cloud_state%qns_upd    (idim, jdim, kdim) )
 
-  
+
       allocate (Cloud_state%ql_mean   (idim, jdim, kdim) )
       allocate (Cloud_state%qi_mean   (idim, jdim, kdim) )
       allocate (Cloud_state%qa_mean   (idim, jdim, kdim) )
@@ -1764,7 +1734,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       allocate (Cloud_state%qnr_mean    (idim, jdim, kdim) )
       allocate (Cloud_state%qns_mean    (idim, jdim, kdim) )
 
- 
+
       allocate (Cloud_state%ql_in     (idim, jdim, kdim) )
       allocate (Cloud_state%qr_in     (idim, jdim, kdim) )
       allocate (Cloud_state%qi_in     (idim, jdim, kdim) )
@@ -1803,11 +1773,11 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       Cloud_state%qnr_upd   = 0.
       Cloud_state%qns_upd   = 0.
 
-      Cloud_state%ql_mean    = 0.      
-      Cloud_state%qi_mean    = 0.      
-      Cloud_state%qa_mean    = 0.      
-      Cloud_state%qn_mean    = 0.      
-      Cloud_state%qni_mean   = 0.      
+      Cloud_state%ql_mean    = 0.
+      Cloud_state%qi_mean    = 0.
+      Cloud_state%qa_mean    = 0.
+      Cloud_state%qn_mean    = 0.
+      Cloud_state%qni_mean   = 0.
       Cloud_state%qr_mean    = 0.
       Cloud_state%qs_mean    = 0.
       Cloud_state%qnr_mean   = 0.
@@ -1816,52 +1786,52 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
 
 
       if (nql == NO_TRACER) then
-        Cloud_state%ql_in = 0.    
+        Cloud_state%ql_in = 0.
       else
         Cloud_state%ql_in = Input_mp%tracer(:,:,:,nql)
       endif
       if (nqr == NO_TRACER) then
-        Cloud_state%qr_in = 0.    
+        Cloud_state%qr_in = 0.
       else
         Cloud_state%qr_in = Input_mp%tracer(:,:,:,nqr)
       endif
       if (nqi == NO_TRACER) then
-        Cloud_state%qi_in = 0.    
+        Cloud_state%qi_in = 0.
       else
         Cloud_state%qi_in = Input_mp%tracer(:,:,:,nqi)
       endif
       if (nqs == NO_TRACER) then
-        Cloud_state%qs_in = 0.    
+        Cloud_state%qs_in = 0.
       else
         Cloud_state%qs_in = Input_mp%tracer(:,:,:,nqs)
       endif
       if (nqg == NO_TRACER) then
-        Cloud_state%qg_in = 0.    
+        Cloud_state%qg_in = 0.
       else
         Cloud_state%qg_in = Input_mp%tracer(:,:,:,nqg)
       endif
       if (nqa == NO_TRACER) then
-        Cloud_state%qa_in = 0.    
+        Cloud_state%qa_in = 0.
       else
         Cloud_state%qa_in = Input_mp%tracer(:,:,:,nqa)
       endif
       if (nqn == NO_TRACER) then
-        Cloud_state%qn_in = 0.    
+        Cloud_state%qn_in = 0.
       else
         Cloud_state%qn_in = Input_mp%tracer(:,:,:,nqn)
       end if
       if (nqni == NO_TRACER) then
-        Cloud_state%qni_in = 0.    
+        Cloud_state%qni_in = 0.
       else
         Cloud_state%qni_in = Input_mp%tracer(:,:,:,nqni)
       end if
       if (nqnr == NO_TRACER) then
-        Cloud_state%qnr_in = 0.    
+        Cloud_state%qnr_in = 0.
       else
         Cloud_state%qnr_in = Input_mp%tracer(:,:,:,nqnr)
       endif
       if (nqns == NO_TRACER) then
-        Cloud_state%qns_in = 0.    
+        Cloud_state%qns_in = 0.
       else
         Cloud_state%qns_in = Input_mp%tracer(:,:,:,nqns)
       endif
@@ -1875,7 +1845,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       Cloud_state%SS_out  = 0.
       Cloud_state%SNR_out = 0.
       Cloud_state%SNS_out = 0.
-    
+
       Cloud_state%qcvar_clubb  = 0.
       Cloud_state%relvarn      = qcvar
       Cloud_state%qa_upd_0 = 0.
@@ -1885,7 +1855,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
 !------------------------------------------------------------------------
 
 
-end subroutine lscloud_alloc 
+end subroutine lscloud_alloc
 
 
 
@@ -1896,17 +1866,17 @@ subroutine impose_realizability (   &
                                                 diag_4d, diag_id, diag_pt)
 
 !-----------------------------------------------------------------------
-!    account for the fact that other processes may have created negative 
+!    account for the fact that other processes may have created negative
 !    tracer or extremely small values of tracer fields. the general reason
 !    for the extremely small values of the tracer fields is due to vertical
 !    diffusion, advection of condensate or cumulus induced subsidence (also
 !    a form of advection) of condensate.
-!    in this step any values of the prognostic variables which are less 
+!    in this step any values of the prognostic variables which are less
 !    than qmin are reset to zero, while conserving total moisture.
-!    note that this is done slightly different for the Tiedtke cloud 
-!    fraction than it is for pdf clouds. In the former, the filling 
+!    note that this is done slightly different for the Tiedtke cloud
+!    fraction than it is for pdf clouds. In the former, the filling
 !    requires that cloud liquid, cloud ice, and cloud fraction are greater
-!    than qmin. For PDF clouds, cloud fraction need not be considered 
+!    than qmin. For PDF clouds, cloud fraction need not be considered
 !    since it is diagnosed later from the PDF cloud field.
 !-----------------------------------------------------------------------
 
@@ -1924,7 +1894,7 @@ type(diag_pt_type),         intent(in)    :: diag_pt
 
       logical, dimension(size(ST_out,1), size(ST_out,2),   &
                          size(ST_out,3)) :: ql_too_small, qi_too_small, qr_too_small, &
-                                            qs_too_small, qg_too_small 
+                                            qs_too_small, qg_too_small
 
       integer      :: idim,jdim,kdim
       integer      :: i,j,k
@@ -1938,7 +1908,7 @@ type(diag_pt_type),         intent(in)    :: diag_pt
       kdim = size(ST_out,3)
 
 !-----------------------------------------------------------------------
-!    for the non-pdf scheme,  assure that cloud fraction is greater than 
+!    for the non-pdf scheme,  assure that cloud fraction is greater than
 !    qmin.  if it is not, set it to 0.0 and save the tendency and updated
 !    value. save a diagnostic if requested.
 !-----------------------------------------------------------------------
@@ -1947,7 +1917,7 @@ type(diag_pt_type),         intent(in)    :: diag_pt
           Cloud_state%SA_out = Cloud_state%SA_out - Cloud_state%qa_in
           Cloud_state%qa_upd = 0.
         elsewhere
-          Cloud_state%qa_upd = Cloud_state%qa_in     
+          Cloud_state%qa_upd = Cloud_state%qa_in
         end where
         if (diag_id%qadt_fill + diag_id%qa_fill_col > 0 ) then
           where (Cloud_state%qa_in .le.        qmin)
@@ -1956,13 +1926,13 @@ type(diag_pt_type),         intent(in)    :: diag_pt
           endwhere
         end if
 
-!------------------------------------------------------------------------ 
-!    define the max cloud area permitted (U01), while maintaining the 
+!------------------------------------------------------------------------
+!    define the max cloud area permitted (U01), while maintaining the
 !    grid-box-mean RH, under the assumption that the cloudy air is satur-
-!    ated and the temperature inside and outside of the cloud are ~ the 
-!    same. save a diagnostic indicating the amount the cloud area was 
+!    ated and the temperature inside and outside of the cloud are ~ the
+!    same. save a diagnostic indicating the amount the cloud area was
 !    reduced due to this requirenment,
-!------------------------------------------------------------------------ 
+!------------------------------------------------------------------------
         Atmos_state%U01 = min(Atmos_state%U01, 1.)
         if (diag_id%qadt_rhred + diag_id%qa_rhred_col >0) then
           where (Cloud_state%qa_upd .gt. Atmos_state%U01)
@@ -1970,11 +1940,11 @@ type(diag_pt_type),         intent(in)    :: diag_pt
                                               Atmos_state%U01)*inv_dtcloud
           endwhere
         end if
-        
+
         where (Cloud_state%qa_upd .gt. Atmos_state%U01)
           Cloud_state%SA_out = Cloud_state%SA_out + Atmos_state%U01 -   &
                                                       Cloud_state%qa_upd
-          Cloud_state%qa_upd = Atmos_state%U01      
+          Cloud_state%qa_upd = Atmos_state%U01
         end where
       endif
 
@@ -1983,7 +1953,7 @@ type(diag_pt_type),         intent(in)    :: diag_pt
 !    for both the pdf and non-pdf cases.
 !    for the non-pdf scheme, the filling requires that cloud liquid, cloud
 !    ice, and cloud fraction are greater than qmin.
-!    for pdf clouds, cloud fraction need not be considered since it is 
+!    for pdf clouds, cloud fraction need not be considered since it is
 !    diagnosed later from the PDF cloud field.
 !-------------------------------------------------------------------------
       if (.not. do_pdf_clouds) then
@@ -2009,7 +1979,7 @@ type(diag_pt_type),         intent(in)    :: diag_pt
                             Cloud_state%qnr_in .le. qmin)
            qs_too_small =  (Cloud_state%qs_in .le.  qmin .or.   &
                             Cloud_state%qns_in .le. qmin)
-        endif 
+        endif
 ! <-- h1g, 2019-09-19
       else
         if (do_liq_num) then
@@ -2025,7 +1995,7 @@ type(diag_pt_type),         intent(in)    :: diag_pt
           qi_too_small = (Cloud_state%qi_in .le.  qmin )
         endif
       endif
-  
+
 !------------------------------------------------------------------------
 !    call subroutine adjust_condensate to conservatively fill ql if needed.
 !------------------------------------------------------------------------
@@ -2033,7 +2003,7 @@ type(diag_pt_type),         intent(in)    :: diag_pt
             SQ_out, ST_out, Cloud_state%ql_in, HLV, Cloud_state%ql_upd)
 
 !------------------------------------------------------------------------
-!    save diagnostics defining the cloud liquid filling amount. 
+!    save diagnostics defining the cloud liquid filling amount.
 !------------------------------------------------------------------------
       if ( diag_id%qldt_fill  + diag_id%ql_fill_col > 0 ) then
         where (ql_too_small )
@@ -2049,7 +2019,7 @@ type(diag_pt_type),         intent(in)    :: diag_pt
       end if
 
 !---------------------------------------------------------------------
-!   define diagnostics for the initial large-scale liquid and ice cloud 
+!   define diagnostics for the initial large-scale liquid and ice cloud
 !   fractions, after they have been adjusted to lie within valid limits.
 !---------------------------------------------------------------------
       if (diag_id%cf_liq_init   > 0)  then
@@ -2058,7 +2028,7 @@ type(diag_pt_type),         intent(in)    :: diag_pt
         elsewhere
           diag_4d(:,:,:,diag_pt%cf_liq_init) = MIN(Cloud_state%qa_in, 1.0)
         end where
-      endif 
+      endif
 
       if (diag_id%cf_ice_init > 0) then
         where (qi_too_small)
@@ -2069,16 +2039,16 @@ type(diag_pt_type),         intent(in)    :: diag_pt
       endif
 
 !------------------------------------------------------------------------
-!    adjust cloud droplet numbers as needed when those fields are being 
-!    predicted. if droplet number is not being predicted, values were 
-!    set at allocation.  
+!    adjust cloud droplet numbers as needed when those fields are being
+!    predicted. if droplet number is not being predicted, values were
+!    set at allocation.
 !------------------------------------------------------------------------
       if (do_liq_num .and. do_liq_num_fill ) then
         call adjust_particle_number (ql_too_small, Cloud_state%SN_out, &
                 cloud_state%qn_in, Cloud_state%qn_upd)
 
 !------------------------------------------------------------------------
-!    save a diagnostic defining the cloud droplet number filling amount. 
+!    save a diagnostic defining the cloud droplet number filling amount.
 !------------------------------------------------------------------------
         if ( diag_id%qndt_fill  + diag_id%qn_fill_col + &
                     diag_id%qldt_fill + diag_id%ql_fill_col > 0 ) then
@@ -2096,7 +2066,7 @@ type(diag_pt_type),         intent(in)    :: diag_pt
             SQ_out, ST_out, CLoud_state%qi_in, HLS, Cloud_state%qi_upd)
 
 !------------------------------------------------------------------------
-!    save diagnostics defining the cloud ice filling amount. 
+!    save diagnostics defining the cloud ice filling amount.
 !------------------------------------------------------------------------
       if (diag_id%qidt_fill  + diag_id%qi_fill_col > 0 ) then
         where (qi_too_small )
@@ -2113,7 +2083,7 @@ type(diag_pt_type),         intent(in)    :: diag_pt
 
 !------------------------------------------------------------------------
 !    adjust ice particle numbers as needed when those fields
-!    are being predicted. 
+!    are being predicted.
 !------------------------------------------------------------------------
       if (do_ice_num) then
         call mpp_clock_begin (lscloud_debug_clock)
@@ -2124,17 +2094,17 @@ type(diag_pt_type),         intent(in)    :: diag_pt
                                   Cloud_state%qni_in, Cloud_state%qni_upd)
 
 !------------------------------------------------------------------------
-!    save a diagnostic defining the ice crystal number filling amount. 
+!    save a diagnostic defining the ice crystal number filling amount.
 !------------------------------------------------------------------------
         if (diag_id%qnidt_fill  + diag_id%qni_fill_col > 0 ) then
-          where (qi_too_small) 
+          where (qi_too_small)
             diag_4d(:,:,:,diag_pt%qnidt_fill) =  &
                           -1.*Cloud_state%qni_in*inv_dtcloud
           endwhere
         end if
 
 !------------------------------------------------------------------------
-!    output debug information if desired. 
+!    output debug information if desired.
 !------------------------------------------------------------------------
         call mpp_clock_begin (lscloud_debug_clock)
         call write_debug_output (" SNi 01 ", Cloud_state%SNi_out, &
@@ -2152,7 +2122,7 @@ type(diag_pt_type),         intent(in)    :: diag_pt
       call adjust_condensate (qr_too_small, Cloud_state%SR_out, &
             SQ_out, ST_out, Cloud_state%qr_in, HLV, Cloud_state%qr_upd)
 !------------------------------------------------------------------------
-!    save diagnostics defining the rain filling amount. 
+!    save diagnostics defining the rain filling amount.
 !------------------------------------------------------------------------
         if ( diag_id%qrdt_fill  + diag_id%qr_fill_col > 0 ) then
           where (qr_too_small )
@@ -2208,7 +2178,7 @@ type(diag_pt_type),         intent(in)    :: diag_pt
 !-----------------------------------------------------------------------
 
 
-end subroutine impose_realizability 
+end subroutine impose_realizability
 
 
 
@@ -2224,13 +2194,13 @@ type(mp_input_type),           intent(in   ) :: Input_mp
 type(mp_lsdiag_type),          intent(inout) :: Lsdiag_mp
 type(mp_lsdiag_control_type),  intent(inout) :: Lsdiag_mp_control
 type(cloud_state_type),        intent(inout) :: Cloud_state
-real, dimension(:,:,:),        intent(in   ) :: ahuco3d            
+real, dimension(:,:,:),        intent(in   ) :: ahuco3d
 
 !-----------------------------------------------------------------------
 !   local variables:
 
       logical, dimension(size(ahuco3d,1), size(ahuco3d,2),   &
-                           size(ahuco3d,3)) :: ql_too_small, qi_too_small 
+                           size(ahuco3d,3)) :: ql_too_small, qi_too_small
       integer :: idim, jdim, kdim
       integer :: i, j, k
 
@@ -2242,9 +2212,9 @@ real, dimension(:,:,:),        intent(in   ) :: ahuco3d
       kdim = size(Input_mp%tracer,3)
 
 !-----------------------------------------------------------------------
-!    account for the fact that other processes may have created negative 
-!    tracer or extremely small values of tracer fields. in this step any 
-!    values of the prognostic variables which are less than qmin are 
+!    account for the fact that other processes may have created negative
+!    tracer or extremely small values of tracer fields. in this step any
+!    values of the prognostic variables which are less than qmin are
 !    reset to zero, while conserving total moisture.
 !----------------------------------------------------------------------
       where (Input_mp%tracer(:,:,:,nqa) .le. qmin)
@@ -2256,8 +2226,8 @@ real, dimension(:,:,:),        intent(in   ) :: ahuco3d
       end where
 
 !------------------------------------------------------------------------
-!    total cloud fraction should be no greater than 1.0, i.e, sum of 
-!    large-scale cloud fraction (qa_upd) and convective cloud fraction 
+!    total cloud fraction should be no greater than 1.0, i.e, sum of
+!    large-scale cloud fraction (qa_upd) and convective cloud fraction
 !    (ahuco) qa_upd+ahuco <= 1.0
 !------------------------------------------------------------------------
       where (Cloud_state%qa_upd .gt. (1.0 - ahuco3d) )
@@ -2276,11 +2246,11 @@ real, dimension(:,:,:),        intent(in   ) :: ahuco3d
             ql_too_small(i,j,k) =   &
                      Input_mp%tracer(i,j,k,nql) .le. qmin .or.   &
                      Input_mp%tracer(i,j,k,nqa) .le. qmin .or.   &
-                     Input_mp%tracer(i,j,k,nqn)*1.e-6 .le. qmin 
+                     Input_mp%tracer(i,j,k,nqn)*1.e-6 .le. qmin
             qi_too_small(i,j,k) =   &
                      Input_mp%tracer(i,j,k,nqi).le.qmin .or.   &
                      Input_mp%tracer(i,j,k,nqa).le.qmin .or.   &
-                     Input_mp%tracer(i,j,k,nqni)*1.e-3.le.qmin 
+                     Input_mp%tracer(i,j,k,nqni)*1.e-3.le.qmin
           end do
         end do
       end do
@@ -2293,9 +2263,9 @@ real, dimension(:,:,:),        intent(in   ) :: ahuco3d
             HLV, Cloud_state%ql_upd)
 
 !------------------------------------------------------------------------
-!    adjust cloud droplet numbers as needed when those fields are being 
-!    predicted. if droplet number is not being predicted, values were 
-!    set at allocation.  
+!    adjust cloud droplet numbers as needed when those fields are being
+!    predicted. if droplet number is not being predicted, values were
+!    set at allocation.
 !------------------------------------------------------------------------
       call adjust_particle_number (ql_too_small,   &
                    Tend_mp%q_tnd(:,:,:,nqn), Input_mp%tracer(:,:,:,nqn), &
@@ -2303,7 +2273,7 @@ real, dimension(:,:,:),        intent(in   ) :: ahuco3d
 
 !------------------------------------------------------------------------
 !    save diagnostics defining the cloud liquid and cloud particle
-!    number filling amount. 
+!    number filling amount.
 !------------------------------------------------------------------------
       do k = 1,kdim
         do j = 1,jdim
@@ -2319,7 +2289,7 @@ real, dimension(:,:,:),        intent(in   ) :: ahuco3d
                   Lsdiag_mp_control%diag_id%ql_fill_col > 0 )    &
                     Lsdiag_mp%diag_4d(i,j,k,  &
                              Lsdiag_mp_control%diag_pt%qndt_fill) = &
-                                      -Input_mp%tracer(i,j,k,nqn)/dtcloud 
+                                      -Input_mp%tracer(i,j,k,nqn)/dtcloud
 
             endif
           end do
@@ -2334,7 +2304,7 @@ real, dimension(:,:,:),        intent(in   ) :: ahuco3d
             HLS, Cloud_state%qi_upd)
 
 !------------------------------------------------------------------------
-!    save diagnostics defining the cloud ice  filling amount. 
+!    save diagnostics defining the cloud ice  filling amount.
 !------------------------------------------------------------------------
       do k = 1,kdim
         do j = 1,jdim
@@ -2350,8 +2320,8 @@ real, dimension(:,:,:),        intent(in   ) :: ahuco3d
       end do
 
 !------------------------------------------------------------------------
-!    adjust ice particle numbers as needed when those fields are being 
-!    predicted. 
+!    adjust ice particle numbers as needed when those fields are being
+!    predicted.
 !------------------------------------------------------------------------
       if (do_ice_num) then
         call adjust_particle_number (qi_too_small,   &
@@ -2363,7 +2333,7 @@ real, dimension(:,:,:),        intent(in   ) :: ahuco3d
               if (qi_too_small(i,j,k)) then
 
 !------------------------------------------------------------------------
-!    save a diagnostic defining the ice crystal number filling amount. 
+!    save a diagnostic defining the ice crystal number filling amount.
 !------------------------------------------------------------------------
 
                 if (Lsdiag_mp_control%diag_id%qnidt_fill  +    &
@@ -2395,14 +2365,14 @@ subroutine detailed_diagnostics (     &
                    Cloud_processes, Tend_mp, Removal_mp)
 
 !-----------------------------------------------------------------------
-!     subroutine detailed_diagnostics computes tendencies and imbalances 
+!     subroutine detailed_diagnostics computes tendencies and imbalances
 !     for the equations related to the large-scale clouds (cloud area,
 !     cloud liquid, cloud ice, cloud droplet number, cloud ice particle
-!     number, water vapor, temperature, precip, rain and snow), outputs 
+!     number, water vapor, temperature, precip, rain and snow), outputs
 !     any debug variables requested to either stdout or an ascii data file
-!     (option to write to data file is being removed), computes column 
-!     integrated diagnostics, and calls lscloud_netcdf to output the 
-!     relevant netcdf diagnostics. 
+!     (option to write to data file is being removed), computes column
+!     integrated diagnostics, and calls lscloud_netcdf to output the
+!     relevant netcdf diagnostics.
 
 !     note that budgets for CLUBB will not balance (more work to be done),
 !     but should balance in non-CLUBB cases.
@@ -2425,8 +2395,8 @@ real, dimension(:,:,0:),    intent(inout) :: diag_3d
 type(diag_pt_type),         intent(inout) :: diag_pt
 type(diag_id_type),         intent(inout) :: diag_id
 type(atmos_state_type),     intent(inout) :: Atmos_state
-type(mp_input_type),        intent(inout) :: Input_mp   
-type(mp_conv2ls_type),      intent(inout) :: C2ls_mp   
+type(mp_input_type),        intent(inout) :: Input_mp
+type(mp_conv2ls_type),      intent(inout) :: C2ls_mp
 type(cloud_state_type),     intent(inout) :: Cloud_state
 type(particles_type),       intent(inout) :: Particles
 type(precip_state_type),    intent(inout) :: Precip_state
@@ -2450,11 +2420,11 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
       logical :: used
 
 !-------------------------------------------------------------------------
-!    define spatial dimensions.                
+!    define spatial dimensions.
 !-------------------------------------------------------------------------
       idim = SIZE(Input_mp%tin, 1)
       jdim = SIZE(Input_mp%tin, 2)
-      kdim = SIZE(Input_mp%tin, 3) 
+      kdim = SIZE(Input_mp%tin, 3)
 
 !-----------------------------------------------------------------------
 !    define diagnostics for the time tendencies of the model prognostic
@@ -2481,7 +2451,7 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
       if (diag_id%SNI3d + diag_id%SNI2d > 0) then
         diag_4d(:,:,:,diag_pt%SNI3d) = Cloud_state%SNI_out*inv_dtcloud
       endif
-        
+
 !-----------------------------------------------------------------------
 !    define diagnostics reflecting any budget imbalances between the
 !    total tendency to be applied on the time step and the individual terms
@@ -2526,7 +2496,7 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
               + diag_4d(:,:,:,diag_pt%qldt_tiny)          &  ! h1g, 2020-06-25
               - diag_4d(:,:,:,diag_pt%qidt_melt2 )        &
               - diag_4d(:,:,:,diag_pt%qidt_accrs)         &
-              - diag_4d(:,:,:,diag_pt%qdt_cleanup_liquid) &    
+              - diag_4d(:,:,:,diag_pt%qdt_cleanup_liquid) &
                                                              )
       endif
       if (diag_id%SI_imb + diag_id%SI_imb_col > 0) then
@@ -2592,7 +2562,7 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
               + diag_4d(:,:,:,diag_pt%qnidt_nprci)     &
               + diag_4d(:,:,:,diag_pt%qnidt_nprai)     &
               + diag_4d(:,:,:,diag_pt%qnidt_auto)      &  ! h1g, 2020-06-29
-              + diag_4d(:,:,:,diag_pt%qnidt_accr)      &  ! h1g, 2020-06-29           
+              + diag_4d(:,:,:,diag_pt%qnidt_accr)      &  ! h1g, 2020-06-29
               + diag_4d(:,:,:,diag_pt%qnidt_nucclim1)  &
               + diag_4d(:,:,:,diag_pt%qnidt_nucclim2)  &
               + diag_4d(:,:,:,diag_pt%qnidt_sedi  )    &
@@ -2604,7 +2574,7 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
               + diag_4d(:,:,:,diag_pt%qnidt_destr )    &
               + diag_4d(:,:,:,diag_pt%qnidt_tiny)      &  ! h1g, 2020-06-25
               + diag_4d(:,:,:,diag_pt%qnidt_rain2ice)  &  ! h1g, 2020-06-29
-              - diag_4d(:,:,:,diag_pt%qndt_contact_frz)  &  ! h1g, 2020-06-29 
+              - diag_4d(:,:,:,diag_pt%qndt_contact_frz)  &  ! h1g, 2020-06-29
               + diag_4d(:,:,:,diag_pt%qnidt_cleanup)   &
               + diag_4d(:,:,:,diag_pt%qnidt_cleanup2)  &
               + diag_4d(:,:,:,diag_pt%qnidt_nsacwi)    &
@@ -2627,10 +2597,10 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
               - diag_4d(:,:,:,diag_pt%qidt_qvdep )            &
               - diag_4d(:,:,:,diag_pt%ice_adj    )            &
               + diag_4d(:,:,:,diag_pt%rain_evap  )            &
-              + diag_4d(:,:,:,diag_pt%qdt_sedi_ice2vapor)     & 
-              + diag_4d(:,:,:,diag_pt%qdt_sedi_liquid2vapor)  &  
+              + diag_4d(:,:,:,diag_pt%qdt_sedi_ice2vapor)     &
+              + diag_4d(:,:,:,diag_pt%qdt_sedi_liquid2vapor)  &
               + diag_4d(:,:,:,diag_pt%qdt_cleanup_ice)        &
-              + diag_4d(:,:,:,diag_pt%qdt_cleanup_liquid)     &    
+              + diag_4d(:,:,:,diag_pt%qdt_cleanup_liquid)     &
               + diag_4d(:,:,:,diag_pt%qdt_snow_sublim  )      &
               + diag_4d(:,:,:,diag_pt%qdt_snow2vapor    )     &
                                                                 )
@@ -2652,7 +2622,7 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
               - HLF*diag_4d(:,:,:,diag_pt%srfrain_accrs )    &
               - HLF*diag_4d(:,:,:,diag_pt%srfrain_freez )    &
               - HLF*diag_4d(:,:,:,diag_pt%snow_melt)         &
-              
+
               + HLV*diag_4d(:,:,:,diag_pt%qldt_cond  )           &
               + HLV*diag_4d(:,:,:,diag_pt%qldt_evap  )           &
               + HLV*diag_4d(:,:,:,diag_pt%qldt_eros  )           &
@@ -2660,8 +2630,8 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
               + HLV*diag_4d(:,:,:,diag_pt%qldt_fill  )           &
               + HLV*diag_4d(:,:,:,diag_pt%qldt_destr )           &
               - HLV*diag_4d(:,:,:,diag_pt%rain_evap  )           &
-              - HLV*diag_4d(:,:,:,diag_pt%qdt_sedi_liquid2vapor) &  
-              - HLV*diag_4d(:,:,:,diag_pt%qdt_cleanup_liquid)    &      
+              - HLV*diag_4d(:,:,:,diag_pt%qdt_sedi_liquid2vapor) &
+              - HLV*diag_4d(:,:,:,diag_pt%qdt_cleanup_liquid)    &
 
               + HLS*diag_4d(:,:,:,diag_pt%qidt_dep  )          &
               + HLS*diag_4d(:,:,:,diag_pt%qidt_subl  )         &
@@ -2670,27 +2640,27 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
               + HLS*diag_4d(:,:,:,diag_pt%qidt_destr )         &
               + HLS*diag_4d(:,:,:,diag_pt%qidt_qvdep )         &
               + HLS*diag_4d(:,:,:,diag_pt%ice_adj    )         &
-              - HLS*diag_4d(:,:,:,diag_pt%qdt_sedi_ice2vapor)  & 
+              - HLS*diag_4d(:,:,:,diag_pt%qdt_sedi_ice2vapor)  &
               - HLS*diag_4d(:,:,:,diag_pt%qdt_cleanup_ice)     &
               - HLS*diag_4d(:,:,:,diag_pt%qdt_snow_sublim  )   &
               - HLV*diag_4d(:,:,:,diag_pt%qdt_snow2vapor    )  &
-                                                              )/CP_AIR 
-      endif 
+                                                              )/CP_AIR
+      endif
 
 !------------------------------------------------------------------------
 !    define diagnostics for the 3D rain and snow fields.
 !------------------------------------------------------------------------
-      if (diag_id%rain3d > 0) then 
-        diag_4d_kp1(:,:,:,diag_pt%rain3d) = Removal_mp%rain3d(:,:,:) 
-      endif 
-      if (diag_id%snow3d > 0) then 
-        diag_4d_kp1(:,:,:,diag_pt%snow3d) = Removal_mp%snow3d(:,:,:) 
-      endif 
+      if (diag_id%rain3d > 0) then
+        diag_4d_kp1(:,:,:,diag_pt%rain3d) = Removal_mp%rain3d(:,:,:)
+      endif
+      if (diag_id%snow3d > 0) then
+        diag_4d_kp1(:,:,:,diag_pt%snow3d) = Removal_mp%snow3d(:,:,:)
+      endif
       if (diag_id%qrout + diag_id%qrout_col > 0) then
-        diag_4d(:,:,:,diag_pt%qrout) = Precip_state%lsc_rain 
+        diag_4d(:,:,:,diag_pt%qrout) = Precip_state%lsc_rain
       end if
       if (diag_id%qsout  + diag_id%qsout_col > 0) then
-        diag_4d(:,:,:,diag_pt%qsout) = Precip_state%lsc_snow 
+        diag_4d(:,:,:,diag_pt%qsout) = Precip_state%lsc_snow
       end if
 
 !------------------------------------------------------------------------
@@ -2719,12 +2689,12 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
       call mpp_clock_end (lscloud_debug_clock)
 
 !------------------------------------------------------------------------
-!    if it has been requested, output the number of columns in which 
+!    if it has been requested, output the number of columns in which
 !    microphysics was skipped due to negative h2o in column (only
 !    relevant with "mg" microphysics.
 !------------------------------------------------------------------------
       call mpp_clock_begin (lscloud_debug_clock)
-      call output_refusals 
+      call output_refusals
       call mpp_clock_end (lscloud_debug_clock)
 
 !------------------------------------------------------------------------
@@ -2738,37 +2708,19 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
       enddo
 
 !------------------------------------------------------------------------
-!    define additional column diagnostics that are not simply the  
+!    define additional column diagnostics that are not simply the
 !    pressure-depth-weighted sum of the column values:
 !------------------------------------------------------------------------
-
-!------------------------------------------------------------------------
-!       1) cloud ice and cloud liquid fallout for NCAR microphysics: 
-!------------------------------------------------------------------------
-      if (Constants_lsc%do_mg_microphys .or.   &
-                               Constants_lsc%do_ncar_microphys .or.   &
-                                   Constants_lsc%do_mg_ncar_microphys) then
-        if (diag_id%cld_liq_imb + diag_id%cld_liq_imb_col > 0) then
-          diag_3d(:,:,diag_pt%cld_liq_imb) =   - ( &
-                diag_3d(:,:,diag_pt%qldt_sedi )  +   &
-                diag_3d(:,:,diag_pt%qdt_sedi_liquid2vapor)  ) 
-        endif
-        if (diag_id%cld_ice_imb + diag_id%cld_ice_imb_col > 0) then
-          diag_3d(:,:,diag_pt%cld_ice_imb) =   - ( &
-                diag_3d(:,:,diag_pt%qidt_fall )  +   &
-                diag_3d(:,:,diag_pt%qdt_sedi_ice2vapor)  ) 
-        endif
-      endif
 
 !------------------------------------------------------------------------
 !       2) negative values of rain and snow at the surface
 !------------------------------------------------------------------------
       IF ( diag_id%neg_rain > 0   ) &
           diag_3d(:,:,diag_pt%neg_rain) =   &
-                          diag_4d(:,:,1,diag_pt%neg_rain) 
+                          diag_4d(:,:,1,diag_pt%neg_rain)
       IF ( diag_id%neg_snow > 0   ) &
           diag_3d(:,:,diag_pt%neg_snow) =   &
-                          diag_4d(:,:,1,diag_pt%neg_snow) 
+                          diag_4d(:,:,1,diag_pt%neg_snow)
 
 !------------------------------------------------------------------------
 !       3) imbalance between rainfall and its source/sink terms
@@ -2833,10 +2785,10 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
 !------------------------------------------------------------------------
       if (diag_id%rain_mass_conv > 0   ) &
           diag_3d(:,:,diag_pt%rain_mass_conv) =   &
-                          diag_4d(:,:,1,diag_pt%rain_mass_conv) 
+                          diag_4d(:,:,1,diag_pt%rain_mass_conv)
       if (diag_id%snow_mass_conv > 0   ) &
           diag_3d(:,:,diag_pt%snow_mass_conv) =   &
-                          diag_4d(:,:,1,diag_pt%snow_mass_conv) 
+                          diag_4d(:,:,1,diag_pt%snow_mass_conv)
 
 !------------------------------------------------------------------------
 !       6) in-cloud droplet column burden
@@ -2861,13 +2813,13 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
 ! may change answers for clubb diagnostics:
                 if (ql_new(i,j,k) > qmin .and. &
                     qa_new(i,j,k) > qmin .and. &
-                    qn_new(i,j,k) > qmin ) then      
+                    qn_new(i,j,k) > qmin ) then
                   dum(i,j,k) = qn_new(i,j,k)*Input_mp%pmass(i,j,k)*1.e-4
 
 !------------------------------------------------------------------------
-!    count only columns with qa > 5% for N3d_col and N3d_col250. 
+!    count only columns with qa > 5% for N3d_col and N3d_col250.
 !------------------------------------------------------------------------
-                  if (qa_new(i,j,k) > 0.05) then 
+                  if (qa_new(i,j,k) > 0.05) then
                     N3D_col(i,j) = N3D_col(i,j) +   &
                                          dum(i,j,k)/min(qa_new(i,j,k), 1.)
                     if (Input_mp%tin(i,j,k) +   &
@@ -2878,7 +2830,7 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
                   endif
 
 !------------------------------------------------------------------------
-!    count all columns with qa > qmin for gb_N3d_col. 
+!    count all columns with qa > qmin for gb_N3d_col.
 !------------------------------------------------------------------------
                   gb_N3D_col(i,j) = gb_N3D_col(i,j) + dum(i,j,k)
                 endif
@@ -2917,7 +2869,7 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
 !------------------------------------------------------------------------
 !   count only columns with qa > 5%  for N3Di_col.
 !------------------------------------------------------------------------
-                  if (qa_new(i,j,k) > 0.05) then 
+                  if (qa_new(i,j,k) > 0.05) then
                     N3Di_col(i,j) = N3Di_col(i,j) +   &
                                         dum(i,j,k) /min(qa_new(i,j,k), 1.)
                   endif
@@ -2983,7 +2935,7 @@ subroutine update_fields_and_tendencies (  &
 !    large-scale prognostic cloud scheme. it also outputs these updated
 !    fields if desired. additionally, time increments due to prognostic
 !    large-scale clouds are converted to time tendencies, and added to
-!    those arrays accumulating the total tendency terms from 
+!    those arrays accumulating the total tendency terms from
 !    moist_processes, for return to the calling routine. also, the output
 !    from moist_processes that will be needed by the radiation package is
 !    collected and bundled in the Cld_props derived type for return to
@@ -3013,7 +2965,7 @@ real,                        intent(in)     :: dtinv
 !----------------------------------------------------------------------
       if (doing_prog_clouds) then
         Input_mp%tracer(:,:,:,nql) = Input_mp%tracer(:,:,:,nql) +   &
-                                                 Tend_mp%q_tnd(:,:,:,nql)  
+                                                 Tend_mp%q_tnd(:,:,:,nql)
         Input_mp%tracer(:,:,:,nqi) = Input_mp%tracer(:,:,:,nqi) +   &
                                                  Tend_mp%q_tnd(:,:,:,nqi)
 !--> h1g, 2019-08-27  ---
@@ -3043,11 +2995,11 @@ real,                        intent(in)     :: dtinv
                                                  Tend_mp%q_tnd(:,:,:,nqni)
       endif
 
-      Input_mp%tin = Input_mp%tin + Tend_mp%ttnd 
+      Input_mp%tin = Input_mp%tin + Tend_mp%ttnd
       Input_mp%qin = Input_mp%qin + Tend_mp%qtnd
-        
+
 !-----------------------------------------------------------------------
-!    output the basic variable fields after the above large-scale cloud 
+!    output the basic variable fields after the above large-scale cloud
 !    tendencies have been added.
 !-----------------------------------------------------------------------
       used = send_data (id_qvout, Input_mp%qin, Time, is, js, 1)
@@ -3073,7 +3025,7 @@ real,                        intent(in)     :: dtinv
           used = send_data (id_qnsout, Input_mp%tracer(:,:,:,nqns),   &
                                                         Time, is, js, 1)
 !<-- h1g, 2019-08-27 ----
-        
+
         used = send_data (id_qiout, Input_mp%tracer(:,:,:,nqi),   &
                                                         Time, is, js, 1)
 
@@ -3089,9 +3041,9 @@ real,                        intent(in)     :: dtinv
 !----------------------------------------------------------------------
 !    convert time increments to time tendencies.
 !----------------------------------------------------------------------
-      Tend_mp%ttnd = Tend_mp%ttnd*dtinv 
+      Tend_mp%ttnd = Tend_mp%ttnd*dtinv
       Tend_mp%qtnd = Tend_mp%qtnd*dtinv
-      Precip_state%surfrain = Precip_state%surfrain*dtinv 
+      Precip_state%surfrain = Precip_state%surfrain*dtinv
       Precip_state%surfsnow = Precip_state%surfsnow*dtinv
       if (doing_prog_clouds) then
         Tend_mp%q_tnd(:,:,:,nql) = Tend_mp%q_tnd(:,:,:,nql)*dtinv
@@ -3115,14 +3067,14 @@ real,                        intent(in)     :: dtinv
         if (do_ice_num) Tend_mp%q_tnd(:,:,:,nqni) =   &
                                           Tend_mp%q_tnd(:,:,:,nqni)*dtinv
       endif
-   
+
 !----------------------------------------------------------------------
-!    update the total tendency terms (temperature, vapor specific 
+!    update the total tendency terms (temperature, vapor specific
 !    humidity, cloud liquid, cloud ice, cloud area, droplet number,
-!    ice particle number, liquid precip, frozen precip) with the 
+!    ice particle number, liquid precip, frozen precip) with the
 !    contributions from the prognostic large-scale cloud  scheme.
 !----------------------------------------------------------------------
-      Output_mp%tdt = Output_mp%tdt + Tend_mp%ttnd 
+      Output_mp%tdt = Output_mp%tdt + Tend_mp%ttnd
       Output_mp%rdt(:,:,:,1) = Output_mp%rdt(:,:,:,1) + Tend_mp%qtnd
       if (doing_prog_clouds) then
         Output_mp%rdt(:,:,:,nql) = Output_mp%rdt(:,:,:,nql) +   &
@@ -3194,8 +3146,8 @@ subroutine compute_ls_wetdep (   &
                                  f_snow_berg, dt, Output_mp, Precip_state)
 
 !---------------------------------------------------------------------
-!    calculate the wet deposition associated with the large scale 
-!    condensation. 
+!    calculate the wet deposition associated with the large scale
+!    condensation.
 !---------------------------------------------------------------------
 
 integer,                 intent(in)    :: is, js
@@ -3228,7 +3180,7 @@ type(precip_state_type), intent(inout) :: Precip_state
       kx = size(Input_mp%t,3)
 
 !---------------------------------------------------------------------
-!    define the water tendency (vapor, condensate) from the large-scale 
+!    define the water tendency (vapor, condensate) from the large-scale
 !    cloud / condensation scheme.
 !---------------------------------------------------------------------
       Tend_mp%qtnd_wet = Tend_mp%qtnd
@@ -3253,7 +3205,7 @@ type(precip_state_type), intent(inout) :: Precip_state
 !    convert from kg/m2/s to kg/kg
 !------------------------------------------------------------------------
           C2ls_mp%cloud_wet(:,:,:) = C2ls_mp%cloud_wet(:,:,:)*dt/   &
-                      Input_mp%pmass(:,:,:) 
+                      Input_mp%pmass(:,:,:)
         endif
 
 !-----------------------------------------------------------------------
@@ -3286,7 +3238,7 @@ type(precip_state_type), intent(inout) :: Precip_state
 
 !----------------------------------------------------------------------
 !    loop over each tracer, skipping the cloud tracers, calling the
-!    wet deposition routine to compute the amount of that tracer removed 
+!    wet deposition routine to compute the amount of that tracer removed
 !    from the column in each layer (Tend_mp%wetdeptnd(i,j,k)) and in the
 !    column (Removal_mp%ls_wetdep(i,j,n)).
 !----------------------------------------------------------------------
@@ -3299,7 +3251,7 @@ type(precip_state_type), intent(inout) :: Precip_state
              n /=              nqni .and. &
              n /=              nqr .and. &
              n /=              nqs .and. &
-             n /=              nqg       &      
+             n /=              nqg       &
                                        ) then
           Tend_mp%wetdeptnd(:,:,:) = 0.0
 
@@ -3321,8 +3273,8 @@ type(precip_state_type), intent(inout) :: Precip_state
           Output_mp%rdt (:,:,:,n) =  Output_mp%rdt(:,:,:,n) -   &
                                                   Tend_mp%wetdeptnd(:,:,:)
 !-----------------------------------------------------------------------
-!    add the large-scale wet deposition tendency for the tracer to the 
-!    previously-obtained convective wet deposition tendency 
+!    add the large-scale wet deposition tendency for the tracer to the
+!    previously-obtained convective wet deposition tendency
 !    (C2ls_mp%wet_data).
 !-----------------------------------------------------------------------
           C2ls_mp%wet_data(:,:,:,n) = C2ls_mp%wet_data(:,:,:,n) +   &
@@ -3333,7 +3285,7 @@ type(precip_state_type), intent(inout) :: Precip_state
           end if
 
 !------------------------------------------------------------------------
-!    output the total wet deposition diagnostic for this tracer, 
+!    output the total wet deposition diagnostic for this tracer,
 !    if desired.
 !------------------------------------------------------------------------
           used = send_data( id_wet_deposition(n),   &
@@ -3411,8 +3363,8 @@ type(mp_removal_type),   intent(inout) :: Removal_mp
 !---------------------------------------------------------------------
       if (id_q_ls_col > 0) &
            call column_diag(id_q_ls_col, is, js, Time,    &
-                                Tend_mp%qtnd(:,:,:), 1.0, Input_mp%pmass) 
- 
+                                Tend_mp%qtnd(:,:,:), 1.0, Input_mp%pmass)
+
 !---------------------------------------------------------------------
 !    specific humidity change due to large-scale clouds:
 !---------------------------------------------------------------------
@@ -3426,7 +3378,7 @@ type(mp_removal_type),   intent(inout) :: Removal_mp
       used = send_data (id_lsc_precip,   &
                          Precip_state%surfrain + Precip_state%surfsnow, &
                                                             Time, is, js)
-        
+
 !---------------------------------------------------------------------
 !    precip frequency due to large-scale clouds:
 !---------------------------------------------------------------------
@@ -3456,7 +3408,7 @@ type(mp_removal_type),   intent(inout) :: Removal_mp
       if (doing_prog_clouds) then
 
 !---------------------------------------------------------------------
-!    cloud liquid, ice, area and ice crystal number tendencies due to 
+!    cloud liquid, ice, area and ice crystal number tendencies due to
 !    prognostic cloud parameterization:
 !---------------------------------------------------------------------
         used = send_data (id_qldt_ls,  &
@@ -3473,24 +3425,24 @@ type(mp_removal_type),   intent(inout) :: Removal_mp
                    Tend_mp%q_tnd(:,:,:,nqni), Time, is, js, 1)
 
 !---------------------------------------------------------------------
-!    cloud liquid and ice water path  and particle number tendencies due 
+!    cloud liquid and ice water path  and particle number tendencies due
 !    to prognostic cloud parameterization:
 !---------------------------------------------------------------------
         if (id_ql_ls_col > 0) &
           call column_diag(id_ql_ls_col, is, js, Time,   &
-               Tend_mp%q_tnd(:,:,:,nql), 1.0, Input_mp%pmass) 
+               Tend_mp%q_tnd(:,:,:,nql), 1.0, Input_mp%pmass)
         if (id_qi_ls_col > 0) &
           call column_diag(id_qi_ls_col, is, js, Time,   &
-               Tend_mp%q_tnd(:,:,:,nqi), 1.0, Input_mp%pmass) 
+               Tend_mp%q_tnd(:,:,:,nqi), 1.0, Input_mp%pmass)
         if (do_liq_num .and. id_qn_ls_col > 0) &
           call column_diag(id_qn_ls_col, is, js, Time,   &
                 Tend_mp%q_tnd(:,:,:,nqn), 1.0, Input_mp%pmass)
         if (do_ice_num .and. id_qni_ls_col > 0) &
           call column_diag(id_qni_ls_col, is, js, Time,   &
                Tend_mp%q_tnd(:,:,:,nqni), 1.0, Input_mp%pmass)
-      
+
 !---------------------------------------------------------------------
-!    column integrated enthalpy and total water tendencies due to 
+!    column integrated enthalpy and total water tendencies due to
 !    prognostic cloud parameterization:
 !---------------------------------------------------------------------
         if (id_enth_ls_col > 0) then
@@ -3499,20 +3451,20 @@ type(mp_removal_type),   intent(inout) :: Removal_mp
                         Tend_mp%ttnd(:,:,:), CP_AIR,   &
                         Tend_mp%q_tnd(:,:,:,nql), -HLV,  &
                         Tend_mp%q_tnd(:,:,:,nqi), -HLS,   &
-                                                  Input_mp%pmass, temp_2d) 
+                                                  Input_mp%pmass, temp_2d)
         endif
- 
+
         if (id_wat_ls_col > 0) then
           temp_2d = Precip_state%surfrain+Precip_state%surfsnow
           call column_diag(id_wat_ls_col, is, js, Time,   &
                      Tend_mp%qtnd(:,:,:), 1.0, &
                      Tend_mp%q_tnd(:,:,:,nql), 1.0,  &
                      Tend_mp%q_tnd(:,:,:,nqi), 1.0,   &
-                                                Input_mp%pmass, temp_2d) 
+                                                Input_mp%pmass, temp_2d)
         endif
 
 !---------------------------------------------------------------------
-!    stratiform cloud volume tendency due to prognostic cloud 
+!    stratiform cloud volume tendency due to prognostic cloud
 !    parameterization:
 !---------------------------------------------------------------------
         if (id_qa_ls_col > 0) &
@@ -3536,7 +3488,7 @@ type(mp_removal_type),   intent(inout) :: Removal_mp
 !-----------------------------------------------------------------------
 
 
-end subroutine basic_diagnostics 
+end subroutine basic_diagnostics
 
 
 
@@ -3544,17 +3496,17 @@ end subroutine basic_diagnostics
 
 subroutine lscloud_dealloc (Atmos_state, Particles, Cloud_State, &
                                             Precip_state, Cloud_Processes)
-      
+
 !-----------------------------------------------------------------------
 type(atmos_state_type),     intent(inout) :: Atmos_state
-type(particles_type),       intent(inout) :: Particles   
+type(particles_type),       intent(inout) :: Particles
 type(cloud_state_type),     intent(inout) :: Cloud_state
 type(precip_state_type),    intent(inout) :: Precip_state
 type(cloud_processes_type), intent(inout) :: Cloud_processes
 
 
 !-----------------------------------------------------------------------
-!    deallocate the components of the atmos_state_type variable 
+!    deallocate the components of the atmos_state_type variable
 !    Atmos_State.
 !-----------------------------------------------------------------------
       deallocate (Atmos_state%airdens     )
@@ -3572,7 +3524,7 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
       deallocate (Atmos_state%delp        )
       deallocate (Atmos_state%U01         )
       deallocate (Atmos_state%pthickness  )
- 
+
 !-----------------------------------------------------------------------
 !    deallocate the components of the particles_type variable Particles.
 !-----------------------------------------------------------------------
@@ -3591,7 +3543,7 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
       deallocate (Particles%imass1      )
 
 !-----------------------------------------------------------------------
-!    deallocate the components of the cloud_state_type variable 
+!    deallocate the components of the cloud_state_type variable
 !    Cloud_state.
 !-----------------------------------------------------------------------
       deallocate (Cloud_state%ql_upd  )
@@ -3624,7 +3576,7 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
       deallocate (Cloud_state%qni_in  )
       deallocate (Cloud_state%qnr_in  )
       deallocate (Cloud_state%qns_in  )
- 
+
       deallocate (Cloud_state%SL_out  )
       deallocate (Cloud_state%SI_out  )
       deallocate (Cloud_state%SA_out  )
@@ -3641,7 +3593,7 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
       deallocate (Cloud_state%SA_0    )
 
 !-----------------------------------------------------------------------
-!    deallocate the components of the precip_state_type variable 
+!    deallocate the components of the precip_state_type variable
 !    Precip_state.
 !-----------------------------------------------------------------------
       deallocate (Precip_state%lsc_snow      )
@@ -3655,7 +3607,7 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
       deallocate (Precip_state%precip        )
 
 !-----------------------------------------------------------------------
-!    deallocate the components of the cloud_processes_type variable 
+!    deallocate the components of the cloud_processes_type variable
 !    Cloud_processes.
 !-----------------------------------------------------------------------
       deallocate (Cloud_processes%da_ls       )
@@ -3681,7 +3633,7 @@ subroutine adjust_condensate (   &
 !------------------------------------------------------------------------
 !    subroutine adjust_condensate eliminates unacceptably small values of
 !    condensate in a way which assures mass and enthalpy conservation.
-!    tendency terms and output condensate fields are adjusted. 
+!    tendency terms and output condensate fields are adjusted.
 !------------------------------------------------------------------------
 
 logical, dimension(:,:,:),  intent(in)    :: mask
@@ -3693,7 +3645,7 @@ real,                       intent(in)    :: lh
 !---------------------------------------------------------------------
 !   local variables:
 
-      integer :: idim, jdim, kdim    
+      integer :: idim, jdim, kdim
       integer :: i, j, k
 
       call mpp_clock_begin (adjust_cond_clock)
@@ -3723,7 +3675,7 @@ real,                       intent(in)    :: lh
 !------------------------------------------------------------------------
 
 
-end subroutine adjust_condensate 
+end subroutine adjust_condensate
 
 
 !#########################################################################
@@ -3741,7 +3693,7 @@ real, dimension(:,:,:),     intent(out)   :: particles_out
 !---------------------------------------------------------------------
 !   local variables:
 
-      integer :: idim, jdim, kdim    
+      integer :: idim, jdim, kdim
       integer :: i, j, k
 
       call mpp_clock_begin (adjust_part_num_clock)
@@ -3779,5 +3731,3 @@ end subroutine adjust_particle_number
 
 
                    end module lscloud_driver_mod
-
-

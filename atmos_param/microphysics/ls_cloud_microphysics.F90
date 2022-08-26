@@ -6,9 +6,6 @@
 !         ---------------------------------------
 !         OPTIONS AVAILABLE:
 !             Rotstayn-Klein microphysics (this used in old strat_cloud)
-!             MG microphysics (as developed by M. Salzmann)
-!             MG-NCAR microphysics (an early version of NCAR microphysics)
-!             NCAR microphysics version 1.5 (became available in 2012)
 !             NCAR microphysics version 2.0 (became available? )
 !
 !-----------------------------------------------------------------------
@@ -58,14 +55,6 @@ use lscloud_debug_mod,     only: write_debug_output
 use rotstayn_klein_mp_mod, only: rotstayn_klein_microp, &
                                  rotstayn_klein_microp_init,  &
                                  rotstayn_klein_microp_end
-use morrison_gettelman_microp_mod,     &
-                           only: morrison_gettelman_microp, &
-                                 morrison_gettelman_microp_init, &
-                                 morrison_gettelman_microp_end
-use cldwat2m_micro_mod,    only: ini_micro, mmicro_pcond, mmicro_end
-use micro_mg_mod,          only: micro_mg_init, micro_mg_get_cols,&
-                                 micro_mg_tend
-
 use micro_mg2_mod,         only: micro_mg2_init, micro_mg2_get_cols,&
                                  micro_mg2_tend
 
@@ -77,7 +66,7 @@ private
 
 public   ls_cloud_microphysics_init, ls_cloud_microphysics, &
          ls_cloud_microphysics_end, ls_cloud_microphysics_time_vary
-  
+
 !-----------------------------------------------------------------------
 !-------------------- private data -------------------------------------
 
@@ -91,23 +80,23 @@ character(len=128) :: tagname = '$Name: $'
 
 !--------------------------------------------------------------------------
 !---namelist---------------------------------------------------------------
- 
-logical :: mass_cons = .true.         ! should we ensure water mass 
-                                      ! conservation by adjusting precip 
-                                      ! to balance column water 
+
+logical :: mass_cons = .true.         ! should we ensure water mass
+                                      ! conservation by adjusting precip
+                                      ! to balance column water
                                       ! mass change ?
 integer :: override_liq_num = 0       ! override model predicted droplet
                                       ! number ? 0 = no, otherwise = y
-integer :: override_ice_num = 0       ! override model predicted ice 
+integer :: override_ice_num = 0       ! override model predicted ice
                                       ! number ? 0 = no, otherwise = y
 logical :: use_Meyers = .false.       ! use Meyers formula when overriding
                                       ! model ice particle number ?
 logical :: use_Cooper = .false.       ! use Cooper formula when overriding
                                       ! model ice particle number ?
-integer, dimension(6) :: init_date = (/ 1, 1, 1, 0, 0, 0 /)  
-                                      ! date to use as base for  
+integer, dimension(6) :: init_date = (/ 1, 1, 1, 0, 0, 0 /)
+                                      ! date to use as base for
                                       ! defining microphysics start time
-real    :: micro_begin_sec  = 0.0     ! begin microphysics this many 
+real    :: micro_begin_sec  = 0.0     ! begin microphysics this many
                                       ! seconds after init_date
 integer :: top_lev = 1                ! topmost level for ncar microphysics
 real    :: min_precip_needing_adjustment     = 0.0      
@@ -123,11 +112,11 @@ namelist / ls_cloud_microphysics_nml /   &
                                mass_cons, &
                                override_liq_num, override_ice_num, &
                                use_Meyers, use_Cooper, init_date, &
-                               micro_begin_sec, top_lev, &
+                               micro_begin_sec, &
                                min_precip_needing_adjustment, &
                                lowest_allowed_precip, use_ndust, accretion_scale, &
                                do_cleanup, liq_num_eros_fac, ice_num_eros_fac   !h1g, 2020-06-22
-                               
+
 !-------------------- clock definitions --------------------------------
 
 integer  :: rk_micro_clock, ncar_micro_clock
@@ -142,8 +131,7 @@ integer :: super_ice_opt
 logical :: do_pdf_clouds
 logical :: doing_prog_clouds
 real    :: dtcloud, inv_dtcloud
-logical :: do_rk_microphys, do_mg_microphys, do_mg_ncar_microphys, &
-           do_ncar_microphys, do_ncar_MG2
+logical :: do_rk_microphys, do_ncar_MG2
 logical :: tiedtke_macrophysics
 logical :: dqa_activation, total_activation
 integer :: nsphum, nql, nqi, nqa, nqn, nqni, nqr, nqs, nqg, nqnr, nqns
@@ -152,9 +140,9 @@ integer :: nsphum, nql, nqi, nqa, nqn, nqni, nqr, nqs, nqg, nqnr, nqns
 !    other module variables
 !--------------------------------------------------------------------
 
-integer, parameter          :: r8 = selected_real_kind(12)   
+integer, parameter          :: r8 = selected_real_kind(12)
                                   ! 8 byte real
-integer                     :: current_days0, current_sec0   
+integer                     :: current_days0, current_sec0
                                   ! variables related to delayed initiation
                                   ! of microphysics
 
@@ -187,10 +175,10 @@ type(lscloud_nml_type),      intent(in)    :: Nml_lsc
 type(exchange_control_type), intent(in)    :: Exch_ctrl
 
 !------------------------------------------------------------------------
-! local variables:    
+! local variables:
       integer              :: logunit, io, ierr
       type(time_type)      :: Time_init
-      character(len=128)   :: errstring ! Output status: non-blank for 
+      character(len=128)   :: errstring ! Output status: non-blank for
                                         ! error return
       integer              :: rk_micro_init_clock, &
                               ncar_micro_init_clock
@@ -209,10 +197,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
       do_pdf_clouds = Nml_lsc%do_pdf_clouds
       doing_prog_clouds = Exch_ctrl%doing_prog_clouds
       do_rk_microphys = Constants_lsc%do_rk_microphys
-      do_mg_microphys = Constants_lsc%do_mg_microphys
-      do_mg_ncar_microphys = Constants_lsc%do_mg_ncar_microphys
-      do_ncar_microphys = Constants_lsc%do_ncar_microphys
-
       do_ncar_MG2       = Constants_lsc%do_ncar_MG2
 
       tiedtke_macrophysics = Constants_lsc%tiedtke_macrophysics
@@ -238,18 +222,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
         rk_micro_init_clock = mpp_clock_id(   &
                '   Ls_cld_micro: rk_micro:Initialization' , &
                                                 grain=CLOCK_MODULE_DRIVER )
-      else if (do_mg_microphys) then
-        ncar_micro_init_clock = mpp_clock_id(    &
-               '   Ls_cld_micro: mg_micro:Initialization' , &
-                                                grain=CLOCK_MODULE_DRIVER)
-      else if (do_mg_ncar_microphys) then
-        ncar_micro_init_clock = mpp_clock_id(    &
-               '   Ls_cld_micro: mg_ncar_micro:Initialization' , &
-                                                grain=CLOCK_MODULE_DRIVER)
-      else if (do_ncar_microphys) then
-        ncar_micro_init_clock = mpp_clock_id(    &
-               '   Ls_cld_micro: ncar_micro:Initialization' , &
-                                                grain=CLOCK_MODULE_DRIVER)
       else if (do_ncar_MG2) then
         ncar_micro_init_clock = mpp_clock_id(    &
                '   Ls_cld_micro: ncar_MG2:Initialization' , &
@@ -259,18 +231,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
       if (do_rk_microphys) then
         rk_micro_clock = mpp_clock_id(   &
                '   Ls_cld_micro: rk_micro' , &
-                                                grain=CLOCK_MODULE_DRIVER )
-      else if (do_mg_microphys) then
-        ncar_micro_clock = mpp_clock_id(    &
-               '   Ls_cld_micro: mg_micro' , &
-                                                grain=CLOCK_MODULE_DRIVER )
-      else if (do_mg_ncar_microphys) then
-        ncar_micro_clock = mpp_clock_id(    &
-               '   Ls_cld_micro: mg_ncar_micro' , &
-                                                grain=CLOCK_MODULE_DRIVER)
-      else if (do_ncar_microphys) then
-        ncar_micro_clock = mpp_clock_id(    &
-               '   Ls_cld_micro: ncar_micro' , &
                                                 grain=CLOCK_MODULE_DRIVER )
       else if (do_ncar_MG2) then
         ncar_micro_clock = mpp_clock_id(    &
@@ -300,13 +260,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
 !-------------------------------------------------------------------------
 !     perform consistency / realizability checks.
 !-------------------------------------------------------------------------
-      if (do_clubb > 0 .and.   &
-             (.not. (do_ncar_microphys .or. do_mg_ncar_microphys) ) ) then
-        call error_mesg ('ls_cloud_microphys_mod/ls_cloud_microphys_init',&
-        'when clubb is activated, must use microphys_scheme = "ncar" or &
-                      & "mg_ncar"', FATAL)
-      endif
-
       if (override_ice_num == 1) then
         if ( use_Meyers .and. use_Cooper ) &
           call error_mesg (   &
@@ -326,38 +279,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
           call mpp_clock_begin (rk_micro_init_clock)
           call rotstayn_klein_microp_init (Nml_lsc, Exch_ctrl)
           call mpp_clock_end   (rk_micro_init_clock)
-
-!-----------------------------------------------------------------------
-!  morrison-gettelman microphysics (as done by M. Salzmann)
-!-----------------------------------------------------------------------
-        else if (do_mg_microphys) then
-          call mpp_clock_begin (ncar_micro_init_clock)
-          call morrison_gettelman_microp_init (Nml_lsc, Exch_ctrl)
-          call mpp_clock_end (ncar_micro_init_clock)
-
-!-----------------------------------------------------------------------
-!   an early version of the ncar microphysics 
-!-----------------------------------------------------------------------
-        else if (do_mg_ncar_microphys) then
-          call mpp_clock_begin (ncar_micro_init_clock)
-          call ini_micro (GRAV, RDGAS, RVGAS, CP_AIR, TFREEZE, HLV, HLF, &
-                          Nml_lsc, Exch_ctrl)
-          call mpp_clock_end (ncar_micro_init_clock)
-
-!-----------------------------------------------------------------------
-!  latest available ncar microphysics  (ncar v1.5)
-!-----------------------------------------------------------------------
-        else if (do_ncar_microphys) then
-          call mpp_clock_begin (ncar_micro_init_clock)
-          call micro_mg_init (r8, GRAV, RDGAS, RVGAS, CP_AIR, TFREEZE, &
-                              HLV, HLF, Nml_lsc%do_ice_nucl_wpdf,   &
-                              errstring, Exch_ctrl)
-          if (trim(errstring) /= '') then
-            call error_mesg    &
-                  ('ls_cloud_microphysics/ls_cloud_microphysics_init', &
-                                                         errstring, FATAL)
-          endif
-          call mpp_clock_end (ncar_micro_init_clock)
 
 !-----------------------------------------------------------------------
 !  ncar microphysics  (ncar v2.0)
@@ -385,7 +306,7 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
       endif  ! (doing_prog_clouds)
 
 !-------------------------------------------------------------------------
-!    get namelist initial time from namelist to determine whether 
+!    get namelist initial time from namelist to determine whether
 !    it is time for microphysics to be active.
 !-------------------------------------------------------------------------
       Time_init = set_date( init_date(1), init_date(2), init_date(3),  &
@@ -398,7 +319,7 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
 !------------------------------------------------------------------------
 
 
-end subroutine ls_cloud_microphysics_init     
+end subroutine ls_cloud_microphysics_init
 
 
 
@@ -418,7 +339,7 @@ real, intent(in) :: dtcloud_in
 
 !----------------------------------------------------------------------
 
-end subroutine ls_cloud_microphysics_time_vary 
+end subroutine ls_cloud_microphysics_time_vary
 
 
 !########################################################################
@@ -463,14 +384,14 @@ real,                        intent(in), dimension(:,:) :: lon, lat
                                delp, delz, &
                                ST_micro, SQ_micro, SL_micro, SI_micro, &
                                SN_micro, SNI_micro,                    &
-                               SR_micro, SS_micro, SNR_micro,SNS_micro,& 
+                               SR_micro, SS_micro, SNR_micro,SNS_micro,&
                                D_eros_l, D_eros_i,  &
                                nerosc, nerosi, dqcdt, dqidt, qa_new, &
                                ssat_disposal, ql_new,  qi_new,           &
                                nctend, nitend, qn_new, qni_new, &
                                rho, liqcldf, icecldf, tmp2s,  &
                                accre_enhann, tnd_qsnown, &
-                               tnd_nsnown, re_icen, relvarn, &           
+                               tnd_nsnown, re_icen, relvarn, &
                                crystal1, rho_air,  &
                                aerosols_concen, droplets_concen, test_bqx, dte3d
 
@@ -478,7 +399,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
                             size(Input_mp%tin,3),4) ::  &
                                rbar_dust_4bin, ndust_4bin
 
-      integer,dimension(:),allocatable  :: mgcols         
+      integer,dimension(:),allocatable  :: mgcols
 
       integer               :: mgncol
       integer               :: i, j, k, n
@@ -492,8 +413,8 @@ real,                        intent(in), dimension(:,:) :: lon, lat
 !-------------------------------------------------------------------------
 !   define array dimensions
 !-------------------------------------------------------------------------
-      ix = size(Input_mp%tin,1) 
-      jx = size(Input_mp%tin,2) 
+      ix = size(Input_mp%tin,1)
+      jx = size(Input_mp%tin,2)
       kx = size(Input_mp%tin,3)
 
 !------------------------------------------------------------------------
@@ -505,7 +426,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
       if (do_rk_microphys) then
         call mpp_clock_begin (rk_micro_clock)
         call rotstayn_klein_microp ( &
-                      ix, jx, kx, Particles%N3D, total_activation,  &  
+                      ix, jx, kx, Particles%N3D, total_activation,  &
                       dtcloud, inv_dtcloud, Input_mp%pfull,&
                       Input_mp%pmass, Atmos_state%airdens,     &
                       Atmos_state%esat0, Cloud_state%ql_in,  &
@@ -519,7 +440,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
                       Cloud_processes%qvg, Atmos_state%gamma,   &
                       Cloud_processes%delta_cf, Particles%drop1,    &
                       Particles%concen_dust_sub, Cloud_state%ql_upd,   &
-                      Cloud_state%qi_upd, Cloud_state%qn_upd,       & 
+                      Cloud_state%qi_upd, Cloud_state%qn_upd,       &
                       Cloud_state%qi_mean, Cloud_state%qa_upd,   &
                       C2ls_mp%convective_humidity_area,   &
                       Lsdiag_mp_control%n_diag_4d, Lsdiag_mp%diag_4d,   &
@@ -528,12 +449,12 @@ real,                        intent(in), dimension(:,:) :: lon, lat
                       Lsdiag_mp_control%n_diag_4d_kp1,   &
                       Lsdiag_mp%diag_4d_kp1,  &
                       limit_conv_cloud_frac, &
-                      Cloud_state%SA_out, Cloud_state%SN_out,        & 
+                      Cloud_state%SA_out, Cloud_state%SN_out,        &
                       Tend_mp%ttnd, Tend_mp%qtnd, Cloud_state%SL_out,  &
                       Cloud_state%SI_out, Removal_mp%rain3d,  &
                       Removal_mp%snow3d, Removal_mp%snowclr3d,    &
                       Precip_state%surfrain, Precip_state%surfsnow,  &
-                      Cloud_processes%f_snow_berg )  
+                      Cloud_processes%f_snow_berg )
 
 !-----------------------------------------------------------------------
 !   define the output tendency fields.
@@ -548,16 +469,13 @@ real,                        intent(in), dimension(:,:) :: lon, lat
         call mpp_clock_end   (rk_micro_clock)
 
 !-----------------------------------------------------------------------
-!  NCAR microphysics (currently 3 flavors)
+!  NCAR microphysics
 !-----------------------------------------------------------------------
-      else if (do_mg_microphys   .or. &    
-               do_mg_ncar_microphys   .or. &    
-               do_ncar_microphys      .or. &
-               do_ncar_MG2         ) then      
+      else if ( do_ncar_MG2 ) then
         call mpp_clock_begin (ncar_micro_clock)
 
         ST_micro(:,:,:)  = 0.0
-        SQ_micro(:,:,:)  = 0.0 
+        SQ_micro(:,:,:)  = 0.0
         SL_micro(:,:,:)  = 0.0
         SI_micro(:,:,:)  = 0.0
         SN_micro(:,:,:)  = 0.0
@@ -565,7 +483,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
 
         SR_micro(:,:,:)  = 0.0
         SNR_micro(:,:,:) = 0.0
-        SS_micro(:,:,:)  = 0.0 
+        SS_micro(:,:,:)  = 0.0
         SNS_micro(:,:,:) = 0.0
 
 !-----------------------------------------------------------------------
@@ -575,12 +493,12 @@ real,                        intent(in), dimension(:,:) :: lon, lat
           Atmos_state%qvn = Input_mp%qin + Tend_mp%qtnd
 
 !--------------------------------------------------------------------------
-!     define some input fields related to ls condensation and the  cloud 
+!     define some input fields related to ls condensation and the  cloud
 !     erosion process that are needed when tiedtke macrophysics are active,
 !     since the magnitude of these processes is still subject to change
-!     based on what the microphysics does. for the non-tiedtke case, the 
+!     based on what the microphysics does. for the non-tiedtke case, the
 !     magnitude of these processes have been locked in before the micro-
-!     physics tendencies are calculated, and so these input fields are 
+!     physics tendencies are calculated, and so these input fields are
 !     set to 0.0.
 !--------------------------------------------------------------------------
           do k=1,kx
@@ -588,7 +506,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
               do i=1,ix
                 Cloud_processes%dcond_ls_tot(i,j,k) =   &
                                Cloud_processes%dcond_ls(i,j,k) +   &
-                                      Cloud_processes%dcond_ls_ice(i,j,k) 
+                                      Cloud_processes%dcond_ls_ice(i,j,k)
                 if (tiedtke_macrophysics) then
                   D_eros_i(i,j,k) = -Cloud_state%qi_upd(i,j,k)* &
                                         Cloud_processes%D_eros(i,j,k)/ &
@@ -646,85 +564,16 @@ real,                        intent(in), dimension(:,:) :: lon, lat
                   dqcdt(i,j,k) = 0.
                   nerosi(i,j,k) = 0.
                   nerosc(i,j,k) = 0.
-                  D_eros_l(i,j,k) = 0.                             
-                  D_eros_i(i,j,k) = 0.                             
+                  D_eros_l(i,j,k) = 0.
+                  D_eros_i(i,j,k) = 0.
                 endif  ! (tiedtke)
               end do
-            end do   
-          end do   
-
-!------------------------------------------------------------------------
-!    if the 'mg' microphysics (the original,produced by M. Salzmann, with
-!    tweaks by H. Guo and R. Hemler) is activated, execute the following:
-!------------------------------------------------------------------------
-          if (do_mg_microphys) then
-
-!-----------------------------------------------------------------------
-!   define activated droplets in units of #/kg (drop1 is in-cloud #/cc).
-!-----------------------------------------------------------------------
-            Particles%drop2 = Particles%drop1*1.e6/Atmos_state%airdens
-
-!-----------------------------------------------------------------------
-!   execute the microphysics, 1 jrow at a time.
-!-----------------------------------------------------------------------
-            do j=1,jx
-
-!------------------------------------------------------------------------
-!    if debugging is activated, output the temp tendency prior to
-!    microphysics.
-!------------------------------------------------------------------------
-              call write_debug_output (" ST samp bef mg ",   &
-                                                       Tend_mp%ttnd, j=j)
+            end do
+          end do
 
 !-------------------------------------------------------------------------
-!    call morrison-gettelman (mg) microphysics package.
+!    executed ncar microphysics:
 !-------------------------------------------------------------------------
-              call morrison_gettelman_microp( &
-                   tiedtke_macrophysics, total_activation,   &
-                   dqa_activation, j ,ix, jx, kx, dtcloud,   &
-                   Input_mp%pfull(:,j,:),  Atmos_state%delp(:,j,:),  &
-                   Atmos_state%tn(:,j,:),  Input_mp%tin(:,j,:),    &
-                   Atmos_state%qvn(:,j,:), Input_mp%qin(:,j,:),  &
-                   Cloud_state%ql_upd(:,j,:), Cloud_state%qi_upd(:,j,:),&
-                   Cloud_state%qn_upd(:,j,:), Cloud_state%qni_upd(:,j,:), &
-                   Cloud_state%qa_upd(:,j,:), dqcdt(:,j,:), dqidt(:,j,:), &
-                   Particles%drop2(:,j,:), Particles%crystal1(:,j,:), &
-                   Particles%rbar_dust(:,j,:), Particles%ndust(:,j,:),  &
-                   Cloud_processes%delta_cf(:,j,:),   &
-                   Cloud_state%qa_upd(:,j,:), Cloud_state%qa_upd_0(:,j,:),&
-                   Cloud_state%SA_0(:,j,:), D_eros_l(:,j,:),  &
-                   nerosc(:,j,:),  D_eros_i(:,j,:), nerosi(:,j,:), &
-                   Atmos_state%gamma(:,j,:), inv_dtcloud,    &
-                   Cloud_state%qa_in(:,j,:), Tend_mp%ttnd(:,j,:),   &
-                   Tend_mp%qtnd(:,j,:), ssat_disposal(:,j,:), &
-                   ST_micro(:,j,:), SQ_micro(:,j,:),&
-                   SL_micro(:,j,:), SI_micro(:,j,:),  &
-                   SN_micro(:,j,:), SNI_micro(:,j,:),&
-                   Cloud_state%SA_out(:,j,:), Removal_mp%rain3d,   &
-                   Removal_mp%snow3d, Precip_state%surfrain(:,j),   &
-                   Precip_state%surfsnow(:,j), &
-                   Precip_state%lsc_rain(:,j,:),   &
-                   Precip_state%lsc_snow(:,j,:), &
-                   Precip_state%lsc_rain_size(:,j,:),   &
-                   Precip_state%lsc_snow_size(:,j,:), &
-                   Cloud_processes%f_snow_berg(:,j,:), &
-                   Lsdiag_mp_control%n_diag_4d, Lsdiag_mp%diag_4d,   &
-                   Lsdiag_mp_control%diag_id, Lsdiag_mp_control%diag_pt)    
-
-!------------------------------------------------------------------------
-!    if debugging is activated, output the temp tendency after 
-!    microphysics is completed.
-!------------------------------------------------------------------------
-              call write_debug_output  &
-                                  (" ST samp aft mg ", Tend_mp%ttnd, j=j)
-            end do   ! j loop
-
-!-------------------------------------------------------------------------
-!    executed for mg_ncar or ncar microphysics:
-!-------------------------------------------------------------------------
-          else if (do_mg_ncar_microphys .or. do_ncar_microphys &
-                   .or. do_ncar_MG2 ) then   
-          
             rho = Input_mp%pfull/(RDGAS*Atmos_state%tn)
 
 !------------------------------------------------------------------------
@@ -733,13 +582,13 @@ real,                        intent(in), dimension(:,:) :: lon, lat
             if (do_clubb > 0 ) then
 
 !------------------------------------------------------------------------
-!   for CLUBB, activated ice crystals are supplied by 
+!   for CLUBB, activated ice crystals are supplied by
 !   Particles%Icedrop_act_CLUBB, in units of #/kg. since droplet activation
-!   has been considered and resultant droplet number has been updated 
+!   has been considered and resultant droplet number has been updated
 !   in CLUBB, we do not need to include activation within MG microphysics,
 !   i.e Particles%drop2 = 0.0.
 !------------------------------------------------------------------------
-              crystal1 = Particles%Icedrop_act_CLUBB  
+              crystal1 = Particles%Icedrop_act_CLUBB
               Particles%drop2 = 0.0
 
 !------------------------------------------------------------------------
@@ -764,7 +613,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
 !--------------------------------------------------------------------
                   crystal1 = 0.005*exp(0.304*(273.15-Atmos_state%tn))*1000.
                   crystal1 = min( crystal1, 208.9e3)/rho_air
-                else 
+                else
 
 !-----------------------------------------------------------------------
 ! use a constant 0.5 /kg
@@ -772,10 +621,10 @@ real,                        intent(in), dimension(:,:) :: lon, lat
                   crystal1 = 1.0e6 * 0.5
                 end if
               end if
-  
+
             else ! (do_clubb)
 !-----------------------------------------------------------------------
-!   for the non-CLUBB case, use the values previously calculated and 
+!   for the non-CLUBB case, use the values previously calculated and
 !   input to this routine. convert to units of #/kg.
 !-----------------------------------------------------------------------
               crystal1 = Particles%crystal1/rho
@@ -788,7 +637,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
 
 
 !------------------------------------------------------------------------
-!   set liquid and ice cloud fraction to be the same as total large-scale 
+!   set liquid and ice cloud fraction to be the same as total large-scale
 !   cloud fraction.
 !------------------------------------------------------------------------
             liqcldf  = Cloud_state%qa_upd
@@ -807,7 +656,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
                   rbar_dust_4bin(i,j,k,4) = 20.e-6
 
 !------------------------------------------------------------------------
-!    define the number of particles in each of the 4 dust bins, if 
+!    define the number of particles in each of the 4 dust bins, if
 !    contact freezing is to be done. the active code below assigns
 !    the total number to each size bin, as is done with CLUBB.
 !    is this OK, or should the total number be distributed across all the
@@ -818,10 +667,10 @@ real,                        intent(in), dimension(:,:) :: lon, lat
                     ndust_4bin(i,j,k,2)     = Particles%ndust(i, j, k)
                     ndust_4bin(i,j,k,3)     = Particles%ndust(i, j, k)
                     ndust_4bin(i,j,k,4)     = Particles%ndust(i, j, k)
-!                   ndust_4bin(i,j,k,1) = 0.25*Particles%ndust(i,j,k) 
-!                   ndust_4bin(i,j,k,2) = 0.25*Particles%ndust(i,j,k) 
-!                   ndust_4bin(i,j,k,3) = 0.25*Particles%ndust(i,j,k) 
-!                   ndust_4bin(i,j,k,4) = 0.25*Particles%ndust(i,j,k) 
+!                   ndust_4bin(i,j,k,1) = 0.25*Particles%ndust(i,j,k)
+!                   ndust_4bin(i,j,k,2) = 0.25*Particles%ndust(i,j,k)
+!                   ndust_4bin(i,j,k,3) = 0.25*Particles%ndust(i,j,k)
+!                   ndust_4bin(i,j,k,4) = 0.25*Particles%ndust(i,j,k)
 
 !------------------------------------------------------------------------
 !    if contact freezing not desired, set ndust = 0. in each bin.
@@ -838,8 +687,8 @@ real,                        intent(in), dimension(:,:) :: lon, lat
 
 !------------------------------------------------------------------------
 !    define the relative variance of the cloud water within each gridbox.
-!    when CLUBB is active, spatially-dependent values are returned from 
-!    CLUBB; with Tiedtke macrophysics up to this time only a constant 
+!    when CLUBB is active, spatially-dependent values are returned from
+!    CLUBB; with Tiedtke macrophysics up to this time only a constant
 !    value has been used, though spatial dependence could be introduced.
 !------------------------------------------------------------------------
             if (do_clubb > 0 ) then
@@ -848,204 +697,10 @@ real,                        intent(in), dimension(:,:) :: lon, lat
               relvarn(:,:,:) = Cloud_state%relvarn(:,:,:)
             endif
 
-!------------------------------------------------------------------------
-!    if the 'mg_ncar' microphysics (a version of the NCAR microphysics 
-!    developed by H. Guo and R. Hemler, based upon a newer release than 
-!    that used by M. Salzmann, but following his adaptations for use in
-!    GFDL models) is activated, execute the following:
-!------------------------------------------------------------------------
-            if (do_mg_ncar_microphys) then   
-
-!-----------------------------------------------------------------------
-!    execute the microphysics, 1 jrow at a time.
-!-----------------------------------------------------------------------
-              do j=1,jx
-                call mmicro_pcond( &
-                     dqa_activation, total_activation,    &
-                     tiedtke_macrophysics, .false., j ,jx, kx, ix, ix,  &
-                     dtcloud, relvarn(:,j,:), Atmos_state%tn(:,j,:),     &
-                     Atmos_state%qvn(:,j,:),  Cloud_state%ql_upd(:,j,:), &
-                     Cloud_state%qi_upd(:,j,:), Cloud_state%qn_upd(:,j,:),&
-                     Cloud_state%qni_upd(:,j,:), Input_mp%pfull(:,j,:),  &
-                     Atmos_state%delp(:,j,:), Input_mp%phalf(:,j,:), &
-                     Cloud_state%qa_upd(:,j,:), liqcldf(:,j,:),   &
-                     icecldf(:,j,:), Cloud_processes%delta_cf(:,j,:), &
-                     D_eros_l(:,j,:), nerosc(:,j,:), &
-                     D_eros_i(:,j,:), nerosi(:,j,:), &
-                     dqcdt(:,j,:), dqidt(:,j,:), crystal1(:,j,:), &
-                     Particles%drop2(:,j,:), rbar_dust_4bin(:,j,:,:), &
-                     ndust_4bin(:,j,:,:), &
-                     ST_micro(:,j,:), SQ_micro(:,j,:), SL_micro(:,j,:), &
-                     SI_micro(:,j,:), SN_micro(:,j,:), SNI_micro(:,j,:), &
-                     Precip_state%surfrain(:,j),   &
-                     Precip_state%surfsnow(:,j),   &
-                     Removal_mp%rain3d(:,j,:), Removal_mp%snow3d(:,j,:), &
-                     Precip_state%lsc_rain(:,j,:),   &
-                     Precip_state%lsc_snow(:,j,:), &
-                     Precip_state%lsc_rain_size(:,j,:),   &
-                     Precip_state%lsc_snow_size(:,j,:), &
-                     Cloud_processes%f_snow_berg(:,j,:), &
-                     Cloud_state%qa_in(:,j,:), Atmos_state%gamma(:,j,:),&
-                     Cloud_state%SA_0(:,j,:), Cloud_state%SA_out(:,j,:),  &
-                     ssat_disposal (:,j,:), Lsdiag_mp_control%n_diag_4d,  &
-                     Lsdiag_mp%diag_4d, Lsdiag_mp_control%diag_id,    &
-                     Lsdiag_mp_control%diag_pt)
-              end do
-
-!------------------------------------------------------------------------
-!    if the 'ncar' microphysics (the newest available version of the NCAR 
-!    microphysics, adapted for use in FMS by H. Guo and R. Hemler) 
-!    is activated, execute the following:
-!------------------------------------------------------------------------
-            else if (do_ncar_microphys) then 
-
-!------------------------------------------------------------------------
-!    define the topmost model level at which microphysics is to be 
-!    calculated (top_lev).  define the number of levels (nlev) over which 
-!    microphysics will be calculated (from top_lev to the surface).
-!------------------------------------------------------------------------
-              nlev = kx - top_lev + 1
-
-!-----------------------------------------------------------------------
-!    define additional input fields:
-!    accre_enhann -- accretion enhancement factor
-!    the following are used if an external cirrus microphysics model 
-!    is active (eg, NCAR CARMA model)
-!    tnd_qsnown --  snow mass tendency (kg/kg/s)
-!    tnd_nsnown(:,:) ! snow number tendency (#/kg/s)
-!    re_icen(:,:)    ! ice effective radius (m)
-!-----------------------------------------------------------------------
-              accre_enhann(:,:,:) = 1.0 
-              tnd_qsnown(:,:,:) = 0.     
-              tnd_nsnown(:,:,:) = 0.
-              re_icen(:,:,:) = 0.
-
-!-------------------------------------------------------------------------
-!    execute the microphysics, 1 jrow at a time.
-!-------------------------------------------------------------------------
-              do j=1,jx
-
-!------------------------------------------------------------------------
-!    call subroutine micro_mg_get_cols to identify the columns in which
-!    microphysics will be calculated. only those columns meeting certain 
-!    criteria below the specified top_lev will be flagged, and experience
-!    microphysics.  
-!------------------------------------------------------------------------
-                call micro_mg_get_cols (   &
-                    ix, nlev, top_lev, Atmos_state%qvn(:,j,:), &
-                    Cloud_state%ql_upd(:,j,:) + dqcdt(:,j,:)*dtcloud, &
-                    Cloud_state%qi_upd(:,j,:) + dqidt(:,j,:)*dtcloud, &
-                    mgncol, mgcols, do_clubb > 0)
-
-!------------------------------------------------------------------------
-!    if debugging is activated, output the temp tendency prior to
-!    microphysics.
-!------------------------------------------------------------------------
-                call write_debug_output (" ST samp bef mg ",   &
-                                                      Tend_mp%ttnd, j=j)
-
-
-!-------------------------------------------------------------------------
-!    call the ncar microphysics routine micro_mg_tend.
-!-------------------------------------------------------------------------
-                call  micro_mg_tend ( &
-                       dqa_activation, total_activation, &
-                       tiedtke_macrophysics, j, jx, mgncol, mgcols,   &
-                       nlev, top_lev, dtcloud, Atmos_state%tn(:,j,:), &
-                       Atmos_state%qvn(:,j,:), Cloud_state%ql_upd(:,j,:), &
-                       Cloud_state%qi_upd(:,j,:),   &
-                       Cloud_state%qn_upd(:,j,:),   &
-                       Cloud_state%qni_upd(:,j,:), relvarn(:,j,:),  &
-                       accre_enhann(:,j,:), Input_mp%pfull(:,j,:),  &
-                       Atmos_state%delp(:,j,:), Input_mp%phalf(:,j,:), &
-                       Cloud_state%qa_upd(:,j,:), liqcldf(:,j,:),   &
-                       icecldf(:,j,:), Cloud_processes%delta_cf(:,j,:), &
-                       D_eros_l(:,j,:), nerosc(:,j,:), D_eros_i(:,j,:),  &
-                       nerosi(:,j,:), dqcdt(:,j,:), dqidt(:,j,:),   &
-                       crystal1(:,j,:), Particles%drop2(:,j,:),&
-                       rbar_dust_4bin(:,j,:,:),  ndust_4bin(:,j,:,:),   &
-                       ST_micro(:,j,:), SQ_micro(:,j,:), SL_micro(:,j,:), &
-                       SI_micro(:,j,:), SN_micro(:,j,:), SNI_micro(:,j,:),&
-                       Precip_state%surfrain(:,j),    &
-                       Precip_state%surfsnow(:,j),&
-                       Precip_state%lsc_snow(:,j,:), &
-                       Removal_mp%rain3d(:,j,:), Removal_mp%snow3d(:,j,:),&
-                       Precip_state%lsc_rain(:,j,:),  &
-                       Precip_state%lsc_rain_size(:,j,:),  &
-                       Precip_state%lsc_snow_size(:,j,:),  &
-                       tnd_qsnown(:,j,:), tnd_nsnown(:,j,:),    &
-                       re_icen(:,j,:), errstring,    &
-                       Cloud_processes%f_snow_berg(:,j,:), &
-                       ssat_disposal(:,j,:), &
-                       Lsdiag_mp_control%n_diag_4d, Lsdiag_mp%diag_4d,  &
-                       Lsdiag_mp_control%diag_id,    &
-                                                 Lsdiag_mp_control%diag_pt)
-
-!------------------------------------------------------------------------
-!   convert from effective radius to diameter for use in radiation.
-!   in mg and mg-ncar, diameter is returned from microphysics routine,
-!   so this step is unneeded.
-!------------------------------------------------------------------------
-                Precip_state%lsc_rain_size(:,j,:) =   &
-                                   2.0*Precip_state%lsc_rain_size(:,j,:)
-                Precip_state%lsc_snow_size(:,j,:) =   &
-                                   2.0*Precip_state%lsc_snow_size(:,j,:)
-
-!-------------------------------------------------------------------------
-!   if an error message was returned from micro_mg_tend output it and
-!   stop execution.
-!-------------------------------------------------------------------------
-                if (trim(errstring) /= '') then
-                  call error_mesg (  &
-                          'moist_processes/ls_cloud_microphysics', &
-                                                         errstring, FATAL)
-                endif
-
-!------------------------------------------------------------------------
-!   if debugging is activated, output the temp tendency after microphysics.
-!------------------------------------------------------------------------
-                call write_debug_output (" ST samp aft mg ",  &
-                                                       Tend_mp%ttnd, j=j)
-
-              end do  ! end of j loop
-     
-!------------------------------------------------------------------------
-!    calculate column enthalpy and total water changes
-!    Note: in MG-microphys, temperature tendency is multiplied by Cp_air.
-!------------------------------------------------------------------------
-              enth_micro_col(:,:) = 0.0
-              wat_micro_col(:,:)  = 0.0
-              do j=1,jx
-                do i=1,ix
-                  do k=1,kx
-                    enth_micro_col(i,j) = enth_micro_col(i,j)   +         &
-                        ( ST_micro(i,j,k) - HLV*SL_micro(i,j,k) -   &
-                                         HLS*SI_micro(i,j,k) )*    &
-                                             Atmos_state%delp(i,j,k)/grav
-
-                    wat_micro_col(i,j) = wat_micro_col(i,j)  +            &
-                         ( SQ_micro(i,j,k) + SL_micro(i,j,k) +  &
-                                        SI_micro(i,j,k) )*   &
-                                             Atmos_state%delp(i,j,k)/grav
-                  enddo
-  
-                  enth_micro_col(i,j) = enth_micro_col(i,j) +   &
-                                                 (-HLV*1000.0* &
-                                        (Precip_state%surfrain(i,j) -  &
-                                         Precip_state%surfsnow(i,j)) -  &
-                                 HLS*1000.0 * Precip_state%surfsnow(i,j) )
-
-                  wat_micro_col(i,j) = wat_micro_col(i,j) +   &
-                                       Precip_state%surfrain(i,j) *1000.0
-                enddo
-              enddo
-
-            else if (do_ncar_MG2) then
               nlev = kx
-              top_lev = 1
               mgncol = ix
               accre_enhann(:,:,:) = accretion_scale  ! accretion enhancement factor
-             
+
               call get_time( time, current_sec, current_days)
             !  if ( mpp_pe() == mpp_root_pe() ) &
             !   write(*,*)  'current_sec =',   current_sec
@@ -1057,11 +712,11 @@ real,                        intent(in), dimension(:,:) :: lon, lat
                          Atmos_state%tn(i,j,k) .gt.90+273.15)         &
             write(*,'(a,3i5, 5f12.5, 15e12.3)') 'before MG2: bad temperature@1213',   &
               i,j,k, current_sec/3600.0, Atmos_state%tn(i,j,k), Atmos_state%qvn(i,j,k), Input_mp%pfull(i,j,k), dtcloud
-  
+
                   enddo
                 enddo
-              enddo  
- 
+              enddo
+
               do j=1,jx
                call  micro_mg2_tend (  lon(:,j), lat(:,j), &
                    dqa_activation, total_activation, &
@@ -1079,7 +734,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
                    Atmos_state%delp(:,j,:),   &
                    Input_mp%zhalf(:,j,:),  &
                    Cloud_state%qa_upd(:,j,:),  &
-                   liqcldf(:,j,:)       , icecldf(:,j,:),   & 
+                   liqcldf(:,j,:)       , icecldf(:,j,:),   &
                    Cloud_processes%delta_cf(:,j,:), &
                    D_eros_l(:,j,:), nerosc(:,j,:), &
                    D_eros_i(:,j,:), nerosi(:,j,:), &
@@ -1109,41 +764,41 @@ real,                        intent(in), dimension(:,:) :: lon, lat
                                    2.0*Precip_state%lsc_rain_size(:,j,:)
                    Precip_state%lsc_snow_size(:,j,:) =      &
                                   2.0*Precip_state%lsc_snow_size(:,j,:)
-                   
+
                    if(maxval(Removal_mp%snow3d(:,j,:)) > 1.e-2) write(*,*) 'max snow3d',maxval(Removal_mp%snow3d(:,j,:))
                    if(minval(Removal_mp%snow3d(:,j,:)) <-1.e-2) write(*,*) 'min snow3d',minval(Removal_mp%snow3d(:,j,:))
 
                 do i=1,ix
                   do k=1,kx
                     if( Cloud_state%qn_upd(i,j,k) + dtcloud * SN_micro(i,j,k) < -1.e-3 ) then
-                      print*, 'negative drop number @1281', lon(i,j), lat(i,j), k, Cloud_state%qn_upd(i,j,k),  & 
-                               SN_micro(i,j,k), Cloud_state%qn_upd(i,j,k) + dtcloud * SN_micro(i,j,k) 
+                      print*, 'negative drop number @1281', lon(i,j), lat(i,j), k, Cloud_state%qn_upd(i,j,k),  &
+                               SN_micro(i,j,k), Cloud_state%qn_upd(i,j,k) + dtcloud * SN_micro(i,j,k)
                     endif
 
                     if( Cloud_state%qr_upd(i,j,k) + dtcloud * SR_micro(i,j,k) < -1.e-3 ) then
-                      print*, 'negative rain mass @1281', lon(i,j), lat(i,j), k, Cloud_state%qr_upd(i,j,k),  & 
-                               SR_micro(i,j,k), Cloud_state%qr_upd(i,j,k) + dtcloud * SR_micro(i,j,k) 
+                      print*, 'negative rain mass @1281', lon(i,j), lat(i,j), k, Cloud_state%qr_upd(i,j,k),  &
+                               SR_micro(i,j,k), Cloud_state%qr_upd(i,j,k) + dtcloud * SR_micro(i,j,k)
                     endif
 
                     if( Cloud_state%qnr_upd(i,j,k) + dtcloud * SNR_micro(i,j,k) < -1.e-3 ) then
-                      print*, 'negative rain number @1281', lon(i,j), lat(i,j), k, Cloud_state%qnr_upd(i,j,k),  & 
-                               SNR_micro(i,j,k), Cloud_state%qnr_upd(i,j,k) + dtcloud * SNR_micro(i,j,k) 
+                      print*, 'negative rain number @1281', lon(i,j), lat(i,j), k, Cloud_state%qnr_upd(i,j,k),  &
+                               SNR_micro(i,j,k), Cloud_state%qnr_upd(i,j,k) + dtcloud * SNR_micro(i,j,k)
                     endif
 
                     if( Cloud_state%qs_upd(i,j,k) + dtcloud * SS_micro(i,j,k) < -1.e-3 ) then
-                      print*, 'negative snow mass @1281', lon(i,j), lat(i,j), k, Cloud_state%qs_upd(i,j,k),  & 
-                               SS_micro(i,j,k), Cloud_state%qs_upd(i,j,k) + dtcloud * SS_micro(i,j,k) 
+                      print*, 'negative snow mass @1281', lon(i,j), lat(i,j), k, Cloud_state%qs_upd(i,j,k),  &
+                               SS_micro(i,j,k), Cloud_state%qs_upd(i,j,k) + dtcloud * SS_micro(i,j,k)
                     endif
 
                     if( Cloud_state%qns_upd(i,j,k) + dtcloud * SNS_micro(i,j,k) < -1.e-3 ) then
-                      print*, 'negative snow number @1281', lon(i,j), lat(i,j), k, Cloud_state%qns_upd(i,j,k),  & 
-                               SNS_micro(i,j,k), Cloud_state%qns_upd(i,j,k) + dtcloud * SNS_micro(i,j,k) 
+                      print*, 'negative snow number @1281', lon(i,j), lat(i,j), k, Cloud_state%qns_upd(i,j,k),  &
+                               SNS_micro(i,j,k), Cloud_state%qns_upd(i,j,k) + dtcloud * SNS_micro(i,j,k)
                     endif
                   enddo
-                enddo  
-      
+                enddo
+
               enddo  ! end of j loop
-     
+
 !------------------------------------------------------------------------
 !    calculate column enthalpy and total water changes
 !    Note: in MG2, temperature tendency is multiplied by Cp_air.
@@ -1163,7 +818,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
                                         SI_micro(i,j,k) )*   &
                                              Atmos_state%delp(i,j,k)/grav
                   enddo
-  
+
                   enth_micro_col(i,j) = enth_micro_col(i,j) +   &
                                                  (-HLV*1000.0* &
                                         (Precip_state%surfrain(i,j) -  &
@@ -1175,9 +830,6 @@ real,                        intent(in), dimension(:,:) :: lon, lat
                 enddo
               enddo
 
-            endif ! do_mg_ncar_microphys
-          endif  ! if do_mg_microphys, elseif do_mg_ncar_microphys .or. do_ncar_microphys & .or. do_ncar_MG2
-
 !------------------------------------------------------------------------
 !    adjust precip fields to assure mass conservation and realizable
 !    values.
@@ -1185,7 +837,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
           call adjust_precip_fields (   &
                               ix, jx, kx, SQ_micro, SL_micro, SI_micro,  SR_micro, SS_micro, &
                                   Atmos_state, Precip_state, Lsdiag_mp, &
-                                                       Lsdiag_mp_control ) 
+                                                       Lsdiag_mp_control )
 
 !-----------------------------------------------------------------------
 !    update prognostic tendencies due to microphysics terms.
@@ -1204,7 +856,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
             Cloud_state%SS_out = Cloud_state%SS_out + SS_micro*dtcloud
           endif
           if (nqnr /= NO_TRACER) then
-            Cloud_state%SNR_out = Cloud_state%SNR_out + SNR_micro*dtcloud 
+            Cloud_state%SNR_out = Cloud_state%SNR_out + SNR_micro*dtcloud
           endif
           if (nqns /= NO_TRACER) then
             Cloud_state%SNS_out = Cloud_state%SNS_out + SNS_micro*dtcloud
@@ -1218,17 +870,17 @@ real,                        intent(in), dimension(:,:) :: lon, lat
             call adjust_for_supersaturation_removal (  &
                     ix, jx, kx, C2ls_mp, Input_mp, Atmos_state,  &
                          ssat_disposal, Particles, Cloud_state, Lsdiag_mp,&
-                                                    Lsdiag_mp_control ) 
+                                                    Lsdiag_mp_control )
           endif
 
 !------------------------------------------------------------------------
-!    process output fields after microphysics is completed 
+!    process output fields after microphysics is completed
 !    for the CLUBB case.
 !------------------------------------------------------------------------
           if (do_clubb > 0 ) then
 
 !-------------------------------------------------------------------------
-!    remove any clouds with less condensate present than the specified 
+!    remove any clouds with less condensate present than the specified
 !    allowable minimum.
 !-------------------------------------------------------------------------
             call destroy_tiny_clouds_clubb (   &
@@ -1237,12 +889,12 @@ real,                        intent(in), dimension(:,:) :: lon, lat
 
 
 !-------------------------------------------------------------------------
-!     ---> h1g, 06-14-2013, in order to reproduce bit-wise identical 
+!     ---> h1g, 06-14-2013, in order to reproduce bit-wise identical
 !     results as AM3-CLUBB
 !-------------------------------------------------------------------------
             Tend_mp%ttnd = Tend_mp%ttnd/dtcloud
             Tend_mp%ttnd = Tend_mp%ttnd*dtcloud
-     
+
             Tend_mp%qtnd = Tend_mp%qtnd/dtcloud
             Tend_mp%qtnd = Tend_mp%qtnd*dtcloud
 
@@ -1254,7 +906,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
 
             Tend_mp%q_tnd(:,:,:,nqni) = Tend_mp%q_tnd(:,:,:,nqni)/dtcloud
             Tend_mp%q_tnd(:,:,:,nqni) = Tend_mp%q_tnd(:,:,:,nqni)*dtcloud
-    
+
             Tend_mp%q_tnd(:,:,:,nqi) = Tend_mp%q_tnd(:,:,:,nqi)/dtcloud
             Tend_mp%q_tnd(:,:,:,nqi) = Tend_mp%q_tnd(:,:,:,nqi)*dtcloud
 
@@ -1264,7 +916,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
           else  !(do_clubb)
 
 !-------------------------------------------------------------------------
-!    remove any clouds with less condensate present than the specified 
+!    remove any clouds with less condensate present than the specified
 !    allowable minimum.
 !-------------------------------------------------------------------------
             call destroy_tiny_clouds (    &
@@ -1304,7 +956,7 @@ real,                        intent(in), dimension(:,:) :: lon, lat
 !-------------------------------------------------------------------------
 !    exit with error if no valid microphysics scheme was specified.
 !-------------------------------------------------------------------------
-      else    ! do rk
+     else    ! do rk
         call error_mesg ('ls_cloud_microphysics/ls_cloud_microphysics', &
               'invalid lscloud_driver_nml microphys_scheme option', FATAL)
       endif    ! (do_rk)
@@ -1312,13 +964,13 @@ real,                        intent(in), dimension(:,:) :: lon, lat
 !---------------------------------------------------------------------
 
 
-end subroutine ls_cloud_microphysics    
+end subroutine ls_cloud_microphysics
 
 
 
 !#######################################################################
 
-subroutine ls_cloud_microphysics_end                                
+subroutine ls_cloud_microphysics_end
 
 !------------------------------------------------------------------------
 
@@ -1336,18 +988,6 @@ subroutine ls_cloud_microphysics_end
         rk_micro_term_clock = mpp_clock_id(   &
                '   Ls_cld_micro: rk_micro:Termination' , &
                                                 grain=CLOCK_MODULE_DRIVER )
-      else if (do_mg_microphys) then
-        ncar_micro_term_clock = mpp_clock_id(    &
-               '   Ls_cld_micro: mg_micro:Termination' , &
-                                                grain=CLOCK_MODULE_DRIVER)
-      else if (do_mg_ncar_microphys) then
-        ncar_micro_term_clock = mpp_clock_id(    &
-               '   Ls_cld_micro: mg_ncar_micro:Termination' , &
-                                                grain=CLOCK_MODULE_DRIVER)
-      else if (do_ncar_microphys) then
-        ncar_micro_term_clock = mpp_clock_id(    &
-               '   Ls_cld_micro: ncar_micro:Termination' , &
-                                                grain=CLOCK_MODULE_DRIVER)
       endif
 
 !-------------------------------------------------------------------------
@@ -1358,16 +998,8 @@ subroutine ls_cloud_microphysics_end
         call mpp_clock_begin (rk_micro_term_clock)
         call rotstayn_klein_microp_end
         call mpp_clock_end   (rk_micro_term_clock)
-      else if (do_mg_microphys ) then
-        call mpp_clock_begin (ncar_micro_term_clock)
-        call morrison_gettelman_microp_end 
-        call mpp_clock_end   (ncar_micro_term_clock)
-      else if (do_mg_ncar_microphys ) then
-        call mpp_clock_begin (ncar_micro_term_clock)
-        call mmicro_end
-        call mpp_clock_end   (ncar_micro_term_clock)
       endif
-      
+
       module_is_initialized = .false.
 
 !----------------------------------------------------------------------
@@ -1386,7 +1018,7 @@ subroutine adjust_precip_fields (    &
 !    subroutine adjust_precip_fields modifies the surface precipitation to
 !    balance the atmospheric tendencies of water, and thus conserve water
 !    mass. Any needed adjustments are available for examination as
-!    model netcdf diagnostics. 
+!    model netcdf diagnostics.
 !------------------------------------------------------------------------
 
 integer,                    intent(in)    :: ix, jx, kx
@@ -1427,7 +1059,7 @@ real, dimension (:,:,:),    intent(in)    :: SL_micro, SI_micro, SQ_micro, SR_mi
                        m2(i,j) .GT. min_precip_needing_adjustment) .or. &
                    (do_clubb == 0 .and. m2(i,j) .ne. 0.0)) THEN
               scalef(i,j) = -m1(i,j)/m2(i,j)
- 
+
 !-----------------------------------------------------------------------
 !   define diagnostics capturing the rate (kg/m2/s) that the precip
 !   field is adjusted to balance the loss of atmospheric water mass.
@@ -1442,7 +1074,7 @@ real, dimension (:,:,:),    intent(in)    :: SL_micro, SI_micro, SQ_micro, SR_mi
                            Lsdiag_mp_control%diag_pt%snow_mass_conv) = &
                               (scalef(i,j)*Precip_state%surfsnow(i,j) -  &
                                          Precip_state%surfsnow(i,j))*1.0e3
- 
+
 !------------------------------------------------------------------------
 !    modify the output rain and snow precip fields.
 !------------------------------------------------------------------------
@@ -1453,7 +1085,7 @@ real, dimension (:,:,:),    intent(in)    :: SL_micro, SI_micro, SQ_micro, SR_mi
             end if
           end do
         end do
-      end if 
+      end if
 
 !------------------------------------------------------------------------
 !    save the rain and snow precipitation fields before any lower limit
@@ -1467,14 +1099,14 @@ real, dimension (:,:,:),    intent(in)    :: SL_micro, SI_micro, SQ_micro, SR_mi
       if (Lsdiag_mp_control%diag_id%neg_snow > 0) &
         Lsdiag_mp%diag_4d(:,:,1,    &
                         Lsdiag_mp_control%diag_pt%neg_snow) = 1.0e3*    &
-          (Precip_state%surfsnow(:,:))*dtcloud 
+          (Precip_state%surfsnow(:,:))*dtcloud
 
 !-----------------------------------------------------------------------
 !    impose lower limit.
 !-----------------------------------------------------------------------
       Precip_state%surfrain = max(     &
              1.e3*(Precip_state%surfrain - Precip_state%surfsnow)*   &
-                                        dtcloud , lowest_allowed_precip) 
+                                        dtcloud , lowest_allowed_precip)
       Precip_state%surfsnow = max(    &
              1.e3*Precip_state%surfsnow*dtcloud,   &
                                                   lowest_allowed_precip)
@@ -1487,7 +1119,7 @@ real, dimension (:,:,:),    intent(in)    :: SL_micro, SI_micro, SQ_micro, SR_mi
           Lsdiag_mp%diag_4d(:,:,1,Lsdiag_mp_control%diag_pt%neg_rain) =   &
           -1.0*( (Precip_state%surfrain(:,:))  -   &
                   Lsdiag_mp%diag_4d(:,:,1,   &
-                              Lsdiag_mp_control%diag_pt%neg_rain))/dtcloud 
+                              Lsdiag_mp_control%diag_pt%neg_rain))/dtcloud
       if (Lsdiag_mp_control%diag_id%neg_snow > 0) &
           Lsdiag_mp%diag_4d(:,:,1,Lsdiag_mp_control%diag_pt%neg_snow) =   &
           -1.0*( (Precip_state%surfsnow(:,:))  -   &
@@ -1503,12 +1135,12 @@ end subroutine adjust_precip_fields
 subroutine adjust_for_supersaturation_removal (  &
                       ix, jx, kx, C2ls_mp, Input_mp, Atmos_state, &
                        ssat_disposal, Particles, Cloud_state, Lsdiag_mp, &
-                                                       lsdiag_mp_control ) 
+                                                       lsdiag_mp_control )
 
 !-----------------------------------------------------------------------
-!    with tiedtke macrophysics, supersaturation removal results in an 
-!    increase in cloudiness to the max allowable cloudiness in the grid 
-!    box and a consequent increase in activated aerosols due to this 
+!    with tiedtke macrophysics, supersaturation removal results in an
+!    increase in cloudiness to the max allowable cloudiness in the grid
+!    box and a consequent increase in activated aerosols due to this
 !    increase in coverage when the Ming dqa activation is being used.
 !-----------------------------------------------------------------------
 
@@ -1516,8 +1148,8 @@ integer,                    intent(in)    :: ix, jx, kx
 type(mp_lsdiag_type),       intent(inout) :: Lsdiag_mp
 type(mp_lsdiag_control_type), intent(inout) :: Lsdiag_mp_control
 type(atmos_state_type),     intent(inout) :: Atmos_state
-type(mp_input_type),        intent(inout) :: Input_mp    
-type(mp_conv2ls_type),      intent(inout) :: C2ls_mp     
+type(mp_input_type),        intent(inout) :: Input_mp
+type(mp_conv2ls_type),      intent(inout) :: C2ls_mp
 type(cloud_state_type),     intent(inout) :: Cloud_state
 type(particles_type),       intent(inout) :: Particles
 real, dimension(:,:,:),     intent(in)    :: ssat_disposal
@@ -1536,14 +1168,14 @@ real, dimension(:,:,:),     intent(in)    :: ssat_disposal
       if (tiedtke_macrophysics .and.  .not. do_pdf_clouds) then
 
 !-----------------------------------------------------------------------
-!    where supersaturation is present, define the effects of removing it 
+!    where supersaturation is present, define the effects of removing it
 !    on the cloud area and cloud particle / ice crystal number.
 !-----------------------------------------------------------------------
         do k=1,kx
           do j=1,jx
             do i=1,ix
               if (ssat_disposal(i,j,k) > 0.0) then
- 
+
 !-----------------------------------------------------------------------
 !    define the density (rho).
 !-----------------------------------------------------------------------
@@ -1551,7 +1183,7 @@ real, dimension(:,:,:),     intent(in)    :: ssat_disposal
                                         (RDGAS*Atmos_state%tn(i,j,k))
 
 !-----------------------------------------------------------------------
-!    define the area unavailable for large-scale clouds due to it 
+!    define the area unavailable for large-scale clouds due to it
 !    containing convective cloud (tmp2s).
 !-----------------------------------------------------------------------
                 if (limit_conv_cloud_frac) then
@@ -1563,7 +1195,7 @@ real, dimension(:,:,:),     intent(in)    :: ssat_disposal
 !-----------------------------------------------------------------------
 !    when dqa activation is being used, the increase in cloud area results
 !    in an increase in activated ice particles and cloud nuclei,
-!    proportional to the cloud area increase. save the incremental 
+!    proportional to the cloud area increase. save the incremental
 !    increase due to removing superstauration as diagnostics.
 !-----------------------------------------------------------------------
              !   if (dqa_activation) then    ! h1g, 2020-03-19
@@ -1579,7 +1211,7 @@ real, dimension(:,:,:),     intent(in)    :: ssat_disposal
                               Lsdiag_mp_control%diag_pt%qnidt_super) =    &
                         Particles%crystal1(i,j,k)/rho(i,j,k)*  &
                      (1. - Cloud_state%qa_upd(i,j,k) - tmp2s(i,j,k))/  &
-                                                                  dtcloud  
+                                                                  dtcloud
 
                   else if (ssat_disposal(i,j,k) == 1.) then
                     Cloud_state%SN_out(i,j,k) =    &
@@ -1593,31 +1225,31 @@ real, dimension(:,:,:),     intent(in)    :: ssat_disposal
                              Lsdiag_mp_control%diag_pt%qndt_super ) =    &
                            Particles%drop2(i,j,k)*               &
                      (1. - Cloud_state%qa_upd(i,j,k) - tmp2s(i,j,k))/  &
-                                                                  dtcloud  
+                                                                  dtcloud
                   endif
              !   end if ! dqa_activation ! h1g, 2020-03-19
                 if (max(Lsdiag_mp_control%diag_id%qadt_super,  &
                             Lsdiag_mp_control%diag_id%qa_super_col) > 0) then
                   Lsdiag_mp%diag_4d(i,j,k,  &
-                        Lsdiag_mp_control%diag_pt%qadt_super ) = &              
+                        Lsdiag_mp_control%diag_pt%qadt_super ) = &
                      (1. - Cloud_state%qa_upd(i,j,k) - tmp2s(i,j,k))/  &
-                                                                  dtcloud  
+                                                                  dtcloud
                 endif
 
 !-------------------------------------------------------------------------
-!    add the change to the cloud area increment resulting from this 
-!    process (SA_out), and update the model cloud area after this process 
+!    add the change to the cloud area increment resulting from this
+!    process (SA_out), and update the model cloud area after this process
 !    is completed (Cloud_state%qa_upd).
 !-------------------------------------------------------------------------
                 Cloud_state%SA_out(i,j,k) =   &
                       Cloud_state%SA_out(i,j,k) + &
-                          (1. - Cloud_state%qa_upd(i,j,k) - tmp2s(i,j,k))  
-                Cloud_state%qa_upd(i,j,k) = 1. - tmp2s(i,j,k)     
+                          (1. - Cloud_state%qa_upd(i,j,k) - tmp2s(i,j,k))
+                Cloud_state%qa_upd(i,j,k) = 1. - tmp2s(i,j,k)
               endif ! ssat_disposal > 0.0
             end do
           end do
         end do
-      end if 
+      end if
 
 !-------------------------------------------------------------------------
 
@@ -1640,8 +1272,8 @@ type(mp_lsdiag_type),       intent(inout) :: Lsdiag_mp
 type(mp_lsdiag_control_type), intent(inout) :: Lsdiag_mp_control
 type(mp_tendency_type),     intent(inout) :: Tend_mp
 type(atmos_state_type),     intent(inout) :: Atmos_state
-type(mp_input_type),        intent(inout) :: Input_mp    
-type(mp_conv2ls_type),      intent(inout) :: C2ls_mp    
+type(mp_input_type),        intent(inout) :: Input_mp
+type(mp_conv2ls_type),      intent(inout) :: C2ls_mp
 type(cloud_state_type),     intent(inout) :: Cloud_state
 
 !-----------------------------------------------------------------------
@@ -1655,10 +1287,10 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
 !-----------------------------------------------------------------------
 !    define current cloud and particle values.
 !----------------------------------------------------------------------
-      ql_new  = Cloud_state%ql_in  + Cloud_state%SL_out 
+      ql_new  = Cloud_state%ql_in  + Cloud_state%SL_out
       qi_new  = Cloud_state%qi_in  + Cloud_state%SI_out
-      qn_new  = Cloud_state%qn_in  + Cloud_state%SN_out         
-      qni_new = Cloud_state%qni_in + Cloud_state%SNi_out         
+      qn_new  = Cloud_state%qn_in  + Cloud_state%SN_out
+      qni_new = Cloud_state%qni_in + Cloud_state%SNi_out
 
       qr_new  = Cloud_state%qr_in  + Cloud_state%SR_out
       qnr_new = Cloud_state%qnr_in + Cloud_state%SNR_out
@@ -1667,7 +1299,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
 !-----------------------------------------------------------------------
 !    if these values are lower than acceptable, or if the new cloud area
 !    is lower than acceptable, set the tendency to balance the input value,
-!    so that the field is 0. upon exiting this routine. include 
+!    so that the field is 0. upon exiting this routine. include
 !    adjustments to temp and vapor to conserve energy and water mass.
 !-----------------------------------------------------------------------
       do k=1,kx
@@ -1735,16 +1367,16 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
 !-----------------------------------------------------------------------
 
     if ( do_cleanup ) then  ! --> h1g, 20200317
-      ql_new  =  Cloud_state%ql_in  + Cloud_state%SL_out 
+      ql_new  =  Cloud_state%ql_in  + Cloud_state%SL_out
       qi_new  =  Cloud_state%qi_in  + Cloud_state%SI_out
       qn_new  =  Cloud_state%qn_in  + Cloud_state%SN_out
       qni_new =  Cloud_state%qni_in + Cloud_state%SNI_out
 
 !-----------------------------------------------------------------------
-!    if the new value of cloud water is too small (including negative 
-!    roundoff values), and the vapor will remain positive when 
+!    if the new value of cloud water is too small (including negative
+!    roundoff values), and the vapor will remain positive when
 !    conservatively adjusted, eliminate the cloudwater by adjusting the
-!    vapor.  
+!    vapor.
 !-----------------------------------------------------------------------
       do k=1,kx
         do j=1,jx
@@ -1771,7 +1403,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
 !    be set to 0.0. define diagnostic for droplet loss due to this cleanup.
 !------------------------------------------------------------------------
               Cloud_state%SN_out(i,j,k) = Cloud_state%SN_out(i,j,k) -   &
-                                                           qn_new(i,j,k) 
+                                                           qn_new(i,j,k)
               if (Lsdiag_mp_control%diag_id%qndt_cleanup +   &
                           Lsdiag_mp_control%diag_id%qn_cleanup_col > 0) &
                 Lsdiag_mp%diag_4d(i,j,k,   &
@@ -1783,10 +1415,10 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       end do
 
 !-----------------------------------------------------------------------
-!    if the new value of cloud ice is too small (including negative 
-!    roundoff values), and the vapor will remain positive when 
+!    if the new value of cloud ice is too small (including negative
+!    roundoff values), and the vapor will remain positive when
 !    conservatively adjusted, eliminate the cloudice by adjusting the
-!    vapor.  
+!    vapor.
 !-----------------------------------------------------------------------
       do k=1,kx
         do j=1,jx
@@ -1813,7 +1445,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
 !    be set to 0.0. define diagnostic for crystal loss due to this cleanup.
 !------------------------------------------------------------------------
               Cloud_state%SNI_out(i,j,k) = Cloud_state%SNI_out(i,j,k) -  &
-                                                             qni_new(i,j,k) 
+                                                             qni_new(i,j,k)
               if (Lsdiag_mp_control%diag_id%qnidt_cleanup +    &
                     Lsdiag_mp_control%diag_id%qni_cleanup_col > 0) &
                Lsdiag_mp%diag_4d(i,j,k,     &
@@ -1823,9 +1455,9 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
           end do
         end do
       end do
-    
+
 !-----------------------------------------------------------------------
-!    force the change in ice crystal number to not be so large as to 
+!    force the change in ice crystal number to not be so large as to
 !    eliminate more crystals than were present initially. save a diagnostic
 !    if desired.
 !-----------------------------------------------------------------------
@@ -1851,9 +1483,9 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
         end do
       end do
 
-    
+
 !-----------------------------------------------------------------------
-!    force the change in cloud droplet number to not be so large as to 
+!    force the change in cloud droplet number to not be so large as to
 !    eliminate more droplets than were present initially. save a diagnostic
 !    if desired.
 !-----------------------------------------------------------------------
@@ -1880,8 +1512,8 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
 
      endif ! do_cleanup  --> h1g 20200317
 !----------------------------------------------------------------------
-!    make sure the new cloud area is not smaller than the minimum 
-!    allowable. if not set the tendency so that cloud area is reduced to 
+!    make sure the new cloud area is not smaller than the minimum
+!    allowable. if not set the tendency so that cloud area is reduced to
 !    zero after the step. save a diagnostic if desired.
 !----------------------------------------------------------------------
       if (Lsdiag_mp_control%diag_id%qadt_destr +    &
@@ -1908,11 +1540,10 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
 !    be so large as to more than fill the available area in the grid box
 !    (some area may have been taken up by the convective system, so the
 !    max available area is (1 - conv area). Include a diagnostic if
-!    desired. this constraint has already been imposed with r-k 
+!    desired. this constraint has already been imposed with r-k
 !    microphysics, as part of the destruction diagnostic.
 !------------------------------------------------------------------------
-      if (do_mg_ncar_microphys .or. do_ncar_microphys .or. &
-          do_mg_microphys .or. do_ncar_MG2 ) then
+      if ( do_ncar_MG2 ) then
         if (Lsdiag_mp_control%diag_id%qadt_limits +    &
                          Lsdiag_mp_control%diag_id%qa_limits_col > 0)    &
        Lsdiag_mp%diag_4d(:,:,:,Lsdiag_mp_control%diag_pt%qadt_limits) =   &
@@ -1944,7 +1575,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
                 Tend_mp%qtnd(i,j,k) = Tend_mp%qtnd(i,j,k) + qr_new(i,j,k)
                 Tend_mp%ttnd(i,j,k) = Tend_mp%ttnd(i,j,k) - (hlv*qr_new(i,j,k))/cp_air
 
-                if (Lsdiag_mp_control%diag_id%qrdt_destr > 0 .or. & 
+                if (Lsdiag_mp_control%diag_id%qrdt_destr > 0 .or. &
                     Lsdiag_mp_control%diag_id%qr_destr_col > 0) &
                     Lsdiag_mp%diag_4d(i,j,k,Lsdiag_mp_control%diag_pt%qrdt_destr) =    &
                                           - qr_new(i,j,k)/dtcloud
@@ -2029,9 +1660,9 @@ type(mp_lsdiag_control_type), intent(inout) :: Lsdiag_mp_control
      qa_new = Input_mp%tracer(:,:,:,nqa) + Tend_mp%q_tnd(:,:,:,nqa)
 
 !-----------------------------------------------------------------------
-!    if these values are lower than acceptable, set the tendency to 
-!    balance the input value, so that the field is 0. upon exiting this 
-!    loop. include adjustments to temp and vapor to conserve energy and 
+!    if these values are lower than acceptable, set the tendency to
+!    balance the input value, so that the field is 0. upon exiting this
+!    loop. include adjustments to temp and vapor to conserve energy and
 !    water mass.
 !-----------------------------------------------------------------------
      do k=1,kx
@@ -2040,7 +1671,7 @@ type(mp_lsdiag_control_type), intent(inout) :: Lsdiag_mp_control
            if ( (ql_new(i,j,k) .le. qmin) .and.    &
                                        (qi_new(i,j,k) .le. qmin) ) then
              Tend_mp%qtnd(i,j,k) = Tend_mp%qtnd(i,j,k) +   &
-                                           ql_new(i,j,k) + qi_new(i,j,k) 
+                                           ql_new(i,j,k) + qi_new(i,j,k)
              Tend_mp%ttnd(i,j,k) = Tend_mp%ttnd(i,j,k) -   &
                      (hlv*(ql_new(i,j,k) ) + hls*(qi_new(i,j,k) ) )/cp_air
              Tend_mp%q_tnd(i,j,k,nql) = Tend_mp%q_tnd(i,j,k,nql) -  &
@@ -2048,7 +1679,7 @@ type(mp_lsdiag_control_type), intent(inout) :: Lsdiag_mp_control
              Tend_mp%q_tnd(i,j,k,nqi) = Tend_mp%q_tnd(i,j,k,nqi) -   &
                                                           (qi_new(i,j,k))
              Tend_mp%q_tnd(i,j,k,nqa) = Tend_mp%q_tnd(i,j,k,nqa) -   &
-                                                             qa_new(i,j,k) 
+                                                             qa_new(i,j,k)
              Tend_mp%q_tnd(i,j,k,nqn) = Tend_mp%q_tnd(i,j,k,nqn) -   &
                                                            (qn_new(i,j,k) )
              Tend_mp%q_tnd(i,j,k,nqni)= Tend_mp%q_tnd(i,j,k,nqni) -   &
@@ -2101,9 +1732,9 @@ type(mp_lsdiag_control_type), intent(inout) :: Lsdiag_mp_control
       qni_new = Input_mp%tracer(:,:,:,nqni)+Tend_mp%q_tnd(:,:,:,nqni)
 
 !-----------------------------------------------------------------------
-!    if only the new value of cloud water is too small (including negative 
-!    values), eliminate the cloudwater by conservatively adjusting 
-!    the vapor.  
+!    if only the new value of cloud water is too small (including negative
+!    values), eliminate the cloudwater by conservatively adjusting
+!    the vapor.
 !-----------------------------------------------------------------------
       do k=1,kx
         do j=1,jx
@@ -2139,9 +1770,9 @@ type(mp_lsdiag_control_type), intent(inout) :: Lsdiag_mp_control
       end do
 
 !-----------------------------------------------------------------------
-!    if only the new value of cloud ice is too small (including negative 
+!    if only the new value of cloud ice is too small (including negative
 !    values), eliminate the cloud ice by conservatively adjusting the
-!    vapor.  
+!    vapor.
 !-----------------------------------------------------------------------
       do k=1,kx
         do j=1,jx
@@ -2186,4 +1817,3 @@ end subroutine destroy_tiny_clouds_clubb
 
 
           end module ls_cloud_microphysics_mod
-
