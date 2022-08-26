@@ -71,7 +71,7 @@ public   ls_cloud_microphysics_init, ls_cloud_microphysics, &
 !-------------------- private data -------------------------------------
 
 private  adjust_precip_fields, adjust_for_supersaturation_removal,  &
-         destroy_tiny_clouds, destroy_tiny_clouds_clubb
+         destroy_tiny_clouds
 
 
 !--------------------- version number ----------------------------------
@@ -89,10 +89,6 @@ integer :: override_liq_num = 0       ! override model predicted droplet
                                       ! number ? 0 = no, otherwise = y
 integer :: override_ice_num = 0       ! override model predicted ice
                                       ! number ? 0 = no, otherwise = y
-logical :: use_Meyers = .false.       ! use Meyers formula when overriding
-                                      ! model ice particle number ?
-logical :: use_Cooper = .false.       ! use Cooper formula when overriding
-                                      ! model ice particle number ?
 integer, dimension(6) :: init_date = (/ 1, 1, 1, 0, 0, 0 /)
                                       ! date to use as base for
                                       ! defining microphysics start time
@@ -111,7 +107,7 @@ logical :: do_cleanup = .true.
 namelist / ls_cloud_microphysics_nml /   &
                                mass_cons, &
                                override_liq_num, override_ice_num, &
-                               use_Meyers, use_Cooper, init_date, &
+                               init_date, &
                                micro_begin_sec, &
                                min_precip_needing_adjustment, &
                                lowest_allowed_precip, use_ndust, accretion_scale, &
@@ -125,7 +121,6 @@ integer  :: rk_micro_clock, ncar_micro_clock
 !    module variables retrieved from other modules
 !----------------------------------------------------------------------
 real    :: qmin
-integer :: do_clubb
 logical :: limit_conv_cloud_frac
 integer :: super_ice_opt
 logical :: do_pdf_clouds
@@ -191,7 +186,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
 !    save variables needed from other modules as module variables
 !-----------------------------------------------------------------------
       qmin = Exch_ctrl%qmin
-      do_clubb = Exch_ctrl%do_clubb
       limit_conv_cloud_frac = Nml_mp%limit_conv_cloud_frac
       super_ice_opt = Nml_lsc%super_ice_opt
       do_pdf_clouds = Nml_lsc%do_pdf_clouds
@@ -256,16 +250,6 @@ type(exchange_control_type), intent(in)    :: Exch_ctrl
 !    make sure needed modules have been initialized.
 !-------------------------------------------------------------------------
       call lscloud_types_init
-
-!-------------------------------------------------------------------------
-!     perform consistency / realizability checks.
-!-------------------------------------------------------------------------
-      if (override_ice_num == 1) then
-        if ( use_Meyers .and. use_Cooper ) &
-          call error_mesg (   &
-               'ls_cloud_microphysics/ls_cloud_microphysics_init',&
-                  'use_Meyers and use_Cooper cannot both be true',FATAL)
-      endif
 
 !-----------------------------------------------------------------------
 !    initialize the active microphysics scheme module.
@@ -579,62 +563,16 @@ real,                        intent(in), dimension(:,:) :: lon, lat
 !------------------------------------------------------------------------
 !   define amount of activated aerosol to be passed to microphysics.
 !------------------------------------------------------------------------
-            if (do_clubb > 0 ) then
-
-!------------------------------------------------------------------------
-!   for CLUBB, activated ice crystals are supplied by
-!   Particles%Icedrop_act_CLUBB, in units of #/kg. since droplet activation
-!   has been considered and resultant droplet number has been updated
-!   in CLUBB, we do not need to include activation within MG microphysics,
-!   i.e Particles%drop2 = 0.0.
-!------------------------------------------------------------------------
-              crystal1 = Particles%Icedrop_act_CLUBB
-              Particles%drop2 = 0.0
-
-!------------------------------------------------------------------------
-!   Options to override ice crystal number concentrations from CLUBB:
-!------------------------------------------------------------------------
-              if (override_ice_num == 1) then
-                rho_air = Input_mp%pfull/Atmos_state%tn/RDGAS
-
-                if (use_Meyers) then
-!------------------------------------------------------------------------
-!   Meyers formula as in original MG microphysics
-!-------------------------------------------------------------------------
-                  crystal1 = 1000.0*exp(  &
-                             (12.96*0.0125*(273.15-Atmos_state%tn))-0.639)
-                  crystal1 = crystal1/rho_air
-
-                elseif( use_Cooper ) then
-!--------------------------------------------------------------------
-! cooper curve (factor of 1000 is to convert from L-1 to m-3)
-! put limit on number of nucleated crystals, set to number at T=-35 C
-! then convert from m-3 to kg-1.
-!--------------------------------------------------------------------
-                  crystal1 = 0.005*exp(0.304*(273.15-Atmos_state%tn))*1000.
-                  crystal1 = min( crystal1, 208.9e3)/rho_air
-                else
-
 !-----------------------------------------------------------------------
-! use a constant 0.5 /kg
-!-----------------------------------------------------------------------
-                  crystal1 = 1.0e6 * 0.5
-                end if
-              end if
-
-            else ! (do_clubb)
-!-----------------------------------------------------------------------
-!   for the non-CLUBB case, use the values previously calculated and
+!   use the values previously calculated and
 !   input to this routine. convert to units of #/kg.
 !-----------------------------------------------------------------------
-              crystal1 = Particles%crystal1/rho
+            crystal1 = Particles%crystal1/rho
 
 !-----------------------------------------------------------------------
 !   define activated droplets in units of #/kg (drop1 is #/cc).
 !-----------------------------------------------------------------------
-              Particles%drop2 = Particles%drop1*1.e6/Atmos_state%airdens
-            endif  ! (do_clubb)
-
+            Particles%drop2 = Particles%drop1*1.e6/Atmos_state%airdens
 
 !------------------------------------------------------------------------
 !   set liquid and ice cloud fraction to be the same as total large-scale
@@ -687,15 +625,10 @@ real,                        intent(in), dimension(:,:) :: lon, lat
 
 !------------------------------------------------------------------------
 !    define the relative variance of the cloud water within each gridbox.
-!    when CLUBB is active, spatially-dependent values are returned from
-!    CLUBB; with Tiedtke macrophysics up to this time only a constant
+!    with Tiedtke macrophysics up to this time only a constant
 !    value has been used, though spatial dependence could be introduced.
 !------------------------------------------------------------------------
-            if (do_clubb > 0 ) then
-              relvarn(:,:,:) = Cloud_state%qcvar_clubb(:,:,:)
-            else
               relvarn(:,:,:) = Cloud_state%relvarn(:,:,:)
-            endif
 
               nlev = kx
               mgncol = ix
@@ -863,57 +796,16 @@ real,                        intent(in), dimension(:,:) :: lon, lat
           endif
 
 !------------------------------------------------------------------------
-!    adjustment to fields needed after removing supersaturation (only
-!    for non-CLUBB case, as originally coded).
+!    adjustment to fields needed after removing supersaturation
 !------------------------------------------------------------------------
-          if (do_clubb <= 0 ) then
-            call adjust_for_supersaturation_removal (  &
-                    ix, jx, kx, C2ls_mp, Input_mp, Atmos_state,  &
-                         ssat_disposal, Particles, Cloud_state, Lsdiag_mp,&
-                                                    Lsdiag_mp_control )
-          endif
+          call adjust_for_supersaturation_removal (  &
+              ix, jx, kx, C2ls_mp, Input_mp, Atmos_state,  &
+              ssat_disposal, Particles, Cloud_state, Lsdiag_mp,&
+              Lsdiag_mp_control )
 
 !------------------------------------------------------------------------
-!    process output fields after microphysics is completed
-!    for the CLUBB case.
+!    process fields after microphysics is completed 
 !------------------------------------------------------------------------
-          if (do_clubb > 0 ) then
-
-!-------------------------------------------------------------------------
-!    remove any clouds with less condensate present than the specified
-!    allowable minimum.
-!-------------------------------------------------------------------------
-            call destroy_tiny_clouds_clubb (   &
-                  ix, jx, kx, Cloud_state, Tend_mp, Lsdiag_mp, &
-                        Lsdiag_mp_control, C2ls_mp, Input_mp, Atmos_state)
-
-
-!-------------------------------------------------------------------------
-!     ---> h1g, 06-14-2013, in order to reproduce bit-wise identical
-!     results as AM3-CLUBB
-!-------------------------------------------------------------------------
-            Tend_mp%ttnd = Tend_mp%ttnd/dtcloud
-            Tend_mp%ttnd = Tend_mp%ttnd*dtcloud
-
-            Tend_mp%qtnd = Tend_mp%qtnd/dtcloud
-            Tend_mp%qtnd = Tend_mp%qtnd*dtcloud
-
-            Tend_mp%q_tnd(:,:,:,nql) = Tend_mp%q_tnd(:,:,:,nql)/dtcloud
-            Tend_mp%q_tnd(:,:,:,nql) = Tend_mp%q_tnd(:,:,:,nql)*dtcloud
-
-            Tend_mp%q_tnd(:,:,:,nqn) = Tend_mp%q_tnd(:,:,:,nqn)/dtcloud
-            Tend_mp%q_tnd(:,:,:,nqn) = Tend_mp%q_tnd(:,:,:,nqn)*dtcloud
-
-            Tend_mp%q_tnd(:,:,:,nqni) = Tend_mp%q_tnd(:,:,:,nqni)/dtcloud
-            Tend_mp%q_tnd(:,:,:,nqni) = Tend_mp%q_tnd(:,:,:,nqni)*dtcloud
-
-            Tend_mp%q_tnd(:,:,:,nqi) = Tend_mp%q_tnd(:,:,:,nqi)/dtcloud
-            Tend_mp%q_tnd(:,:,:,nqi) = Tend_mp%q_tnd(:,:,:,nqi)*dtcloud
-
-!------------------------------------------------------------------------
-!    process fields after microphysics is completed for the non-CLUBB case.
-!------------------------------------------------------------------------
-          else  !(do_clubb)
 
 !-------------------------------------------------------------------------
 !    remove any clouds with less condensate present than the specified
@@ -949,8 +841,6 @@ real,                        intent(in), dimension(:,:) :: lon, lat
 !    field), as in the R-K microphysics case.
 !-----------------------------------------------------------------------
             Removal_mp%snowclr3d = Removal_mp%snow3d
-
-          endif !  do_clubb
 
         call mpp_clock_end   (ncar_micro_clock)
 !-------------------------------------------------------------------------
@@ -1050,39 +940,6 @@ real, dimension (:,:,:),    intent(in)    :: SL_micro, SI_micro, SQ_micro, SR_mi
                                     dtcloud*Atmos_state%delp(i,j,k)/grav
             end do
             m2(i,j) = 1.e3*Precip_state%surfrain(i,j)*dtcloud
-
-!------------------------------------------------------------------------
-!    for small precip, adjustment for conservation may be ignored. other-
-!    wise, compute the ratio of condensate loss to precip at the surface.
-!------------------------------------------------------------------------
-            if ( (do_clubb > 0 .and.   &
-                       m2(i,j) .GT. min_precip_needing_adjustment) .or. &
-                   (do_clubb == 0 .and. m2(i,j) .ne. 0.0)) THEN
-              scalef(i,j) = -m1(i,j)/m2(i,j)
-
-!-----------------------------------------------------------------------
-!   define diagnostics capturing the rate (kg/m2/s) that the precip
-!   field is adjusted to balance the loss of atmospheric water mass.
-!-----------------------------------------------------------------------
-              if (Lsdiag_mp_control%diag_id%rain_mass_conv > 0   ) &
-              Lsdiag_mp%diag_4d(i,j,1,   &
-                            Lsdiag_mp_control%diag_pt%rain_mass_conv) = &
-                           (scalef(i,j)*Precip_state%surfrain(i,j) -    &
-                                        Precip_state%surfrain(i,j))*1.0e3
-              if (Lsdiag_mp_control%diag_id%snow_mass_conv > 0   ) &
-              Lsdiag_mp%diag_4d(i,j,1,   &
-                           Lsdiag_mp_control%diag_pt%snow_mass_conv) = &
-                              (scalef(i,j)*Precip_state%surfsnow(i,j) -  &
-                                         Precip_state%surfsnow(i,j))*1.0e3
-
-!------------------------------------------------------------------------
-!    modify the output rain and snow precip fields.
-!------------------------------------------------------------------------
-              Precip_state%surfrain(i,j) =    &
-                                   scalef(i,j)*Precip_state%surfrain(i,j)
-              Precip_state%surfsnow(i,j) =    &
-                                   scalef(i,j)*Precip_state%surfsnow(i,j)
-            end if
           end do
         end do
       end if
@@ -1625,192 +1482,6 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       endif   ! do_ncar_MG2
 !-----------------------------------------------------------------------
 end subroutine destroy_tiny_clouds
-
-
-
-!#######################################################################
-
-subroutine destroy_tiny_clouds_clubb (    &
-                   ix, jx, kx, Cloud_state, Tend_mp, Lsdiag_mp, &
-                        Lsdiag_mp_control, C2ls_mp, Input_mp, Atmos_state)
-
-integer,                    intent(in)    :: ix,jx,kx
-type(atmos_state_type),     intent(inout) :: Atmos_state
-type(cloud_state_type),     intent(inout) :: Cloud_state
-type(mp_tendency_type),     intent(inout) :: Tend_mp
-type(mp_conv2ls_type),      intent(inout) :: C2ls_mp
-type(mp_input_type),        intent(in   ) :: Input_mp
-type(mp_lsdiag_type),       intent(inout) :: Lsdiag_mp
-type(mp_lsdiag_control_type), intent(inout) :: Lsdiag_mp_control
-
-!----------------------------------------------------------------------
-!   local variables:
-
-      integer :: i, j, k
-      real, dimension (ix,jx,kx) :: ql_new, qi_new, qn_new, &
-                                    qni_new, qa_new
-
-!-----------------------------------------------------------------------
-!    define current cloud and particle values.
-!----------------------------------------------------------------------
-     ql_new = Input_mp%tracer(:,:,:,nql)+Tend_mp%q_tnd(:,:,:,nql)
-     qi_new = Input_mp%tracer(:,:,:,nqi)+Tend_mp%q_tnd(:,:,:,nqi)
-     qn_new = Input_mp%tracer(:,:,:,nqn)+Tend_mp%q_tnd(:,:,:,nqn)
-     qni_new = Input_mp%tracer(:,:,:,nqni)+Tend_mp%q_tnd(:,:,:,nqni)
-     qa_new = Input_mp%tracer(:,:,:,nqa) + Tend_mp%q_tnd(:,:,:,nqa)
-
-!-----------------------------------------------------------------------
-!    if these values are lower than acceptable, set the tendency to
-!    balance the input value, so that the field is 0. upon exiting this
-!    loop. include adjustments to temp and vapor to conserve energy and
-!    water mass.
-!-----------------------------------------------------------------------
-     do k=1,kx
-       do j=1,jx
-         do i=1,ix
-           if ( (ql_new(i,j,k) .le. qmin) .and.    &
-                                       (qi_new(i,j,k) .le. qmin) ) then
-             Tend_mp%qtnd(i,j,k) = Tend_mp%qtnd(i,j,k) +   &
-                                           ql_new(i,j,k) + qi_new(i,j,k)
-             Tend_mp%ttnd(i,j,k) = Tend_mp%ttnd(i,j,k) -   &
-                     (hlv*(ql_new(i,j,k) ) + hls*(qi_new(i,j,k) ) )/cp_air
-             Tend_mp%q_tnd(i,j,k,nql) = Tend_mp%q_tnd(i,j,k,nql) -  &
-                                                          (ql_new(i,j,k))
-             Tend_mp%q_tnd(i,j,k,nqi) = Tend_mp%q_tnd(i,j,k,nqi) -   &
-                                                          (qi_new(i,j,k))
-             Tend_mp%q_tnd(i,j,k,nqa) = Tend_mp%q_tnd(i,j,k,nqa) -   &
-                                                             qa_new(i,j,k)
-             Tend_mp%q_tnd(i,j,k,nqn) = Tend_mp%q_tnd(i,j,k,nqn) -   &
-                                                           (qn_new(i,j,k) )
-             Tend_mp%q_tnd(i,j,k,nqni)= Tend_mp%q_tnd(i,j,k,nqni) -   &
-                                                          (qni_new(i,j,k) )
-
-!------------------------------------------------------------------------
-!    save diagnostics defining the adjustments made here to destroy the
-!    clouds.
-!------------------------------------------------------------------------
-             if ( Lsdiag_mp_control%diag_id%qldt_destr > 0  .or.   &
-                           Lsdiag_mp_control%diag_id%ql_destr_col > 0 )  &
-                Lsdiag_mp%diag_4d(i,j,k,   &
-                        Lsdiag_mp_control%diag_pt%qldt_destr) =   &
-                                  - (ql_new(i,j,k) )/dtcloud
-             if ( Lsdiag_mp_control%diag_id%qidt_destr > 0  .or.   &
-                          Lsdiag_mp_control%diag_id%qi_destr_col > 0   ) &
-               Lsdiag_mp%diag_4d(i,j,k,  &
-                             Lsdiag_mp_control%diag_pt%qidt_destr) =   &
-                                   - (qi_new(i,j,k) )/dtcloud
-             if ( Lsdiag_mp_control%diag_id%qadt_destr > 0  .or.   &
-                          Lsdiag_mp_control%diag_id%qa_destr_col > 0   ) &
-               Lsdiag_mp%diag_4d(i,j,k,   &
-                              Lsdiag_mp_control%diag_pt%qadt_destr) =   &
-                                     - qa_new(i,j,k)/dtcloud
-             if ( Lsdiag_mp_control%diag_id%qndt_destr > 0  .or.   &
-                           Lsdiag_mp_control%diag_id%qn_destr_col > 0  ) &
-               Lsdiag_mp%diag_4d(i,j,k,    &
-                               Lsdiag_mp_control%diag_pt%qndt_destr) =  &
-                                   - (qn_new(i,j,k) )/dtcloud
-             if ( Lsdiag_mp_control%diag_id%qnidt_destr > 0   )          &
-               Lsdiag_mp%diag_4d(i,j,k,    &
-                              Lsdiag_mp_control%diag_pt%qnidt_destr) =  &
-                                  - (qni_new(i,j,k) )/dtcloud
-             if ( Lsdiag_mp_control%diag_id%qdt_destr > 0 )             &
-              Lsdiag_mp%diag_4d(i,j,k,   &
-                            Lsdiag_mp_control%diag_pt%qdt_destr) =  &
-                      (ql_new(i,j,k) + qi_new(i,j,k))/dtcloud
-
-           endif
-         end do
-       end do
-     end do
-
-!-----------------------------------------------------------------------
-!    redefine the new cloud tracer values.
-!-----------------------------------------------------------------------
-      ql_new = Input_mp%tracer(:,:,:,nql)+Tend_mp%q_tnd(:,:,:,nql)
-      qi_new = Input_mp%tracer(:,:,:,nqi)+Tend_mp%q_tnd(:,:,:,nqi)
-      qn_new = Input_mp%tracer(:,:,:,nqn)+Tend_mp%q_tnd(:,:,:,nqn)
-      qni_new = Input_mp%tracer(:,:,:,nqni)+Tend_mp%q_tnd(:,:,:,nqni)
-
-!-----------------------------------------------------------------------
-!    if only the new value of cloud water is too small (including negative
-!    values), eliminate the cloudwater by conservatively adjusting
-!    the vapor.
-!-----------------------------------------------------------------------
-      do k=1,kx
-        do j=1,jx
-          do i=1,ix
-            if ( (ql_new(i,j,k) .le. qmin) ) then
-              Tend_mp%qtnd(i,j,k) = Tend_mp%qtnd(i,j,k) + (ql_new(i,j,k))
-              Tend_mp%ttnd(i,j,k) = Tend_mp%ttnd(i,j,k) -   &
-                                              (hlv*(ql_new(i,j,k)))/cp_air
-              Tend_mp%q_tnd(i,j,k,nql) = Tend_mp%q_tnd(i,j,k,nql) -  &
-                                                           (ql_new(i,j,k))
-
-!------------------------------------------------------------------------
-!    compute diagnostic for this liquid loss due to this cleanup.
-!------------------------------------------------------------------------
-              if ( Lsdiag_mp_control%diag_id%qdt_cleanup_liquid > 0 ) &
-                Lsdiag_mp%diag_4d(i,j,k,    &
-                      Lsdiag_mp_control%diag_pt%qdt_cleanup_liquid) =   &
-                                      (ql_new(i,j,k))/dtcloud
-
-!------------------------------------------------------------------------
-!    with the removal of all liquid, the cloud droplet number must also
-!    be set to 0.0. define diagnostic for droplet loss due to this cleanup.
-!------------------------------------------------------------------------
-              Tend_mp%q_tnd(i,j,k,nqn) = Tend_mp%q_tnd(i,j,k,nqn) -   &
-                                                          (qn_new(i,j,k))
-              IF ( Lsdiag_mp_control%diag_id%qndt_cleanup > 0 ) &
-                Lsdiag_mp%diag_4d(i,j,k,    &
-                           Lsdiag_mp_control%diag_pt%qndt_cleanup) = &
-                                     -(qn_new(i,j,k))/dtcloud
-            endif
-          end do
-        end do
-      end do
-
-!-----------------------------------------------------------------------
-!    if only the new value of cloud ice is too small (including negative
-!    values), eliminate the cloud ice by conservatively adjusting the
-!    vapor.
-!-----------------------------------------------------------------------
-      do k=1,kx
-        do j=1,jx
-          do i=1,ix
-            if ( (qi_new(i,j,k) .le. qmin) ) then
-              Tend_mp%qtnd(i,j,k) = Tend_mp%qtnd(i,j,k) + (qi_new(i,j,k))
-              Tend_mp%ttnd(i,j,k) = Tend_mp%ttnd(i,j,k) -   &
-                                              (hls*(qi_new(i,j,k)))/cp_air
-              Tend_mp%q_tnd(i,j,k,nqi) = Tend_mp%q_tnd(i,j,k,nqi) -  &
-                                                         (qi_new(i,j,k))
-
-!------------------------------------------------------------------------
-!    compute diagnostic for this ice loss due to this cleanup.
-!------------------------------------------------------------------------
-              if ( Lsdiag_mp_control%diag_id%qdt_cleanup_ice > 0 ) &
-                Lsdiag_mp%diag_4d(i,j,k,   &
-                           Lsdiag_mp_control%diag_pt%qdt_cleanup_ice) =  &
-                                      (qi_new(i,j,k))/dtcloud
-
-!------------------------------------------------------------------------
-!    with the removal of all ice, the ice crystal number must also
-!    be set to 0.0. define diagnostic for crystal loss due to this cleanup.
-!------------------------------------------------------------------------
-              Tend_mp%q_tnd(i,j,k,nqni) = Tend_mp%q_tnd(i,j,k,nqni) -  &
-                                                         (qni_new(i,j,k))
-              if ( Lsdiag_mp_control%diag_id%qnidt_cleanup > 0 ) &
-                 Lsdiag_mp%diag_4d(i,j,k,   &
-                             Lsdiag_mp_control%diag_pt%qnidt_cleanup) =   &
-                                   - (qni_new(i,j,k))/dtcloud
-            endif
-          end do
-        end do
-      end do
-
-!------------------------------------------------------------------------
-
-end subroutine destroy_tiny_clouds_clubb
-
 
 
 !########################################################################

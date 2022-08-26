@@ -289,7 +289,6 @@ logical :: wetdep_diagnostics_desired = .false.
 !-----------------------------------------------------------------------
 logical :: donner_meso_is_largescale
 logical :: doing_prog_clouds
-integer :: do_clubb
 logical :: do_cosp
 logical :: use_tau
 integer :: nsphum, nql, nqi, nqa, nqn, nqni, nqr, nqs, nqg
@@ -354,7 +353,6 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
 !   exchange_control_type variable. these variables are needed in both
 !   radiation and physics modules.
 !-----------------------------------------------------------------------
-      do_clubb = Exch_ctrl%do_clubb
       do_cosp = Exch_ctrl%do_cosp
       doing_prog_clouds = Exch_ctrl%doing_prog_clouds
       donner_meso_is_largescale = Exch_ctrl%donner_meso_is_largescale
@@ -691,17 +689,12 @@ type(aerosol_type),intent(in), optional :: Aerosol
                Moist_clouds_block, Output_mp, Removal_mp)  
 
 !------------------------------------------------------------------------
-!    define needed output arguments. redefine r to be the value after 
-!    modification in moist_processes (only by clubb ? -- need to check why 
-!    this is) and pass it back to physics_driver.
+!    define needed output arguments. pass it back to physics_driver.
 !------------------------------------------------------------------------
       Phys_mp_exch%convect = Output_mp%convect
       lprec   = Output_mp%lprec  
       fprec   = Output_mp%fprec  
       gust_cv = Output_mp%gust_cv
-      if (do_clubb > 0) then
-        Phys_mp_exch%diff_t_clubb = Output_mp%diff_t_clubb
-      endif
       Phys_mp_exch%diff_cu_mo = Output_mp%diff_cu_mo
  
 !---------------------------------------------------------------------
@@ -1917,10 +1910,6 @@ type(mp2uwconv_type),     intent(inout) :: Mp2uwconv
                                       C2ls_mp%convective_humidity_area = 0.
       allocate (C2ls_mp%convective_humidity_ratio (ix,jx,kx))   
                                      C2ls_mp%convective_humidity_ratio = 0.
-      allocate (C2ls_mp%conv_frac_clubb    (ix,jx,kx))   
-                                          C2ls_mp%conv_frac_clubb      = 0.
-      allocate (C2ls_mp%convective_humidity_ratio_clubb (ix,jx,kx))   
-                              C2ls_mp%convective_humidity_ratio_clubb = 0.
       allocate (C2ls_mp%wet_data (ix,jx,kx,nt))   ; C2ls_mp%wet_data = 0.   
       allocate (C2ls_mp%cloud_wet (ix,jx,kx))   ; C2ls_mp%cloud_wet = 0.   
       allocate (C2ls_mp%cloud_frac (ix,jx,kx))   ; C2ls_mp%cloud_frac = 0.   
@@ -1945,8 +1934,6 @@ type(mp2uwconv_type),     intent(inout) :: Mp2uwconv
       allocate ( Output_mp%fprec  (ix,jx))    ; Output_mp%fprec   = 0.   
       allocate ( Output_mp%precip  (ix,jx))    ; Output_mp%precip   = 0.   
       allocate ( Output_mp%gust_cv(ix,jx))    ; Output_mp%gust_cv = 0.   
-      Output_mp%diff_t_clubb => Phys_mp_exch%diff_t_clubb
-                                              Output_mp%diff_t_clubb =0.  
       Output_mp%diff_cu_mo  => Phys_mp_exch%diff_cu_mo
                                              Output_mp%diff_cu_mo  = 0. 
 
@@ -2108,8 +2095,6 @@ type(mp2uwconv_type),   intent(inout) :: Mp2uwconv
       deallocate (C2ls_mp%donner_humidity_factor)
       deallocate (C2ls_mp%convective_humidity_area)
       deallocate (C2ls_mp%convective_humidity_ratio)
-      deallocate (C2ls_mp%conv_frac_clubb   )
-      deallocate (C2ls_mp%convective_humidity_ratio_clubb)
       deallocate (C2ls_mp%wet_data              )
       deallocate (C2ls_mp%cloud_wet             )
       deallocate (C2ls_mp%cloud_frac            )
@@ -2145,7 +2130,6 @@ type(mp2uwconv_type),   intent(inout) :: Mp2uwconv
       deallocate (Output_mp%gust_cv)
 
       Output_mp%convect => null()
-      Output_mp%diff_t_clubb => null()
       Output_mp%diff_cu_mo    => null()
 
       deallocate (Mp2uwconv%shflx  )

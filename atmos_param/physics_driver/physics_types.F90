@@ -15,7 +15,6 @@ use mpp_domains_mod,    only: domain2D
      integer :: nqnr,   nqns
      integer :: num_prog_tracers
      logical :: hydrostatic, phys_hydrostatic, do_uni_zfull !miz
-     logical :: l_host_applies_sfc_fluxes
      logical :: use_tau
      logical, dimension(:), _ALLOCATABLE :: cloud_tracer _NULL
      type (domain2D) :: domain !< Atmosphere domain
@@ -82,7 +81,6 @@ use mpp_domains_mod,    only: domain2D
       real, dimension(:,:,:), pointer :: diff_t => null()
       real, dimension(:,:,:), pointer :: radturbten => null()
       real, dimension(:,:,:), pointer :: diff_cu_mo => null()
-      real, dimension(:,:,:), pointer :: diff_t_clubb => null()
       real, dimension(:,:  ), pointer :: cush        => null()
       real, dimension(:,:  ), pointer :: cbmf        => null()
       real, dimension(:,:  ), pointer :: pbltop      => null()

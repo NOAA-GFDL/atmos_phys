@@ -99,7 +99,7 @@ public   lscloud_driver_init, lscloud_driver_time_vary,      &
          lscloud_driver, lscloud_driver_endts, lscloud_driver_end
 
 private  diag_field_init, lscloud_alloc,                  &
-         impose_realizability, impose_realizability_clubb, &
+         impose_realizability, &
          detailed_diagnostics, update_fields_and_tendencies,&
          compute_ls_wetdep, basic_diagnostics, lscloud_dealloc
 
@@ -228,7 +228,7 @@ integer :: lscloud_driver_clock, ls_macrophysics_clock,&
            lscloud_driver_init_clock, lscloud_driver_term_clock, &
            lscloud_netcdf_clock
 
-integer :: lscloud_alloc_clock, realiz_clock, realiz_clubb_clock, &
+integer :: lscloud_alloc_clock, realiz_clock, &
            detail_diag_clock, update_fields_clock, ls_wetdep_clock, &
            basic_diags_clock, dealloc_clock, adjust_cond_clock, &
            adjust_part_num_clock
@@ -267,7 +267,6 @@ real     :: N_land, N_ocean, qcvar
 logical  :: do_liq_num
 real     :: qmin
 logical  :: do_ice_num
-integer  :: do_clubb
 logical  :: limit_conv_cloud_frac
 logical  :: module_is_initialized = .false.
 logical  :: doing_prog_clouds
@@ -340,7 +339,6 @@ real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
       qcvar = Exch_ctrl%qcvar
       do_liq_num = Exch_ctrl%do_liq_num
       do_ice_num = Exch_ctrl%do_ice_num
-      do_clubb   = Exch_ctrl%do_clubb
 
       limit_conv_cloud_frac = Nml_mp%limit_conv_cloud_frac
       do_lsc = Nml_mp%do_lsc
@@ -423,9 +421,6 @@ real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
       realiz_clock = mpp_clock_id(   &
                    'Lscloud_driver: impose_real    ', &
                                                grain=CLOCK_MODULE_DRIVER )
-      realiz_clubb_clock = mpp_clock_id(   &
-                   'Lscloud_driver: impo_real_clubb', &
-                                               grain=CLOCK_MODULE_DRIVER )
       detail_diag_clock =  mpp_clock_id(   &
                    'Lscloud_driver: detail_diag    ', &
                                                grain=CLOCK_MODULE_DRIVER )
@@ -490,32 +485,16 @@ real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
           Constants_lsc%tiedtke_macrophysics = .false.
         endif
 
-        if (do_clubb > 0) then
-          Constants_lsc%tiedtke_macrophysics = .false.
-        endif
-
 !-----------------------------------------------------------------------
 !   perform realizability checks -- make sure one and only one large-scale
 !   cloud scheme has been activated, and that no untested combinations
 !   are being attempted.
 !-----------------------------------------------------------------------
-        if ( do_clubb > 0 .and. do_lsc) then
-          call error_mesg ('lscloud_driver_mod', &
-                 ' cannot do large-scale condensation when&
-                                & CLUBB is active', FATAL)
-        endif
-
         if ( Constants_lsc%tiedtke_macrophysics .and. do_lsc) then
           call error_mesg ('lscloud_driver_mod', &
                  ' cannot do large-scale condensation when&
                                 & tiedtke_macrophysics is active', FATAL)
         endif
-
-        if (do_clubb > 0 .and. .not. do_liq_num) then
-          call error_mesg ('lscloud_driver_mod', &
-              'can only execute clubb with prognostic droplet number', &
-                                                                    FATAL)
-        endif ! do_clubb
 
 !-----------------------------------------------------------------------
 !    check for acceptable namelist values:
@@ -568,20 +547,15 @@ real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
 !------------------------------------------------------------------------
 !    define logicals defining aerosol activation scheme which is active.
 !------------------------------------------------------------------------
-        if (do_clubb > 0) then
-          Constants_lsc%dqa_activation = .false.
+        if (trim(aerosol_activation_scheme) == 'dqa') then
+          Constants_lsc%dqa_activation = .true.
           Constants_lsc%total_activation = .false.
+        else if (trim(aerosol_activation_scheme) == 'total') then
+          Constants_lsc%dqa_activation = .false.
+          Constants_lsc%total_activation = .true.
         else
-          if (trim(aerosol_activation_scheme) == 'dqa') then
-            Constants_lsc%dqa_activation = .true.
-            Constants_lsc%total_activation = .false.
-          else if (trim(aerosol_activation_scheme) == 'total') then
-            Constants_lsc%dqa_activation = .false.
-            Constants_lsc%total_activation = .true.
-          else
-            call error_mesg ('lscloud_driver_init',   &
-           'invalid value for aerosol_activation_scheme specified', FATAL)
-          endif
+          call error_mesg ('lscloud_driver_init',   &
+              'invalid value for aerosol_activation_scheme specified', FATAL)
         endif
 
 !------------------------------------------------------------------------
@@ -854,8 +828,7 @@ type(aerosol_type),          intent(in), optional :: Aerosol
 !----------------------------------------------------------------------
 !    Macrophysics and microphysics
 !    are being treated in separate modules. For the macrophysics, current
-!    choices are tiedtke (tiedtke_macrophysics = .T.), or clubb
-!    macrophysics (do_clubb ==2).
+!    choice is tiedtke (tiedtke_macrophysics = .T.)
 !----------------------------------------------------------------------
 !------------------------------------------------------------------------
 !    if tiedtke clouds are active, calculate needed svp arrays, initialize
@@ -912,11 +885,11 @@ type(aerosol_type),          intent(in), optional :: Aerosol
           endif
 
 !------------------------------------------------------------------------
-!    if either tiedtke or clubb macrophysics are active, call
+!    if tiedtke macrophysics are active, call
 !    determine_available_aerosol to determine the available condensation
 !    nuclei.
 !------------------------------------------------------------------------
-          if (Constants_lsc%tiedtke_macrophysics .or. do_clubb == 2) then
+          if (Constants_lsc%tiedtke_macrophysics) then
             call mpp_clock_begin (aerosol_cloud_clock)
             call determine_available_aerosol (    &
                    ix, jx, kx, Lsdiag_mp, Lsdiag_mp_control,  &
@@ -928,8 +901,7 @@ type(aerosol_type),          intent(in), optional :: Aerosol
 !    code is now ready to calculate macrophysics tendencies. start the
 !    clock for the ls cloud macrophysics code and call
 !    ls_cloud_macrophysics to handle grid-scale condensation effects.
-!    either tiedtke or clubb  macrophysics will be employed, dependent on
-!    the nml specification provided.
+!    tiedtke macrophysics will be employed.
 !---------------------------------------------------------------------
           call mpp_clock_begin (ls_macrophysics_clock)
           call ls_cloud_macrophysics (    &
@@ -943,52 +915,11 @@ type(aerosol_type),          intent(in), optional :: Aerosol
 !---------------------------------------------------------------------
           call mpp_clock_end (ls_macrophysics_clock)
 
-!------------------------------------------------------------------------
-!    if  clubb is activated, the input fields are updated and subroutine
-!    impose_realizability_clubb is called to validate the consistency and
-!    magnitude of the cloud tracers before microphysics is calculated.
-!------------------------------------------------------------------------
-          if (do_clubb == 2) then
-            Input_mp%tin = Input_mp%t + Output_mp%tdt*dt
-            Input_mp%qin = Input_mp%q + Output_mp%rdt(:,:,:,1)*dt
-            Input_mp%uin = Input_mp%u + Output_mp%udt*dt
-            Input_mp%vin = Input_mp%v + Output_mp%vdt*dt
-            do tr=1,size(Output_mp%rdt,4)
-              Input_mp%tracer(:,:,:,tr) = Input_mp%r(:,:,:,tr) +   &
-                                               Output_mp%rdt(:,:,:,tr)*dt
-            end do
-            do tr=size(Output_mp%rdt,4) +1, size(Input_mp%r,4)
-              Input_mp%tracer(:,:,:,tr) = Input_mp%r(:,:,:,tr)
-            end do
-
-!----------------------------------------------------------------------
-!    start clock to time realizability subroutine.
-!----------------------------------------------------------------------
-            call mpp_clock_begin (realiz_clubb_clock)
-            call impose_realizability_clubb (   &
-                 Input_mp, Tend_mp, Cloud_state,   &
-                 C2ls_mp%convective_humidity_area, dtcloud, Lsdiag_mp, &
-                                                       Lsdiag_mp_control)
-            call mpp_clock_end (realiz_clubb_clock)
-
-!------------------------------------------------------------------------
-!    define particle numbers (in units of number / cm**3) after
-!    realizability adjustment.
-!------------------------------------------------------------------------
-            if (do_liq_num) then
-              Particles%N3d = Cloud_state%qn_upd*Atmos_state%airdens*1.e-6
-              Particles%N3di =    &
-                             Cloud_state%qni_upd*Atmos_state%airdens*1.e-6
-            endif
-          endif
-
 !-----------------------------------------------------------------------
 !    when prognostic clouds are active, call ls_cloud_microphysics to
 !    compute the cloud microphysical effects using the requested
 !    microphysics scheme:
-!    a) rotstayn-klein, b) MG (from Marc Salzmann, c) mg-ncar, a
-!    newer version of the MG code with those changes made by Marc,
-!    d) ncar, the latest available ncar microphysics version ,
+!    a) rotstayn-klein
 !-----------------------------------------------------------------------
           if (doing_prog_clouds)  then
 
@@ -1012,10 +943,8 @@ type(aerosol_type),          intent(in), optional :: Aerosol
 !-----------------------------------------------------------------------
 !    call detailed_diagnostics to generate and output cloud budget
 !    diagnostics and detailed netcdf and/or debug variable fields.
-!    note that budgets may not be complete for CLUBB, but should balance
-!    in non-CLUBB cases.
 !-----------------------------------------------------------------------
-          if (Constants_lsc%tiedtke_macrophysics .or. do_clubb > 0) then
+          if (Constants_lsc%tiedtke_macrophysics) then
             call mpp_clock_begin (detail_diag_clock)
             call detailed_diagnostics (      &
                 is, ie, js, je, Time, Lsdiag_mp_control%n_diag_4d,      &
@@ -1169,7 +1098,7 @@ subroutine lscloud_driver_end
             call polysvp_end
             call mpp_clock_end ( polysvp_term_clock)
           endif
-          if (Constants_lsc%tiedtke_macrophysics .or. do_clubb ==2) then
+          if (Constants_lsc%tiedtke_macrophysics) then
             call mpp_clock_begin ( aerosol_cloud_term_clock)
             call aerosol_cloud_end
             call mpp_clock_end ( aerosol_cloud_term_clock)
@@ -1180,7 +1109,7 @@ subroutine lscloud_driver_end
           call mpp_clock_begin ( microphysics_term_clock)
           call ls_cloud_microphysics_end
           call mpp_clock_end ( microphysics_term_clock)
-          if (Constants_lsc%tiedtke_macrophysics .or. do_clubb ==2) then
+          if (Constants_lsc%tiedtke_macrophysics) then
             call mpp_clock_begin ( lscloud_netcdf_term_clock)
             call lscloud_netcdf_end
             call mpp_clock_end ( lscloud_netcdf_term_clock)
@@ -1534,8 +1463,6 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       allocate (Particles%drop1             (idim, jdim, kdim) )
       allocate (Particles%drop2             (idim, jdim, kdim) )
       allocate (Particles%crystal1          (idim, jdim, kdim) )
-      allocate (Particles%Ndrop_act_CLUBB   (idim, jdim, kdim) )
-      allocate (Particles%Icedrop_act_CLUBB (idim, jdim, kdim) )
       allocate (Particles%rbar_dust         (idim, jdim, kdim) )
       allocate (Particles%ndust             (idim, jdim, kdim) )
       allocate (Particles%hom               (idim, jdim, kdim) )
@@ -1548,8 +1475,6 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       Particles%drop1    = 0.
       Particles%drop2    = 0.
       Particles%crystal1    = 0.
-      Particles%Ndrop_act_CLUBB  = 0.
-      Particles%Icedrop_act_CLUBB  = 0.
       Particles%rbar_dust   = 0.
       Particles%ndust   = 0.
       Particles%hom   = 0.
@@ -1635,11 +1560,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       allocate (Atmos_state%U01            (idim, jdim, kdim) )
       allocate (Atmos_state%pthickness     (idim, jdim, kdim) )
 
-      if (do_clubb > 0) then
-        T_aerosol = Input_mp%t
-      else
-        T_aerosol = Input_mp%tin
-      endif
+      T_aerosol = Input_mp%tin
 
 !-----------------------------------------------------------------------
 !    calculate air density.
@@ -1652,11 +1573,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
         elsewhere
           Atmos_state%airdens = Input_mp%pfull/(RDGAS*Input_mp%tin)
         end where
-        if (do_clubb > 0) then
-          airdens_aerosol = Input_mp%pfull/(RDGAS*Input_mp%t)
-        else
-          airdens_aerosol = Atmos_state%airdens
-        endif
+        airdens_aerosol = Atmos_state%airdens
       else  ! (NO_TRACER)
         where (C2ls_mp%convective_humidity_ratio .gt. 0.)
           Atmos_state%airdens = Input_mp%pfull/(RDGAS*Input_mp%tin*  &
@@ -1666,12 +1583,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
           Atmos_state%airdens = Input_mp%pfull/(RDGAS*Input_mp%tin*  &
            (1.  - Input_mp%tracer(:,:,:,nql) - Input_mp%tracer(:,:,:,nqi)))
         end where
-        if (do_clubb > 0) then
-          airdens_aerosol = Input_mp%pfull/(RDGAS*Input_mp%t*  &
-                (1.  - Input_mp%r(:,:,:,nql) - Input_mp%r(:,:,:,nqi)))
-        else
-          airdens_aerosol = Atmos_state%airdens
-        endif
+        airdens_aerosol = Atmos_state%airdens
       endif ! (NO_TRACER)
 
 !------------------------------------------------------------------------
@@ -1757,7 +1669,6 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       allocate (Cloud_state%SNR_out    (idim, jdim, kdim) )
       allocate (Cloud_state%SNS_out    (idim, jdim, kdim) )
 
-      allocate (Cloud_state%qcvar_clubb   (idim, jdim, kdim) )
       allocate (Cloud_state%relvarn       (idim, jdim, kdim) )
 
       allocate (Cloud_state%qa_upd_0     (idim, jdim, kdim) )
@@ -1846,7 +1757,6 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       Cloud_state%SNR_out = 0.
       Cloud_state%SNS_out = 0.
 
-      Cloud_state%qcvar_clubb  = 0.
       Cloud_state%relvarn      = qcvar
       Cloud_state%qa_upd_0 = 0.
       Cloud_state%SA_0        = 0.
@@ -2181,181 +2091,6 @@ type(diag_pt_type),         intent(in)    :: diag_pt
 end subroutine impose_realizability
 
 
-
-!########################################################################
-
-subroutine impose_realizability_clubb   &
-                            (Input_mp, Tend_mp, Cloud_state, ahuco3d,    &
-                                    dtcloud, Lsdiag_mp, Lsdiag_mp_control)
-
-real,                          intent(in)    :: dtcloud
-type(mp_tendency_type),        intent(inout) :: Tend_mp
-type(mp_input_type),           intent(in   ) :: Input_mp
-type(mp_lsdiag_type),          intent(inout) :: Lsdiag_mp
-type(mp_lsdiag_control_type),  intent(inout) :: Lsdiag_mp_control
-type(cloud_state_type),        intent(inout) :: Cloud_state
-real, dimension(:,:,:),        intent(in   ) :: ahuco3d
-
-!-----------------------------------------------------------------------
-!   local variables:
-
-      logical, dimension(size(ahuco3d,1), size(ahuco3d,2),   &
-                           size(ahuco3d,3)) :: ql_too_small, qi_too_small
-      integer :: idim, jdim, kdim
-      integer :: i, j, k
-
-!------------------------------------------------------------------------
-!    define local variables.
-!------------------------------------------------------------------------
-      idim = size(Input_mp%tracer,1)
-      jdim = size(Input_mp%tracer,2)
-      kdim = size(Input_mp%tracer,3)
-
-!-----------------------------------------------------------------------
-!    account for the fact that other processes may have created negative
-!    tracer or extremely small values of tracer fields. in this step any
-!    values of the prognostic variables which are less than qmin are
-!    reset to zero, while conserving total moisture.
-!----------------------------------------------------------------------
-      where (Input_mp%tracer(:,:,:,nqa) .le. qmin)
-        Tend_mp%q_tnd(:,:,:,nqa) = Tend_mp%q_tnd(:,:,:,nqa) -   &
-                                              Input_mp%tracer(:,:,:,nqa)
-        Cloud_state%qa_upd = 0.
-      elsewhere
-        Cloud_state%qa_upd = Input_mp%tracer(:,:,:,nqa)
-      end where
-
-!------------------------------------------------------------------------
-!    total cloud fraction should be no greater than 1.0, i.e, sum of
-!    large-scale cloud fraction (qa_upd) and convective cloud fraction
-!    (ahuco) qa_upd+ahuco <= 1.0
-!------------------------------------------------------------------------
-      where (Cloud_state%qa_upd .gt. (1.0 - ahuco3d) )
-        Tend_mp%q_tnd(:,:,:,nqa) = Tend_mp%q_tnd(:,:,:,nqa) +   &
-                                    (1.0 - ahuco3d) - Cloud_state%qa_upd
-        Cloud_state%qa_upd = (1.0 - ahuco3d)
-      end where
-
-!-----------------------------------------------------------------------
-!    define conditions under which condensate is removed before calling
-!    microphysics.
-!-----------------------------------------------------------------------
-      do k = 1,kdim
-        do j = 1,jdim
-          do i = 1,idim
-            ql_too_small(i,j,k) =   &
-                     Input_mp%tracer(i,j,k,nql) .le. qmin .or.   &
-                     Input_mp%tracer(i,j,k,nqa) .le. qmin .or.   &
-                     Input_mp%tracer(i,j,k,nqn)*1.e-6 .le. qmin
-            qi_too_small(i,j,k) =   &
-                     Input_mp%tracer(i,j,k,nqi).le.qmin .or.   &
-                     Input_mp%tracer(i,j,k,nqa).le.qmin .or.   &
-                     Input_mp%tracer(i,j,k,nqni)*1.e-3.le.qmin
-          end do
-        end do
-      end do
-
-!------------------------------------------------------------------------
-!    call subroutine adjust_condensate to conservatively fill ql if needed.
-!------------------------------------------------------------------------
-      call adjust_condensate (ql_too_small, Tend_mp%q_tnd(:,:,:,nql), &
-            Tend_mp%qtnd, Tend_mp%ttnd, Input_mp%tracer(:,:,:,nql), &
-            HLV, Cloud_state%ql_upd)
-
-!------------------------------------------------------------------------
-!    adjust cloud droplet numbers as needed when those fields are being
-!    predicted. if droplet number is not being predicted, values were
-!    set at allocation.
-!------------------------------------------------------------------------
-      call adjust_particle_number (ql_too_small,   &
-                   Tend_mp%q_tnd(:,:,:,nqn), Input_mp%tracer(:,:,:,nqn), &
-                                                      Cloud_state%qn_upd)
-
-!------------------------------------------------------------------------
-!    save diagnostics defining the cloud liquid and cloud particle
-!    number filling amount.
-!------------------------------------------------------------------------
-      do k = 1,kdim
-        do j = 1,jdim
-          do i = 1,idim
-            if (ql_too_small(i,j,k)) then
-              if (Lsdiag_mp_control%diag_id%qdt_liquid_init > 0)  &
-                   Lsdiag_mp%diag_4d(i,j,k,  &
-                           Lsdiag_mp_control%diag_pt%qdt_liquid_init)  =  &
-                                       Input_mp%tracer(i,j,k,nql)/dtcloud
-              if (Lsdiag_mp_control%diag_id%qndt_fill  +   &
-                  Lsdiag_mp_control%diag_id%qn_fill_col + &
-                  Lsdiag_mp_control%diag_id%qldt_fill +   &
-                  Lsdiag_mp_control%diag_id%ql_fill_col > 0 )    &
-                    Lsdiag_mp%diag_4d(i,j,k,  &
-                             Lsdiag_mp_control%diag_pt%qndt_fill) = &
-                                      -Input_mp%tracer(i,j,k,nqn)/dtcloud
-
-            endif
-          end do
-        end do
-      end do
-
-!------------------------------------------------------------------------
-!    call subroutine adjust_condensate to conservatively fill qi if needed.
-!------------------------------------------------------------------------
-      call adjust_condensate (qi_too_small, Tend_mp%q_tnd(:,:,:,nqi), &
-            Tend_mp%qtnd, Tend_mp%ttnd, Input_mp%tracer(:,:,:,nqi), &
-            HLS, Cloud_state%qi_upd)
-
-!------------------------------------------------------------------------
-!    save diagnostics defining the cloud ice  filling amount.
-!------------------------------------------------------------------------
-      do k = 1,kdim
-        do j = 1,jdim
-          do i = 1,idim
-            if (qi_too_small(i,j,k)) then
-              if (Lsdiag_mp_control%diag_id%qdt_ice_init > 0)   &
-                     Lsdiag_mp%diag_4d(i,j,k,  &
-                            Lsdiag_mp_control%diag_pt%qdt_ice_init ) =   &
-                                        Input_mp%tracer(i,j,k,nqi)/dtcloud
-            endif
-          end do
-        end do
-      end do
-
-!------------------------------------------------------------------------
-!    adjust ice particle numbers as needed when those fields are being
-!    predicted.
-!------------------------------------------------------------------------
-      if (do_ice_num) then
-        call adjust_particle_number (qi_too_small,   &
-                   Tend_mp%q_tnd(:,:,:,nqni), Input_mp%tracer(:,:,:,nqni),&
-                                                      Cloud_state%qni_upd)
-        do k = 1,kdim
-          do j = 1,jdim
-            do i = 1,idim
-              if (qi_too_small(i,j,k)) then
-
-!------------------------------------------------------------------------
-!    save a diagnostic defining the ice crystal number filling amount.
-!------------------------------------------------------------------------
-
-                if (Lsdiag_mp_control%diag_id%qnidt_fill  +    &
-                    Lsdiag_mp_control%diag_id%qni_fill_col > 0 )   &
-                   Lsdiag_mp%diag_4d(i,j,k,   &
-                             Lsdiag_mp_control%diag_pt%qnidt_fill) =   &
-                                      -Input_mp%tracer(i,j,k,nqni)/dtcloud
-               endif
-             end do
-           end do
-         end do
-       endif
-
-
-!-----------------------------------------------------------------------
-
-
-
-end subroutine impose_realizability_clubb
-
-
-
 !########################################################################
 
 subroutine detailed_diagnostics (     &
@@ -2373,9 +2108,6 @@ subroutine detailed_diagnostics (     &
 !     (option to write to data file is being removed), computes column
 !     integrated diagnostics, and calls lscloud_netcdf to output the
 !     relevant netcdf diagnostics.
-
-!     note that budgets for CLUBB will not balance (more work to be done),
-!     but should balance in non-CLUBB cases.
 
 !     note that for the budget imbalance terms to be valid ALL terms in
 !     the particular budget equation must be present in the diag_table.
@@ -2810,7 +2542,6 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
                                                   Tend_mp%q_tnd(i,j,k,nql)
                 qn_new(i,j,k) = Cloud_state%qn_in(i,j,k) +    &
                                                    Tend_mp%q_tnd(i,j,k,nqn)
-! may change answers for clubb diagnostics:
                 if (ql_new(i,j,k) > qmin .and. &
                     qa_new(i,j,k) > qmin .and. &
                     qn_new(i,j,k) > qmin ) then
@@ -2859,7 +2590,6 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
                                  Tend_mp%q_tnd(i,j,k,nqi)
                 qni_new(i,j,k) = Cloud_state%qni_in(i,j,k) +  &
                                  Tend_mp%q_tnd(i,j,k,nqni)
-! may change answers for clubb diagnostics:
                 if (qi_new(i,j,k) > qmin .and. &
                     qa_new(i,j,k) > qmin .and. &
                     qni_new(i,j,k)  > qmin ) then
@@ -3532,8 +3262,6 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
       deallocate (Particles%drop1           )
       deallocate (Particles%drop2           )
       deallocate (Particles%crystal1        )
-      deallocate (Particles%Ndrop_act_CLUBB )
-      deallocate (Particles%Icedrop_act_CLUBB )
       deallocate (Particles%rbar_dust       )
       deallocate (Particles%ndust           )
       deallocate (Particles%hom             )
@@ -3587,7 +3315,6 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
       deallocate (Cloud_state%SNR_out )
       deallocate (Cloud_state%SNS_out )
 
-      deallocate (Cloud_state%qcvar_clubb )
       deallocate (Cloud_state%relvarn     )
       deallocate (Cloud_state%qa_upd_0)
       deallocate (Cloud_state%SA_0    )

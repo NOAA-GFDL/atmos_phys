@@ -35,7 +35,6 @@ use block_control_mod,  only: block_control_type
      integer           :: overlap
      logical           :: do_liq_num
      logical           :: do_ice_num
-     integer           :: do_clubb
  end type  exchange_control_type
 
 !---
