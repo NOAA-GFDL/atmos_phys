@@ -131,7 +131,7 @@ character(len=128) :: tagname = '$Name: $'
 !  </DATA>
 !  <DATA NAME="microphys_scheme" TYPE="character" DEFAULT="rotstayn_klein">
 !   the microphysics scheme being used (currently either
-!   "morrison_gettelman" or "rotstayn_klein" or "ncar")
+!   "rotstayn_klein" or "mg2")
 !  </DATA>
 !  <DATA NAME="macrophys_scheme" TYPE="character" DEFAULT="tiedtke">
 !   the macrophysics scheme being used (currently either
@@ -555,14 +555,6 @@ real,dimension(:,:,:),   intent(in)     :: phalf        ! h1g
           Constants_lsc%do_rk_microphys = .true.
           Constants_lsc%do_ncar_MG2 = .false.
           do_predicted_ice_number = .false.
-        else if (trim(microphys_scheme) == 'morrison_gettelman') then
-          Constants_lsc%do_rk_microphys = .false.
-          Constants_lsc%do_ncar_MG2 = .false.
-          do_predicted_ice_number = .true.
-        else if (trim(microphys_scheme) == 'ncar') then
-          Constants_lsc%do_rk_microphys = .false.
-          Constants_lsc%do_ncar_MG2 = .false.
-          do_predicted_ice_number = .true.
        else if (trim(microphys_scheme) == 'mg2') then
           Constants_lsc%do_rk_microphys = .false.
           Constants_lsc%do_ncar_MG2 = .true.
