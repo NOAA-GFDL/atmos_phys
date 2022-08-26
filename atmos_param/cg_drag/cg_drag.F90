@@ -17,13 +17,6 @@ use diag_manager_mod,       only:  diag_manager_init,   &
 use constants_mod,          only:  constants_init, PI, RDGAS, GRAV, CP_AIR, &
                                    SECONDS_PER_DAY
 
-#ifdef COL_DIAG
-use column_diagnostics_mod, only:  column_diagnostics_init, &
-                                   initialize_diagnostic_columns, &
-                                   column_diagnostics_header, &
-                                   close_column_diagnostics_units
-#endif
-
 !-------------------------------------------------------------------
 
 implicit none
@@ -56,7 +49,7 @@ private   read_nc_restart_file, gwfc
 
 !--- for netcdf restart
 type (domain2D), pointer               :: cg_domain !< Atmosphere domain
-integer                                :: vers, old_time_step
+integer                                :: old_time_step
 
 !wfc++ Addition for regular use
       integer, allocatable, dimension(:,:)     ::  source_level
@@ -99,49 +92,18 @@ real        :: Bt_nh=.003         ! magnitude of momentum flux divided by densit
 
 real        :: Bt_sh=.003         ! magnitude of momentum flux divided by density  (SH limit )
 
-real        :: Bt_eq=.000         ! magnitude of momentum flux divided by density  (equator) 
-
-real        :: Bt_eq_width=4.0    ! scaling for width of equtorial momentum flux  (equator) 
-
 real        :: phi0n = 30., phi0s = -30., dphin = 5., dphis = -5.
 
-logical     :: calculate_ked=.false. 
-                                  ! calculate ked diagnostic ?
 logical     :: dump_flux=.false. 
                                   ! deposit remaining flux at the model top ?
 logical     :: do_conserve_energy=.false. 
                                   ! conserve total energy?
 
-integer     :: num_diag_pts_ij=0  ! number of diagnostic columns specif-
-                                  ! ied by global (i,j) coordinates
-integer     :: num_diag_pts_latlon=0 
-                                  ! number of diagnostic columns
-                                  ! specified by lat-lon coordinates
-integer, parameter           ::  MAX_PTS= 20
-                                  ! maximum number of diagnostic columns
-integer, dimension(MAX_PTS)  ::  i_coords_gl=-100     
-                                  ! global i coordinates for ij 
-                                  ! diagnostic columns 
-integer, dimension(MAX_PTS)  ::  j_coords_gl=-100   
-                                  ! global j coordinates for ij 
-                                  ! diagnostic columns 
-real,    dimension(MAX_PTS)  ::  lat_coords_gl=-999. 
-                                  ! latitudes for latlon diagnostic 
-                                  ! columns  [degrees, -90. -> 90. ]
-real,    dimension(MAX_PTS)  ::  lon_coords_gl=-999. 
-                                  ! longitudes for latlon diagnostic 
-                                  ! columns [ degrees, 0. -> 360. ]
-
-
 namelist / cg_drag_nml /         &
                           cg_drag_freq, cg_drag_offset, &
                           source_level_pressure,   &
                           nk, cmax, dc, Bt_0, Bt_aug,  &
-                          Bt_sh, Bt_nh, Bt_eq,  Bt_eq_width,  &
-                          calculate_ked,    &
-                          num_diag_pts_ij, num_diag_pts_latlon, &
-                          i_coords_gl, j_coords_gl,   &
-                          lat_coords_gl, lon_coords_gl, &
+                          Bt_sh, Bt_nh,  &
                           phi0n,phi0s,dphin,dphis,      &
                           dump_flux, do_conserve_energy
 
@@ -152,27 +114,6 @@ namelist / cg_drag_nml /         &
 !--------------------------------------------------------------------
 !------ private data ------
 
-!--------------------------------------------------------------------
-!   list of restart versions readable by this module.
-!--------------------------------------------------------------------
-integer, dimension(3)  :: restart_versions = (/ 1, 2, 3 /)
-! v1 :
-! v2 : 
-! v3 : Now use NetCDF for restart file.
-!
-!--------------------------------------------------------------------
-!   these arrays must be preserved across timesteps in case the
-!   parameterization is not called every timestep:
-!
-!   gwd      time tendency for u eqn due to gravity wave forcing 
-!            [ m/s^2 ]
-!   ked      effective eddy diffusion coefficient resulting from 
-!            gravity wave forcing [ m^2/s ]
-!
-!--------------------------------------------------------------------
-!wfc++ not needed if calcucate_ked is removed.
-!!!!rjw real,    dimension(:,:,:), allocatable   :: gwd, ked
-!wfc--
 !--------------------------------------------------------------------
 !   these are the arrays which define the gravity wave source spectrum:
 !
@@ -209,28 +150,6 @@ integer    :: klevel_of_source
 !
 !---------------------------------------------------------------------
 integer          :: cgdrag_alarm
-
-!---------------------------------------------------------------------
-!   variables used with column diagnostics:
-!
-!   diag_units     output unit numbers
-!   num_diag_pts   number of columns where diagnostics are desired 
-!   column_diagnostics_desired
-!                  column diagnostics are desired ?
-!   do_column_diagnostics 
-!                  a diagnostic column is in this jrow ?  
-!   diag_lon       longitude of diagnostic columns [ degrees ]
-!   diag_lat       latiude of diagnostic columns  [ degrees ]
-!   diag_i         processor-based i index of diagnostic columns
-!   diag_j         processor-based j index of diagnostic columns
-!
-!--------------------------------------------------------------------
-integer                            :: num_diag_pts = 0  
-logical                            :: column_diagnostics_desired=.false.
-integer, dimension(:), allocatable :: diag_units         
-logical, dimension(:), allocatable :: do_column_diagnostics
-real,    dimension(:), allocatable :: diag_lon, diag_lat
-integer, dimension(:), allocatable :: diag_j, diag_i   
 
 !---------------------------------------------------------------------
 !   variables for netcdf diagnostic fields.
@@ -323,9 +242,6 @@ type(time_type),         intent(in)      :: Time
       call time_manager_init
       call diag_manager_init
       call constants_init
-#ifdef COL_DIAG
-      call column_diagnostics_init 
-#endif SKIP
 !---------------------------------------------------------------------
 !    read namelist.
 !---------------------------------------------------------------------
@@ -376,50 +292,6 @@ type(time_type),         intent(in)      :: Time
       source_level = MIN (source_level, kmax-1)
 
 !      deallocate( lat )
-
-!---------------------------------------------------------------------
-!    determine if column diagnostics are desired from this module. if
-!    so, set a flag to so indicate.
-!---------------------------------------------------------------------
-      num_diag_pts = num_diag_pts_ij + num_diag_pts_latlon
-      if (num_diag_pts > 0) then
-        column_diagnostics_desired = .true.
-      endif
-
-!---------------------------------------------------------------------
-!    if column diagnostics are desired, check that array dimensions are
-!    sufficiently large for the number of requests. 
-!---------------------------------------------------------------------
-#ifdef COL_DIAG
-      if (column_diagnostics_desired) then
-        if (num_diag_pts > MAX_PTS) then
-          call error_mesg ( 'cg_drag_mod', &
-         ' must reset MAX_PTS or reduce number of diagnostic points', &
-                                                     FATAL)
-        endif
-
-!---------------------------------------------------------------------
-!    allocate arrays needed for column diagnostics. 
-!---------------------------------------------------------------------
-        allocate (do_column_diagnostics   (jdf)          )
-        allocate (diag_units              (num_diag_pts) )
-        allocate (diag_lon                (num_diag_pts) )
-        allocate (diag_lat                (num_diag_pts) )
-        allocate (diag_i                  (num_diag_pts) )
-        allocate (diag_j                  (num_diag_pts) )
-
-!---------------------------------------------------------------------
-!    call initialize_diagnostic_columns to determine the locations 
-!    (i, j, lat and lon) of any diagnostic columns in this processsor's 
-!    space and to open output files for the diagnostics.
-!---------------------------------------------------------------------
-        call initialize_diagnostic_columns    &
-                     (mod_name, num_diag_pts_latlon, num_diag_pts_ij, &
-                      i_coords_gl, j_coords_gl, lat_coords_gl,   &
-                      lon_coords_gl, lonb(:,1), latb(1,:), do_column_diagnostics, &
-                      diag_lon, diag_lat, diag_i, diag_j, diag_units)
-      endif
-#endif
 
 !---------------------------------------------------------------------
 !    define the number of waves in the gravity wave spectrum, and define
@@ -480,7 +352,6 @@ type(time_type),         intent(in)      :: Time
 !---------------------------------------------------------------------
 
       cg_domain => domain
-      vers = 3 ! NetCDF version
       call read_nc_restart_file
 
       old_time_step = cgdrag_alarm 
@@ -735,48 +606,6 @@ real, dimension(:,:,:), intent(out)     :: dtemp
           gwd_v(is:ie,js:je,:) = gwfcng_y(:,:,:)
 
 
-#ifdef COL_DIAG
-!--------------------------------------------------------------------
-!  if column diagnostics are desired, determine if any columns are on
-!  this processor. if so, call column_diagnostics_header to write
-!  out location and timestamp information. then output desired 
-!  quantities to the diag_unit file.
-!---------------------------------------------------------------------
-        if (column_diagnostics_desired) then
-          do j=1,jmax
-            if (do_column_diagnostics(j+js-1)) then
-              do nn=1,num_diag_pts
-                if (js + j - 1 == diag_j(nn)) then
-                  call column_diagnostics_header   &
-                       (mod_name, diag_units(nn), Time, nn, diag_lon, &
-                        diag_lat, diag_i, diag_j) 
-                  iz0 = source_level (diag_i(nn), j)
-                  write (diag_units(nn),'(a, i5)')    &
-                                              '  source_level  =', iz0
-                  write (diag_units(nn),'(a)')     &
-                         '   k         u           z        density&
-                         &         bf      gwforcing'
-                  do k=0,iz0 
-                    write (diag_units(nn), '(i5, 2x, 5e12.5)')   &
-                                       k,                         &
-                                       zu       (diag_i(nn),j,k), &
-                                       zzchm    (diag_i(nn),j,k), &
-                                       zden     (diag_i(nn),j,k), &
-                                       zbf      (diag_i(nn),j,k), &
-                                       gwd_xtnd (diag_i(nn),j,k) 
-                  end do
-                  write (diag_units(nn), '(i5, 14x, 2e12.5)')     &
-                                       iz0+1,                       &
-                                       zzchm  (diag_i(nn),j,iz0+1), &
-                                       zden   (diag_i(nn),j,iz0+1)
-                endif
-              end do  ! (nn loop)
-            endif    ! (do_column_diagnostics)
-          end do   ! (j loop)
-        endif    ! (column_diagnostics_desired)
-#endif
-
-
 !--------------------------------------------------------------------
 !    if activated, store the effective eddy diffusivity into a 
 !    processor-global array, and if desired as a netcdf diagnostic, 
@@ -859,12 +688,6 @@ subroutine cg_drag_end
       call cg_drag_restart
 
 
-#ifdef COL_DIAG
-      if (column_diagnostics_desired) then
-        call close_column_diagnostics_units (diag_units)
-      endif
-#endif
-
 !---------------------------------------------------------------------
 !    mark the module as uninitialized.
 !---------------------------------------------------------------------
@@ -894,7 +717,6 @@ subroutine read_nc_restart_file
 !   local variables:
 
       character(len=64)     :: fname='INPUT/cg_drag.res.nc'
-      character(len=8)      :: chvers
       type(FmsNetcdfFile_t)       :: Cg_restart !< Fms2io fileobj
       type(FmsNetcdfDomainFile_t) :: Til_restart !< Fms2io domain fileobj
       integer, allocatable, dimension(:) :: pes !< Array of the pes in the current pelist
@@ -984,7 +806,6 @@ subroutine cg_drag_register_restart(Cg_restart)
 
   dim_names(1) = "Time"
   call register_axis(Cg_restart, dim_names(1), unlimited)
-  call register_restart_field(Cg_restart, "restart_version", vers, dim_names)
   call register_restart_field(Cg_restart, "cgdrag_alarm", cgdrag_alarm, dim_names)
   call register_restart_field(Cg_restart, "cg_drag_freq", old_time_step, dim_names)
 
@@ -1384,16 +1205,6 @@ real,    dimension(:,:,0:),  intent(out)            :: ked
 
 
 
-#ifdef SKIP
-!   optional upper boundary
-!           Dump remaining flux in the top model level. 
-     k=1;
-     fm= sum( INT(msk) .*B0 ) * sqrt(rho(k)*rho(k+1))  * eps / dz(k);
-     wv_frcng(1)= 0.5*( fm + wv_frcng(1) );
-
-     gwf(1)= 0.5* ( fm + gwf(1) );
-#endif
-            
           end do   ! wavelength loop
         end do  ! i loop                      
       end do   ! j loop                 
@@ -1410,5 +1221,3 @@ end subroutine gwfc
 
 
 end module cg_drag_mod
-
-
