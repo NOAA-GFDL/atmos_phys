@@ -940,10 +940,38 @@ real, dimension (:,:,:),    intent(in)    :: SL_micro, SI_micro, SQ_micro, SR_mi
                                     dtcloud*Atmos_state%delp(i,j,k)/grav
             end do
             m2(i,j) = 1.e3*Precip_state%surfrain(i,j)*dtcloud
+!------------------------------------------------------------------------
+!    for small precip, adjustment for conservation may be ignored. other-
+!    wise, compute the ratio of condensate loss to precip at the surface.
+!------------------------------------------------------------------------
+            if ( m2(i,j) .ne. 0.0 ) THEN
+              scalef(i,j) = -m1(i,j)/m2(i,j)
+!-----------------------------------------------------------------------
+!   define diagnostics capturing the rate (kg/m2/s) that the precip
+!   field is adjusted to balance the loss of atmospheric water mass.
+!-----------------------------------------------------------------------
+              if (Lsdiag_mp_control%diag_id%rain_mass_conv > 0   ) &
+              Lsdiag_mp%diag_4d(i,j,1,   &
+                            Lsdiag_mp_control%diag_pt%rain_mass_conv) = &
+                           (scalef(i,j)*Precip_state%surfrain(i,j) -    &
+                                        Precip_state%surfrain(i,j))*1.0e3
+              if (Lsdiag_mp_control%diag_id%snow_mass_conv > 0   ) &
+              Lsdiag_mp%diag_4d(i,j,1,   &
+                           Lsdiag_mp_control%diag_pt%snow_mass_conv) = &
+                              (scalef(i,j)*Precip_state%surfsnow(i,j) -  &
+                                         Precip_state%surfsnow(i,j))*1.0e3
+!------------------------------------------------------------------------
+!    modify the output rain and snow precip fields.
+!------------------------------------------------------------------------
+              Precip_state%surfrain(i,j) =    &
+                                   scalef(i,j)*Precip_state%surfrain(i,j)
+              Precip_state%surfsnow(i,j) =    &
+                                   scalef(i,j)*Precip_state%surfsnow(i,j)
+            end if
           end do
         end do
       end if
-
+      
 !------------------------------------------------------------------------
 !    save the rain and snow precipitation fields before any lower limit
 !    is imposed (usually 0.0).
