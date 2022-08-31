@@ -93,7 +93,6 @@ use donner_deep_mod,        only: donner_deep_init,               &
 use moist_conv_mod,         only: moist_conv, moist_conv_init
 use uw_conv_mod,            only: uw_conv, uw_conv_end, uw_conv_init
 use ras_mod,                only: ras_end, ras_init, ras
-use dry_adj_mod,            only: dry_adj, dry_adj_init
 use detr_ice_num_mod,       only: detr_ice_num, detr_ice_num_init,   &
                                   detr_ice_num_end
 use cu_mo_trans_mod,        only: cu_mo_trans_init, cu_mo_trans,   &
@@ -138,8 +137,6 @@ private                             &
            prevent_unrealizable_water, define_output_fields,  &
            donner_mca_driver, output_donner_diagnostics,  &
            donner_dealloc, &
-!   associated with dry convective adjustment:
-           dca_driver,     &
 !   associated with betts-miller convection:
            betts_miller_driver,  &
 !   associated with moist convective adjustment:
@@ -304,7 +301,6 @@ logical :: do_ras                  ! relaxed arakawa-schubert param
                                    !                             is active?
 logical :: do_uw_conv              ! uw convection scheme is active ?
 logical :: do_donner_deep          ! donner convection scheme is active ?
-logical :: do_dryadj               ! dry convective adjustment is active ?
 logical :: limit_conv_cloud_frac   ! total convective cloud area in a box 
                                    ! is limited to 0.999, when donner and 
                                    ! uw schemes are both active ?
@@ -363,7 +359,6 @@ integer :: i_cell,     &           ! index of donner cell clouds in cloud
            i_shallow               ! index of uw clouds in cloud array
 
 !  variables used to define the active convective implementation: 
-logical :: ldca = .false.          ! dry convective adjustment only
 logical :: lmca = .false.          ! moist convective adjustment only
 logical :: lras = .false.          ! ras only
 logical :: luwconv = .false.       ! uw only
@@ -371,7 +366,6 @@ logical :: ldonner = .false.       ! donner only
 logical :: lBM = .false.           ! Betts-Miller only
 logical :: lBMmass = .false.       ! Betts-Miller mass version only
 logical :: lBMomp = .false.        ! Betts-Miller Pauluis version only
-logical :: ldcamca = .false.       ! dry, then moist cnvctve adjustment
 logical :: ldonnerras = .false.    ! donner and ras
 logical :: luw_then_donner = .false. 
                                    ! uw and then donner
@@ -391,7 +385,6 @@ real, allocatable, dimension(:,:)   ::  &
 
 integer :: convection_clock,  &    ! clock to time total convection 
            donner_clock,      &    ! clock to time donner paramaeterization
-           dca_clock,    &         ! clock to time dry conv adjustment
            mca_clock,    &         ! clock to time moist conv adjustment
            uw_clock,     &         ! clock to time uw parameterization
            donner_mca_clock,  &    ! clock to time mca with donner param
@@ -455,9 +448,6 @@ integer, dimension(:), allocatable ::    &
                                       id_tracerdt_conv_col, &
                                       id_conv_tracer,  &
                                       id_conv_tracer_col
-
-!  dry adjustment diagnostic:
-integer :: id_tdt_dadj
 
 !  BM diagnostics:
 integer :: id_bmflag, id_klzbs, id_invtaubmt, id_invtaubmq, &
@@ -583,7 +573,6 @@ real, dimension(:),            intent(in)    :: pref
       do_uw_conv = Nml_mp%do_uw_conv
       do_donner_deep = Nml_mp%do_donner_deep
       limit_conv_cloud_frac = Nml_mp%limit_conv_cloud_frac
-      do_dryadj = Nml_mp%do_dryadj
       include_donmca_in_cosp = Nml_mp%include_donmca_in_cosp
       do_bm = Nml_mp%do_bm
       do_bmmass = Nml_mp%do_bmmass
@@ -663,13 +652,7 @@ real, dimension(:),            intent(in)    :: pref
 !    define logical controls indicating the status of the available
 !    convective implementations in this experiment.
 !----------------------------------------------------------------------
-      if (do_dryadj) then
-        if (do_mca) then
-          ldcamca = .true.
-        else
-          ldca = .true.
-        endif
-      else if (do_mca) then
+      if (do_mca) then
           lmca = .true.
       else if (do_ras) then
           if (do_donner_deep) then
@@ -766,7 +749,6 @@ real, dimension(:),            intent(in)    :: pref
 !    initialize the convective parameterizations that are active in this 
 !    experiment.
 !-----------------------------------------------------------------------
-      if (do_dryadj) call dry_adj_init ()
       if (do_bm)     call betts_miller_init () 
       if (do_bmmass) call bm_massflux_init()
       if (do_bmomp)  call bm_omp_init () 
@@ -815,8 +797,6 @@ real, dimension(:),            intent(in)    :: pref
       convection_clock = mpp_clock_id( '   Physics_up: Moist Proc: Conv' ,&
                                              grain=CLOCK_MODULE_DRIVER )
       donner_clock     = mpp_clock_id( '   Moist Processes: Donner_deep' ,&
-                                             grain=CLOCK_MODULE_DRIVER )
-      dca_clock        = mpp_clock_id( '   Moist Processes: DCA'         ,&
                                              grain=CLOCK_MODULE_DRIVER )
       mca_clock        = mpp_clock_id( '   Moist Processes: MCA'         ,&
                                              grain=CLOCK_MODULE_DRIVER )
@@ -1058,21 +1038,7 @@ type(aerosol_type),     intent(in), optional :: Aerosol
 
 !------------------------------------------------------------------------
 !    integrate the active convective implementation.
-!------------------------------------------------------------------------
-      
-
-!        @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-!        @                                            @
-!        @         DRY CONVECTIVE ADJUSTMENT          @
-!        @                                            @
-!        @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
-!---------------------------------------------------------------------
-!    if dry adjustment only is desired call subroutine dca_driver.
-!---------------------------------------------------------------------
-      if (ldca) then
-        call dca_driver (is, js, Input_mp, Output_mp, Tend_mp)
-
+!------------------------------------------------------------------------     
 
 !        @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 !        @                                            @
@@ -1083,7 +1049,7 @@ type(aerosol_type),     intent(in), optional :: Aerosol
 !---------------------------------------------------------------------
 !    if moist adjustment only is desired call subroutine mca_driver.
 !---------------------------------------------------------------------
-      else if (lmca) then
+      if (lmca) then
         call mca_driver  (is, js, Input_mp, Output_mp, Tend_mp )
 
 !        @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1093,13 +1059,6 @@ type(aerosol_type),     intent(in), optional :: Aerosol
 !        @                                            @
 !        @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-!---------------------------------------------------------------------
-!    if both dry and moist convective adjustment are desired call 
-!    subroutines dca_driver and mca_driver.
-!---------------------------------------------------------------------
-      else if (ldcamca) then
-        call dca_driver (is, js, Input_mp, Output_mp, Tend_mp)
-        call mca_driver (is, js, Input_mp, Output_mp, Tend_mp)
 
 !        @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 !        @                                            @
@@ -2259,16 +2218,6 @@ type(mp_removal_control_type), intent(in) :: Control
                         'UW convection ice number tendency', '#/kg/s', &
                         missing_value=missing_value               )
 
-      endif
-
-!----------------------------------------------------------------------
-!    dry adjustment diagnostic.
-!----------------------------------------------------------------------
-      if (do_dryadj) then
-        id_tdt_dadj = register_diag_field ( mod_name, &
-                    'tdt_dadj', axes(1:3), Time, &
-                    'Temperature tendency from dry conv adj', 'deg_K/s',  &
-                    missing_value=missing_value               )
       endif
 
 !---------------------------------------------------------------------
@@ -5187,113 +5136,6 @@ end subroutine donner_dealloc
 
 
 !#######################################################################
-
-
-
-!*******************************************************************
-!
-!                  PRIVATE, DRY ADJUSTMENT-RELATED SUBROUTINES
-!
-!*******************************************************************
-
-
-!######################################################################
-
-subroutine dca_driver (is, js, Input_mp, Output_mp, Tend_mp)
-
-!---------------------------------------------------------------------
-!    subroutine dca_driver prepares for, calls, and handles the output from
-!    the dry convective adjustment parameterization.
-!---------------------------------------------------------------------
-
-integer,                intent(in)    :: is, js
-type(mp_input_type),    intent(inout) :: Input_mp
-type(mp_output_type),   intent(inout) :: Output_mp
-type(mp_tendency_type), intent(inout) :: Tend_mp
-
-!----------------------------------------------------------------------
-!    is,js      starting i and j indices for window
-!    Input_mp   derived type used to transfer needed input data between
-!               moist_processes and convection_driver
-!    Output_mp  derived type used to transfer output fields between
-!               convection_driver and moist_processes
-!    Tend_mp    derived type used to transfer calculated tendency data
-!               between convection_driver and moist_processes
-!---------------------------------------------------------------------
-
-      real, dimension(size(Input_mp%t,1),size(Input_mp%t,2),   &
-                                   size(Input_mp%t,3)) ::  delta_temp
-      type(conv_tendency_type) :: Dca_tend
-      logical :: used
-      integer :: ix, jx, kx
-
-!---------------------------------------------------------------------
-!   delta_temp    
-!   Dca_tend      conv_tendency_type variable containing tendency
-!                 output from dry convective adjustment parameterization
-!   used          logical used to indicate data has been received by
-!                 diag_manager_mod
-!   ix, jx, kx    physics window dimensions
-!---------------------------------------------------------------------
-
-!---------------------------------------------------------------------
-!    activate dca_clock.
-!---------------------------------------------------------------------
-      call mpp_clock_begin (dca_clock)
-
-!--------------------------------------------------------------------
-!     define local array dimensions.
-!--------------------------------------------------------------------
-      ix = size(Input_mp%t,1) 
-      jx = size(Input_mp%t,2) 
-      kx = size(Input_mp%t,3) 
-
-!--------------------------------------------------------------------
-!     allocate and initialize tendency array.
-!--------------------------------------------------------------------
-      allocate (Dca_tend%ttnd(ix, jx, kx))
-      Dca_tend%ttnd = 0.
-
-!---------------------------------------------------------------------
-!    call subroutine dry_adj to obtain the temperature tendencies which 
-!    must be applied to adjust each column to a non-superadiabatic lapse 
-!    rate. 
-!---------------------------------------------------------------------
-      call dry_adj (Input_mp%tin, Input_mp%pfull, Input_mp%phalf,   &
-                                                              delta_temp)
-
-!-------------------------------------------------------------------
-!    add the temperature change due to dry adjustment to the current
-!    temperature. convert the temperature change to a heating rate.
-!-------------------------------------------------------------------
-      Input_mp%tin  = Input_mp%tin + delta_temp
-      Dca_tend%ttnd  = delta_temp*dtinv
-
-!---------------------------------------------------------------------
-!    output the temperature tendency from dry adjustment, if desired.
-!---------------------------------------------------------------------
-      used = send_data (id_tdt_dadj, Dca_tend%ttnd, Time, is, js, 1 )
-
-!----------------------------------------------------------------------
-!    call update_outputs to update the arrays which will return the
-!    convective tendencies to moist_processes.
-!----------------------------------------------------------------------
-      call update_outputs (Dca_tend, Output_mp, Tend_mp)
-
-!----------------------------------------------------------------------
-!    deallocate local arrays and turn off the dca clock.
-!----------------------------------------------------------------------
-      deallocate (Dca_tend%ttnd)
-      call mpp_clock_end   (dca_clock)
-
-!---------------------------------------------------------------------
-
-
-end subroutine dca_driver
-
-
-
-!######################################################################
 
 
 !*******************************************************************

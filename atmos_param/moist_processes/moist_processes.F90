@@ -131,8 +131,6 @@ private combined_MP_diagnostics, MP_alloc, MP_dealloc, create_Nml_mp, &
 !                [logical, default: do_uw_conv=false ]
 !   do_donner_deep = switch to turn on/off donner deep convection scheme
 !                [logical, default: do_donner_deep=false ]
-!   do_dryadj = switch to turn on/off dry adjustment scheme
-!                [logical, default: do_dryadj=false ]
 !   do_bm    = switch to turn on/off betts-miller scheme
 !                [logical, default: do_bm=false ]
 !   do_bmmass  = switch to turn on/off betts-miller massflux scheme
@@ -171,7 +169,6 @@ logical :: do_mca=.false.
 logical :: do_ras=.false.
 logical :: do_uw_conv=.false.
 logical :: do_donner_deep=.false.
-logical :: do_dryadj=.false.
 logical :: do_bm=.false.
 logical :: do_bmmass =.false.
 logical :: do_bmomp  =.false.
@@ -186,7 +183,7 @@ real    :: om_to_oc = 1.67
 logical :: do_height_adjust = .false.
 
 namelist /moist_processes_nml/ do_unified_clouds, do_lsc, do_mca, do_ras,   &
-                  do_uw_conv, do_donner_deep, do_dryadj, do_bm,             &
+                  do_uw_conv, do_donner_deep, do_bm,             &
                   do_bmmass, do_bmomp, do_simple,                           &
                   pdepth, limit_conv_cloud_frac, include_donmca_in_cosp,    &
                   use_online_aerosol, use_sub_seasalt, sea_salt_scale,      &
@@ -2153,7 +2150,6 @@ subroutine create_Nml_mp
       Nml_mp%do_ras =  do_ras
       Nml_mp%do_uw_conv  = do_uw_conv
       Nml_mp%limit_conv_cloud_frac = limit_conv_cloud_frac
-      Nml_mp%do_dryadj = do_dryadj
       Nml_mp%pdepth = pdepth
       Nml_mp%include_donmca_in_cosp  = include_donmca_in_cosp
       Nml_mp%do_simple = do_simple

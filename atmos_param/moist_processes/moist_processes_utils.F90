@@ -143,7 +143,6 @@ type mp_nml_type
     logical  :: do_ras
     logical  :: do_uw_conv
     logical  :: limit_conv_cloud_frac
-    logical  :: do_dryadj
     real     :: pdepth
     logical  :: include_donmca_in_cosp
     logical  :: do_rh_clouds
