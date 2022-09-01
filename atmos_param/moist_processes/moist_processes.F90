@@ -123,8 +123,6 @@ private combined_MP_diagnostics, MP_alloc, MP_dealloc, create_Nml_mp, &
 !                [logical, default: do_unified_clouds=false ]
 !   do_lsc   = switch to turn on/off large scale condensation
 !                [logical, default: do_lsc=false ]
-!   do_mca   = switch to turn on/off moist convective adjustment;
-!                [logical, default: do_mca=false ]
 !   do_ras   = switch to turn on/off relaxed arakawa shubert
 !                [logical, default: do_ras=false ]
 !   do_uw_conv = switch to turn on/off Univ of Wash shallow convect scheme
@@ -146,8 +144,6 @@ private combined_MP_diagnostics, MP_alloc, MP_dealloc, create_Nml_mp, &
 !                [real, default =150.e2 Pa]
 !   limit_conv_cloud_frac = 
 !                [logical, default: limit_conv_cloud_frac=false] 
-!   include_donmca_in_cosp =
-!                [logical, default: include_donmca_in_cosp = true]
 !  <DATA NAME="use_online_aerosol" TYPE="logical"  DEFAULT=".true.">
 !   the online aerosol fields should be used for nucleation source
 !   (rather than climo values) ?
@@ -165,7 +161,6 @@ private combined_MP_diagnostics, MP_alloc, MP_dealloc, create_Nml_mp, &
 
 logical :: do_unified_clouds = .false. 
 logical :: do_lsc = .false.
-logical :: do_mca=.false. 
 logical :: do_ras=.false.
 logical :: do_uw_conv=.false.
 logical :: do_donner_deep=.false.
@@ -175,17 +170,16 @@ logical :: do_bmomp  =.false.
 logical :: do_simple =.false.
 real    :: pdepth = 150.e2
 logical :: limit_conv_cloud_frac = .false.
-logical :: include_donmca_in_cosp = .true.
 logical :: use_online_aerosol = .true.
 logical :: use_sub_seasalt = .false.
 real    :: sea_salt_scale = 0.1
 real    :: om_to_oc = 1.67
 logical :: do_height_adjust = .false.
 
-namelist /moist_processes_nml/ do_unified_clouds, do_lsc, do_mca, do_ras,   &
+namelist /moist_processes_nml/ do_unified_clouds, do_lsc, do_ras,   &
                   do_uw_conv, do_donner_deep, do_bm,             &
                   do_bmmass, do_bmomp, do_simple,                           &
-                  pdepth, limit_conv_cloud_frac, include_donmca_in_cosp,    &
+                  pdepth, limit_conv_cloud_frac,  &
                   use_online_aerosol, use_sub_seasalt, sea_salt_scale,      &
                   om_to_oc, do_height_adjust
 
@@ -896,15 +890,6 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
                                       Removal_mp%ice_precflxh(i,j,k+1))))
             endif
 
-            if (include_donmca_in_cosp .and. &
-                              donner_precip_in_cosp .eq. 1.0) then
-               Precip_flux%fl_donmca_snow(ii,jj,k) =   0.5*  &
-                            (Removal_mp%mca_frzh(i,j,k) +   &
-                                           Removal_mp%mca_frzh(i,j,k+1))
-               Precip_flux%fl_donmca_rain(ii,jj,k) =   0.5*  &
-                            (Removal_mp%mca_liqh(i,j,k) +   &
-                                           Removal_mp%mca_liqh(i,j,k+1))
-            endif
           end do
         end do
       end do
@@ -919,8 +904,6 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
       deallocate (Removal_mp%liq_mesoh   )
       deallocate (Removal_mp%frz_cellh   )
       deallocate (Removal_mp%liq_cellh   )
-      deallocate (Removal_mp%mca_frzh    )
-      deallocate (Removal_mp%mca_liqh    )
       deallocate (Removal_mp%rain3d      )
       deallocate (Removal_mp%snowclr3d      )
 
@@ -1960,14 +1943,6 @@ type(mp2uwconv_type),     intent(inout) :: Mp2uwconv
                                                  Removal_mp%frz_cellh= 0.  
       allocate ( Removal_mp%liq_cellh(ix,jx,kx+1))  
                                                  Removal_mp%liq_cellh= 0.  
-      allocate ( Removal_mp%mca_frz  (ix,jx,kx))  
-                                                 Removal_mp%mca_frz  = 0. 
-      allocate ( Removal_mp%mca_liq  (ix,jx,kx))  
-                                                 Removal_mp%mca_liq  = 0.  
-      allocate ( Removal_mp%mca_frzh (ix,jx,kx+1))  
-                                                  Removal_mp%mca_frzh = 0. 
-      allocate ( Removal_mp%mca_liqh (ix,jx,kx+1))  
-                                                 Removal_mp%mca_liqh = 0.  
       allocate ( Removal_mp%rain3d   (ix,jx,kx+1))  
                                                  Removal_mp%rain3d   = 0.  
       allocate ( Removal_mp%snow3d   (ix,jx,kx+1))  
@@ -2106,9 +2081,6 @@ type(mp2uwconv_type),   intent(inout) :: Mp2uwconv
       deallocate (Removal_mp%frz_cell    )
       deallocate (Removal_mp%liq_cell    )
 
-      deallocate (Removal_mp%mca_frz     )
-      deallocate (Removal_mp%mca_liq     )
-
       deallocate (Removal_mp%uw_wetdep      )
       deallocate (Removal_mp%donner_wetdep      )
       deallocate (Removal_mp%donner_wetdepm     )
@@ -2145,13 +2117,11 @@ end subroutine MP_dealloc
 subroutine create_Nml_mp 
 
 
-      Nml_mp%do_mca =  do_mca
       Nml_mp%do_lsc =  do_lsc
       Nml_mp%do_ras =  do_ras
       Nml_mp%do_uw_conv  = do_uw_conv
       Nml_mp%limit_conv_cloud_frac = limit_conv_cloud_frac
       Nml_mp%pdepth = pdepth
-      Nml_mp%include_donmca_in_cosp  = include_donmca_in_cosp
       Nml_mp%do_simple = do_simple
       Nml_mp%do_donner_deep = do_donner_deep
       Nml_mp%do_bm =  do_bm  

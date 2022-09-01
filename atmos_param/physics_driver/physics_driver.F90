@@ -980,8 +980,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
         allocate ( Precip_flux%fl_lsgrpl  (id, jd, kd))
         allocate ( Precip_flux%fl_ccrain  (id, jd, kd))
         allocate ( Precip_flux%fl_ccsnow  (id, jd, kd))
-        allocate ( Precip_flux%fl_donmca_snow  (id, jd, kd))
-        allocate ( Precip_flux%fl_donmca_rain  (id, jd, kd))
         allocate ( temp_last (id, jd, kd))
         allocate ( q_last    (id, jd, kd))
         Precip_flux%fl_lsrain = 0.
@@ -989,8 +987,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
         Precip_flux%fl_lsgrpl = 0.
         Precip_flux%fl_ccrain = 0.
         Precip_flux%fl_ccsnow = 0.
-        Precip_flux%fl_donmca_rain = 0.
-        Precip_flux%fl_donmca_snow = 0.
         temp_last = 0.
         q_last    = 0.
       endif
@@ -2318,8 +2314,6 @@ real,dimension(:,:),    intent(inout)             :: gust
           allocate (MP2cosp%fl_lsgrpl(imax, jmax, kmax))
           allocate (MP2cosp%fl_ccrain(imax, jmax, kmax))
           allocate (MP2cosp%fl_ccsnow(imax, jmax, kmax))
-          allocate (MP2cosp%fl_donmca_rain(imax, jmax, kmax))
-          allocate (MP2cosp%fl_donmca_snow(imax, jmax, kmax))
 
           allocate (Phys2cosp%temp_last(imax, jmax, kmax))
           allocate (Phys2cosp%q_last(imax, jmax, kmax))
@@ -2548,10 +2542,6 @@ real,dimension(:,:),    intent(inout)             :: gust
                                        Precip_flux%fl_ccrain(is:ie,js:je,:)
               MP2cosp%fl_ccsnow(:,:,:) =     &
                                        Precip_flux%fl_ccsnow(is:ie,js:je,:)
-              MP2cosp%fl_donmca_rain(:,:,:) =    &
-                                  Precip_flux%fl_donmca_rain(is:ie,js:je,:)
-              MP2cosp%fl_donmca_snow(:,:,:) =    &
-                                  Precip_flux%fl_donmca_snow(is:ie,js:je,:)
             endif
           else
 
@@ -2572,10 +2562,6 @@ real,dimension(:,:),    intent(inout)             :: gust
                                      Precip_flux%fl_ccrain(is:ie,js:je,:)
               MP2cosp%fl_ccsnow(:,:,:) =    &
                                      Precip_flux%fl_ccsnow(is:ie,js:je,:)
-              MP2cosp%fl_donmca_rain(:,:,:) =  &
-                                Precip_flux%fl_donmca_rain(is:ie,js:je,:)
-              MP2cosp%fl_donmca_snow(:,:,:) =  &
-                                Precip_flux%fl_donmca_snow(is:ie,js:je,:)
               Phys2cosp%temp_last(:,:,:) = temp_last(is:ie,js:je,:)
               Phys2cosp%q_last(:,:,:)    = q_last(is:ie,js:je,:)
             endif
@@ -2602,8 +2588,6 @@ real,dimension(:,:),    intent(inout)             :: gust
             deallocate (MP2cosp%fl_lsgrpl)
             deallocate (MP2cosp%fl_ccrain)
             deallocate (MP2cosp%fl_ccsnow)
-            deallocate (MP2cosp%fl_donmca_rain)
-            deallocate (MP2cosp%fl_donmca_snow)
  
             deallocate (Phys2cosp%temp_last)
             deallocate (Phys2cosp%q_last)
@@ -2642,12 +2626,6 @@ real,dimension(:,:),    intent(inout)             :: gust
             endif
             if (allocated(Removal_mp%liq_cellh)) then
                 deallocate(Removal_mp%liq_cellh)
-            endif
-            if (allocated(Removal_mp%mca_frzh)) then
-                deallocate(Removal_mp%mca_frzh)
-            endif
-            if (allocated(Removal_mp%mca_liqh)) then
-                deallocate(Removal_mp%mca_liqh)
             endif
             if (allocated(Removal_mp%rain3d)) then
                 deallocate(Removal_mp%rain3d)
@@ -2867,8 +2845,7 @@ integer :: moist_processes_term_clock, damping_term_clock, turb_term_clock, &
         deallocate (&
            Precip_flux%fl_lsrain, Precip_flux%fl_lssnow,   &
            Precip_flux%fl_lsgrpl, Precip_flux%fl_ccrain,   &
-           Precip_flux%fl_ccsnow, Precip_flux%fl_donmca_rain,    &
-           Precip_flux%fl_donmca_snow)
+           Precip_flux%fl_ccsnow)
       endif
  
       deallocate (id_tracer_phys_vdif_dn)

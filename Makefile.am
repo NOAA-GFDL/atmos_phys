@@ -68,7 +68,6 @@ libatmos_phys_la_SOURCES = ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.F9
 		${top_srcdir}/atmos_param/topo_drag/topo_drag.F90 \
 		${top_srcdir}/atmos_param/macrophysics/ls_cloud_macrophysics.F90 \
 		${top_srcdir}/atmos_param/macrophysics/tiedtke_macro.F90 \
-		${top_srcdir}/atmos_param/moist_conv/moist_conv.F90 \
 		${top_srcdir}/atmos_param/radiation/clouds/cloudrad_types.F90 \
 		${top_srcdir}/atmos_param/radiation/clouds/microphys_rad.F90 \
 		${top_srcdir}/atmos_param/radiation/clouds/strat_clouds_W.F90 \
@@ -441,7 +440,6 @@ ${top_builddir}/atmos_param/macrophysics/tiedtke_macro.lo: ${top_srcdir}/atmos_p
 		 ${top_srcdir}/atmos_param/lscloud_driver/polysvp.lo \
 		 ${top_srcdir}/atmos_param/moist_processes/moist_processes_utils.lo \
 		 ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo
-${top_builddir}/atmos_param/moist_conv/moist_conv.lo: ${top_srcdir}/atmos_param/moist_conv/moist_conv.F90
 ${top_builddir}/atmos_param/radiation/clouds/cloudrad_types.lo: ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_types.F90
 ${top_builddir}/atmos_param/radiation/clouds/microphys_rad.lo: ${top_srcdir}/atmos_param/radiation/clouds/microphys_rad.F90 \
 		 ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_types.lo \
@@ -613,7 +611,6 @@ ${top_builddir}/atmos_param/convection_driver/convection_driver.lo: ${top_srcdir
 		 ${top_srcdir}/atmos_param/betts_miller/bm_massflux.lo \
 		 ${top_srcdir}/atmos_param/betts_miller/bm_omp.lo \
 		 ${top_srcdir}/atmos_param/donner_deep/donner_deep.lo \
-		 ${top_srcdir}/atmos_param/moist_conv/moist_conv.lo \
 		 ${top_srcdir}/atmos_param/shallow_cu/uw_conv.lo \
 		 ${top_srcdir}/atmos_param/ras/ras.lo \
 		 ${top_srcdir}/atmos_param/convection_driver/detr_ice_num.lo \
@@ -1031,7 +1028,6 @@ physics_driver_mod.mod: ${top_srcdir}/atmos_param/physics_driver/physics_driver.
 topo_drag_mod.mod: ${top_srcdir}/atmos_param/topo_drag/topo_drag.lo
 ls_cloud_macrophysics_mod.mod: ${top_srcdir}/atmos_param/macrophysics/ls_cloud_macrophysics.lo
 tiedtke_macro_mod.mod: ${top_srcdir}/atmos_param/macrophysics/tiedtke_macro.lo
-moist_conv_mod.mod: ${top_srcdir}/atmos_param/moist_conv/moist_conv.lo
 cloudrad_types_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_types.lo
 microphys_rad_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/microphys_rad.lo
 strat_clouds_w_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/strat_clouds_W.lo
@@ -1250,7 +1246,6 @@ include_HEADERS = atmos_nudge_mod.mod \
 		topo_drag_mod.mod \
 		ls_cloud_macrophysics_mod.mod \
 		tiedtke_macro_mod.mod \
-		moist_conv_mod.mod \
 		cloudrad_types_mod.mod \
 		microphys_rad_mod.mod \
 		strat_clouds_w_mod.mod \
