@@ -519,7 +519,8 @@ subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
 
 !-----------------------------------------------------------------------
     doing_prog_clouds = Exch_ctrl%doing_prog_clouds
-
+    nwp2 = get_tracer_index ( MODEL_ATMOS, 'wp2' )        
+    
 !<--h1g, 2012-07-16
 
 ! get tracer indices for stratiform cloud variables
