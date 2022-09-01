@@ -123,19 +123,10 @@ private combined_MP_diagnostics, MP_alloc, MP_dealloc, create_Nml_mp, &
 !                [logical, default: do_unified_clouds=false ]
 !   do_lsc   = switch to turn on/off large scale condensation
 !                [logical, default: do_lsc=false ]
-!   do_ras   = switch to turn on/off relaxed arakawa shubert
-!                [logical, default: do_ras=false ]
 !   do_uw_conv = switch to turn on/off Univ of Wash shallow convect scheme
 !                [logical, default: do_uw_conv=false ]
 !   do_donner_deep = switch to turn on/off donner deep convection scheme
 !                [logical, default: do_donner_deep=false ]
-!   do_bm    = switch to turn on/off betts-miller scheme
-!                [logical, default: do_bm=false ]
-!   do_bmmass  = switch to turn on/off betts-miller massflux scheme
-!                [logical, default: do_bmmass=false ]
-!   do_bmomp  = switch to turn on/off olivier's version of the betts-miller
-!                scheme (with separated boundary layer)
-!                [logical, default: do_bmomp=false ]
 !   do_simple = switch to turn on alternative definition of specific 
 !                humidity. When true, specific humidity = 
 !                (rdgas/rvgas)*esat/pressure
@@ -161,12 +152,8 @@ private combined_MP_diagnostics, MP_alloc, MP_dealloc, create_Nml_mp, &
 
 logical :: do_unified_clouds = .false. 
 logical :: do_lsc = .false.
-logical :: do_ras=.false.
 logical :: do_uw_conv=.false.
 logical :: do_donner_deep=.false.
-logical :: do_bm=.false.
-logical :: do_bmmass =.false.
-logical :: do_bmomp  =.false.
 logical :: do_simple =.false.
 real    :: pdepth = 150.e2
 logical :: limit_conv_cloud_frac = .false.
@@ -176,9 +163,9 @@ real    :: sea_salt_scale = 0.1
 real    :: om_to_oc = 1.67
 logical :: do_height_adjust = .false.
 
-namelist /moist_processes_nml/ do_unified_clouds, do_lsc, do_ras,   &
-                  do_uw_conv, do_donner_deep, do_bm,             &
-                  do_bmmass, do_bmomp, do_simple,                           &
+namelist /moist_processes_nml/ do_unified_clouds, do_lsc, &
+                  do_uw_conv, do_donner_deep,   &
+                  do_simple,                           &
                   pdepth, limit_conv_cloud_frac,  &
                   use_online_aerosol, use_sub_seasalt, sea_salt_scale,      &
                   om_to_oc, do_height_adjust
@@ -2118,15 +2105,11 @@ subroutine create_Nml_mp
 
 
       Nml_mp%do_lsc =  do_lsc
-      Nml_mp%do_ras =  do_ras
       Nml_mp%do_uw_conv  = do_uw_conv
       Nml_mp%limit_conv_cloud_frac = limit_conv_cloud_frac
       Nml_mp%pdepth = pdepth
       Nml_mp%do_simple = do_simple
       Nml_mp%do_donner_deep = do_donner_deep
-      Nml_mp%do_bm =  do_bm  
-      Nml_mp%do_bmmass = do_bmmass
-      Nml_mp%do_bmomp = do_bmomp
       Nml_mp%do_unified_clouds = do_unified_clouds
       Nml_mp%use_online_aerosol = use_online_aerosol
       Nml_mp%use_sub_seasalt = use_sub_seasalt

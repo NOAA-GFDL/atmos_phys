@@ -9,15 +9,10 @@
 !
 !         ---------------------------------------
 !         4)  donner deep convection
-!         5)  betts-miller convective adjustment (3 varieties)
 !         6)  uw convection
 !
 !         The following convective implementations are available:
 !         -------------------------------------------------
-!         4)  betts-miller convection alone, as either 
-!                a) standard version,
-!                b) a mass flux based version, or
-!                c) a version developed by O. Pauluis.
 !         6)  donner convection alone
 !         7)  uw convection  alone
 !         9)  donner convection followed by uw convection
@@ -73,9 +68,6 @@ use physics_radiation_exch_mod,        &
                             only: clouds_from_moist_block_type, &
                                   exchange_control_type,  &
                                   cloud_scheme_data_type
-use betts_miller_mod,       only: betts_miller, betts_miller_init
-use bm_massflux_mod,        only: bm_massflux, bm_massflux_init
-use bm_omp_mod,             only: bm_omp, bm_omp_init
 use donner_deep_mod,        only: donner_deep_init,               &
                                   donner_deep_time_vary,  &
                                   donner_deep_endts,         &
@@ -126,8 +118,6 @@ private                             &
            prevent_unrealizable_water, define_output_fields,  &
            output_donner_diagnostics,  &
            donner_dealloc, &
-!   associated with betts-miller convection:
-           betts_miller_driver,  &
 !   associated with uw-then-donner convection:
            uw_then_donner_driver, &
 !   associated with uw convection:
@@ -280,10 +270,6 @@ logical :: do_donner_deep          ! donner convection scheme is active ?
 logical :: limit_conv_cloud_frac   ! total convective cloud area in a box 
                                    ! is limited to 0.999, when donner and 
                                    ! uw schemes are both active ?
-logical :: do_bm                   ! the basic bm scheme is active ?
-logical :: do_bmmass               ! the mass flux version of bm 
-                                   ! is active ?
-logical :: do_bmomp                ! the Pauluis version of bm is active ?
 logical :: do_simple               ! a simple formulation for rh is to be 
                                    ! used with the betts-miller scheme ?
 integer :: num_donner_tracers, &   ! number of tracers transported by the
@@ -326,9 +312,6 @@ integer :: i_cell,     &           ! index of donner cell clouds in cloud
 !  variables used to define the active convective implementation: 
 logical :: luwconv = .false.       ! uw only
 logical :: ldonner = .false.       ! donner only
-logical :: lBM = .false.           ! Betts-Miller only
-logical :: lBMmass = .false.       ! Betts-Miller mass version only
-logical :: lBMomp = .false.        ! Betts-Miller Pauluis version only
 logical :: luw_then_donner = .false. 
                                    ! uw and then donner
 logical :: ldonner_then_uw = .false.   
@@ -348,7 +331,6 @@ real, allocatable, dimension(:,:)   ::  &
 integer :: convection_clock,  &    ! clock to time total convection 
            donner_clock,      &    ! clock to time donner paramaeterization
            uw_clock,     &         ! clock to time uw parameterization
-           bm_clock,    &          ! clock to time betts-miller param
            cmt_clock               ! clock to time cumulus momentum
                                    !                  transport calculation
 
@@ -402,10 +384,6 @@ integer, dimension(:), allocatable ::    &
                                       id_tracerdt_conv_col, &
                                       id_conv_tracer,  &
                                       id_conv_tracer_col
-
-!  BM diagnostics:
-integer :: id_bmflag, id_klzbs, id_invtaubmt, id_invtaubmq, &
-           id_massflux, id_tref, id_qref
 
 ! cape-cin diagnostics:
 integer :: id_cape, id_cin, id_tp, id_rp, id_lcl, id_lfc, id_lzb
@@ -522,9 +500,6 @@ real, dimension(:),            intent(in)    :: pref
       do_uw_conv = Nml_mp%do_uw_conv
       do_donner_deep = Nml_mp%do_donner_deep
       limit_conv_cloud_frac = Nml_mp%limit_conv_cloud_frac
-      do_bm = Nml_mp%do_bm
-      do_bmmass = Nml_mp%do_bmmass
-      do_bmomp  = Nml_mp%do_bmomp 
       do_simple = Nml_mp%do_simple
       doing_prog_clouds = Exch_ctrl%doing_prog_clouds
       nsphum = Physics_control%nsphum
@@ -550,20 +525,6 @@ real, dimension(:),            intent(in)    :: pref
       allocate (cloud_tracer(size(Physics_control%cloud_tracer)))
       cloud_tracer = Physics_control%cloud_tracer
 
-!-----------------------------------------------------------------------
-!    check to make sure that unavailable convection implementations have
-!    not been specified.
-!-----------------------------------------------------------------------
-      if (do_bm .and. do_bmmass ) call error_mesg   &
-         ('convection_driver_init',  &
-                   'both do_bm and do_bmmass cannot be specified', FATAL)
-      if (do_bm .and. do_bmomp ) call error_mesg   &
-         ('convection_driver_init',  &
-                   'both do_bm and do_bmomp cannot be specified', FATAL)
-      if (do_bmomp .and. do_bmmass ) call error_mesg   &
-         ('convection_driver_init',  &
-             'both do_bmomp and do_bmmass cannot be specified', FATAL)
-
 !----------------------------------------------------------------------
 !    define logical controls indicating the status of the available
 !    convective implementations in this experiment.
@@ -580,12 +541,6 @@ real, dimension(:),            intent(in)    :: pref
           endif           
       else if (do_donner_deep) then
           ldonner = .true.
-      else if (do_bm) then
-          lbm = .true.
-      else if (do_bmmass) then
-          lbmmass = .true.
-      else if (do_bmomp) then
-          lbmomp = .true.
       endif
       
 !----------------------------------------------------------------------
@@ -642,14 +597,6 @@ real, dimension(:),            intent(in)    :: pref
         endif
       endif
 
-!-----------------------------------------------------------------------
-!    initialize the convective parameterizations that are active in this 
-!    experiment.
-!-----------------------------------------------------------------------
-      if (do_bm)     call betts_miller_init () 
-      if (do_bmmass) call bm_massflux_init()
-      if (do_bmomp)  call bm_omp_init () 
-
 !-------------------------------------------------------------------------
 !    initialize the cumulus momentum transport module, defining logicals 
 !    indicating which convective schemes are to be seen by that module.
@@ -690,9 +637,6 @@ real, dimension(:),            intent(in)    :: pref
                                              grain=CLOCK_MODULE_DRIVER )
       cmt_clock        = mpp_clock_id( '   Moist Processes: CMT'         ,&
                                              grain=CLOCK_MODULE_DRIVER )
-      bm_clock         = mpp_clock_id( '   Moist Processes: Betts-Miller',&
-                                             grain=CLOCK_MODULE_DRIVER )
- 
 !------------------------------------------------------------------------
 !    call diag_field_init to register the netcdf diagnostic fields.
 !------------------------------------------------------------------------
@@ -994,20 +938,6 @@ type(aerosol_type),     intent(in), optional :: Aerosol
         call donner_driver ( is, ie, js, je, Input_mp,             &
                              Moist_clouds_block, Conv_results,           &
                              C2ls_mp, Removal_mp, Tend_mp, Output_mp )
-
-!        @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-!        @                                            @
-!        @        BETTS-MILLER CONVECTION SCHEME      @
-!        @                                            @
-!        @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
-!----------------------------------------------------------------------
-!    if one of the betts-miller convection schemes is active, call the 
-!    betts-miller driver subroutine.
-!----------------------------------------------------------------------
-      else if ( any((/do_bm, do_bmmass, do_bmomp/)) ) then
-        call betts_miller_driver (is, js, Input_mp, Output_mp, Tend_mp)
-
 
       else
 
@@ -1571,51 +1501,6 @@ type(mp_removal_control_type), intent(in) :: Control
              standard_name=   &
               'tendency_of_atmosphere_moles_of_nox_expressed_as_nitrogen')
       end if
-
-!-------------------------------------------------------------------------
-!    register diagnostics specific to the Betts-Miller experiments.
-!-------------------------------------------------------------------------
-      if ( any((/do_bm, do_bmmass, do_bmomp/)) ) then
-        id_qref = register_diag_field ( mod_name, &
-                      'qref', axes(1:3), Time, &
-                       'Adjustment reference specific humidity profile', &
-                                    'kg/kg',  missing_value=missing_value)
-
-        id_tref = register_diag_field ( mod_name, &
-                      'tref', axes(1:3), Time, &
-                         'Adjustment reference temperature profile', &
-                                'K',  missing_value=missing_value )
-
-        id_bmflag = register_diag_field (mod_name, &
-                       'bmflag', axes(1:2), Time, &
-                         'Betts-Miller flag', &
-                            'no units', missing_value=missing_value)
-
-        id_klzbs  = register_diag_field  (mod_name, &
-                        'klzbs', axes(1:2), Time, &
-                           'klzb', &
-                             'no units', missing_value=missing_value  )
-
-      endif
-
-      if (do_bm ) then
-        id_invtaubmt  = register_diag_field  (mod_name, &
-                            'invtaubmt', axes(1:2), Time, &
-                              'Inverse temperature relaxation time', &
-                                       '1/s', missing_value=missing_value )
-
-        id_invtaubmq = register_diag_field  (mod_name, &
-                          'invtaubmq', axes(1:2), Time, &
-                            'Inverse humidity relaxation time', &
-                                     '1/s', missing_value=missing_value )
-      end if 
-
-      if (do_bmmass) then
-        id_massflux = register_diag_field (mod_name, &
-                        'massflux', axes(1:3), Time, &
-                           'Massflux implied by temperature adjustment', &
-                                   'm/s', missing_value=missing_value )
-      end if  
 
 !-------------------------------------------------------------------------
 !    register diagnostics associated with CAPE / CIN calculations.
@@ -4580,207 +4465,6 @@ type(conv_tendency_type), intent(inout) :: Don_tend
 
 
 end subroutine donner_dealloc 
-
-
-
-!#######################################################################
-
-
-!*******************************************************************
-!
-!               PRIVATE, BETTS-MILLER-RELATED SUBROUTINES
-!
-!*******************************************************************
-
-!#######################################################################
-
-subroutine betts_miller_driver (is, js, Input_mp, Output_mp, Tend_mp)  
-
-!------------------------------------------------------------------
-!  subroutine betts_miller_driver prepares for, calls, and handles the 
-!  output from the three flavors of the betts-miller convective 
-!  parameterization.
-!------------------------------------------------------------------
-
-integer,                intent(in)    :: is, js
-type(mp_input_type),    intent(inout) :: Input_mp
-type(mp_output_type),   intent(inout) :: Output_mp
-type(mp_tendency_type), intent(inout) :: Tend_mp
-                                          
-!----------------------------------------------------------------------
-!    is,js      starting i and j indices for window
-!    Input_mp   derived type used to transfer needed input data between
-!               moist_processes and convection_driver
-!    Output_mp  derived type used to transfer output fields between
-!               convection_driver and moist_processes
-!    Tend_mp    derived type used to transfer calculated tendency data
-!               between convection_driver and moist_processes
-!---------------------------------------------------------------------
-
-      real, dimension(size(Input_mp%qin,1),   &
-                      size(Input_mp%qin,2),  size(Input_mp%qin,3)) ::  &
-                                             RH, t_ref, q_ref, massflux
-      real, dimension(size(Input_mp%qin,1), size(Input_mp%qin,2)) ::    &
-                          bmflag, klzbs, invtaubmt, invtaubmq, cape, cin
-      type(conv_tendency_type) :: BM_tend
-      logical :: used
-      integer :: ix, jx, kx
-
-!---------------------------------------------------------------------
-!   RH            relative humidity
-!   t_ref         reference temperature profile used with Betts-Miller
-!                 convection
-!   q_ref         reference specific humidity p[rofile used with
-!                 Betts-Miller convection
-!   massflux      mass flux used to calculate the humidity adjustment
-!   bmflag        bmflag indicates the degree of convection in the 
-!                 column
-!                 bmflag = 0. is no cape, no convection
-!                 bmflag = 1. is shallow conv, no precipitationo
-!                 bmflag = 2. is deep convection
-!   klzbs         model grid level of zero buoyancy 
-!   invtaubmt     temperature relaxation timescale
-!   invtaubmq     humidity relaxation timescale
-!   cape          convective available potential energy
-!   cin           convective inhibition
-!   BM_tend       conv_tendency_type variable containing tendency
-!                 output from betts-miller parameterization
-!   used          logical used to indicate data has been received by
-!                 diag_manager_mod
-!   ix, jx, kx    physics window dimesnsions
-!---------------------------------------------------------------------
-
-!---------------------------------------------------------------------
-!    activate bm_clock.
-!---------------------------------------------------------------------
-      call mpp_clock_begin (bm_clock)
-
-!-----------------------------------------------------------------------
-!    define array dimensions.
-!-----------------------------------------------------------------------
-      ix = size(Input_mp%t,1) 
-      jx = size(Input_mp%t,2) 
-      kx = size(Input_mp%t,3) 
-
-!--------------------------------------------------------------------
-!    allocate and initialize the needed components of a
-!    conv_tendency_type array.
-!--------------------------------------------------------------------
-      allocate (BM_tend%rain(ix, jx))  
-      allocate (BM_tend%snow(ix, jx)) 
-      allocate (BM_tend%ttnd(ix, jx, kx))
-      allocate (BM_tend%qtnd(ix, jx, kx))
-      BM_tend%rain = 0.
-      BM_tend%snow = 0.
-      BM_tend%ttnd = 0.
-      BM_tend%qtnd = 0.
-
-!--------------------------------------------------------------------
-!    initialize local arrays.
-!--------------------------------------------------------------------
-      t_ref = 0.
-      q_ref = 0.
-
-!----------------------------------------------------------------------
-!    call appropriate interface dependent on flavor of Betts-Miller which
-!    has been selected.
-!----------------------------------------------------------------------
-      if (LBM) then
-
-!----------------------------------------------------------------------
-!    betts-miller cumulus param scheme
-!----------------------------------------------------------------------
-        call betts_miller     &
-               (dt, Input_mp%tin, Input_mp%qin, Input_mp%pfull, &
-                     Input_mp%phalf, Input_mp%coldT, BM_tend%rain,   &
-                        BM_tend%snow, BM_tend%ttnd, BM_tend%qtnd,   &
-                           q_ref, bmflag, klzbs, cape, cin, t_ref, & 
-                                                    invtaubmt, invtaubmq)
-      endif
-
-      if (LBMmass) then
-
-!----------------------------------------------------------------------
-!    betts-miller-style massflux cumulus param scheme
-!----------------------------------------------------------------------
-        call bm_massflux    &
-               (dt, Input_mp%tin, Input_mp%qin, Input_mp%pfull,   &
-                  Input_mp%phalf, Input_mp%coldT, BM_tend%rain,    &
-                    BM_tend%snow, BM_tend%ttnd, BM_tend%qtnd, q_ref,   &
-                                          bmflag, klzbs, t_ref, massflux)
-
-      endif
-
-      if (LBMomp) then
-!----------------------------------------------------------------------
-!    olivier's betts-miller cumulus param scheme
-!----------------------------------------------------------------------
-        call bm_omp    &
-               (dt, Input_mp%tin, Input_mp%qin, Input_mp%pfull,  &
-                 Input_mp%phalf, Input_mp%coldT, BM_tend%rain,   &
-                    BM_tend%snow, BM_tend%ttnd, BM_tend%qtnd, q_ref,  &
-                                                   bmflag, klzbs, t_ref)
-      endif
-
-!----------------------------------------------------------------------
-!    update input values and compute tendency.
-!----------------------------------------------------------------------
-      Input_mp%tin = Input_mp%tin + BM_tend%ttnd
-      Input_mp%qin = Input_mp%qin + BM_tend%qtnd
-
-      BM_tend%ttnd = BM_tend%ttnd*dtinv
-      BM_tend%qtnd = BM_tend%qtnd*dtinv
-      BM_tend%rain= BM_tend%rain*dtinv
-      BM_tend%snow= BM_tend%snow*dtinv
-
-!-----------------------------------------------------------------------
-!    save desired betts-miller diagnostics.
-!-----------------------------------------------------------------------
-      used = send_data (id_tref, t_ref, Time, is, js, 1 )
-      used = send_data (id_qref, q_ref, Time, is, js, 1 )
-      used = send_data (id_bmflag, bmflag, Time, is, js)
-      used = send_data (id_klzbs, klzbs, Time, is, js)
-      if (do_bm) then
-        used = send_data (id_invtaubmt, invtaubmt, Time, is, js)
-        used = send_data (id_invtaubmq, invtaubmq, Time, is, js)
-      endif
-      if (do_bmmass) then
-        used = send_data (id_massflux, massflux, Time, is, js, 1)
-      endif
-
-!----------------------------------------------------------------------
-!    call update_outputs to update the arrays which will return the
-!    convective tendencies to moist_processes.
-!----------------------------------------------------------------------
-      call update_outputs (BM_tend, Output_mp, Tend_mp)
-
-!-----------------------------------------------------------------------
-!    preserve an error / bug in the warsaw code. diagnostic output changes
-!    for the post-warsaw case, reflecting the bugfix.
-!-----------------------------------------------------------------------
-      if (reproduce_AM4) then
-        Tend_mp%ttnd_conv = 0.
-        Tend_mp%qtnd_conv = 0.
-      endif
-
-!----------------------------------------------------------------------
-!    deallocate components of conv_tendency_type which were allocated
-!    in this subroutine.
-!----------------------------------------------------------------------
-      deallocate (BM_tend%rain)
-      deallocate (BM_tend%snow)
-      deallocate (BM_tend%ttnd)
-      deallocate (BM_tend%qtnd)
-
-!---------------------------------------------------------------------
-!    turn off the betts-miller clock.
-!---------------------------------------------------------------------
-      call mpp_clock_end (bm_clock)
-
-!---------------------------------------------------------------------
-
-
-end subroutine betts_miller_driver
 
 
 

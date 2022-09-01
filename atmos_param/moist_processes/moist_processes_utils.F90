@@ -139,15 +139,11 @@ end type mp_conv2ls_type
 
 type mp_nml_type
     logical  :: do_lsc
-    logical  :: do_ras
     logical  :: do_uw_conv
     logical  :: limit_conv_cloud_frac
     real     :: pdepth
     logical  :: do_rh_clouds
     logical  :: do_donner_deep
-    logical  :: do_bm  
-    logical  :: do_bmmass
-    logical  :: do_bmomp
     logical  :: do_simple
     logical  :: do_unified_clouds
     logical  :: use_online_aerosol
@@ -176,10 +172,8 @@ end type mp_tendency_type
 type mp_removal_control_type
     logical, dimension(:),  allocatable :: tracers_in_donner
     logical, dimension(:),  allocatable :: tracers_in_uw
-    logical, dimension(:),  allocatable :: tracers_in_ras
     integer  :: num_donner_tracers
     integer  :: num_uw_tracers
-    integer  :: num_ras_tracers
 end type mp_removal_control_type
 
 type mp_removal_type
@@ -1015,12 +1009,9 @@ integer,                       intent(in)    :: num_prog_tracers
 !    scheme.
 !------------------------------------------------------------------------
       allocate (control%tracers_in_donner(num_prog_tracers))
-      allocate (control%tracers_in_ras(num_prog_tracers))
       allocate (control%tracers_in_uw(num_prog_tracers))
       control%tracers_in_donner = .false.
-      control%tracers_in_ras    = .false.
       control%tracers_in_uw     = .false.
-      control%num_ras_tracers   = 0       
       control%num_donner_tracers   = 0       
       control%num_uw_tracers   = 0       
 
@@ -1038,27 +1029,15 @@ integer,                       intent(in)    :: num_prog_tracers
             case ("donner")
                Control%num_donner_tracers = Control%num_donner_tracers + 1
                Control%tracers_in_donner(n) = .true.
-            case ("ras")
-               Control%num_ras_tracers = Control%num_ras_tracers + 1
-               Control%tracers_in_ras(n) = .true.
             case ("uw")
                Control%num_uw_tracers = Control%num_uw_tracers + 1
                Control%tracers_in_uw(n) = .true.
-            case ("donner_and_ras")
-               Control%num_donner_tracers = Control%num_donner_tracers + 1
-               Control%tracers_in_donner(n) = .true.
-               Control%num_ras_tracers = Control%num_ras_tracers + 1
-               Control%tracers_in_ras(n) = .true.
             case ("all")
                Control%num_donner_tracers = Control%num_donner_tracers + 1
                Control%tracers_in_donner(n) = .true.
-               Control%num_ras_tracers = Control%num_ras_tracers + 1
-               Control%tracers_in_ras(n) = .true.
                Control%num_uw_tracers = Control%num_uw_tracers + 1
                Control%tracers_in_uw(n) = .true.
             case ("all_nodonner")
-               Control%num_ras_tracers = Control%num_ras_tracers + 1
-               Control%tracers_in_ras(n) = .true.
                Control%num_uw_tracers = Control%num_uw_tracers + 1
                Control%tracers_in_uw(n) = .true.
             case default  ! corresponds to "none"
@@ -1076,7 +1055,6 @@ subroutine deallocate_mp_removal_control_type (Removal_mp_control)
 type(mp_removal_control_type), intent(inout)  :: Removal_mp_control
 
       deallocate (Removal_mp_control%tracers_in_donner )   
-      deallocate (Removal_mp_control%tracers_in_ras )    
       deallocate (Removal_mp_control%tracers_in_uw  )   
 
 
