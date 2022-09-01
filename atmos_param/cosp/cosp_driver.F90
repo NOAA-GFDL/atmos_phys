@@ -570,13 +570,6 @@ type(cosp_from_rad_block_type),  intent(inout) :: Cosp_rad_block
         end do
       endif
 
-!----------------------------------------------------------------------
-!    add in donner mca precip. if it is desired to not pass this to COSP,
-!    the fields will have been set to 0.0 previously.
-!----------------------------------------------------------------------
-      MP2cosp%fl_ccrain = Mp2cosp%fl_ccrain + MP2cosp%fl_donmca_rain
-      MP2cosp%fl_ccsnow = MP2cosp%fl_ccsnow + MP2cosp%fl_donmca_snow
-
 !---------------------------------------------------------------------
 !    pass in the large-scale graupel flux, lowest-level u and v wind
 !    components.
