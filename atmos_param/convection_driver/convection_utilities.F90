@@ -20,11 +20,9 @@ integer, dimension(:,:), allocatable    :: cldbot
 integer, dimension(:,:), allocatable    :: cldtop
 real,    dimension(:,:,:), allocatable  :: prod_no
 
-real, dimension(:,:,:), allocatable     :: ras_mflux
 real, dimension(:,:,:), allocatable     :: donner_mflux
 real, dimension(:,:,:), allocatable     :: donner_mflux_up
 real, dimension(:,:,:), allocatable     :: uw_mflux
-real, dimension(:,:,:), allocatable     :: ras_det_mflux
 real, dimension(:,:,:), allocatable     :: donner_det_mflux
 real, dimension(:,:,:), allocatable     :: mc_donner
 real, dimension(:,:,:), allocatable     :: mc_donner_half
