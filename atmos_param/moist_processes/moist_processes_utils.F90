@@ -118,7 +118,6 @@ type mp_output_type
     real, dimension(:,:),          allocatable  ::  fprec
     real, dimension(:,:),          allocatable  ::  precip
     real, dimension(:,:),          allocatable  ::  gust_cv
-    real, dimension(:,:,:),        pointer      ::  diff_t_clubb => NULL()
     real, dimension(:,:,:),        pointer      ::  diff_cu_mo => NULL()
 end type mp_output_type
 
@@ -130,14 +129,12 @@ type mp_conv2ls_type
     real, dimension(:,:,:),   allocatable   :: convective_humidity_area
     real, dimension(:,:,:),   allocatable   ::    &
                             convective_humidity_ratio
-    real, dimension(:,:,:),   allocatable   :: conv_frac_clubb
     real, dimension(:,:,:,:), allocatable   :: wet_data
     real, dimension(:,:,:),   allocatable   :: cloud_wet
     real, dimension(:,:,:),   allocatable   :: cloud_frac
     real, dimension(:,:,:),   allocatable   :: mc_full
     real, dimension(:,:,:),   allocatable   :: mc_half
-    real, dimension(:,:,:),   allocatable   ::    &
-                            convective_humidity_ratio_clubb
+
 end type mp_conv2ls_type
 
 type mp_nml_type

@@ -269,7 +269,6 @@ real         :: qamin = 1.E-2
 logical      :: do_brenguier = .true.
 logical      :: snow_in_cloudrad = .false.
 logical      :: rain_in_cloudrad = .false.
-logical      :: clubb_error = .false.
 
 ! <NAMELIST NAME="cloud_rad_nml">
 !  <DATA NAME="taucrit" UNITS="" TYPE="" DIM="" DEFAULT="">
@@ -306,8 +305,7 @@ logical      :: clubb_error = .false.
 namelist /cloud_rad_nml/                                       &
                          taucrit, adjust_top, scale_factor,    &
                          qamin, do_brenguier, snow_in_cloudrad, &
-                         rain_in_cloudrad, clubb_error
-
+                         rain_in_cloudrad
 
 !------------------------------------------------------------------
 !---- public data ------
@@ -354,12 +352,6 @@ real, parameter :: k_land = 1.143   ! ratio of effective radius to
 real, parameter :: k_ocean = 1.077  ! ratio of effective radius to 
                                     ! volume radius for continental
                                     ! air masses  [ dimensionless ]
-real, parameter :: dcs_mg = 200.e-6 ! value originally used in this 
-                                    ! module that was inconsistent with
-                                    ! the value used in the microphysics
-                                    ! (for ncar microphysics, including
-                                    ! CLUBB)
-
 !----------------------------------------------------------------------
 !    diagnostics variables.        
 !----------------------------------------------------------------------
@@ -482,26 +474,11 @@ type(exchange_control_type), intent(in), optional :: Exch_ctrl
         qcvar = Exch_ctrl%qcvar
         overlap = Exch_ctrl%overlap
         do_liq_num = Exch_ctrl%do_liq_num
-
-!-----------------------------------------------------------------------
-!RSH:to preserve previous behavior with clubb ( in which do_ice_num was
-!    always false) the requirement that do_clubb be F for ice num to be 
-!    true is included. For a fresh start (assuming clubb can now handle 
-!    prognostic ice crystals), the clubb condition on this definition
-!    should be removed.
-!----------------------------------------------------------------------
-        do_ice_num = Exch_ctrl%do_ice_num .and.   &
-                                      Exch_ctrl%do_clubb <= 0
+        do_ice_num = Exch_ctrl%do_ice_num 
         min_diam_ice = Exch_ctrl%min_diam_ice
         min_diam_drop = Exch_ctrl%min_diam_drop
         max_diam_drop = Exch_ctrl%max_diam_drop
-
-!------------------------------------------------------------------------
-!    retain ability to override standard dcs value with the old value
-!    which was originally used by error with clubb
-!------------------------------------------------------------------------
         dcs = Exch_ctrl%dcs
-        if (clubb_error) dcs = dcs_mg
       else
         call error_mesg ('cloud_rad_init', ' first call to &
                    &cloud_rad_init does not have Exch_ctrl as arg',&

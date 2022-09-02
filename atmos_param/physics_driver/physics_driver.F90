@@ -215,9 +215,6 @@ end interface
 !  <DATA NAME="do_radiation" UNITS="" TYPE="logical" DIM="" DEFAULT=".true.     ">
 !   calculating radiative fluxes and  heating rates?
 !  </DATA>
-!  <DATA NAME="do_clubb" UNITS="" TYPE="integer" DIM="" DEFAULT="0">
-!   do_clubb > 0 implies clubb is active in some manner
-!  </DATA>
 !  <DATA NAME="do_cosp" UNITS="" TYPE="logical" DIM="" DEFAULT=".false.">
 !   activate COSP simulator ?
 !  </DATA>
@@ -244,9 +241,6 @@ end interface
 !  <DATA NAME="override_aerosols_cloud" UNITS="" TYPE="logical" DIM="" DEFA     ULT=".false.">
 !   use offline aerosols for cloud calculation
 !   (via data_override in aerosol_driver)?
-!  </DATA>
-!  <DATA NAME="l_host_applies_sfc_fluxes" UNITS="" TYPE="logical" DIM="" DEFAULT=".true.">
-!   applying surface fluxes in host-model ?
 !  </DATA>
 !  <DATA NAME="qmin" UNITS="kg h2o/kg air" TYPE="real"  DEFAULT="1.E-10">
 !   minimum permissible value of cloud liquid, cloud ice, saturated volume
@@ -316,7 +310,6 @@ end interface
  
 
 logical :: do_radiation = .true.
-integer :: do_clubb = 0        
 logical :: do_cosp = .false.   
 logical :: do_modis_yim = .true.
 logical :: donner_meso_is_largescale = .true.
@@ -325,7 +318,6 @@ real    :: tau_diff = 3600.
 real    :: diff_min = 1.e-3   
 logical :: diffusion_smooth = .true.
 logical :: override_aerosols_cloud = .false.
-logical :: l_host_applies_sfc_fluxes = .true.
 real    :: qmin = 1.0e-10
 real    :: N_land = 3.e8
 real    :: N_ocean = 1.e8
@@ -342,12 +334,11 @@ logical :: use_tau = .false.
 real    :: cosp_frequency = 10800.
 
 
-namelist / physics_driver_nml / do_radiation, do_clubb,  do_cosp, &
+namelist / physics_driver_nml / do_radiation, do_cosp, &
                                 do_modis_yim, donner_meso_is_largescale, &
                                 do_moist_processes, tau_diff,      &
                                 diff_min, diffusion_smooth, &
                                 override_aerosols_cloud,    &
-                                l_host_applies_sfc_fluxes, &
                                 qmin, N_land, N_ocean, do_liq_num,  &
                                 do_ice_num, qcvar, overlap, N_min, &
                                 min_diam_ice, dcs, min_diam_drop, &
@@ -436,7 +427,6 @@ integer, dimension(8) :: restart_versions = (/ 1, 2, 3, 4, 5, 6, 7, 8 /)
 !                   physics_driver_down on the next step.
 !    temp_last
 !    q_last
-!    diff_t_clubb
 !----------------------------------------------------------------------
 real,    dimension(:,:,:), allocatable,target :: diff_cu_mo, diff_t, diff_m
 real,    dimension(:,:,:), allocatable,target :: radturbten
@@ -448,7 +438,6 @@ integer, dimension(:,:,:), allocatable,target :: exist_shconv, exist_dpconv
 real,    dimension(:,:,:), allocatable,target :: pblht_prev, hlsrc_prev, &
                                                  qtsrc_prev, cape_prev,  &
                                                  cin_prev
-real,    dimension(:,:,:), allocatable,target ::  diff_t_clubb
 
 real,    dimension(:,:,:), allocatable        :: temp_last, q_last
 
@@ -753,7 +742,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
 !   into the Physics%control derived type for easy movement.
 !------------------------------------------------------------------------
       Physics%control%use_tau = use_tau
-      Physics%control%l_host_applies_sfc_fluxes = l_host_applies_sfc_fluxes
       Physics%control%nsphum = get_tracer_index ( MODEL_ATMOS, 'sphum' )
       Physics%control%nql = get_tracer_index ( MODEL_ATMOS, 'liq_wat' )
       Physics%control%nqi = get_tracer_index ( MODEL_ATMOS, 'ice_wat' )
@@ -875,7 +863,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       Exch_ctrl%min_diam_drop = min_diam_drop
       Exch_ctrl%max_diam_drop = max_diam_drop
 
-      Exch_ctrl%do_clubb = do_clubb
       Exch_ctrl%do_cosp = do_cosp
       Exch_ctrl%donner_meso_is_largescale =  donner_meso_is_largescale
       Exch_ctrl%do_modis_yim              =  do_modis_yim
@@ -929,15 +916,14 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       call mpp_clock_begin ( turb_init_clock )
       call vert_turb_driver_init (physics_domain, lonb, latb, id, jd, kd, axes, Time, &
                                   Exch_ctrl, Physics%control,  &
-                                  doing_entrain, do_clubb)
+                                  doing_entrain)
       call mpp_clock_end ( turb_init_clock )
 
 !-----------------------------------------------------------------------
 !    initialize vert_diff_driver_mod.
 !-----------------------------------------------------------------------
       call mpp_clock_begin ( diff_init_clock )
-      call vert_diff_driver_init (Surf_diff, id, jd, kd, axes, Time,   &
-                                  do_clubb )
+      call vert_diff_driver_init (Surf_diff, id, jd, kd, axes, Time )
       call mpp_clock_end ( diff_init_clock )
 
       if (do_moist_processes) then
@@ -981,7 +967,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       allocate ( convect    (id, jd) )     ; convect = .false.
       allocate ( radturbten (id, jd, kd))  ; radturbten = 0.0
       allocate ( r_convect  (id, jd) )     ; r_convect   = 0.0
-      allocate ( diff_t_clubb(id, jd, kd) ); diff_t_clubb = 0.0
 
 
       if (do_cosp) then
@@ -1992,26 +1977,14 @@ real,  dimension(:,:,:), intent(out)  ,optional :: diffm, difft
 
       call mpp_clock_begin ( diff_down_clock )
       radturbten(is:ie,js:je,:) = radturbten(is:ie,js:je,:) - tdt(:,:,:)
-      if (do_clubb > 0) then
-        call vert_diff_driver_down (is, js, Time_next, dt, p_half,   &
-                                    p_full, z_full,   &
-                                    diff_m(is:ie,js:je,:),         &
-                                    diff_t(is:ie,js:je,:),         &
-                                    u ,v ,t ,r(:,:,:,1) ,r(:,:,:,1:ntp), &
-                                    dtau_du, dtau_dv, tau_x, tau_y,  &
-                                    udt, vdt, tdt, rdt(:,:,:,1), rdt,       &
-                                    Surf_diff,                     &
-                                    diff_t_clubb=diff_t_clubb(is:ie,js:je,:))
-      else
-        call vert_diff_driver_down (is, js, Time_next, dt, p_half,   &
-                                    p_full, z_full,   &
-                                    diff_m(is:ie,js:je,:),         &
-                                    diff_t(is:ie,js:je,:),         &
-                                    u ,v ,t ,r(:,:,:,1) ,r(:,:,:,1:ntp), &
-                                    dtau_du, dtau_dv, tau_x, tau_y,  &
-                                    udt, vdt, tdt, rdt(:,:,:,1), rdt,        &
-                                    Surf_diff)
-      endif
+      call vert_diff_driver_down (is, js, Time_next, dt, p_half,   &
+          p_full, z_full,   &
+          diff_m(is:ie,js:je,:),         &
+          diff_t(is:ie,js:je,:),         &
+          u ,v ,t ,r(:,:,:,1) ,r(:,:,:,1:ntp), &
+          dtau_du, dtau_dv, tau_x, tau_y,  &
+          udt, vdt, tdt, rdt(:,:,:,1), rdt,        &
+          Surf_diff)
 
       if (id_tdt_phys_vdif_dn > 0) then
         used = send_data ( id_tdt_phys_vdif_dn, +2.0*tdt(:,:,:), &
@@ -2384,16 +2357,6 @@ real,dimension(:,:),    intent(inout)             :: gust
         endif
       end do
 
-!--------------------------------------------------------------------------
-!    save temperature and moisture tendencies due to surface fluxes at 
-!    lowest-level before calculating vertical diffusion, in the case where
-!    these tendencies are not yet to be applied (ie, clubb is active).
-!------------------------------------------------------------------------
-      if( .not. l_host_applies_sfc_fluxes ) then
-          tdt_shf(:,:) = tdt(:, :, kmax)
-          qdt_lhf(:,:) = rdt(:, :, kmax, 1)
-      endif
-
       call mpp_clock_begin ( diff_up_clock )
 !------------------------------------------------------------------
 !    call vert_diff_driver_up to complete the vertical diffusion
@@ -2401,19 +2364,6 @@ real,dimension(:,:),    intent(inout)             :: gust
 !------------------------------------------------------------------
       call vert_diff_driver_up (is, js, Time_next, dt, p_half,   &
                                 Surf_diff, tdt, rdt(:,:,:,1), rdt )
-
-!--------------------------------------------------------------------------
-!    if the surface tendencies are not to be applied here (ie, clubb),  
-!    define those values and remove them from the accumulated time 
-!    tendencies. otherwise, set these tendencies to 0.0.
-!------------------------------------------------------------------------
-      if( .not. l_host_applies_sfc_fluxes ) then
-          tdt_shf(:,:) = tdt(:, :, kmax) - tdt_shf(:,:)
-          qdt_lhf(:,:) = rdt(:, :, kmax, 1) - qdt_lhf(:,:)
-
-          tdt(:, :, kmax) = tdt(:, :, kmax) - tdt_shf(:,:)
-          rdt(:, :, kmax, 1) = rdt(:, :, kmax, 1) - qdt_lhf(:,:)
-      endif
 
 !-----------------------------------------------------------------------
 !    add the temperature tendency due to vertical  diffusion to radturbten.
@@ -2483,7 +2433,6 @@ real,dimension(:,:),    intent(inout)             :: gust
         Phys_mp_exch%pbltop     => pbltop    (is:ie,js:je  )
         Phys_mp_exch%diff_cu_mo => diff_cu_mo(is:ie,js:je,:)
         Phys_mp_exch%convect    => convect   (is:ie,js:je  )
-        Phys_mp_exch%diff_t_clubb => diff_t_clubb(is:ie,js:je,:)
         Phys_mp_exch%tdt_shf    => tdt_shf 
         Phys_mp_exch%qdt_lhf    => qdt_lhf 
         Phys_mp_exch%hmint      => hmint     (is:ie,js:je  )
@@ -2723,7 +2672,6 @@ real,dimension(:,:),    intent(inout)             :: gust
       Phys_mp_exch%diff_t => null()
       Phys_mp_exch%radturbten => null()
       Phys_mp_exch%diff_cu_mo => null()
-      Phys_mp_exch%diff_t_clubb => null()
       Phys_mp_exch%cush   => null()
       Phys_mp_exch%cbmf   => null()
       Phys_mp_exch%pbltop => null()
@@ -2787,7 +2735,7 @@ type(block_control_type), intent(in) :: Atm_block
 !--------------------------------------------------------------------
 integer :: n, nb, nc, ibs, ibe, jbs, jbe
 integer :: moist_processes_term_clock, damping_term_clock, turb_term_clock, &
-           diff_term_clock, aerosol_term_clock, clubb_term_clock, &
+           diff_term_clock, aerosol_term_clock,  &
            tracer_term_clock, cosp_term_clock
 
 !---------------------------------------------------------------------
@@ -2798,9 +2746,6 @@ integer :: moist_processes_term_clock, damping_term_clock, turb_term_clock, &
               'module has not been initialized', FATAL)
       endif
 
-      clubb_term_clock =      &
-        mpp_clock_id( '   Phys_driver_term: clubb: Termination', &
-                grain=CLOCK_MODULE_DRIVER )
       moist_processes_term_clock =      &
         mpp_clock_id( '   Phys_driver_term: MP: Termination', &
                 grain=CLOCK_MODULE_DRIVER )
@@ -2926,8 +2871,6 @@ integer :: moist_processes_term_clock, damping_term_clock, turb_term_clock, &
            Precip_flux%fl_donmca_snow)
       endif
  
-      deallocate ( diff_t_clubb )
-      
       deallocate (id_tracer_phys_vdif_dn)
       deallocate (id_tracer_phys_vdif_up)
       deallocate (id_tracer_phys_turb)
@@ -3265,9 +3208,6 @@ subroutine physics_driver_register_restart_domain (Restart, Til_restart)
   call register_restart_field(Til_restart, 'diff_m',     diff_m, dim_names_4d)
   call register_restart_field(Til_restart, 'convect',    r_convect, dim_names_3d)
 
-  if (do_clubb > 0) then
-    call register_restart_field(Til_restart, 'diff_t_clubb', diff_t_clubb, dim_names_4d, is_optional = .true.)
-  end if
   if (doing_prog_clouds) then
     call register_restart_field(Til_restart, 'radturbten',       radturbten, dim_names_4d)
   endif

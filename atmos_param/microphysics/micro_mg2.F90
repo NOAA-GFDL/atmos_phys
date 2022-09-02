@@ -276,7 +276,6 @@ logical           ::  do_cldice = .true.
                                       ! .false. = skip all processes
                                       ! affecting cloud ice
 logical           ::  do_ice_nucl_wpdf
-logical           ::  clubb_active
 logical           ::  do_Ni_linear_interp = .false.
 logical           ::  do_implicit_fall    = .false.
 
@@ -414,7 +413,6 @@ subroutine micro_mg2_init( &
         write (logunit, nml=micro_mg2_nml)
 
   do_ice_nucl_wpdf = do_ice_nucl_wpdf_in
-  clubb_active=(Exch_ctrl%do_clubb>0)
 
   ! typical air density at 850 mb
   rhosu = 85000._r8/(rair * tmelt)

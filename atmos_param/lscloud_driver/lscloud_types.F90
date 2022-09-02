@@ -391,8 +391,6 @@ type  particles_type
                                         crystal1       =>NULL(), &
                                         N3D            =>NULL(), &
                                         N3Di           =>NULL(), &
-                                        Ndrop_act_CLUBB =>NULL(), &
-                                        icedrop_act_CLUBB =>NULL(), &
                                         rbar_dust      =>NULL(), &
                                         ndust          =>NULL(), &
                                         hom            =>NULL()
@@ -466,8 +464,7 @@ type cloud_state_type
                                         SNS_out        =>NULL(), &
                                         SA_0           =>NULL(), &
                                         qa_upd_0       =>NULL(), &
-                                        relvarn        =>NULL(), &
-                                        qcvar_clubb    =>NULL()
+                                        relvarn        =>NULL()
 
 end type cloud_state_type
 

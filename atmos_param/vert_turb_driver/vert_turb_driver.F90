@@ -88,20 +88,16 @@ logical            :: module_is_initialized = .false.
 
  integer           :: alternate_zpbl = 0        ! alternate algorith to compute PBL height
 
-!-->h1g, 2012-07-16
- integer :: do_clubb
  integer :: nwp2
  real    :: wp2_min = 4.e-4
  real    :: diff_min = 1.e-3    ! minimum value of a diffusion 
                                 ! coefficient beneath which the
                                 ! coefficient is reset to zero
  
- integer :: id_clubb_on
  integer :: id_stable_on                     ! ( diff_m_stab > diff_m  or diff_t_stab > diff_t)
  
  integer :: id_stable_effective              !     ( diff_m_stab > diff_m  or diff_t_stab > diff_t) 
                                              ! and ( diff_m_stab > diff_min  or diff_t_stab > diff_min)
-!<--h1g, 2012-07-16 
  
  namelist /vert_turb_driver_nml/ gust_scheme, constant_gust, &
                                  do_stable_bl, &
@@ -180,8 +176,7 @@ integer :: i,j,kk
 logical :: used
 !-->h1g, 2012-08-07
 real   , dimension(size(diff_t,1),size(diff_t,2), &
-                                  size(diff_t,3))   :: clubb_on,   &
-                                                       stable_on,  &
+                                  size(diff_t,3))   :: stable_on,  &
                                                        stable_effective
 !<--h1g, 2012-08-07 
 
@@ -295,23 +290,8 @@ CALL STABLE_BL_TURB( is, js, Time_next, tt, qq, qlin, qiin, uu,&
      diff_m_stab, diff_t_stab,kbot=kbot)
 
 ! --->h1g, 2012-07-16
-     if(  do_clubb > 0 ) then
-        clubb_on = 1.0
-        where ( rdiag(:,:,:, nwp2) <= wp2_min )
-            where( diff_m_stab > diff_m .or. diff_t_stab > diff_t )
-               stable_on = 1.0
-               where( diff_m_stab >= diff_min .or. diff_t_stab >= diff_min )
-                   stable_effective = 1.0
-               endwhere
-            endwhere
-            diff_m = diff_m +  MAX( diff_m_stab - diff_m, 0.0 )
-            diff_t = diff_t +  MAX( diff_t_stab - diff_t, 0.0 )
-            clubb_on = 0.0
-        endwhere
-     else
-        diff_m = diff_m +  MAX( diff_m_stab - diff_m, 0.0 )
-        diff_t = diff_t +  MAX( diff_t_stab - diff_t, 0.0 )
-     endif
+     diff_m = diff_m +  MAX( diff_m_stab - diff_m, 0.0 )
+     diff_t = diff_t +  MAX( diff_t_stab - diff_t, 0.0 )
 ! <---h1g, 2012-07-16
 
 end if
@@ -481,14 +461,6 @@ end if
       used = send_data ( id_vwnd, vv, Time_next, is, js, 1, rmask=mask)
    endif
   
-! --->h1g, 2012-08-07, dump whether stable-scheme is on, clubb_on
-   if( do_clubb > 0) then
-     if ( id_clubb_on > 0 ) then
-        used = send_data ( id_clubb_on, clubb_on, Time_next, is, js, 1, mask=lmask )
-     endif
-   endif
-! <---h1g, 2012-08-07
-   
 !-----------------------------------------------------------------------
 
 end subroutine vert_turb_driver
@@ -497,7 +469,7 @@ end subroutine vert_turb_driver
 
 subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
                                   Exch_ctrl, Physics_control, &
-                                  doing_entrain, do_clubb_in)
+                                  doing_entrain)
 
 !-----------------------------------------------------------------------
    type(domain2D), target,      intent(in)    :: domain !< Atmosphere domain
@@ -508,9 +480,6 @@ subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
    type(time_type), intent(in) :: Time
    logical,         intent(out) :: doing_entrain
 
-!-->h1g
-   integer, optional,    intent(in)    :: do_clubb_in
-!<--h1g
 !-----------------------------------------------------------------------
    integer, dimension(3) :: full = (/1,2,3/), half = (/1,2,4/)
    integer :: ierr, unit, io, logunit
@@ -549,24 +518,9 @@ subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
       call get_number_tracers (MODEL_ATMOS, num_prog=ntp)
 
 !-----------------------------------------------------------------------
-! -->h1g, 2012-07-16
-    if (present(do_clubb_in)) then
-         do_clubb = do_clubb_in
-    else
-         do_clubb = 0
-    endif
-    
     doing_prog_clouds = Exch_ctrl%doing_prog_clouds
-
-    if( do_entrain .and. do_clubb>0 ) &
-         call error_mesg ( 'vert_turb_driver_mod', 'cannot activate '//&
-           'both do_entrain and CLUBB', FATAL)
-    nwp2 = get_tracer_index ( MODEL_ATMOS, 'wp2' )
-    if ( do_clubb>0 .and. nwp2 <= ntp ) then
-     ! nwp2 is a diagnostic tracer
-      call error_mesg ('vert_turb_driver_mod', &
-                      'wp2 is a diagnostic tracer in CLUBB', FATAL)
-    endif
+    nwp2 = get_tracer_index ( MODEL_ATMOS, 'wp2' )        
+    
 !<--h1g, 2012-07-16
 
 ! get tracer indices for stratiform cloud variables
@@ -698,15 +652,6 @@ if (do_entrain) then
                         missing_value=missing_value               )
 
  endif
-
-! --->h1g, 2012-08-07, register id_clubb_on
-if( do_clubb > 0 ) then
-   id_clubb_on = &
-    register_diag_field ( mod_name, 'clubb_on', axes(half), Time,       &
-                       'frequency of clubb is on',  ' ',                &
-                        missing_value=missing_value               )
-endif
-! <---h1g, 2012-08-07
 
 
 !-----------------------------------------------------------------------

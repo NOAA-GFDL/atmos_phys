@@ -228,9 +228,6 @@ character(len=128) :: tagname = '$Name: $'
 !   detrain_ice_num = if true, convective ice particles may be detrained
 !                into the large-scale clouds (default = F).
 
-!   conv_frac_max = the largest allowable convective cloud fraction in a
-!                grid box (default = 0.99, used only for clubb scheme).
-
 !   remain_detrain_bug = setting this to T will result in retaining a bug
 !                which resulted in 10x fewer liquid droplets being 
 !                detrained into the large-scale clouds than should have 
@@ -272,7 +269,6 @@ logical            :: do_donner_conservation_checks = .true.
 logical            :: do_donner_mca=.false.
 logical            :: detrain_liq_num = .false.
 logical            :: detrain_ice_num = .false.
-real               :: conv_frac_max = 0.99
 logical            :: remain_detrain_bug = .false.
 logical            :: keep_icenum_detrain_bug = .false.
 logical            :: reproduce_AM4 = .true.
@@ -289,7 +285,6 @@ namelist /convection_driver_nml/    &
               force_donner_moist_conserv, do_donner_conservation_checks, &
               do_donner_mca,     &
               detrain_liq_num, detrain_ice_num, &
-              conv_frac_max,   &
               remain_detrain_bug, keep_icenum_detrain_bug, &
               reproduce_AM4
 
@@ -303,8 +298,6 @@ real    :: qmin                    ! minimum value for condensate specific
 logical :: do_liq_num              ! prognostic cloud droplet number ?
 logical :: do_ice_num              ! prognostic ice particle number ?
 logical :: do_cosp                 ! call COSP diagnostic package ?
-integer :: do_clubb                ! using CLUBB as the large-scale cloud 
-                                   !                               scheme ?
 logical :: do_lsc                  ! using bulk large scale condensation ?
 logical :: do_mca                  ! moist convective adjustment is active?
 logical :: do_ras                  ! relaxed arakawa-schubert param 
@@ -583,7 +576,6 @@ real, dimension(:),            intent(in)    :: pref
       qmin = Exch_ctrl%qmin
       do_liq_num = Exch_ctrl%do_liq_num
       do_ice_num = Exch_ctrl%do_ice_num
-      do_clubb = Exch_ctrl%do_clubb
       do_lsc = Nml_mp%do_lsc
       do_cosp = Exch_ctrl%do_cosp
       do_mca = Nml_mp%do_mca
@@ -3132,23 +3124,13 @@ type(mp_input_type),                intent(in)    :: Input_mp
 !-----------------------------------------------------------------------
 !    call compute_convective_area to compute the grid box area taken up 
 !    by convective clouds, and the ratio of gridbox relative humidity to
-!    that in the cloud environment.  If CLUBB is active, then a second call
-!    is made using slightly different inputs, and with outputs that are 
-!    used only with CLUBB. 
+!    that in the cloud environment.  
 !-----------------------------------------------------------------------
       if (.not. do_lsc) then
         call compute_convective_area     &
             (Input_mp%tin, Input_mp%pfull, Input_mp%qin, conv_area_input, &
              rh_wtd_conv_area, 1.0, C2ls_mp%convective_humidity_ratio, &
                                          C2ls_mp%convective_humidity_area)
-      endif
-      if (do_clubb == 2) then
-        call compute_convective_area     &
-                   (Input_mp%t, Input_mp%pfull, Input_mp%q,   &
-                       conv_area_input, rh_wtd_conv_area, conv_frac_max, &
-                         C2ls_mp%convective_humidity_ratio_clubb,   &
-                                                C2ls_mp%conv_frac_clubb)
-
       endif
 
 !---------------------------------------------------------------------
