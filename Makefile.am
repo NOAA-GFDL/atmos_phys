@@ -68,7 +68,6 @@ libatmos_phys_la_SOURCES = ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.F9
 		${top_srcdir}/atmos_param/topo_drag/topo_drag.F90 \
 		${top_srcdir}/atmos_param/macrophysics/ls_cloud_macrophysics.F90 \
 		${top_srcdir}/atmos_param/macrophysics/tiedtke_macro.F90 \
-		${top_srcdir}/atmos_param/moist_conv/moist_conv.F90 \
 		${top_srcdir}/atmos_param/radiation/clouds/cloudrad_types.F90 \
 		${top_srcdir}/atmos_param/radiation/clouds/microphys_rad.F90 \
 		${top_srcdir}/atmos_param/radiation/clouds/strat_clouds_W.F90 \
@@ -177,9 +176,6 @@ libatmos_phys_la_SOURCES = ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.F9
 		${top_srcdir}/atmos_param/cg_drag/cg_drag.F90 \
 		${top_srcdir}/atmos_param/cu_mo_trans/cu_mo_trans.F90 \
 		${top_srcdir}/atmos_param/cloud_rad/cloud_rad.F90 \
-		${top_srcdir}/atmos_param/betts_miller/bm_omp.F90 \
-		${top_srcdir}/atmos_param/betts_miller/betts_miller.F90 \
-		${top_srcdir}/atmos_param/betts_miller/bm_massflux.F90 \
 		${top_srcdir}/atmos_param/vert_diff/vert_diff.F90 \
 		${top_srcdir}/atmos_param/aerosol_cloud/aerosol_cloud.F90 \
 		${top_srcdir}/atmos_param/donner_deep/donner_deep.F90 \
@@ -197,7 +193,6 @@ libatmos_phys_la_SOURCES = ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.F9
 		${top_srcdir}/atmos_param/donner_deep/donner_lscloud_k.F90 \
 		${top_srcdir}/atmos_param/donner_deep/wet_deposition_0D.F90 \
 		${top_srcdir}/atmos_param/donner_deep/cumulus_closure_k.F90 \
-		${top_srcdir}/atmos_param/dry_adj/dry_adj.F90 \
 		${top_srcdir}/atmos_param/mg_drag/mg_drag.F90 \
 		${top_srcdir}/atmos_param/vert_turb_driver/vert_turb_driver.F90 \
 		${top_srcdir}/atmos_param/shallow_cu/conv_plumes_k.F90 \
@@ -206,8 +201,7 @@ libatmos_phys_la_SOURCES = ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.F9
 		${top_srcdir}/atmos_param/shallow_cu/conv_plumes.F90 \
 		${top_srcdir}/atmos_param/shallow_cu/conv_utilities_k.F90 \
 		${top_srcdir}/atmos_param/shallow_cu/conv_utilities.F90 \
-		${top_srcdir}/atmos_param/shallow_cu/uw_conv.F90 \
-		${top_srcdir}/atmos_param/ras/ras.F90
+		${top_srcdir}/atmos_param/shallow_cu/uw_conv.F90 
 
 ${top_builddir}/atmos_shared/atmos_nudge/atmos_nudge.lo: ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.F90
 ${top_builddir}/atmos_shared/atmos_cmip_diag/atmos_global_diag.lo: ${top_srcdir}/atmos_shared/atmos_cmip_diag/atmos_global_diag.F90
@@ -442,7 +436,6 @@ ${top_builddir}/atmos_param/macrophysics/tiedtke_macro.lo: ${top_srcdir}/atmos_p
 		 ${top_srcdir}/atmos_param/lscloud_driver/polysvp.lo \
 		 ${top_srcdir}/atmos_param/moist_processes/moist_processes_utils.lo \
 		 ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo
-${top_builddir}/atmos_param/moist_conv/moist_conv.lo: ${top_srcdir}/atmos_param/moist_conv/moist_conv.F90
 ${top_builddir}/atmos_param/radiation/clouds/cloudrad_types.lo: ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_types.F90
 ${top_builddir}/atmos_param/radiation/clouds/microphys_rad.lo: ${top_srcdir}/atmos_param/radiation/clouds/microphys_rad.F90 \
 		 ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_types.lo \
@@ -610,14 +603,8 @@ ${top_builddir}/atmos_param/convection_driver/convection_driver.lo: ${top_srcdir
 		 ${top_srcdir}/atmos_param/physics_driver/physics_types.lo \
 		 ${top_srcdir}/atmos_param/vert_diff_driver/vert_diff_driver.lo \
 		 ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo \
-		 ${top_srcdir}/atmos_param/betts_miller/betts_miller.lo \
-		 ${top_srcdir}/atmos_param/betts_miller/bm_massflux.lo \
-		 ${top_srcdir}/atmos_param/betts_miller/bm_omp.lo \
 		 ${top_srcdir}/atmos_param/donner_deep/donner_deep.lo \
-		 ${top_srcdir}/atmos_param/moist_conv/moist_conv.lo \
 		 ${top_srcdir}/atmos_param/shallow_cu/uw_conv.lo \
-		 ${top_srcdir}/atmos_param/ras/ras.lo \
-		 ${top_srcdir}/atmos_param/dry_adj/dry_adj.lo \
 		 ${top_srcdir}/atmos_param/convection_driver/detr_ice_num.lo \
 		 ${top_srcdir}/atmos_param/cu_mo_trans/cu_mo_trans.lo \
 		 ${top_srcdir}/atmos_shared/tracer_driver/tropchem/mo_hook.lo \
@@ -842,9 +829,6 @@ ${top_builddir}/atmos_param/cloud_rad/cloud_rad.lo: ${top_srcdir}/atmos_param/cl
 		 ${top_srcdir}/atmos_param/lscloud_driver/lscloud_constants.lo \
 		 ${top_srcdir}/atmos_shared/aerosol/aerosol_types.lo \
 		 ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo
-${top_builddir}/atmos_param/betts_miller/bm_omp.lo: ${top_srcdir}/atmos_param/betts_miller/bm_omp.F90
-${top_builddir}/atmos_param/betts_miller/betts_miller.lo: ${top_srcdir}/atmos_param/betts_miller/betts_miller.F90
-${top_builddir}/atmos_param/betts_miller/bm_massflux.lo: ${top_srcdir}/atmos_param/betts_miller/bm_massflux.F90
 ${top_builddir}/atmos_param/vert_diff/vert_diff.lo: ${top_srcdir}/atmos_param/vert_diff/vert_diff.F90
 ${top_builddir}/atmos_param/aerosol_cloud/aerosol_cloud.lo: ${top_srcdir}/atmos_param/aerosol_cloud/aerosol_cloud.F90 \
 		 ${top_srcdir}/atmos_shared/aerosol/aerosol_types.lo \
@@ -892,7 +876,6 @@ ${top_builddir}/atmos_param/donner_deep/donner_lscloud_k.lo: ${top_srcdir}/atmos
 ${top_builddir}/atmos_param/donner_deep/wet_deposition_0D.lo: ${top_srcdir}/atmos_param/donner_deep/wet_deposition_0D.F90
 ${top_builddir}/atmos_param/donner_deep/cumulus_closure_k.lo: ${top_srcdir}/atmos_param/donner_deep/cumulus_closure_k.F90 \
 		 ${top_srcdir}/atmos_param/donner_deep/donner_types.lo
-${top_builddir}/atmos_param/dry_adj/dry_adj.lo: ${top_srcdir}/atmos_param/dry_adj/dry_adj.F90
 ${top_builddir}/atmos_param/mg_drag/mg_drag.lo: ${top_srcdir}/atmos_param/mg_drag/mg_drag.F90
 ${top_builddir}/atmos_param/vert_turb_driver/vert_turb_driver.lo: ${top_srcdir}/atmos_param/vert_turb_driver/vert_turb_driver.F90 \
 		 ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo \
@@ -927,10 +910,6 @@ ${top_builddir}/atmos_param/shallow_cu/uw_conv.lo: ${top_srcdir}/atmos_param/sha
 		 ${top_srcdir}/atmos_param/shallow_cu/conv_plumes_k.lo \
 		 ${top_srcdir}/atmos_param/shallow_cu/conv_closures.lo \
 		 ${top_srcdir}/atmos_param/shallow_cu/deep_conv.lo
-${top_builddir}/atmos_param/ras/ras.lo: ${top_srcdir}/atmos_param/ras/ras.F90 \
-		 ${top_srcdir}/atmos_shared/aerosol/aerosol_types.lo \
-		 ${top_srcdir}/atmos_shared/tracer_driver/aer_ccn_act/aer_ccn_act.lo \
-		 ${top_srcdir}/atmos_param/moist_processes/moist_processes_utils.lo
 atmos_nudge_mod.mod: ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.lo
 atmos_global_diag_mod.mod: ${top_srcdir}/atmos_shared/atmos_cmip_diag/atmos_global_diag.lo
 atmos_cmip_diag_mod.mod: ${top_srcdir}/atmos_shared/atmos_cmip_diag/atmos_cmip_diag.lo
@@ -1034,7 +1013,6 @@ physics_driver_mod.mod: ${top_srcdir}/atmos_param/physics_driver/physics_driver.
 topo_drag_mod.mod: ${top_srcdir}/atmos_param/topo_drag/topo_drag.lo
 ls_cloud_macrophysics_mod.mod: ${top_srcdir}/atmos_param/macrophysics/ls_cloud_macrophysics.lo
 tiedtke_macro_mod.mod: ${top_srcdir}/atmos_param/macrophysics/tiedtke_macro.lo
-moist_conv_mod.mod: ${top_srcdir}/atmos_param/moist_conv/moist_conv.lo
 cloudrad_types_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_types.lo
 microphys_rad_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/microphys_rad.lo
 strat_clouds_w_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/strat_clouds_W.lo
@@ -1130,9 +1108,6 @@ entrain_mod.mod: ${top_srcdir}/atmos_param/entrain/entrain.lo
 cg_drag_mod.mod: ${top_srcdir}/atmos_param/cg_drag/cg_drag.lo
 cu_mo_trans_mod.mod: ${top_srcdir}/atmos_param/cu_mo_trans/cu_mo_trans.lo
 cloud_rad_mod.mod: ${top_srcdir}/atmos_param/cloud_rad/cloud_rad.lo
-bm_omp_mod.mod: ${top_srcdir}/atmos_param/betts_miller/bm_omp.lo
-betts_miller_mod.mod: ${top_srcdir}/atmos_param/betts_miller/betts_miller.lo
-bm_massflux_mod.mod: ${top_srcdir}/atmos_param/betts_miller/bm_massflux.lo
 vert_diff_mod.mod: ${top_srcdir}/atmos_param/vert_diff/vert_diff.lo
 aerosol_cloud_mod.mod: ${top_srcdir}/atmos_param/aerosol_cloud/aerosol_cloud.lo
 donner_deep_mod.mod: ${top_srcdir}/atmos_param/donner_deep/donner_deep.lo
@@ -1140,7 +1115,6 @@ null_donner_deep_miz.mod: ${top_srcdir}/atmos_param/donner_deep/donner_deep_miz.
 fms_donner_mod.mod: ${top_srcdir}/atmos_param/donner_deep/fms_donner.lo
 nonfms_donner_mod.mod: ${top_srcdir}/atmos_param/donner_deep/nonfms_donner.lo
 donner_types_mod.mod: ${top_srcdir}/atmos_param/donner_deep/donner_types.lo
-dry_adj_mod.mod: ${top_srcdir}/atmos_param/dry_adj/dry_adj.lo
 mg_drag_mod.mod: ${top_srcdir}/atmos_param/mg_drag/mg_drag.lo
 vert_turb_driver_mod.mod: ${top_srcdir}/atmos_param/vert_turb_driver/vert_turb_driver.lo
 conv_plumes_k_mod.mod: ${top_srcdir}/atmos_param/shallow_cu/conv_plumes_k.lo
@@ -1150,7 +1124,6 @@ conv_plumes_mod.mod: ${top_srcdir}/atmos_param/shallow_cu/conv_plumes.lo
 conv_utilities_k_mod.mod: ${top_srcdir}/atmos_param/shallow_cu/conv_utilities_k.lo
 conv_utilities_mod.mod: ${top_srcdir}/atmos_param/shallow_cu/conv_utilities.lo
 uw_conv_mod.mod: ${top_srcdir}/atmos_param/shallow_cu/uw_conv.lo
-ras_mod.mod: ${top_srcdir}/atmos_param/ras/ras.lo
 include_HEADERS = atmos_nudge_mod.mod \
 		atmos_global_diag_mod.mod \
 		atmos_cmip_diag_mod.mod \
@@ -1254,7 +1227,6 @@ include_HEADERS = atmos_nudge_mod.mod \
 		topo_drag_mod.mod \
 		ls_cloud_macrophysics_mod.mod \
 		tiedtke_macro_mod.mod \
-		moist_conv_mod.mod \
 		cloudrad_types_mod.mod \
 		microphys_rad_mod.mod \
 		strat_clouds_w_mod.mod \
@@ -1350,9 +1322,6 @@ include_HEADERS = atmos_nudge_mod.mod \
 		cg_drag_mod.mod \
 		cu_mo_trans_mod.mod \
 		cloud_rad_mod.mod \
-		bm_omp_mod.mod \
-		betts_miller_mod.mod \
-		bm_massflux_mod.mod \
 		vert_diff_mod.mod \
 		aerosol_cloud_mod.mod \
 		donner_deep_mod.mod \
@@ -1360,7 +1329,6 @@ include_HEADERS = atmos_nudge_mod.mod \
 		fms_donner_mod.mod \
 		nonfms_donner_mod.mod \
 		donner_types_mod.mod \
-		dry_adj_mod.mod \
 		mg_drag_mod.mod \
 		vert_turb_driver_mod.mod \
 		conv_plumes_k_mod.mod \
@@ -1369,6 +1337,5 @@ include_HEADERS = atmos_nudge_mod.mod \
 		conv_plumes_mod.mod \
 		conv_utilities_k_mod.mod \
 		conv_utilities_mod.mod \
-		uw_conv_mod.mod \
-		ras_mod.mod
+		uw_conv_mod.mod
 CLEANFILES = *.mod
