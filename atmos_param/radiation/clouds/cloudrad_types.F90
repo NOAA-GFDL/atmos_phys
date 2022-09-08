@@ -161,7 +161,6 @@ type cloudrad_control_type
     logical :: do_lw_micro
     logical :: do_strat_clouds
     logical :: do_no_clouds
-    logical :: do_donner_deep_clouds
     logical :: do_uw_clouds
     logical :: do_random_overlap
     logical :: do_max_random_overlap

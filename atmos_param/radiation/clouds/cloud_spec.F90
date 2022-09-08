@@ -59,10 +59,6 @@ use cloudrad_types_mod,       only: cld_specification_type, &
 use strat_clouds_W_mod,       only: strat_clouds_W_init,   &
                                     strat_clouds_amt, strat_clouds_W_end
 
-use donner_deep_clouds_W_mod, only: donner_deep_clouds_W_init, &
-                                    donner_deep_clouds_amt, &
-                                    donner_deep_clouds_W_end
-
 use uw_clouds_W_mod,          only: uw_clouds_W_init, &
                                     uw_clouds_amt, &
                                     uw_clouds_W_end
@@ -112,9 +108,7 @@ private    &
 character(len=16)  ::      &
               cloud_type_form = '     ' ! cloud parameterization being
                                         ! used; either 'strat', 'rh',
-                                        ! 'deep',  'stratdeep', 'stratuw',
-                                        ! 'stratdeepuw', 'uw', 'deepuw
-                                        !  or 'none'
+                                        ! 'stratuw', or 'none'
 real :: wtr_cld_reff=10.                ! assumed cloud drop efective
                                         ! radius [ microns ]
 real :: ice_cld_reff=50.                ! assumed ice cloud effective
@@ -132,10 +126,6 @@ logical :: do_snow   = .false. !miz
 logical :: do_graupel  = .false. !sjl
 
 logical   :: do_stochastic_clouds = .false.
-
-logical :: ignore_donner_cells = .false.! when set to .true., the effects
-                                        ! of donner cell clouds in the
-                                        ! radiation code are ignored
 
 logical :: use_cloud_tracers_in_radiation = .true.
                                ! if true, use lsc cloud tracer fields
@@ -155,7 +145,6 @@ namelist /cloud_spec_nml / cloud_type_form, wtr_cld_reff,   &
                            doing_data_override, do_fu2007,    &
                            do_rain, do_snow, do_graupel, &
                            do_stochastic_clouds, &
-                           ignore_donner_cells, &
                            use_cloud_tracers_in_radiation, &
                            reproduce_ulm
 
@@ -397,13 +386,6 @@ type(cloudrad_control_type), intent(inout) ::  Cldrad_control
 !BW      Cldrad_control%do_rh_clouds = .true.
 !BW      call rh_based_clouds_init
 
-!-------------------------------------------------------------------
-!    cloud fractions, heights are predicted by the donner deep cloud
-!    (cell cloud, anvil cloud) scheme.
-!-------------------------------------------------------------------
-      else if (trim(cloud_type_form) == 'deep')  then
-         Cldrad_control%do_donner_deep_clouds = .true.
-
 !------------------------------------------------------------------
 !    cloud fractions, heights are provided by the uw_conv shallow
 !    convection scheme
@@ -412,39 +394,11 @@ type(cloudrad_control_type), intent(inout) ::  Cldrad_control
          Cldrad_control%do_uw_clouds = .true.
 
 !-------------------------------------------------------------------
-!    cloud fractions, heights are a combination of the donner
-!    deep cloud (cell cloud, anvil cloud) and klein large-scale cloud
-!    parameterizations.
-!-------------------------------------------------------------------
-      else if (trim(cloud_type_form) == 'stratdeep')  then
-         Cldrad_control%do_strat_clouds = .true.
-         Cldrad_control%do_donner_deep_clouds = .true.
-
-!-------------------------------------------------------------------
-!    cloud fractions, heights are provided by the donner deep convection
-!    (cell cloud, anvil cloud) and uw_conv shallow convection
-!    cloud parameterizations.
-!-------------------------------------------------------------------
-      else if (trim(cloud_type_form) == 'deepuw')  then
-         Cldrad_control%do_donner_deep_clouds = .true.
-         Cldrad_control%do_uw_clouds = .true.
-
-!-------------------------------------------------------------------
 !    cloud fractions, heights are provided by the klein large-scale
 !    and uw_conv shallow convection cloud parameterizations.
 !-------------------------------------------------------------------
       else if (trim(cloud_type_form) == 'stratuw')  then
          Cldrad_control%do_strat_clouds = .true.
-         Cldrad_control%do_uw_clouds = .true.
-
-!-------------------------------------------------------------------
-!    cloud fractions, heights are provided by the klein large-scale
-!    the donner deep convection (cell cloud, anvil cloud) and the
-!    uw_conv shallow convection cloud parameterizations.
-!-------------------------------------------------------------------
-      else if (trim(cloud_type_form) == 'stratdeepuw')  then
-         Cldrad_control%do_strat_clouds = .true.
-         Cldrad_control%do_donner_deep_clouds = .true.
          Cldrad_control%do_uw_clouds = .true.
 
 !---------------------------------------------------------------
@@ -466,9 +420,6 @@ type(cloudrad_control_type), intent(inout) ::  Cldrad_control
 !--------------------------------------------------------------------
       if (Cldrad_control%do_strat_clouds) then
          call strat_clouds_W_init(latb, lonb, Cldrad_control, Exch_ctrl)
-      endif
-      if (Cldrad_control%do_donner_deep_clouds) then
-         call donner_deep_clouds_W_init (pref, lonb, latb, axes, Time)
       endif
       if (Cldrad_control%do_uw_clouds) then
          call uw_clouds_W_init (Exch_ctrl)
@@ -616,14 +567,6 @@ end subroutine cloud_spec_init
 !   microphysical specification for large-scale
 !                        clouds
 !  </INOUT>
-!  <INOUT NAME="Meso_microphys" TYPE="microphysics_type">
-!   microphysical specification for meso-scale
-!                        clouds assciated with donner convection
-!  </INOUT>
-!  <INOUT NAME="Cell_microphys" TYPE="microphysics_type">
-!   microphysical specification for convective cell
-!                        clouds associated with donner convection
-!  </INOUT>
 !  <INOUT NAME="Shallow_microphys" TYPE="microphysics_type">
 !   microphysical specification for
 !                        clouds associated with uw shallow convection
@@ -699,13 +642,6 @@ type(clouds_from_moist_block_type), intent(in)       :: Moist_clouds_block
 !      Lsc_microphys     variables describing the microphysical proper-
 !                        ties of the large-scale clouds
 !                        [ microphysics_type ]
-!      Meso_microphys    variables describing the microphysical proper-
-!                        ties of the meso-scale clouds
-!                        [ microphysics_type ]
-!      Cell_microphys    variables describing the microphysical proper-
-!                        ties of the convective cell-scale clouds
-!                        [ microphysics_type ]
-!
 !   intent(in), optional variables:
 !
 !      lsc_liquid_in     cloud water mixing ratio (or specific humidity
@@ -733,12 +669,12 @@ type(clouds_from_moist_block_type), intent(in)       :: Moist_clouds_block
       type(microphysics_type) :: Lsc_microphys
 
 ! locally define indices to make code more readable
-      integer :: index_strat, index_cell, index_meso, index_shallow
+      integer :: index_strat, index_shallow
 
 !     indices for cloud schemes
 !     Microphysics index (clouds actually used)
 
-integer :: istrat, icell, imeso, ishallow
+integer :: istrat, ishallow
 
 !---------------------------------------------------------------------
 !   local variables:
@@ -772,23 +708,6 @@ integer :: istrat, icell, imeso, ishallow
         scheme_names_used(ncld_used) = 'strat_cloud'
         istrat = ncld_used
         strat_data_found = .true.
-      endif
-
-     !-----------------------------------------
-     ! check for donner deep cloud input data
-     !-----------------------------------------
-      imeso = 0
-      icell = 0
-      if (Cldrad_control%do_donner_deep_clouds) then
-        if (Moist_clouds_block%index_donner_meso == 0 .or. Moist_clouds_block%index_donner_cell == 0) &
-                   call error_mesg ('cloud_spec_mod',  &
-                 'donner meso and cell properties not found when &
-                 &donner clouds requested', FATAL)
-        scheme_names_used(ncld_used+1) = 'donner_meso'
-        scheme_names_used(ncld_used+2) = 'donner_cell'
-        imeso = ncld_used+1
-        icell = ncld_used+2
-        ncld_used = ncld_used+2
       endif
 
      !-------------------------------------
@@ -1025,45 +944,8 @@ integer :: istrat, icell, imeso, ishallow
         endif ! (do_strat_clouds)
 
 !--------------------------------------------------------------------
-!    since donner_deep_clouds may be active along with strat clouds,
-!    the associated properties are determined outside of the above loop.
-!    these properties are placed in Cell_microphys and Meso_microphys.
-!----------------------------------------------------------------------
-        if (Cldrad_control%do_donner_deep_clouds) then
-          index_cell = Moist_clouds_block%index_donner_cell
-          index_meso = Moist_clouds_block%index_donner_meso
-
-          call donner_deep_clouds_amt (is, ie, js, je,  &
-                           Moist_clouds_block%Cloud_data(index_cell)%cloud_area,  &
-                           Moist_clouds_block%Cloud_data(index_cell)%liquid_amt,  &
-                           Moist_clouds_block%Cloud_data(index_cell)%liquid_size, &
-                           Moist_clouds_block%Cloud_data(index_cell)%ice_amt,     &
-                           Moist_clouds_block%Cloud_data(index_cell)%ice_size,    &
-                           Moist_clouds_block%Cloud_data(index_cell)%droplet_number, &
-                           Moist_clouds_block%Cloud_data(index_meso)%cloud_area,  &
-                           Moist_clouds_block%Cloud_data(index_meso)%liquid_amt,  &
-                           Moist_clouds_block%Cloud_data(index_meso)%liquid_size, &
-                           Moist_clouds_block%Cloud_data(index_meso)%ice_amt,     &
-                           Moist_clouds_block%Cloud_data(index_meso)%ice_size,    &
-                           Moist_clouds_block%Cloud_data(index_meso)%droplet_number, &
-                           Moist_clouds_block%Cloud_data(index_meso)%nsum_out,       &
-                           Cloud_microphys(icell), Cloud_microphys(imeso)  )
-
-!---------------------------------------------------------------------
-!    convert the cloud and ice amounts from kg(h2o) / kg(air) to
-!    g(h2o) / m**3, as required for use in the microphys_rad routines
-!    which compute cloud radiative properties.
-!---------------------------------------------------------------------
-          rho(:,:,:) = press(:,:,1:kx)/(RDGAS*temp(:,:,1:kx))
-          Cloud_microphys(icell)%conc_drop = 1.0e03*rho*Cloud_microphys(icell)%conc_drop
-          Cloud_microphys(icell)%conc_ice  = 1.0e03*rho*Cloud_microphys(icell)%conc_ice
-          Cloud_microphys(imeso)%conc_drop = 1.0e03*rho*Cloud_microphys(imeso)%conc_drop
-          Cloud_microphys(imeso)%conc_ice  = 1.0e03*rho*Cloud_microphys(imeso)%conc_ice
-        endif
-
-!--------------------------------------------------------------------
-!    since uw_clouds may be active along with strat clouds and / or
-!    donner deep clouds, the associated properties are determined
+!    since uw_clouds may be active along with strat clouds
+!    the associated properties are determined
 !    outside of the above loop. these properties are placed in
 !    Shallow_microphys.
 !----------------------------------------------------------------------
@@ -1146,9 +1028,6 @@ type(cloudrad_control_type), intent(in) :: Cldrad_control
           if (Cldrad_control%do_strat_clouds) then
             call strat_clouds_W_end (Cldrad_control)
           endif
-          if (Cldrad_control%do_donner_deep_clouds) then
-            call donner_deep_clouds_W_end
-          endif
           if (Cldrad_control%do_uw_clouds) then
             call uw_clouds_W_end
           endif
@@ -1187,11 +1066,10 @@ end subroutine cloud_spec_end
 !    combine_cloud_properties produces cloud specification property
 !    arrays for the total cloud field in each grid box, using as input
 !    the specification of the component cloud types that may be present
-!    (large-scale, mesoscale and cell-scale).
+!    (large-scale).
 !  </DESCRIPTION>
 !  <TEMPLATE>
-!   call combine_cloud_properties (Lsc_microphys, Meso_microphys,  &
-!                                     Cell_microphys, Cld_spec)
+!   call combine_cloud_properties (Lsc_microphys, Cld_spec)
 !  </TEMPLATE>
 !  <INOUT NAME="Cld_spec" TYPE="cld_specification_type">
 !   cloud specification properties on model grid,
@@ -1199,14 +1077,6 @@ end subroutine cloud_spec_end
 !  <IN NAME="Lsc_microphys" TYPE="microphysics_type">
 !   microphysical specification for large-scale
 !                        clouds
-!  </IN>
-!  <IN NAME="Meso_microphys" TYPE="microphysics_type">
-!   microphysical specification for meso-scale
-!                        clouds assciated with donner convection
-!  </IN>
-!  <IN NAME="Cell_microphys" TYPE="microphysics_type">
-!   microphysical specification for convective cell
-!                        clouds associated with donner convection
 !  </IN>
 !  </IN>
 !  <IN NAME="Shallow_microphys" TYPE="microphysics_type">
@@ -1222,7 +1092,7 @@ subroutine combine_cloud_properties (is, js, temp, Rad_time, &
 !    combine_cloud_properties produces cloud specification property
 !    arrays for the total cloud field in each grid box, using as input
 !    the specification of the component cloud types that may be present
-!    (large-scale, donner mesoscale and cell-scale, uw shallow).
+!    (large-scale, uw shallow).
 !----------------------------------------------------------------------
 
 integer, intent(in)  :: is, js
@@ -1237,12 +1107,6 @@ type(cld_specification_type),           intent(inout) :: Cld_spec
 !
 !       Lsc_microphys  microphysical specification for large-scale
 !                      clouds
-!                      [ microphysics_type ]
-!       Meso_microphys microphysical specification for meso-scale
-!                      clouds assciated with donner convection
-!                      [ microphysics_type ]
-!       Cell_microphys microphysical specification for convective cell
-!                      clouds associated with donner convection
 !                      [ microphysics_type ]
 !       Shallow_microphys
 !                      microphysical specification for
@@ -1261,10 +1125,6 @@ type(cld_specification_type),           intent(inout) :: Cld_spec
 !
 !---------------------------------------------------------------------
 
-!-----------------------------------------------------------------------
-!    variables for folding Donner cloud properties into stochastic
-!    cloud arrays
-!------------------------------------------------------------------
       type(randomNumberStream),   &
                     dimension(size(Cld_spec%camtsw,1),   &
                               size(Cld_spec%camtsw,2)) :: streams
@@ -1278,25 +1138,20 @@ type(cld_specification_type),           intent(inout) :: Cld_spec
       integer :: nn, nsubcols
 
       integer :: i, j, k, n, ncld
-      integer :: meso, cell
-      integer :: istrat, icell, imeso, ishallow
+      integer :: istrat, ishallow
 
 !---------------------------------------------------------------------
 !    total-cloud specification properties need be defined only when
-!    strat_cloud, donner_deep and/or uw shallow clouds are active.
+!    strat_cloud and/or uw shallow clouds are active.
 !---------------------------------------------------------------------
 
       ncld = size(Cloud_microphys,1)
 
   ! indices for cloud types in microphysics type
       istrat=0
-      icell=0
-      imeso=0
       ishallow=0
       do n = 1, ncld
          if (trim(Cloud_microphys(n)%scheme_name) == 'strat_cloud') istrat = n
-         if (trim(Cloud_microphys(n)%scheme_name) == 'donner_meso') imeso  = n
-         if (trim(Cloud_microphys(n)%scheme_name) == 'donner_cell') icell  = n
          if (trim(Cloud_microphys(n)%scheme_name) == 'uw_conv')     ishallow = n
       enddo
 
@@ -1305,18 +1160,7 @@ type(cld_specification_type),           intent(inout) :: Cld_spec
 !    fractions of all cloud schemes
 !---------------------------------------------------------------------
 
-      if (reproduce_ulm .and. ncld == 4) then
-         Cld_spec%crndlw = Cloud_microphys(istrat)%cldamt + &
-                           Cloud_microphys(icell)%cldamt + &
-                           Cloud_microphys(imeso)%cldamt + &
-                           Cloud_microphys(ishallow)%cldamt
-
-      else if (reproduce_ulm .and. ncld == 3) then
-         Cld_spec%crndlw = Cloud_microphys(1)%cldamt + &
-                           Cloud_microphys(2)%cldamt + &
-                           Cloud_microphys(3)%cldamt
-
-      else if (reproduce_ulm .and. ncld == 2) then
+      if (reproduce_ulm .and. ncld == 2) then
          Cld_spec%crndlw = Cloud_microphys(1)%cldamt + &
                            Cloud_microphys(2)%cldamt
 
@@ -1378,64 +1222,6 @@ type(cld_specification_type),           intent(inout) :: Cld_spec
             enddo
           enddo
         endif ! strat_cloud
-
-!----------------------------------------------------------------------
-!    compare the cell and meso-scale cloud amounts to a random number,
-!    and replace the large-scale cloud and clear sky assignment in each
-!    subcolumn with an assignment of cell or meso-scale clouds when the
-!    number is less than the cloud fraction. use the maximum overlap
-!    assumption. treat the random number as the location with the PDF
-!    of total water. cells are at the top of the PDF; then meso-scale
-!    anvils, then large-scale clouds and clear sky.
-!------------------------------------------------------------
-        if (Cldrad_control%do_donner_deep_clouds) then
-          call get_random_number_streams (is, js, Rad_time, temp, streams, perm=1)
-
-!----------------------------------------------------------------------
-!    get the random numbers to do both sw and lw at oncer.
-!----------------------------------------------------------------------
-          do j=1,size(Cld_spec%camtsw,2) ! Lons
-            do i=1,size(Cld_spec%camtsw,1) ! Lats
-              call getRandomNumbers (streams(i,j), randomNumbers(i,j,1,:))
-            end do
-          end do
-
-!----------------------------------------------------------------------
-!    here is maximum overlap. we use a 3D arrary for the random numbers
-!    for flexibility.
-!----------------------------------------------------------------------
-          do k=2,size(Cld_spec%camtsw,3)
-            randomNumbers(:,:,k,:) = randomNumbers(:,:,1,:)
-          end do
-
-!----------------------------------------------------------------------
-!    assign cloud types, band by band
-!----------------------------------------------------------------------
-          if (ignore_donner_cells) then
-            do n=1,nsubcols
-              where( randomNumbers(:,:,:,n) > &
-                     (1. - Cloud_microphys(imeso)%cldamt)) &
-                   ! assign meso-scale cloud
-                     Cld_spec%stoch_cloud_type(:,:,:,n) = imeso
-                   ! Cld_spec%stoch_cloud_type(:,:,:,n) = 2
-            enddo
-
-          else ! ignore_donner_cells
-            do n=1,nsubcols
-               where( randomNumbers(:,:,:,n) > &
-                      (1. - Cloud_microphys(icell)%cldamt - &
-                            Cloud_microphys(imeso)%cldamt)) &
-                   ! assign meso-scale cloud
-                     Cld_spec%stoch_cloud_type(:,:,:,n) = imeso
-                    !Cld_spec%stoch_cloud_type(:,:,:,n) = 2
-               where( randomNumbers(:,:,:,n) > &
-                      (1. - Cloud_microphys(icell)%cldamt)) &
-                   ! assign meso-scale cloud
-                     Cld_spec%stoch_cloud_type(:,:,:,n) = icell
-                    !Cld_spec%stoch_cloud_type(:,:,:,n) = 3
-            enddo ! n
-          endif ! ignore_donner_cells
-        endif ! do_donner_deep_clouds
 
 !----------------------------------------------------------------------
 !    compare the uw shallow cloud amount to a random number, and replace

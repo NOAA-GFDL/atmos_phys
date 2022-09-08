@@ -540,8 +540,6 @@ integer                                :: int_do_clear_sky_pass
 
 !--- data for concurrent radiation restarts ---
 integer :: ido_conc_rad = 0
-integer :: idonner_meso = 0
-integer :: idoing_donner = 0
 integer :: idoing_uw_conv = 0
 logical                                :: in_different_file_conc = .false.
 
@@ -3379,8 +3377,6 @@ real, dimension(:,:,:,:), intent(out)   ::    &
 !-------------------------------------------------------------------
         strat_index = 0
         shallow_index = 0
-        donner_meso_index = 0
-        donner_cell_index = 0
 
         ncld = 0
         ic1 = 1
@@ -3395,8 +3391,6 @@ real, dimension(:,:,:,:), intent(out)   ::    &
           ncld = ncld + 1
           if (Model_microphys%scheme_name(ic1:ic2) == 'strat_cloud') strat_index = ncld
           if (Model_microphys%scheme_name(ic1:ic2) == 'uw_conv')     shallow_index = ncld
-          if (Model_microphys%scheme_name(ic1:ic2) == 'donner_meso') donner_meso_index = ncld
-          if (Model_microphys%scheme_name(ic1:ic2) == 'donner_cell') donner_cell_index = ncld
           ic1 = ic2 + 2
         enddo
 
@@ -3404,33 +3398,12 @@ real, dimension(:,:,:,:), intent(out)   ::    &
 !    save the stochastic cloud type in each subcolumn.
 !    output values of 0 --> no cloud
 !           values of 1 --> stratiform cloud
-!           values of 2 --> convective cloud
-!    input values are 0(none), 1(strat), 2(donnermeso), 3(donnercell), 
-!    4(uw)
+!           values of 2 --> shallow cloud
+!    input values are 0(none), 1(strat), 2(uw)
 !---------------------------------------------------------------------
         stoch_cloud_type(:,:,:,:) =   &
                          Model_microphys%stoch_cloud_type(:,:,:,:)
          
-!---------------------------------------------------------------------
-!    donner meso clouds may be treated either as large-scale or
-!    convective clouds, dependent on donner_meso_is_largescale.
-!---------------------------------------------------------------------
-        if (Exch_ctrl%donner_meso_is_largescale) then
-          where (stoch_cloud_type(:,:,:,:) == donner_meso_index)  ! == 2)
-            stoch_cloud_type(:,:,:,:) = strat_index               ! = 1
-          end where
-          where (stoch_cloud_type(:,:,:,:) == donner_cell_index .or. &
-                 stoch_cloud_type(:,:,:,:) == shallow_index)      ! >= 3)
-            stoch_cloud_type(:,:,:,:) = donner_meso_index         ! = 2)
-          end where
-        else
-          where (stoch_cloud_type(:,:,:,:) == donner_meso_index .or. &
-                 stoch_cloud_type(:,:,:,:) == donner_cell_index .or. &
-                 stoch_cloud_type(:,:,:,:) == shallow_index)      ! >= 2)
-            stoch_cloud_type(:,:,:,:) = donner_meso_index         ! = 2)
-          end where
-        endif    
-
 !---------------------------------------------------------------------
 !    save the particle concentrations and sizes seen by the radiation
 !    package in each stochastic column.
@@ -3733,14 +3706,10 @@ subroutine conc_rad_register_restart_scalars(Rad_restart_conc, Exch_ctrl)
 
    if (do_concurrent_radiation) ido_conc_rad = 1
    if (present(Exch_ctrl)) then
-      if (Exch_ctrl%donner_meso_is_largescale) idonner_meso = 1
-      if (Exch_ctrl%doing_donner) idoing_donner = 1
-      if (Exch_ctrl%doing_uw_conv) idoing_uw_conv = 1
+     if (Exch_ctrl%doing_uw_conv) idoing_uw_conv = 1
    endif
 
    call register_restart_field(Rad_restart_conc, 'do_concurrent_radiation', ido_conc_rad, dim_names)
-   call register_restart_field(Rad_restart_conc, 'donner_meso_is_largescale', idonner_meso, dim_names)
-   call register_restart_field(Rad_restart_conc, 'doing_donner', idoing_donner, dim_names)
    call register_restart_field(Rad_restart_conc, 'doing_uw_conv', idoing_uw_conv, dim_names)
 
 end subroutine conc_rad_register_restart_scalars

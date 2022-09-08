@@ -161,7 +161,6 @@ logical :: module_is_initialized = .false.  ! module initialized?
 ! </SUBROUTINE>
 !
 subroutine cloudrad_package_init (pref, lonb, latb, axes, Time, &
-                                  donner_meso_is_largescale, &
                                   Cldrad_control)
 
 !---------------------------------------------------------------------
@@ -172,7 +171,6 @@ real,    dimension(:,:),     intent(in)    ::  pref
 real,    dimension(:,:),     intent(in)    ::  lonb, latb
 integer, dimension(4),       intent(in)    ::  axes
 type(time_type),             intent(in)    ::  Time
-logical,                     intent(in)    ::  donner_meso_is_largescale
 type(cloudrad_control_type), intent(inout) ::  Cldrad_control
 
 !---------------------------------------------------------------------
@@ -287,7 +285,6 @@ type(cloudrad_control_type), intent(inout) ::  Cldrad_control
 !    with an error message.
 !---------------------------------------------------------------------
         if (Cldrad_control%do_strat_clouds .or. &
-            Cldrad_control%do_donner_deep_clouds .or. &
             Cldrad_control%do_uw_clouds) then
           if (Cldrad_control%do_sw_micro .and. &
               Cldrad_control%do_lw_micro) then
@@ -311,8 +308,7 @@ type(cloudrad_control_type), intent(inout) ::  Cldrad_control
 !    physically_based.  if not ok, write an error message and stop.
 !---------------------------------------------------------------------
       else if (trim(microphys_form) == 'none') then
-        if (Cldrad_control%do_donner_deep_clouds .or.  &
-            Cldrad_control%do_uw_clouds) then
+        if (Cldrad_control%do_uw_clouds) then
           call error_mesg( 'cloudrad_package_mod',  &
             ' use predicted microphys with donner or uw clouds.', FATAL)
         else
@@ -360,7 +356,6 @@ type(cloudrad_control_type), intent(inout) ::  Cldrad_control
                                         max_cld_drop_rad, &
                                   min_cld_ice_size, max_cld_ice_size, &
                                         axes, Time, &
-                                  donner_meso_is_largescale, &
                                   Cldrad_control)
       endif
 
@@ -416,14 +411,6 @@ end subroutine cloudrad_package_init
 !  <IN NAME="Lsc_microphys" TYPE="microphysics_type">
 !   microphysical specification for large-scale
 !                        clouds
-!  </IN>
-!  <IN NAME="Meso_microphys" TYPE="microphysics_type">
-!   microphysical specification for meso-scale
-!                        clouds assciated with donner convection
-!  </IN>
-!  <IN NAME="Cell_microphys" TYPE="microphysics_type">
-!   microphysical specification for convective cell
-!                        clouds associated with donner convection
 !  </IN>
 !  <IN NAME="Shallow_microphys" TYPE="microphysics_type">
 !   microphysical specification for
@@ -486,12 +473,6 @@ real, dimension(:,:,:,:,:),   intent(out)              :: cldsct, cldext, cldasy
 !      Lsc_microphys     microphysical specification for large-scale
 !                        clouds
 !                        [ microphysics_type ]
-!      Meso_microphys    microphysical specification for meso-scale
-!                        clouds assciated with donner convection
-!                        [ microphysics_type ]
-!      Cell_microphys    microphysical specification for convective cell
-!                        clouds associated with donner convection
-!                        [ microphysics_type ]
 !      Shallow_microphys
 !                        microphysical specification for
 !                        clouds associated with uw shallow convection
@@ -510,28 +491,19 @@ real, dimension(:,:,:,:,:),   intent(out)              :: cldsct, cldext, cldasy
 !   local variables:
 
       type(cldrad_properties_type)   :: Cldrad_props
-     !type(microrad_properties_type) :: Lscrad_props, Cellrad_props, &
-     !                                  Mesorad_props, Shallowrad_props
       type(microrad_properties_type), &
                       dimension(size(Cloud_microphys(:))) :: &
                                         Microrad_props
       integer  ::   ix, jx, kx, nb, np, n
-      logical  ::   donner_flag = .true.
       logical  ::   donner_flag_uw = .false.
-      integer  ::   strat_index, shallow_index, &
-                    donner_meso_index, donner_cell_index
+      integer  ::   strat_index, shallow_index
+
 
 !---------------------------------------------------------------------
 !   local variables:
 !
 !       Lscrad_props   cloud radiative properties for the large-scale
 !                      clouds
-!                      [ microrad_properties_type ]
-!       Mesorad_props  cloud radiative properties for meso-scale
-!                      clouds associated with donner convection
-!                      [ microrad_properties_type ]
-!       Cellrad_props  cloud radiative properties for convective cell
-!                      clouds associated with donner convection
 !                      [ microrad_properties_type ]
 !       Shallowrad_props
 !                      cloud radiative properties for
@@ -579,13 +551,9 @@ real, dimension(:,:,:,:,:),   intent(out)              :: cldsct, cldext, cldasy
         ! define indexing of derived-type cloud properties
         strat_index = 0
         shallow_index = 0
-        donner_meso_index = 0
-        donner_cell_index = 0
         do n = 1, size(Cloud_microphys(:))
            if (trim(Cloud_microphys(n)%scheme_name) == 'strat_cloud') strat_index = n
            if (trim(Cloud_microphys(n)%scheme_name) == 'uw_conv')     shallow_index = n
-           if (trim(Cloud_microphys(n)%scheme_name) == 'donner_meso') donner_meso_index = n
-           if (trim(Cloud_microphys(n)%scheme_name) == 'donner_cell') donner_cell_index = n
            ! copy cloud scheme names
            Microrad_props(n)%scheme_name = trim(Cloud_microphys(n)%scheme_name)
         enddo
@@ -618,38 +586,6 @@ if (Cldrad_control%do_strat_clouds) then
 
 !RSH adds:
 endif
-!--------------------------------------------------------------------
-!    if donner_deep_clouds is active, obtain the cloud radiative prop-
-!    erties associated with the mesoscale and cell-scale convective
-!    components. only microphysically-based properties are available.
-!    the optional argument  donner_flag is used to indicate that prop-
-!    erties associated with the clouds produced by the donner_deep_mod
-!    are being processed, since a different ice parameterization is
-!    used for donner_deep relative to large-scale clouds.
-!----------------------------------------------------------------------
-        if (Cldrad_control%do_donner_deep_clouds) then
-         if (donner_meso_index == 0 .or. donner_cell_index == 0) &
-            call error_mesg( 'cloudrad_package_mod',  &
-           'donner cloud schemes not found when do_donner_deep_clouds = true', FATAL)
-          donner_flag = .true.
-          call microphys_lw_driver (is, ie, js, je, Cldrad_control,  &
-                                    Cloud_microphys(donner_meso_index),  &
-                                    Micro_rad_props=Microrad_props(donner_meso_index),   &
-                                    donner_flag=donner_flag)
-          call microphys_lw_driver (is, ie, js, je, Cldrad_control,  &
-                                    Cloud_microphys(donner_cell_index),  &
-                                    Micro_rad_props=Microrad_props(donner_cell_index), &
-                                    donner_flag=donner_flag)
-          call microphys_sw_driver (is, ie, js, je, Cldrad_control,  &
-                                    Cloud_microphys(donner_meso_index),  &
-                                    Micro_rad_props=Microrad_props(donner_meso_index), &
-                                    donner_flag=donner_flag)
-          call microphys_sw_driver (is, ie, js, je, Cldrad_control,  &
-                                    Cloud_microphys(donner_cell_index),  &
-                                    Micro_rad_props=Microrad_props(donner_cell_index), &
-                                    donner_flag=donner_flag)
-        endif
-
 !--------------------------------------------------------------------
 !    if the uw shallow convection scheme is active, obtain the cloud
 !    radiative properties associated with its clouds. only micro-
@@ -823,16 +759,13 @@ end subroutine cloudrad_package_end
 !   combine_cloud_properties produces cloud-radiative properties fields
 !    for the total-cloud field in each grid box, using as input the
 !    properties and characteristics of the various cloud types that may
-!    be present (large-scale, donner mesoscale and cell-scale, uw
-!    shallow).
+!    be present (large-scale, uw shallow).
 !  </DESCRIPTION>
 !  <TEMPLATE>
 !   call combine_cloud_properties (is, js, Rad_time, deltaz,    &
-!                                     Lsc_microphys, Meso_microphys,  &
-!                                     Cell_microphys,   &
+!                                     Lsc_microphys, &
 !                                     Shallow_microphys, &
 !                                     Lscrad_props,   &
-!                                     Mesorad_props,  Cellrad_props,  &
 !                                     Shallowrad_props, &
 !                                     Cldrad_props)
 !  </TEMPLATE>
@@ -845,14 +778,6 @@ end subroutine cloudrad_package_end
 !    microphysical specification for large-scale
 !                      clouds
 !  </IN>
-!  <IN NAME="Meso_microphys" TYPE="microphysics_type">
-!    microphysical specification for meso-scale
-!                      clouds assciated with donner convection
-!  </IN>
-!  <IN NAME="Cell_microphys" TYPE="microphysics_type">
-!    microphysical specification for  convective cell
-!                      clouds associated with donner convection
-!  </IN>
 !  <IN NAME="Shallow_microphys" TYPE="microphysics_type">
 !    microphysical specification for
 !                      clouds associated with uw shallow convection
@@ -860,14 +785,6 @@ end subroutine cloudrad_package_end
 !  <IN NAME="Lscrad_props" TYPE="microrad_properties_type">
 !   cloud radiative properties for the large-scale
 !                      clouds
-!  </IN>
-!  <IN NAME="Mesorad_props" TYPE="microrad_properties_type">
-!   cloud radiative properties for the meso-scale
-!                      clouds
-!  </IN>
-!  <IN NAME="Cellrad_props" TYPE="microrad_properties_type">
-!   cloud radiative properties for the convective cell
-!                      clouds associated with donner convection
 !  </IN>
 !  <IN NAME="Shallowrad_props" TYPE="microrad_properties_type">
 !   cloud radiative properties for the
@@ -887,8 +804,7 @@ subroutine combine_cloud_properties (is, js, Rad_time, Time_next,  &
 !    combine_cloud_properties produces cloud-radiative properties fields
 !    for the total-cloud field in each grid box, using as input the
 !    properties and characteristics of the various cloud types that may
-!    be present (large-scale, donner mesoscale and cell-scale, uw
-!    shallow).
+!    be present (large-scale, uw shallow).
 !----------------------------------------------------------------------
 
 integer,                        intent(in)    :: is, js

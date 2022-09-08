@@ -159,13 +159,6 @@ real             :: min_cld_drop_rad, max_cld_drop_rad, &
                     min_cld_ice_size, max_cld_ice_size, &
                     mn_drp_diam, mx_drp_diam
 
-!-----------------------------------------------------------------------
-!    if true, then donner meso clouds are treated as largescale in the 
-!    optical depth diagnostic; if false, then they are included with
-!    convective clouds
-!-----------------------------------------------------------------------
-logical          :: donner_meso_is_largescale
-
 !----------------------------------------------------------------------
 !    number of stochastic subcolumns 
 !----------------------------------------------------------------------
@@ -190,26 +183,12 @@ integer :: id_cldtop_reff, id_cldtop_area, id_cldtop_dropnum, &
 ! radiative property diagnostics
 integer :: id_em_cld_lw, id_em_cld_10u, & 
            id_abs_lsc_cld_10u, id_abs_lsc_cld_lw,  &
-           id_abs_cell_cld_10u, id_abs_cell_cld_lw,  &
-           id_abs_meso_cld_10u, id_abs_meso_cld_lw,  &
            id_abs_shallow_cld_10u, id_abs_shallow_cld_lw,  &
            id_abs_cld_10u, id_abs_cld_lw,  &
            id_lsc_cld_ext_uv, id_lsc_cld_ext_vis, id_lsc_cld_ext_nir, &
            id_lsc_cld_sct_uv, id_lsc_cld_sct_vis, id_lsc_cld_sct_nir, &
            id_lsc_cld_asymm_uv, id_lsc_cld_asymm_vis,    &
            id_lsc_cld_asymm_nir, &
-           id_cell_cld_ext_uv, id_cell_cld_ext_vis,    &
-           id_cell_cld_ext_nir, &
-           id_cell_cld_sct_uv, id_cell_cld_sct_vis,    &
-           id_cell_cld_sct_nir, &
-           id_cell_cld_asymm_uv, id_cell_cld_asymm_vis,    &
-           id_cell_cld_asymm_nir, &
-           id_meso_cld_ext_uv, id_meso_cld_ext_vis,   &
-           id_meso_cld_ext_nir, &
-           id_meso_cld_sct_uv, id_meso_cld_sct_vis,   &
-           id_meso_cld_sct_nir, &
-           id_meso_cld_asymm_uv, id_meso_cld_asymm_vis,    &
-           id_meso_cld_asymm_nir, &
            id_shallow_cld_ext_uv, id_shallow_cld_ext_vis,    &
            id_shallow_cld_ext_nir, &
            id_shallow_cld_sct_uv, id_shallow_cld_sct_vis,    &
@@ -220,7 +199,7 @@ integer :: id_em_cld_lw, id_em_cld_10u, &
            id_ext_cld_vis,  id_sct_cld_vis, id_asymm_cld_vis, &
            id_ext_cld_nir,  id_sct_cld_nir, id_asymm_cld_nir, &
            id_alb_uv_cld, id_alb_nir_cld, id_abs_uv_cld, id_abs_nir_cld, &
-           id_strat_opdepth, id_meso_opdepth, id_cell_opdepth,   &
+           id_strat_opdepth,  &
            id_shallow_opdepth, id_largescale_opdepth, id_convect_opdepth,&
            id_total_opdepth
    
@@ -242,25 +221,9 @@ integer::  id_strat_area_liq, id_strat_conc_drop, id_strat_size_drop,&
 !
            id_lsc_cld_col, &
            id_shallow_cld_col, &
-           id_meso_cld_col, &
-           id_cell_cld_col, &
            id_conv_cld_col,  &
            id_gb_strat_conc_drop, id_lsc_cld_amt,  id_lsc_lwp, &
            id_gb_lsc_lwp, id_lsc_iwp, id_gb_lsc_iwp
-
-! donner meso cloud microphysical properties diagnostics
-integer::  id_meso_area_liq, id_meso_conc_drop, id_meso_size_drop,&
-           id_ra_meso_size_drop, id_meso_area_ice, id_meso_conc_ice, &
-           id_meso_size_ice, id_meso_droplet_number, &
-           id_gb_meso_conc_ice, id_gb_meso_conc_drop, id_meso_cld_amt, &
-           id_meso_lwp, id_gb_meso_lwp, id_meso_iwp, id_gb_meso_iwp
-
-! donner cell cloud microphysical properties diagnostics
-integer::  id_cell_area_liq, id_cell_conc_drop, id_cell_size_drop,&
-           id_ra_cell_size_drop, id_cell_area_ice, id_cell_conc_ice, &
-           id_cell_size_ice, id_cell_droplet_number, &
-           id_gb_cell_conc_ice, id_gb_cell_conc_drop, id_cell_cld_amt, &
-           id_cell_lwp, id_gb_cell_lwp, id_cell_iwp, id_gb_cell_iwp
 
 ! uw shallow cloud microphysical properties diagnostics
 integer::  id_shallow_area_liq, id_shallow_conc_drop,   &
@@ -283,12 +246,10 @@ integer :: id_cldfrac_ave, id_ice_conc_ave, id_drop_size_ave, &
            id_ice_col_frac_ave, &
            id_ic_drop_conc_ave, id_ic_ice_conc_ave, id_lwp_ave,  &  
            id_ic_lwp_ave, id_iwp_ave, id_ic_iwp_ave, id_lsc_lwp_ave, &
-           id_cell_lwp_ave, id_meso_lwp_ave, id_shallow_lwp_ave, &
-           id_lsc_iwp_ave, id_cell_iwp_ave, id_meso_iwp_ave, &
+           id_shallow_lwp_ave, &
+           id_lsc_iwp_ave, &
            id_shallow_iwp_ave, id_lsc_drop_conc_ave,  &
-           id_cell_drop_conc_ave, id_meso_drop_conc_ave, & 
            id_shallow_drop_conc_ave, id_lsc_ice_conc_ave,  &
-           id_cell_ice_conc_ave, id_meso_ice_conc_ave, & 
            id_shallow_ice_conc_ave
 
 !   stochastic cloud diagnostics used to show effects of extending
@@ -303,12 +264,10 @@ integer :: id_cldfrac_only_lsc, id_drop_size_only_lsc, &
 integer :: id_LWPr
 
 ! stochastic cloud sampling diagnostics
-integer :: id_stoch_ic_cell_cf_ave, id_stoch_ic_meso_cf_ave, &
-           id_stoch_ic_lsc_cf_ave, id_stoch_ic_shallow_cf_ave
-integer :: id_stoch_sees_cell, id_stoch_sees_meso, &
-           id_stoch_sees_lsc, id_stoch_sees_shallow
-integer :: id_stoch_cell_cf_ave, id_stoch_shallow_cf_ave, &
-           id_stoch_meso_cf_ave, id_stoch_lsc_cf_ave
+integer :: id_stoch_ic_lsc_cf_ave, id_stoch_ic_shallow_cf_ave
+integer :: id_stoch_sees_lsc, id_stoch_sees_shallow
+integer :: id_stoch_shallow_cf_ave, &
+           id_stoch_lsc_cf_ave
 
 ! diagnostics for each stochastic column:
 integer, dimension(:), allocatable ::    &
@@ -386,7 +345,6 @@ subroutine cloudrad_diagnostics_init (min_cld_drop_rad_in,  &
                                       max_cld_drop_rad_in, &
                                       min_cld_ice_size_in, &
                                       max_cld_ice_size_in, axes, Time, &
-                                      donner_meso_is_largescale_in, &
                                       Cldrad_control)
 
 !---------------------------------------------------------------------
@@ -400,7 +358,6 @@ real,                        intent(in)  ::  min_cld_drop_rad_in, &
                                              max_cld_ice_size_in
 integer, dimension(4),       intent(in)  ::  axes
 type(time_type),             intent(in)  ::  Time
-logical,                     intent(in)  ::  donner_meso_is_largescale_in
 type(cloudrad_control_type), intent(in)  ::  Cldrad_control
 
 !---------------------------------------------------------------------
@@ -462,8 +419,6 @@ type(cloudrad_control_type), intent(in)  ::  Cldrad_control
       if (mpp_pe() == mpp_root_pe() )    &
                        write (logunit, nml=cloudrad_diagnostics_nml)
  
-      donner_meso_is_largescale = donner_meso_is_largescale_in
-
 !---------------------------------------------------------------------
 !    define module variables to retain the smallest and largest 
 !    allowable droplet and ice particle sizes which can be processed
@@ -633,8 +588,7 @@ type(cloudrad_control_type), intent(in)  ::  Cldrad_control
       end if
 
       if (id_largescale_opdepth + id_convect_opdepth + id_strat_opdepth + &
-          id_meso_opdepth + id_cell_opdepth + id_shallow_opdepth + &
-          id_total_opdepth > 0) output_opdepth_diagnostics = .true.
+          + id_shallow_opdepth + id_total_opdepth > 0) output_opdepth_diagnostics = .true.
 
 !--------------------------------------------------------------------
 !    mark the module initialized.
@@ -1022,14 +976,6 @@ end subroutine modis_cmip
 !   microphysical specification for large-scale 
 !                        clouds
 !  </IN>
-!  <IN NAME="Meso_microphys" TYPE="microphysics_type">
-!   microphysical specification for meso-scale 
-!                        clouds assciated with donner convection
-!  </IN>
-!  <IN NAME="Cell_microphys" TYPE="microphysics_type">
-!   microphysical specification for convective cell
-!                        clouds associated with donner convection
-!  </IN>
 !  <IN NAME="Shallow_microphys" TYPE="microphysics_type">
 !   microphysical specification for 
 !                        clouds associated with uw shallow convection
@@ -1037,14 +983,6 @@ end subroutine modis_cmip
 !  <IN NAME="Lscrad_props" TYPE="microrad_properties_type">
 !   cloud radiative properties for the large-scale 
 !                      clouds   
-!  </IN>
-!  <IN NAME="Mesorad_props" TYPE="microrad_properties_type">
-!   cloud radiative properties for the meso-scale
-!                      clouds assciated with donner convection
-!  </IN>
-!  <IN NAME="Cellrad_props" TYPE="microrad_properties_type">
-!   cloud radiative properties for the convective cell
-!                      clouds associated with donner convection 
 !  </IN>
 !  <IN NAME="Shallowrad_props" TYPE="microrad_properties_type">
 !   cloud radiative properties for the 
@@ -1096,23 +1034,11 @@ type(microphysics_type),        intent(inout)   :: Model_microphys
 !      Lsc_microphys   microphysical specification for large-scale 
 !                      clouds
 !                      [ microphysics_type ]
-!      Meso_microphys  microphysical specification for meso-scale 
-!                      clouds assciated with donner convection
-!                      [ microphysics_type ]
-!      Cell_microphys  microphysical specification for convective cell
-!                      clouds associated with donner convection
-!                      [ microphysics_type ]
 !   Shallow_microphys  microphysical specification for 
 !                      clouds associated with uw shallow convection
 !                      [ microphysics_type ]
 !      Lscrad_props    cloud radiative properties for the large-scale 
 !                      clouds   
-!                      [ microrad_properties_type ]
-!      Mesorad_props   cloud radiative properties for meso-scale 
-!                      clouds associated with donner convection   
-!                      [ microrad_properties_type ]
-!      Cellrad_props   cloud radiative properties for convective cell
-!                      clouds associated with donner convection  
 !                      [ microrad_properties_type ]
 !    Shallowrad_props   
 !                      cloud radiative properties for
@@ -1153,29 +1079,21 @@ type(microphysics_type),        intent(inout)   :: Model_microphys
 
       real, dimension(size(press,1),size(press,2),size(press,3)) :: &
                                     Tau, LwEm, tau_c, tau_s, &
-                                    tau_strat, tau_meso, tau_cell, &
-                                    tau_uw, tau_tot
+                                    tau_strat, tau_uw, tau_tot
 
       logical    :: used
       integer    :: ix, jx, kx
       integer    :: i, j, k, n
       integer    :: nn
-      integer    :: ctr_s, ctr_c, ctr_strat, ctr_meso, ctr_cell, ctr_uw, &
-                    ctr_tot
-      real       :: sum_s1, sum_c1, sum_strat, sum_meso, sum_cell, sum_uw, &
-                    sum_tot
+      integer    :: ctr_s, ctr_c, ctr_strat, ctr_uw, ctr_tot
+      real       :: sum_s1, sum_c1, sum_strat, sum_uw, sum_tot
 
       integer    :: nc, cloud_index
-      integer    :: strat_index, shallow_index, &
-                    donner_cell_index, donner_meso_index
+      integer    :: strat_index, shallow_index
 !  pointers to cloud schemes
       type(microphysics_type), pointer :: Lsc_microphys,  &
-                                          Meso_microphys, &
-                                          Cell_microphys, &
                                           Shallow_microphys
       type(microrad_properties_type), pointer :: Lscrad_props,  &
-                                                 Mesorad_props, &
-                                                 Cellrad_props, &
                                                  Shallowrad_props
 
 
@@ -1217,13 +1135,9 @@ if (Time_diag > Time) then
 !    initialize with "-1" so indices do not match null stoch_cloud_type
 !---------------------------------------------------------------------
       strat_index = -1
-      donner_cell_index = -1
-      donner_meso_index = -1
       shallow_index = -1
       do nc = 1, size(Cloud_microphys(:))
         if (trim(Cloud_microphys(nc)%scheme_name) .eq. 'strat_cloud') strat_index = nc
-        if (trim(Cloud_microphys(nc)%scheme_name) .eq. 'donner_cell') donner_cell_index = nc
-        if (trim(Cloud_microphys(nc)%scheme_name) .eq. 'donner_cell') donner_meso_index = nc
         if (trim(Cloud_microphys(nc)%scheme_name) .eq. 'uw_conv')     shallow_index = nc
       enddo
 
@@ -1238,7 +1152,7 @@ if (Time_diag > Time) then
 !    compute the depth of each model layer to be used in defining water
 !    paths. include the 10**3 factor needed to produce water path units
 !    of kg(h2o) / m**2 rather than  g(h2o) / m**2. 
-!    pmass is consistent with the expression used for donner ans uw
+!    pmass is consistent with the expression used for uw
 !    shallow clouds, while pmass2 is consistent with that used in
 !    strat_cloud.
 !----------------------------------------------------------------------
@@ -1395,15 +1309,11 @@ if (Time_diag > Time) then
                 ctr_s = 0
                 ctr_c = 0
                 ctr_strat = 0
-                ctr_meso = 0
-                ctr_cell = 0
                 ctr_uw = 0
                 ctr_tot = 0
                 sum_s1 = 0.
                 sum_c1 = 0.
                 sum_strat = 0.
-                sum_meso = 0.
-                sum_cell = 0.
                 sum_uw = 0.
                 sum_tot = 0.
                 do n=1, size(Tau_stoch,4)
@@ -1412,27 +1322,6 @@ if (Time_diag > Time) then
                     sum_s1 = sum_s1 +  tau_stoch(i,j,k,n)
                     ctr_strat = ctr_strat + 1
                     sum_strat = sum_strat + tau_stoch(i,j,k,n)
-                    ctr_tot = ctr_tot + 1
-                    sum_tot = sum_tot + tau_stoch(i,j,k,n)
-                  else if   &
-                    (Model_microphys%stoch_cloud_type(i,j,k,n) == donner_meso_index ) then
-                    ctr_meso = ctr_meso + 1
-                    sum_meso = sum_meso + tau_stoch(i,j,k,n)
-                    if (donner_meso_is_largescale) then
-                      ctr_s = ctr_s + 1
-                      sum_s1 = sum_s1 +  tau_stoch(i,j,k,n)
-                    else
-                      ctr_c = ctr_c + 1
-                      sum_c1 = sum_c1 +  tau_stoch(i,j,k,n)
-                    endif
-                    ctr_tot = ctr_tot + 1
-                    sum_tot = sum_tot + tau_stoch(i,j,k,n)
-                  else if    &
-                    (Model_microphys%stoch_cloud_type(i,j,k,n) == donner_cell_index ) then
-                    ctr_cell = ctr_cell + 1
-                    sum_cell = sum_cell + tau_stoch(i,j,k,n)
-                    ctr_c = ctr_c + 1
-                    sum_c1 = sum_c1 +  tau_stoch(i,j,k,n)
                     ctr_tot = ctr_tot + 1
                     sum_tot = sum_tot + tau_stoch(i,j,k,n)
                   else if    &
@@ -1460,16 +1349,6 @@ if (Time_diag > Time) then
                 else
                   tau_strat(i,j,k) = 0.             
                 endif
-                if (ctr_meso > 0) then
-                  tau_meso(i,j,k) = sum_meso/ctr_meso
-                else
-                  tau_meso(i,j,k) = 0.             
-                endif
-                if (ctr_cell > 0) then
-                  tau_cell(i,j,k) = sum_cell/ctr_cell
-                else
-                  tau_cell(i,j,k) = 0.             
-                endif
                 if (ctr_uw > 0) then
                   tau_uw(i,j,k) = sum_uw/ctr_uw
                 else
@@ -1488,10 +1367,6 @@ if (Time_diag > Time) then
           used = send_data (id_convect_opdepth, tau_c(:,:,:), &
                             Time_diag, is, js, 1)
           used = send_data (id_strat_opdepth, tau_strat(:,:,:), &
-                            Time_diag, is, js, 1)
-          used = send_data (id_meso_opdepth, tau_meso(:,:,:), &
-                            Time_diag, is, js, 1)
-          used = send_data (id_cell_opdepth, tau_cell(:,:,:), &
                             Time_diag, is, js, 1)
           used = send_data (id_shallow_opdepth, tau_uw(:,:,:), &
                             Time_diag, is, js, 1)
@@ -1587,33 +1462,6 @@ if (Time_diag > Time) then
 ! stochastic columns containing anvils assuming maximum overlap
 !---------------------------------------------------------------------
 
-        if ( id_meso_cld_col > 0) then
-
-          cloud(:,:,:) = REAL (COUNT(    &
-                Model_microphys%stoch_cloud_type(:,:,:,:) == donner_meso_index, &
-                                                 dim = 4))/REAL(ncol)
-
-          tca3(:,:) =  MAXVAL (cloud, dim = 3)
-
-          used = send_data (id_meso_cld_col, tca3, Time_diag, is, js)
-
-        endif 
-
-
-
-        if ( id_cell_cld_col > 0) then
-
-          cloud(:,:,:) = REAL (COUNT(    &
-                Model_microphys%stoch_cloud_type(:,:,:,:) == donner_cell_index, &
-                                                 dim = 4))/REAL(ncol)
-
-          tca3(:,:) =  MAXVAL (cloud, dim = 3)
-
-          used = send_data (id_cell_cld_col, tca3, Time_diag, is, js)
-
-        endif 
-
-
         if ( id_shallow_cld_col > 0) then
 
           cloud(:,:,:) = REAL (COUNT(    &
@@ -1630,19 +1478,11 @@ if (Time_diag > Time) then
 
         if ( id_conv_cld_col > 0) then
 
-          cloud(:,:,:) = REAL (   &
-                  COUNT( Model_microphys%stoch_cloud_type(:,:,:,:) == donner_meso_index,  &
-                                                  dim = 4)   +     &    
-                  COUNT( Model_microphys%stoch_cloud_type(:,:,:,:) == donner_cell_index, & 
-                                                  dim = 4))/REAL(ncol)
-
-          tca3(:,:) =  MAXVAL (cloud, dim = 3)
-
           cloud(:,:,:) =  REAL (   &
                   COUNT( Model_microphys%stoch_cloud_type(:,:,:,:) == shallow_index, &
                                                 dim = 4))/REAL(ncol)
 
-          tca3(:,:) =  tca3(:,:) + MAXVAL (cloud,  dim = 3)
+          tca3(:,:) =  MAXVAL (cloud,  dim = 3)
 
           tca3(:,:) = MIN(tca3(:,:), 1.)
 
@@ -1879,88 +1719,6 @@ if (Time_diag > Time) then
 !
 !
 !
-!             SHORTWAVE RADIATIVE PROPERTIES OF DONNER CLOUDS
-!
-!
-!
-!
-!---------------------------------------------------------------------
-
-!----------------------------------------------------------------------
-!    the following diagnostics are meaningful only when 
-!    donner_deep_clouds is active:
-!----------------------------------------------------------------------
-      if (Cldrad_control%do_donner_deep_clouds) then
-
-        Cell_microphys => Cloud_microphys(donner_cell_index)
-        Meso_microphys => Cloud_microphys(donner_meso_index)
-        Cellrad_props  => Microrad_props (donner_cell_index)
-        Mesorad_props  => Microrad_props (donner_meso_index)
-
-!----------------------------------------------------------------------
-!    send the 3D cell-scale cloud amount field to diag_manager_mod.
-!----------------------------------------------------------------------
-        used = send_data (id_cell_cld_amt,100.*Cell_microphys%cldamt,&
-                          Time_diag, is, js, 1)
-
-!----------------------------------------------------------------------
-!    send various cell-scale cloud shortwave radiative property fields
-!    to diag_manager_mod.
-!----------------------------------------------------------------------
-        used = send_data (id_cell_cld_ext_uv, Cellrad_props%cldext(:,:,:,iuv), &
-                          Time_diag, is, js, 1)
-        used = send_data (id_cell_cld_ext_vis, Cellrad_props%cldext(:,:,:,ivis), &
-                          Time_diag, is, js, 1)
-        used = send_data (id_cell_cld_ext_nir, Cellrad_props%cldext(:,:,:,inir), &
-                          Time_diag, is, js, 1)
-        used = send_data (id_cell_cld_sct_uv, Cellrad_props%cldsct(:,:,:,iuv), &
-                          Time_diag, is, js, 1)
-        used = send_data (id_cell_cld_sct_vis, Cellrad_props%cldsct(:,:,:,ivis), &
-                          Time_diag, is, js, 1)
-        used = send_data (id_cell_cld_sct_nir, Cellrad_props%cldsct(:,:,:,inir), &
-                          Time_diag, is, js, 1)
-        used = send_data (id_cell_cld_asymm_uv, Cellrad_props%cldasymm(:,:,:,iuv), &
-                          Time_diag, is, js, 1)
-        used = send_data (id_cell_cld_asymm_vis, Cellrad_props%cldasymm(:,:,:,ivis), &
-                          Time_diag, is, js, 1)
-        used = send_data (id_cell_cld_asymm_nir, Cellrad_props%cldasymm(:,:,:,inir), &
-                          Time_diag, is, js, 1)
-
-!----------------------------------------------------------------------
-!    send the 3D meso-scale cloud amount field to diag_manager_mod.
-!----------------------------------------------------------------------
-        used = send_data (id_meso_cld_amt,100.*Meso_microphys%cldamt,&
-                          Time_diag, is, js, 1)
-
-!----------------------------------------------------------------------
-!    send various meso-scale cloud shortwave radiative property fields
-!    to diag_manager_mod.
-!----------------------------------------------------------------------
-        used = send_data (id_meso_cld_ext_uv, Mesorad_props%cldext(:,:,:,iuv), &
-                          Time_diag, is, js, 1)
-        used = send_data (id_meso_cld_ext_vis, Mesorad_props%cldext(:,:,:,ivis), &
-                          Time_diag, is, js, 1)
-        used = send_data (id_meso_cld_ext_nir, Mesorad_props%cldext(:,:,:,inir), &
-                          Time_diag, is, js, 1)
-        used = send_data (id_meso_cld_sct_uv, Mesorad_props%cldsct(:,:,:,iuv), &
-                          Time_diag, is, js, 1)
-        used = send_data (id_meso_cld_sct_vis, Mesorad_props%cldsct(:,:,:,ivis), &
-                          Time_diag, is, js, 1)
-        used = send_data (id_meso_cld_sct_nir, Mesorad_props%cldsct(:,:,:,inir), &
-                          Time_diag, is, js, 1)
-        used = send_data (id_meso_cld_asymm_uv, Mesorad_props%cldasymm(:,:,:,iuv), &
-                          Time_diag, is, js, 1)
-        used = send_data (id_meso_cld_asymm_vis, Mesorad_props%cldasymm(:,:,:,ivis), &
-                          Time_diag, is, js, 1)
-        used = send_data (id_meso_cld_asymm_nir, Mesorad_props%cldasymm(:,:,:,inir), &
-                          Time_diag, is, js, 1)
-      endif ! (do_donner_deep_clouds)
-
-
-!---------------------------------------------------------------------
-!
-!
-!
 !             SHORTWAVE RADIATIVE PROPERTIES OF UW SHALLOW CLOUDS
 !
 !
@@ -2074,51 +1832,6 @@ if (Time_diag > Time) then
                             Lscrad_props%abscoeff(:,:,:,1), Time_diag, &
                             is, js, 1)
         endif
-      endif
-
-      if (Cldrad_control%do_donner_deep_clouds) then
-!---------------------------------------------------------------------
-!    if a multi-band lw cloud emissivity formulation is active, define 
-!    the cell scale cloud absorption coefficient over the 990-1070 cm-1 
-!    band (band 5 of 7).
-!---------------------------------------------------------------------
-        if (Cldrad_control%do_lw_micro) then
-          used = send_data (id_abs_cell_cld_10u,     &
-                            Cellrad_props%abscoeff(:,:,:,5), Time_diag,&
-                            is, js, 1)
-        else
-
-!---------------------------------------------------------------------
-!    if a multi-band lw cloud emissivity formulation is not active, 
-!    define the cell scale cloud absorption coefficient over 1 band 
-!    (0-2200 cm-1).
-!---------------------------------------------------------------------
-          used = send_data (id_abs_cell_cld_lw,     &
-                            Cellrad_props%abscoeff(:,:,:,1), Time_diag,&
-                            is, js, 1)
-        endif
-
-!---------------------------------------------------------------------
-!    if a multi-band lw cloud emissivity formulation is active, define 
-!    a meso-scale cloud absorption coefficient over the 990-1070 cm-1 
-!    band (band 5 of 7).
-!---------------------------------------------------------------------
-        if (Cldrad_control%do_lw_micro) then
-          used = send_data (id_abs_meso_cld_10u,    &
-                            Mesorad_props%abscoeff(:,:,:,5), Time_diag,&
-                            is, js, 1)
-        else
- 
-!---------------------------------------------------------------------
-!    if a multi-band lw cloud emissivity formulation is not active, 
-!    define the meso-scale cloud absorption coefficient over 1 band 
-!    (0-2200 cm-1).
-!---------------------------------------------------------------------
-          used = send_data (id_abs_meso_cld_lw,    &
-                            Mesorad_props%abscoeff(:,:,:,1), Time_diag,&
-                            is, js, 1)
-        endif
-
       endif
 
       if (Cldrad_control%do_uw_clouds) then
@@ -2476,236 +2189,6 @@ if (Time_diag > Time) then
 !---------------------------------------------------------------------
 !
 !
-!             DONNER MESO PHYSICAL PROPERTIES
-!
-!
-!---------------------------------------------------------------------
-      if (Cldrad_control%do_donner_deep_clouds) then
-
-!--------------------------------------------------------------------
-!    donner meso ice cloud properties: fractional area, size, 
-!    cloud amount and path
-!--------------------------------------------------------------------
-        if (max(id_meso_area_ice, id_meso_size_ice, &
-                id_meso_conc_ice, id_meso_iwp) > 0) then
-          tmplmask = Meso_microphys%conc_ice > 0.0
-
-          if (id_meso_area_ice > 0) then
-            cloud = 0.
-            where (tmplmask)                    
-              cloud = Meso_microphys%cldamt
-            endwhere      
-            used = send_data (id_meso_area_ice, cloud, Time_diag,  &
-                              is, js, 1)
-          endif
-
-          used = send_data (id_meso_size_ice,   &
-                            Meso_microphys%size_ice, Time_diag,  &
-                            is, js, 1, mask=tmplmask)
-
-          used = send_data (id_meso_conc_ice,   &
-                            Meso_microphys%conc_ice, Time_diag,    &
-                            is, js, 1, mask=tmplmask)
-   
-          if (id_meso_iwp > 0) then
-            cloud2d(:,:) =   &
-             SUM (Meso_microphys%conc_ice(:,:,:)*pmass(:,:,:), dim = 3 )
-            tmplmask2 = cloud2d > 0.0
-            used = send_data (id_meso_iwp, cloud2d, Time_diag,   &
-                              is, js, mask=tmplmask2)
-          endif
-        endif
-
-        if (id_gb_meso_conc_ice > 0) then
-          cloud = Meso_microphys%conc_ice*Meso_microphys%cldamt 
-          used = send_data (id_gb_meso_conc_ice, cloud, &
-                            Time_diag, is, js, 1)                  
-        endif
-
-        if (id_gb_meso_iwp > 0) then
-          cloud2d(:,:) =   &
-             SUM (Meso_microphys%conc_ice(:,:,:)*  &
-                  Meso_microphys%cldamt(:,:,:)*pmass(:,:,:), dim = 3 )
-          used = send_data (id_gb_meso_iwp, cloud2d, Time_diag, is, js)
-        endif
-
-!--------------------------------------------------------------------
-!    donner meso liquid cloud properties: fractional area, size, 
-!    cloud amount, path and droplet number. note that the current
-!    donner parameterization does not allow mesoscale liquid.
-!--------------------------------------------------------------------
-        if (max(id_meso_area_liq,       id_meso_size_drop,  &
-                id_ra_meso_size_drop,   id_meso_conc_drop, &
-                id_meso_droplet_number, id_meso_lwp) > 0) then
-          tmplmask = Meso_microphys%conc_drop > 0.0
-
-          if (id_meso_area_liq > 0) then
-            cloud = 0.
-            where (tmplmask)                      
-              cloud = Meso_microphys%cldamt
-            endwhere      
-            used = send_data (id_Meso_area_liq, cloud, Time_diag,  &
-                              is, js, 1)
-          endif
-
-          used = send_data (id_meso_size_drop,     &
-                            Meso_microphys%size_drop, Time_diag,  &
-                            is, js, 1, mask=tmplmask)
-
-          if (id_ra_meso_size_drop > 0) then
-            cloud = MAX   &
-               (MIN(Meso_microphys%size_drop, mx_drp_diam), mn_drp_diam)
-            used = send_data (id_ra_meso_size_drop, cloud, Time_diag,  &
-                              is, js, 1, mask=tmplmask)
-          endif
-
-          used = send_data (id_meso_conc_drop,   &
-                            Meso_microphys%conc_drop, Time_diag,  &
-                            is, js, 1, mask=tmplmask)
-
-          used = send_data (id_meso_droplet_number,   &
-                            Meso_microphys%droplet_number, &
-                            Time_diag, is, js, 1, mask=tmplmask)
-
-          if (id_meso_lwp > 0) then
-            cloud2d(:,:) = SUM (Meso_microphys%conc_drop(:,:,:)*   &
-                                pmass(:,:,:), dim = 3 )
-            tmplmask2 = cloud2d > 0.0
-            used = send_data (id_meso_lwp, cloud2d, Time_diag,   &
-                              is, js, mask=tmplmask2)
-          endif
-        endif
-
-        if (id_gb_meso_conc_drop > 0) then
-          cloud = Meso_microphys%conc_drop*Meso_microphys%cldamt 
-          used = send_data (id_gb_meso_conc_drop, cloud, &
-                            Time_diag, is, js, 1)                  
-        endif
-
-        if (id_gb_meso_lwp > 0) then
-          cloud2d(:,:) = SUM (Meso_microphys%conc_drop(:,:,:)*   &
-                    Meso_microphys%cldamt(:,:,:)*pmass(:,:,:), dim = 3 )
-          used = send_data (id_gb_meso_lwp, cloud2d, Time_diag, is, js)
-        endif
-
-!---------------------------------------------------------------------
-!
-!
-!             DONNER CELL PHYSICAL PROPERTIES
-!
-!
-!---------------------------------------------------------------------
-
-!--------------------------------------------------------------------
-!    donner cell ice cloud properties: fractional area, size, 
-!    cloud amount and path. 
-!--------------------------------------------------------------------
-        if (max(id_cell_area_ice, id_cell_size_ice,  &
-                id_cell_conc_ice, id_cell_iwp) > 0) then
-          tmplmask = Cell_microphys%conc_ice > 0.0
-
-          if (id_cell_area_ice > 0) then
-            cloud = 0.
-            where (tmplmask)                           
-              cloud = Cell_microphys%cldamt
-            endwhere      
-            used = send_data (id_cell_area_ice, cloud, Time_diag,  &
-                              is, js, 1)
-          endif
-
-          used = send_data (id_cell_size_ice,    &
-                            Cell_microphys%size_ice, Time_diag,  &
-                            is, js, 1, mask=tmplmask)
-
-          used = send_data (id_cell_conc_ice,   &
-                            Cell_microphys%conc_ice, Time_diag,   &
-                            is, js, 1, mask=tmplmask)
-
-          if (id_cell_iwp > 0) then
-            cloud2d(:,:) = SUM (Cell_microphys%conc_ice(:,:,:)*   &
-                                pmass(:,:,:), dim = 3 )
-            tmplmask2 = cloud2d  > 0.0
-            used = send_data (id_cell_iwp, cloud2d, &
-                              Time_diag, is, js, mask=tmplmask2)
-          endif
-        endif
-
-        if (id_gb_cell_conc_ice > 0) then
-          cloud = Cell_microphys%conc_ice*Cell_microphys%cldamt 
-          used = send_data (id_gb_cell_conc_ice, cloud, &
-                            Time_diag, is, js, 1)                
-        endif
-
-        if (id_gb_cell_iwp > 0) then
-          cloud2d(:,:) = SUM (Cell_microphys%conc_ice(:,:,:)*   &
-                   Cell_microphys%cldamt(:,:,:)*pmass(:,:,:), dim = 3 )
-          used = send_data (id_gb_cell_iwp, cloud2d, &
-                            Time_diag, is, js)                
-        endif
-
-!--------------------------------------------------------------------
-!    donner cell liquid cloud properties: fractional area, size, 
-!    cloud amount, path and droplet number.
-!--------------------------------------------------------------------
-        if (max(id_cell_area_liq,       id_cell_size_drop, &
-                id_ra_cell_size_drop,   id_cell_conc_drop, &
-                id_cell_droplet_number, id_cell_lwp) > 0) then
-          tmplmask = Cell_microphys%conc_drop > 0.0
-
-          if (id_cell_area_liq > 0) then
-            cloud = 0.
-            where (tmplmask)                       
-              cloud = Cell_microphys%cldamt
-            endwhere      
-            used = send_data (id_cell_area_liq, cloud, Time_diag,  &
-                              is, js, 1)
-          endif
-
-          used = send_data (id_cell_size_drop,    &
-                            Cell_microphys%size_drop, Time_diag,  &
-                            is, js, 1, mask=tmplmask)
-
-          if (id_ra_cell_size_drop > 0) then
-            cloud = MAX   &
-               (MIN (Cell_microphys%size_drop,mx_drp_diam), mn_drp_diam)
-            used = send_data (id_ra_cell_size_drop, cloud, Time_diag,  &
-                              is, js, 1, mask=tmplmask)
-          endif
-
-          used = send_data (id_cell_conc_drop,    &
-                            Cell_microphys%conc_drop,Time_diag,   &
-                            is, js, 1, mask=tmplmask)
-
-          used = send_data (id_cell_droplet_number,    &
-                            Cell_microphys%droplet_number, &  
-                            Time_diag, is, js, 1, mask=tmplmask)
-
-          if (id_cell_lwp > 0) then
-            cloud2d = SUM (Cell_microphys%conc_drop(:,:,:)*  &
-                                                pmass(:,:,:), dim = 3 )
-            tmplmask2 = cloud2d  > 0.0
-            used = send_data (id_cell_lwp, cloud2d, &
-                              Time_diag, is, js, mask=tmplmask2)
-          endif
-        endif
-
-        if (id_gb_cell_conc_drop > 0) then
-          cloud = Cell_microphys%conc_drop*Cell_microphys%cldamt 
-          used = send_data (id_gb_cell_conc_drop, cloud, &
-                            Time_diag, is, js, 1)                
-        endif
-
-        if (id_gb_cell_lwp > 0) then
-          cloud2d = SUM (Cell_microphys%conc_drop(:,:,:)*  &
-                  Cell_microphys%cldamt(:,:,:)*pmass(:,:,:), dim = 3 )
-          used = send_data (id_gb_cell_lwp, cloud2d, &
-                            Time_diag, is, js)                
-        endif
-      endif ! (do_donner_deep_clouds)
-
-!---------------------------------------------------------------------
-!
-!
 !             UW SHALLOW PHYSICAL PROPERTIES
 !
 !
@@ -3058,8 +2541,7 @@ if (Time_diag > Time) then
 
 !--------------------------------------------------------------------
 !    grid-box-mean (averaged over all stochastic bands) ice water path 
-!    and ice water amount contributions from large-scale, cell,
-!    meso, and shallow clouds.
+!    and ice water amount contributions from large-scale and shallow clouds.
 !--------------------------------------------------------------------
         if (max(id_lsc_iwp_ave, id_lsc_ice_conc_ave) > 0  ) then
           tmplmask4(:,:,:,:) =    &
@@ -3076,35 +2558,6 @@ if (Time_diag > Time) then
                             Time_diag, is, js,1)
         endif
  
-        if (max(id_meso_iwp_ave, id_meso_ice_conc_ave) > 0  ) then
-          tmplmask4(:,:,:,:) =    &
-                      (Model_microphys%stoch_cloud_type(:,:,:,:) == donner_meso_index) 
-          cloud(:,:,:) =   &
-                  SUM (Model_microphys%stoch_conc_ice(:,:,:,:),  &
-                                     mask=tmplmask4, dim = 4) / ncol
-          if (id_meso_iwp_ave > 0  ) then
-            cloud2d(:,:) = SUM (cloud(:,:,:)*pmass(:,:,:), dim = 3)
-            used = send_data (id_meso_iwp_ave, cloud2d,   &
-                              Time_diag, is, js)
-          endif
-          used = send_data (id_meso_ice_conc_ave, cloud,   &
-                            Time_diag, is, js,1)
-        endif
-        if (max(id_cell_iwp_ave, id_cell_ice_conc_ave) > 0  ) then
-          tmplmask4(:,:,:,:) =   &
-                   (Model_microphys%stoch_cloud_type(:,:,:,:) == donner_cell_index)  
-          cloud(:,:,:) =   &
-              SUM (Model_microphys%stoch_conc_ice(:,:,:,:),  &
-                                    mask=tmplmask4, dim = 4) / ncol
-          if (id_cell_iwp_ave  > 0  ) then
-            cloud2d(:,:) = SUM (cloud(:,:,:)*pmass(:,:,:), dim = 3)
-            used = send_data (id_cell_iwp_ave, cloud2d,  &
-                              Time_diag, is, js)
-          endif
-          used = send_data (id_cell_ice_conc_ave, cloud,   &
-                            Time_diag, is, js,1)
-        endif
-
         if (max(id_shallow_iwp_ave, id_shallow_ice_conc_ave) > 0  ) then
           tmplmask4(:,:,:,:) =    &
                       (Model_microphys%stoch_cloud_type(:,:,:,:) == shallow_index)  
@@ -3189,7 +2642,7 @@ if (Time_diag > Time) then
 !--------------------------------------------------------------------
 !    grid-box-mean values (averaged over all stochastic bands) of the
 !    contributions to total liquid cloud amount and water path 
-!    from large-scale, cell, meso, and shallow clouds
+!    from large-scale and shallow clouds
 !--------------------------------------------------------------------
         if (max(id_lsc_lwp_ave, id_lsc_drop_conc_ave) > 0  ) then
           tmplmask4(:,:,:,:) =      &
@@ -3203,36 +2656,6 @@ if (Time_diag > Time) then
                               Time_diag, is, js)
           endif
           used = send_data (id_lsc_drop_conc_ave, cloud,     &
-                            Time_diag, is, js,1)
-        endif
-
-        if (max(id_meso_lwp_ave, id_meso_drop_conc_ave) > 0  ) then
-          tmplmask4(:,:,:,:) =    &
-                       (Model_microphys%stoch_cloud_type(:,:,:,:) == donner_meso_index)
-          cloud(:,:,:) =   &
-             SUM (Model_microphys%stoch_conc_drop(:,:,:,:), &
-                                      mask=tmplmask4, dim = 4) / ncol
-          if (id_meso_lwp_ave  > 0  ) then
-            cloud2d(:,:) = SUM (cloud(:,:,:)*pmass(:,:,:), dim = 3)
-            used = send_data (id_meso_lwp_ave, cloud2d,    &
-                              Time_diag, is, js)
-          endif
-          used = send_data (id_meso_drop_conc_ave, cloud,   &
-                            Time_diag, is, js,1)
-        endif
-
-        if (max(id_cell_lwp_ave, id_cell_drop_conc_ave) > 0  ) then
-          tmplmask4(:,:,:,:) =     &
-                       (Model_microphys%stoch_cloud_type(:,:,:,:) == donner_cell_index)
-          cloud(:,:,:) =   &
-              SUM (Model_microphys%stoch_conc_drop(:,:,:,:), &
-                                       mask=tmplmask4, dim = 4) / ncol
-          if (id_cell_lwp_ave > 0  ) then
-            cloud2d(:,:) = SUM (cloud(:,:,:)*pmass(:,:,:), dim = 3)
-            used = send_data (id_cell_lwp_ave, cloud2d,   &
-                              Time_diag, is, js)
-          endif
-          used = send_data (id_cell_drop_conc_ave, cloud,    &
                             Time_diag, is, js,1)
         endif
 
@@ -3570,19 +2993,19 @@ if (Time_diag > Time) then
         end do
 
 !----------------------------------------------------------------------
-!    frequency of occurrence of large-scale, donner meso and cell and 
+!    frequency of occurrence of large-scale and 
 !    uw shallow clouds in cloudy stochastic columns (stoch_ic_xxx_...).
-!    frequency of seeing various cloud types (largescale, donner meso 
-!    and cell, uw shallow) when they are present (stoch_sees_xxx), and 
+!    frequency of seeing various cloud types (largescale,
+!    uw shallow) when they are present (stoch_sees_xxx), and 
 !    the grid-box-mean frequency of their being seen by the radiation 
 !    package, averaged over all stochastic columns  (stoch_xxx_cf_ave). 
 !----------------------------------------------------------------------
-        if (max(id_stoch_ic_shallow_cf_ave, id_stoch_ic_cell_cf_ave, &
-                id_stoch_ic_meso_cf_ave,    id_stoch_ic_lsc_cf_ave,  &
-                id_stoch_sees_lsc,          id_stoch_sees_meso,      &
-                id_stoch_sees_cell,         id_stoch_sees_shallow,   &
-                id_stoch_lsc_cf_ave,        id_stoch_meso_cf_ave,    &
-                id_stoch_cell_cf_ave,       id_stoch_shallow_cf_ave) > 0 ) then
+        if (max(id_stoch_ic_shallow_cf_ave, &
+                id_stoch_ic_lsc_cf_ave,  &
+                id_stoch_sees_lsc,       &          
+                id_stoch_sees_shallow,   &
+                id_stoch_lsc_cf_ave,     &
+                id_stoch_shallow_cf_ave) > 0 ) then
           cloud(:,:,:) =   &
                   SUM (Model_microphys%stoch_cldamt(:,:,:,:), dim = 4) 
           tmplmask = cloud > 0.0
@@ -3601,39 +3024,6 @@ if (Time_diag > Time) then
                                   Time_diag, is, js, 1, mask=tmplmaska)
               endif
               used = send_data (id_stoch_lsc_cf_ave, cloud,  &
-                                Time_diag, is, js, 1)
-            endif
-          endif
-
-          if (Cldrad_control%do_donner_deep_clouds) then
-            if (max(id_stoch_ic_meso_cf_ave, id_stoch_sees_meso, &
-                    id_stoch_meso_cf_ave) > 0 )  then
-              cloud(:,:,:) = REAL (COUNT(    &
-                  Model_microphys%stoch_cloud_type(:,:,:,:) == donner_meso_index,    &
-                                                   dim = 4))/REAL(ncol)
-              used = send_data (id_stoch_ic_meso_cf_ave, cloud, &
-                                Time_diag, is, js, 1, mask=tmplmask)
-              if (id_stoch_sees_meso > 0) then
-                tmplmaska =  Meso_microphys%cldamt > 0.0    
-                used = send_data (id_stoch_sees_meso, cloud,  &
-                                  Time_diag, is, js, 1, mask=tmplmaska)
-              endif
-              used = send_data (id_stoch_meso_cf_ave, cloud,  &
-                                Time_diag, is, js, 1)
-            endif
-            if (max(id_stoch_ic_cell_cf_ave, id_stoch_sees_cell, &
-                    id_stoch_cell_cf_ave) > 0 )  then
-              cloud(:,:,:) = REAL (COUNT(    &
-                  Model_microphys%stoch_cloud_type(:,:,:,:) == donner_cell_index,    &
-                                                   dim = 4))/REAL(ncol)
-              used = send_data (id_stoch_ic_cell_cf_ave, cloud, &
-                                Time_diag, is, js, 1, mask=tmplmask)
-              if (id_stoch_sees_cell > 0) then
-                tmplmaska =  Cell_microphys%cldamt > 0.0    
-                used = send_data (id_stoch_sees_cell, cloud,  &
-                                  Time_diag, is, js, 1, mask=tmplmaska)
-              endif
-              used = send_data (id_stoch_cell_cf_ave, cloud,  &
                                 Time_diag, is, js, 1)
             endif
           endif
@@ -3676,13 +3066,6 @@ if (Time_diag > Time) then
       if (Cldrad_control%do_strat_clouds) then
         Lsc_microphys => null()
         Lscrad_props  => null()
-      endif
-
-      if (Cldrad_control%do_donner_deep_clouds) then
-        Cell_microphys => null()
-        Meso_microphys => null()
-        Cellrad_props  => null()
-        Mesorad_props  => null()
       endif
 
       if (Cldrad_control%do_uw_clouds) then
@@ -3963,16 +3346,6 @@ type(cloudrad_control_type), intent(in) :: Cldrad_control
                          (mod_name, 'shallow_cld_col', axes(1:2), Time, &
                           'shallow_cld_col', 'fraction')
 
-      id_meso_cld_col = register_diag_field    &
-                         (mod_name, 'meso_cld_col', axes(1:2), Time, &
-                          'meso_cld_col', 'fraction')
-
-
-      id_cell_cld_col = register_diag_field    &
-                         (mod_name, 'cell_cld_col', axes(1:2), Time, &
-                          'cell_cld_col', 'fraction')
-
-
       id_conv_cld_col = register_diag_field    &
                          (mod_name, 'conv_cld_col', axes(1:2), Time, &
                           'conv_cld_col', 'fraction')
@@ -4085,7 +3458,8 @@ type(cloudrad_control_type), intent(in) :: Cldrad_control
                           Time, '.55um cloud optical depth avgd over &
                           &subcolumns with ls cloud', &
                           'none', missing_value=missing_value)
- 
+
+        !MKLMKLMKL:  to delete?
         id_convect_opdepth = register_diag_field   &
                          (mod_name, 'convect_opdepth', axes(1:3), &
                           Time, '.55um cloud optical depth avgd over &
@@ -4174,148 +3548,6 @@ type(cloudrad_control_type), intent(in) :: Cldrad_control
                          (mod_name, 'lsc_abs_10u', axes(1:3), Time,&
                           'lsc cloud abs coeff 10um band',   &
                           'percent', missing_value=missing_value)
-
-!---------------------------------------------------------------------
-!    register the donner cell-scale cloud radiative property diagnostic 
-!    fields.
-!---------------------------------------------------------------------
-      if (Cldrad_control%do_donner_deep_clouds) then
-          id_cell_cld_amt = register_diag_field    &
-                         (mod_name, 'cell_cld_amt', axes(1:3), Time,&
-                          'cell cloud amount', 'percent',           &
-                          missing_value=missing_value)
-
-          id_cell_cld_ext_uv = register_diag_field   &
-                         (mod_name, 'cell_cld_ext_uv', axes(1:3),&
-                          Time, '.27um cell cloud ext coeff',  &
-                          'km-1', missing_value=missing_value)
-
-          id_cell_cld_ext_vis = register_diag_field   &
-                         (mod_name, 'cell_cld_ext_vis', axes(1:3),  &
-                          Time, '.55um cell cloud ext coeff',  &
-                          'km-1', missing_value=missing_value)
-
-          id_cell_opdepth = register_diag_field   &
-                         (mod_name, 'cell_opdepth', axes(1:3),  &
-                          Time, '.55um cloud optical depth avgd over &
-                          &subcolumns with cell clouds',  &
-                          'none', missing_value=missing_value)
-
-          id_cell_cld_ext_nir = register_diag_field   &
-                         (mod_name, 'cell_cld_ext_nir', axes(1:3),  &
-                          Time, '1.4um cell cloud ext coeff',  &
-                          'km-1', missing_value=missing_value)
-
-          id_cell_cld_sct_uv = register_diag_field    &
-                         (mod_name, 'cell_cld_sct_uv', axes(1:3),&
-                          Time, '.27um cell cloud sct coeff',   &
-                          'km-1', missing_value=missing_value)
-
-          id_cell_cld_sct_vis = register_diag_field    &
-                         (mod_name, 'cell_cld_sct_vis', axes(1:3),  &
-                          Time, '.55um cell cloud sct coeff',  &
-                          'km-1', missing_value=missing_value)
-
-          id_cell_cld_sct_nir = register_diag_field    &
-                         (mod_name, 'cell_cld_sct_nir', axes(1:3), &
-                          Time, '1.4um cell cloud sct coeff', &
-                          'km-1', missing_value=missing_value)
-
-          id_cell_cld_asymm_uv = register_diag_field    &
-                         (mod_name, 'cell_cld_asymm_uv', axes(1:3), &
-                          Time, '.27um cell cloud asymm coeff',   &
-                          'percent', missing_value=missing_value)
-
-          id_cell_cld_asymm_vis = register_diag_field     &
-                         (mod_name, 'cell_cld_asymm_vis', axes(1:3), &
-                          Time, '.55um cell cloud asymm coeff',   &
-                          'percent', missing_value=missing_value)
-
-          id_cell_cld_asymm_nir = register_diag_field    &
-                         (mod_name, 'cell_cld_asymm_nir', axes(1:3), &
-                          Time, '1.4um cell cloud asymm coeff',    &
-                          'percent', missing_value=missing_value)
-
-          id_abs_cell_cld_lw = register_diag_field    &
-                         (mod_name, 'cell_abs_lw', axes(1:3), Time, &
-                          'cell cloud abs coeff lw', &
-                          'percent', missing_value=missing_value)
-
-          id_abs_cell_cld_10u = register_diag_field    &
-                         (mod_name, 'cell_abs_10u', axes(1:3), Time,   &
-                          'cell cloud abs coeff 10um band', &
-                          'percent', missing_value=missing_value)
-
-!---------------------------------------------------------------------
-!    register the donner meso-scale cloud radiative property diagnostic 
-!    fields.
-!---------------------------------------------------------------------
-          id_meso_cld_amt = register_diag_field     &
-                         (mod_name, 'meso_cld_amt', axes(1:3), Time,&
-                          'meso cloud amount', 'percent',      &
-                          missing_value=missing_value)
-
-          id_meso_cld_ext_uv = register_diag_field    &
-                         (mod_name, 'meso_cld_ext_uv', axes(1:3),&
-                          Time, '.27um meso cloud ext coeff',   &
-                          'km-1', missing_value=missing_value)
-
-          id_meso_cld_ext_vis = register_diag_field   &
-                         (mod_name, 'meso_cld_ext_vis', axes(1:3), &
-                          Time, '.55um meso cloud ext coeff',  &
-                          'km-1', missing_value=missing_value)
-
-          id_meso_opdepth = register_diag_field   &
-                         (mod_name, 'meso_opdepth', axes(1:3), &
-                          Time, '.55um cloud optical depth avgd over &
-                          &subcolumns with meso clouds',  &
-                          'none', missing_value=missing_value)
-
-          id_meso_cld_ext_nir = register_diag_field   &
-                         (mod_name, 'meso_cld_ext_nir', axes(1:3), &
-                          Time, '1.4um meso cloud ext coeff',  &
-                          'km-1', missing_value=missing_value)
-
-          id_meso_cld_sct_uv = register_diag_field   &
-                         (mod_name, 'meso_cld_sct_uv', axes(1:3),&
-                          Time, '.27um meso cloud sct coeff',  &
-                          'km-1', missing_value=missing_value )
-
-          id_meso_cld_sct_vis = register_diag_field  &
-                         (mod_name, 'meso_cld_sct_vis', axes(1:3),  &
-                          Time, '.55um meso cloud sct coeff',  &
-                          'km-1', missing_value=missing_value)
-
-          id_meso_cld_sct_nir = register_diag_field  &
-                         (mod_name, 'meso_cld_sct_nir', axes(1:3),  &
-                          Time, '1.4um meso cloud sct coeff',  &
-                          'km-1', missing_value=missing_value)
-
-          id_meso_cld_asymm_uv = register_diag_field  &
-                         (mod_name, 'meso_cld_asymm_uv', axes(1:3),  &
-                          Time, '.27um meso cloud asymm coeff',   &
-                          'percent', missing_value=missing_value)
-
-          id_meso_cld_asymm_vis = register_diag_field   &
-                         (mod_name, 'meso_cld_asymm_vis', axes(1:3),   &
-                          Time, '.55um meso cloud asymm coeff',    &
-                          'percent', missing_value=missing_value)
-
-          id_meso_cld_asymm_nir = register_diag_field    &
-                         (mod_name, 'meso_cld_asymm_nir', axes(1:3), &
-                          Time, '1.4um meso cloud asymm coeff',   &
-                          'percent', missing_value=missing_value)
-
-          id_abs_meso_cld_lw = register_diag_field    &
-                         (mod_name, 'meso_abs_lw', axes(1:3),  &
-                          Time, 'meso cloud abs coeff lw',  &
-                          'percent', missing_value=missing_value)
-
-          id_abs_meso_cld_10u = register_diag_field   &
-                         (mod_name, 'meso_abs_10u', axes(1:3), Time,   &
-                          'meso cloud abs coeff 10um band', &
-                          'percent', missing_value=missing_value)
-      endif
 
 !---------------------------------------------------------------------
 !    register the uw shallow cloud radiative property diagnostic 
@@ -4545,170 +3777,6 @@ type(cloudrad_control_type), intent(in) :: Cldrad_control
       endif
 
 !--------------------------------------------------------------------
-!    register donner meso cloud microphysical properties
-!--------------------------------------------------------------------
-      if (Cldrad_control%do_donner_deep_clouds) then
-          id_meso_area_liq = register_diag_field     &
-              (mod_name, 'meso_area_liq', axes(1:3), Time, &
-               'Area of donner meso liquid clouds', &
-               'fraction', missing_value=missing_value)
-
-          id_meso_conc_drop = register_diag_field     &
-              (mod_name, 'meso_conc_drop', axes(1:3), Time, &
-              'In-cloud liq water content of donner meso clouds', &
-               'grams/m3', missing_value=missing_value,   &
-               mask_variant = .true.)
-
-          id_gb_meso_conc_drop = register_diag_field     &
-              (mod_name, 'gb_meso_conc_drop', axes(1:3), Time, &
-               'Grid-box-mean liq water content of donner meso clouds',&
-               'grams/m3', missing_value=missing_value)   
-       
-          id_meso_size_drop = register_diag_field     &
-              (mod_name, 'meso_size_drop', axes(1:3), Time, &
-               'Effective diameter for donner meso liquid clouds', &
-               'microns', missing_value=missing_value,   &
-               mask_variant = .true.)
-
-          id_ra_meso_size_drop = register_diag_field     &
-              (mod_name, 'ra_meso_size_drop', axes(1:3), Time, &
-               'Adjusted Effective diam for donner meso liq clouds',&
-               'microns', missing_value=missing_value ,  &
-               mask_variant = .true.)
-
-          id_meso_area_ice = register_diag_field     &
-              (mod_name, 'meso_area_ice', axes(1:3), Time, &
-               'Area of donner meso ice clouds', 'fraction',    &
-               missing_value=missing_value)
-
-          id_meso_conc_ice = register_diag_field     &
-              (mod_name, 'meso_conc_ice', axes(1:3), Time, &
-               'In-cloud ice water content of donner meso clouds', &
-               'grams/m3', missing_value=missing_value,   &
-               mask_variant = .true.)
-
-          id_gb_meso_conc_ice = register_diag_field     &
-              (mod_name, 'gb_meso_conc_ice', axes(1:3), Time, &
-               'Grid-box-mean ice water content of donner meso clouds',&
-               'grams/m3', missing_value=missing_value)
-
-          id_meso_size_ice = register_diag_field     &
-              (mod_name, 'meso_size_ice', axes(1:3), Time, &
-               'Effective diameter for donner meso ice clouds', &
-               'microns', missing_value=missing_value,   &
-               mask_variant = .true.)
-
-          id_meso_droplet_number = register_diag_field     &
-              (mod_name, 'meso_droplet_number', axes(1:3), Time, &
-               'Cloud droplet number for donner meso clouds', &
-               '# per kg of air', missing_value=missing_value,   &
-               mask_variant = .true.)
-     
-          id_meso_lwp = register_diag_field     &
-              (mod_name, 'meso_lwp', axes(1:2), Time, &
-               'In-cloud liquid water path of donner meso clouds', &
-               'kg/m2', missing_value=missing_value,  &
-               mask_variant = .true.)
-
-          id_gb_meso_lwp = register_diag_field     &
-              (mod_name, 'gb_meso_lwp', axes(1:2), Time, &
-               'Grid-box-mean liquid water path of donner meso clouds',&
-               'kg/m2', missing_value=missing_value)   
-
-          id_meso_iwp = register_diag_field     &
-              (mod_name, 'meso_iwp', axes(1:2), Time, &
-               'In-cloud ice water path of donner meso clouds', &
-               'kg/m2',  missing_value=missing_value,   &
-               mask_variant = .true.)
-
-          id_gb_meso_iwp = register_diag_field     &
-              (mod_name, 'gb_meso_iwp', axes(1:2), Time, &
-               'Grid-box-mean ice water path of donner meso clouds', &
-               'kg/m2', missing_value=missing_value)   
-
-!--------------------------------------------------------------------
-!    register donner cell microphysical properties
-!--------------------------------------------------------------------
-          id_cell_area_liq = register_diag_field     &
-              (mod_name, 'cell_area_liq', axes(1:3), Time, &
-               'Area of donner cell liquid clouds', 'fraction',    &
-               missing_value=missing_value)
-
-          id_cell_conc_drop = register_diag_field     &
-              (mod_name, 'cell_conc_drop', axes(1:3), Time, &
-               'In-cloud liquid water content of donner cell clouds', &
-               'grams/m3', missing_value=missing_value,   &
-               mask_variant = .true.)
-
-          id_gb_cell_conc_drop = register_diag_field     &
-              (mod_name, 'gb_cell_conc_drop', axes(1:3), Time, &
-               'Grid-box-mean liq water content of donner cell clouds',&
-               'grams/m3', missing_value=missing_value)   
-
-          id_cell_size_drop = register_diag_field     &
-              (mod_name, 'cell_size_drop', axes(1:3), Time, &
-               'Effective diameter for donner cell liquid clouds', &
-               'microns', missing_value=missing_value ,   &
-               mask_variant = .true. )
-
-          id_ra_cell_size_drop = register_diag_field     &
-              (mod_name, 'ra_cell_size_drop', axes(1:3), Time, &
-               'Adjusted Effective diam for donner cell liq clouds',&
-               'microns', missing_value=missing_value,  &
-               mask_variant = .true.)
-
-          id_cell_area_ice = register_diag_field     &
-              (mod_name, 'cell_area_ice', axes(1:3), Time, &
-               'Area of donner cell ice clouds',  'fraction',    &
-               missing_value=missing_value)
-
-          id_cell_conc_ice = register_diag_field     &
-              (mod_name, 'cell_conc_ice', axes(1:3), Time, &
-               'In-cloud ice water content of donner cell clouds', &
-               'grams/m3', missing_value=missing_value,   &
-               mask_variant = .true.)
-
-          id_gb_cell_conc_ice = register_diag_field     &
-              (mod_name, 'gb_cell_conc_ice', axes(1:3), Time, &
-               'Grid-box-mean ice water content of donner cell clouds',&
-               'grams/m3', missing_value=missing_value)
-
-          id_cell_size_ice = register_diag_field     &
-              (mod_name, 'cell_size_ice', axes(1:3), Time, &
-               'Effective diameter for donner cell ice clouds', &
-               'microns', missing_value=missing_value ,  &
-               mask_variant = .true. )
-
-          id_cell_droplet_number = register_diag_field     &
-              (mod_name, 'cell_droplet_number', axes(1:3), Time, &
-               'Cloud droplet number for donner cell clouds', &
-               '# per kg of air', missing_value=missing_value,   &
-               mask_variant = .true.)
-     
-          id_cell_lwp = register_diag_field     &
-              (mod_name, 'cell_lwp', axes(1:2), Time, &
-               'In-cloud liquid water path of donner cell clouds', &
-               'kg/m2', missing_value=missing_value,   &
-               mask_variant = .true.)
-
-          id_gb_cell_lwp = register_diag_field     &
-              (mod_name, 'gb_cell_lwp', axes(1:2), Time, &
-               'Grid-box-mean liquid water path of donner cell clouds',&
-               'kg/m2', missing_value=missing_value)   
-
-          id_cell_iwp = register_diag_field     &
-              (mod_name, 'cell_iwp', axes(1:2), Time, &
-               'In-cloud ice water path of donner cell clouds', &
-               'kg/m2', missing_value=missing_value,   &
-               mask_variant = .true.)
-
-          id_gb_cell_iwp = register_diag_field     &
-              (mod_name, 'gb_cell_iwp', axes(1:2), Time, &
-               'Grid-box-mean ice water path of donner cell clouds', &
-               'kg/m2', missing_value=missing_value)   
-      endif
-        
-!--------------------------------------------------------------------
 !    register uw shallow microphysical properties
 !--------------------------------------------------------------------
       if (Cldrad_control%do_uw_clouds) then
@@ -4800,7 +3868,7 @@ type(cloudrad_control_type), intent(in) :: Cldrad_control
 
 !--------------------------------------------------------------------
 !    the following diagnostics output the fields actually seen by the 
-!    radiation code (either lsc or donner meso or donner cell or 
+!    radiation code (either lsc or 
 !    uw shallow in a given stochastic column, assuming all are 
 !    activated), determined by the stochastic selection process.
 !--------------------------------------------------------------------
@@ -4960,46 +4028,6 @@ type(cloudrad_control_type), intent(in) :: Cldrad_control
              'grid box avg lsc ice water path - stochastic clouds', &
              'kg/m2', missing_value=missing_value)
 
-          id_cell_drop_conc_ave = register_diag_field  &
-            (mod_name, 'stoch_cell_drop_conc_ave', axes(1:3), Time, &
-             'grid box avg cell liq water content - stochastic clouds',&
-             'g/m3', missing_value=missing_value)
-
-          id_cell_ice_conc_ave = register_diag_field  &
-            (mod_name, 'stoch_cell_ice_conc_ave', axes(1:3), Time, &
-             'grid box avg cell ice water content - stochastic clouds',&
-             'g/m3', missing_value=missing_value)
-
-          id_cell_lwp_ave = register_diag_field  &
-            (mod_name, 'stoch_cell_lwp_ave', axes(1:2), Time, &
-             'grid box avg cell liq water path - stochastic clouds', &
-             'kg/m2', missing_value=missing_value)
-
-          id_cell_iwp_ave = register_diag_field  &
-            (mod_name, 'stoch_cell_iwp_ave', axes(1:2), Time, &
-             'grid box avg cell ice water path - stochastic clouds', &
-             'kg/m2', missing_value=missing_value)
-
-          id_meso_drop_conc_ave = register_diag_field  &
-            (mod_name, 'stoch_meso_drop_conc_ave', axes(1:3), Time, &
-             'grid box avg meso liq water content - stochastic clouds',&
-             'g/m3', missing_value=missing_value)
-
-          id_meso_ice_conc_ave = register_diag_field  &
-            (mod_name, 'stoch_meso_ice_conc_ave', axes(1:3), Time, &
-             'grid box avg meso ice water content - stochastic clouds',&
-             'g/m3', missing_value=missing_value)
-
-          id_meso_lwp_ave = register_diag_field  &
-            (mod_name, 'stoch_meso_lwp_ave', axes(1:2), Time, &
-             'grid box avg meso liq water path - stochastic clouds', &
-             'kg/m2', missing_value=missing_value)
-
-          id_meso_iwp_ave = register_diag_field  &
-            (mod_name, 'stoch_meso_iwp_ave', axes(1:2), Time, &
-             'grid box avg meso ice water path - stochastic clouds', &
-             'kg/m2', missing_value=missing_value)
-
           id_shallow_drop_conc_ave = register_diag_field  &
             (mod_name, 'stoch_shallow_drop_conc_ave', axes(1:3), Time, &
              'grid box avg shallow liq water content - stoch clouds', &
@@ -5150,58 +4178,13 @@ type(cloudrad_control_type), intent(in) :: Cldrad_control
              'fraction', missing_value=missing_value)
 
 !--------------------------------------------------------------------
-!    the following fields are only valid if the donner parameterization
-!    is active.
-!--------------------------------------------------------------------
-          if (Cldrad_control%do_donner_deep_clouds) then
-
-!--------------------------------------------------------------------
-!    diagnostics relative to the frequency that the radiation code sees
-!    donner meso and cell cloud properties.
-!--------------------------------------------------------------------
-              id_stoch_ic_cell_cf_ave = register_diag_field  &
-                (mod_name, 'stoch_ic_cell_cf_ave', axes(1:3), Time, &
-                'fractn of cols in cloudy grid boxes with cell props', &
-                'fraction', missing_value=missing_value,  &
-                mask_variant = .true.)
-
-              id_stoch_ic_meso_cf_ave = register_diag_field  &
-                (mod_name, 'stoch_ic_meso_cf_ave', axes(1:3), Time, &
-                'fractn of cols in cloudy grid boxes with meso props', &
-                'fraction', missing_value=missing_value,   &
-                mask_variant = .true.)
-
-              id_stoch_sees_cell = register_diag_field  &
-                (mod_name, 'stoch_sees_cell', axes(1:3), Time, &
-                 'fraction of times cell clds are seen when present', &
-                 'fraction', missing_value=missing_value,  &
-                 mask_variant = .true.)
-
-              id_stoch_sees_meso = register_diag_field  &
-                (mod_name, 'stoch_sees_meso', axes(1:3), Time, &
-                 'fraction of times meso clds are seen when present', &
-                 'fraction', missing_value=missing_value,   &
-                 mask_variant = .true.)
-
-              id_stoch_cell_cf_ave = register_diag_field  &
-                (mod_name, 'stoch_cell_cf_ave', axes(1:3), Time, &
-                 'fraction of stochastic columns assigned cell props',&
-                 'fraction', missing_value=missing_value)
-
-              id_stoch_meso_cf_ave = register_diag_field  &
-                (mod_name, 'stoch_meso_cf_ave', axes(1:3), Time, &
-                 ' fraction of stochastic columns assigned meso props',&
-                 'fraction', missing_value=missing_value)
-          endif
-
-!--------------------------------------------------------------------
 !    the following fields are only valid if the uw shallow parameter-
 !    ization is active.
 !--------------------------------------------------------------------
           if (Cldrad_control%do_uw_clouds) then
 !--------------------------------------------------------------------
 !    diagnostics indicating frequency that radiation code sees lsc, 
-!    meso, cell and uw shallow clouds, and the frequency that these 
+!    and uw shallow clouds, and the frequency that these 
 !    cloud types are seen when they exist.
 !--------------------------------------------------------------------
               id_stoch_ic_shallow_cf_ave = register_diag_field  &
@@ -5237,13 +4220,12 @@ type(cloudrad_control_type), intent(in) :: Cldrad_control
             endif
 
 !---------------------------------------------------------------------
-!    cloud type diagnostic : 0 = no cloud, 1 = lsc, 2 = meso, 3 = cell
-!                            4 = uw shallow
+!    cloud type diagnostic : 0 = no cloud, 1 = lsc, 2 = uw shallow
 !----------------------------------------------------------------------
             id_stoch_cloud_type(n) = register_diag_field  &
                 (mod_name, 'stoch_cloud_type_'//trim(chvers),  &
                  axes(1:3), Time, &
-                 'cloud type (1-4) in stochastic col  '//trim(chvers), &
+                 'cloud type (1-2) in stochastic col  '//trim(chvers), &
                  'none', missing_value=missing_value,   &
                  mask_variant = .true.)
  
