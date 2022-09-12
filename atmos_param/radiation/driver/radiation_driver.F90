@@ -3358,7 +3358,7 @@ real, dimension(:,:,:,:), intent(out)   ::    &
 !   local variables
 
     integer :: ncld, ic1, ic2, iclast
-    integer :: strat_index, shallow_index, donner_meso_index, donner_cell_index
+    integer :: strat_index, shallow_index
 
 !-------------------------------------------------------------------
 
