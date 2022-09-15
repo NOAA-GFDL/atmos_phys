@@ -76,7 +76,6 @@ libatmos_phys_la_SOURCES = ${top_srcdir}/atmos_shared/atmos_nudge/atmos_nudge.F9
 		${top_srcdir}/atmos_param/radiation/clouds/uw_clouds_W.F90 \
 		${top_srcdir}/atmos_param/radiation/clouds/cloudrad_driver.F90 \
 		${top_srcdir}/atmos_param/radiation/clouds/cloud_spec.F90 \
-		${top_srcdir}/atmos_param/radiation/clouds/donner_deep_clouds_W.F90 \
 		${top_srcdir}/atmos_param/radiation/clouds/cloudrad_diagnostics.F90 \
 		${top_srcdir}/atmos_param/radiation/clouds/cloudrad_package.F90 \
 		${top_srcdir}/atmos_param/radiation/longwave/longwave_tables.F90 \
@@ -466,10 +465,7 @@ ${top_builddir}/atmos_param/radiation/clouds/cloud_spec.lo: ${top_srcdir}/atmos_
 		 ${top_srcdir}/atmos_param/physics_radiation_exch/physics_radiation_exch.lo \
 		 ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_types.lo \
 		 ${top_srcdir}/atmos_param/radiation/clouds/strat_clouds_W.lo \
-		 ${top_srcdir}/atmos_param/radiation/clouds/donner_deep_clouds_W.lo \
 		 ${top_srcdir}/atmos_param/radiation/clouds/uw_clouds_W.lo
-${top_builddir}/atmos_param/radiation/clouds/donner_deep_clouds_W.lo: ${top_srcdir}/atmos_param/radiation/clouds/donner_deep_clouds_W.F90 \
-		 ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_types.lo
 ${top_builddir}/atmos_param/radiation/clouds/cloudrad_diagnostics.lo: ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_diagnostics.F90 \
 		 ${top_srcdir}/atmos_shared/atmos_cmip_diag/atmos_cmip_diag.lo \
 		 ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_types.lo \
@@ -1021,7 +1017,6 @@ random_number_streams_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/get_ra
 uw_clouds_w_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/uw_clouds_W.lo
 cloudrad_driver_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_driver.lo
 cloud_spec_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/cloud_spec.lo
-donner_deep_clouds_w_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/donner_deep_clouds_W.lo
 cloudrad_diagnostics_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_diagnostics.lo
 cloudrad_package_mod.mod: ${top_srcdir}/atmos_param/radiation/clouds/cloudrad_package.lo
 longwave_tables_mod.mod: ${top_srcdir}/atmos_param/radiation/longwave/longwave_tables.lo
@@ -1235,7 +1230,6 @@ include_HEADERS = atmos_nudge_mod.mod \
 		uw_clouds_w_mod.mod \
 		cloudrad_driver_mod.mod \
 		cloud_spec_mod.mod \
-		donner_deep_clouds_w_mod.mod \
 		cloudrad_diagnostics_mod.mod \
 		cloudrad_package_mod.mod \
 		longwave_tables_mod.mod \

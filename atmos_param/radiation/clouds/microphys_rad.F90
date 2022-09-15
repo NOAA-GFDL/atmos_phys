@@ -88,7 +88,6 @@ private         &
 character(len=16)   :: lwem_form=' '     ! longwave emissivity param-
                                          ! eterization; either 'fuliou'
                                          ! or 'ebertcurry'
-logical       ::  do_orig_donner_stoch = .true.
 logical       ::  do_delta_adj = .false.
 logical       ::  do_const_asy = .false.
 logical       ::  do_hu = .false.
@@ -97,18 +96,13 @@ real          ::  alpha = 0.1
                   ! frequency-independent parameter for absorption due 
                   ! to cloud drops in the infrared. this value is given 
                   ! in held et al, JAS, 1993. [ m**2 / g ]
-logical :: ignore_donner_cells = .false.
-                  ! when set to .true., the effects of donner cell clouds 
-                  ! in the radiation code are ignored
-
 logical       ::  remain_hu_bug = .false.
 
 namelist /microphys_rad_nml /     &
                                lwem_form, &
-                               do_orig_donner_stoch, &
                                do_delta_adj, &
                                do_const_asy, val_const_asy, &
-                               alpha, ignore_donner_cells, do_hu, remain_hu_bug
+                               alpha, do_hu, remain_hu_bug
 
 !----------------------------------------------------------------------
 !----  public data -------
@@ -1843,8 +1837,7 @@ end subroutine lwemiss_calc
 !  <DESCRIPTION>
 !   Subroutine to define the total-cloud radiative
 !    properties to be seen by the radiation package, obtained by the 
-!    appropriate combination of the large-scale, donner mesoscale and 
-!    cell-scale and uw shallow clouds present in a grid box.
+!    appropriate combination of the large-scale and uw shallow clouds present in a grid box.
 !  </DESCRIPTION>
 !  <TEMPLATE>
 !   call comb_cldprops_calc ( deltaz, stoch_cloud_type, &
@@ -1932,7 +1925,6 @@ real, dimension(:,:,:,:,:),     intent(inout)       ::  abscoeff
       integer :: ncld, nc
   
       integer :: num_sw_bands, num_lw_bands
-      integer :: donner_cell_index, lsc_index
 !------------------------------------------------------------------
 !    diagnostics
 !------------------------------------------------------------------
@@ -1970,16 +1962,6 @@ real, dimension(:,:,:,:,:),     intent(inout)       ::  abscoeff
               'both '//trim(Cloud_microphys(nc)%scheme_name)//' Cloud_microphys and Cloudrad_props '//&
               'must be present when one is', FATAL)
         endif
-
-        ! both donner cell-scale and meso-scale must be present
-        if ( (trim(Cloud_microphys(nc)%scheme_name) .eq. 'donner_cell' .and. &
-              .not. string_array_index('donner_cell', Cloudrad_props(1:ncld)%scheme_name)) .or. &
-             (trim(Cloud_microphys(nc)%scheme_name) .eq. 'donner_meso' .and. &
-              .not. string_array_index('donner_meso', Cloudrad_props(1:ncld)%scheme_name)) ) then
-
-              call error_mesg ('microphys_rad_mod', & 
-               'both donner cell-scale and meso-scale must be present', FATAL)
-        endif
      enddo
 
 !---------------------------------------------------------------------
@@ -1990,31 +1972,10 @@ real, dimension(:,:,:,:,:),     intent(inout)       ::  abscoeff
         num_lw_bands = size(abscoeff,4)
 
 !---------------------------------------------------------------------
-!    index for large-scale scheme (only used for stochastic clouds)
-!---------------------------------------------------------------------
-        lsc_index = 0
-        if (Cldrad_control%do_stochastic_clouds .and. do_orig_donner_stoch) then
-           do nc = 1, ncld
-              if (trim(Cloudrad_props(nc)%scheme_name) == 'strat_cloud' .or. &
-                  trim(Cloudrad_props(nc)%scheme_name) == 'large scale' .or. &
-                  trim(Cloudrad_props(nc)%scheme_name) == 'lsc') then
-                  lsc_index = nc
-                  exit
-              endif
-           enddo
-           if (lsc_index == 0) call error_mesg ('microphys_rad_mod', &
-                  'when do_orig_donner_stoch is true large-scale clouds'//&
-                  '/strat_cloud must be activated', FATAL)
-           print *, 'do_stochastic_clouds is TRUE'
-           print *, 'do_orig_donner_stoch is TRUE'
-        end if
-
-!---------------------------------------------------------------------
 !    define appropriately-weighted total-cloud radiative properties
 !----------------------------------------------------------------------
 
-        if (.not. Cldrad_control%do_stochastic_clouds .or. &
-             (Cldrad_control%do_stochastic_clouds .and. do_orig_donner_stoch)) then
+        if (.not. Cldrad_control%do_stochastic_clouds ) then
 
 !---------------------------------------------------------------------
 !    define total cloud fraction.
@@ -2032,11 +1993,6 @@ real, dimension(:,:,:,:,:),     intent(inout)       ::  abscoeff
 !---------------------------------------------------------------------
 
         do n=1,num_sw_bands
-          ! option for stochastic clouds with donner
-          if (Cldrad_control%do_stochastic_clouds .and. do_orig_donner_stoch .and. lsc_index .gt. 0) then
-             cldamt(:,:,:,lsc_index) = Cloud_microphys(lsc_index)%sw_stoch_cldamt(:,:,:,n)
-             cldsum = sum(cldamt,4) ! recompute sum
-          endif
 
           do k=1,size(cldext,3)
             do j=1,size(cldext,2)
@@ -2067,16 +2023,9 @@ real, dimension(:,:,:,:,:),     intent(inout)       ::  abscoeff
         end do
 
 !------------------------------------------------------------
-!    define the total-cloud lw emissivity when large-scale, meso-scale
-!    and cell-scale clouds may be present.
+!    define the total-cloud lw emissivity when large-scale clouds may be present.
 !---------------------------------------------------------------------
         do n = 1, num_lw_bands
-          ! option for stochastic clouds with donner
-          if (Cldrad_control%do_stochastic_clouds .and. do_orig_donner_stoch .and. lsc_index .gt. 0) then
-             cldamt(:,:,:,lsc_index) = Cloud_microphys(lsc_index)%lw_stoch_cldamt(:,:,:,n)
-             cldsum = sum(cldamt,4) ! recompute sum
-          endif
-
           do k=1,size(cldext,3)
             do j=1,size(cldext,2)
               do i=1,size(cldext,1)
@@ -2132,24 +2081,6 @@ real, dimension(:,:,:,:,:),     intent(inout)       ::  abscoeff
            enddo
         enddo
 
-        !--- option to ignore the donner cell type ---
-        if (ignore_donner_cells) then
-           donner_cell_index = 0
-           do nc = 1, ncld
-              if (trim(Cloudrad_props(nc)%scheme_name) == 'donner_cell') then
-                 donner_cell_index = nc
-                 exit
-              endif
-           enddo
-           do n = 1, num_sw_bands
-              where (stoch_cloud_type(:,:,:,n) == donner_cell_index)
-                 cldext(:,:,:,n,1) = 0.
-                 cldsct(:,:,:,n,1) = 0.
-                 cldasymm(:,:,:,n,1) = 1.
-              endwhere
-           enddo
-        endif
-              
 !----------------------------------------------------------------------
 !    longwave cloud properties, band by band
 !----------------------------------------------------------------------
@@ -2168,16 +2099,6 @@ real, dimension(:,:,:,:,:),     intent(inout)       ::  abscoeff
            enddo
            enddo
         enddo
-
-        !--- option to ignore the donner cell type ---
-        if (ignore_donner_cells) then
-           do n = 1, num_lw_bands
-              where (stoch_cloud_type(:,:,:,num_sw_bands+n) == donner_cell_index)
-                 abscoeff(:,:,:,n,1) = 0.
-              endwhere
-           enddo
-        endif
-
 
      endif  ! (do_stochastic)
 
