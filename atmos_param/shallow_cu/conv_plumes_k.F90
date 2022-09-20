@@ -817,15 +817,7 @@ contains
           cp%vu(k)=cp%v(k) - exp(-cp%fer(k)*cp%dp(k))*(cp%v(k)- cp%vu(km1))
 
        endif
-       if (cpn%mp_choice.eq.0) then
-          call micro_donner_k (cpn, cp%zs(k), cp%ps(k), cp%hlu(k), &
-                               cp%qctu(k), cp%zs(km1), cp%qlu(km1), &
-                               cp%clu(km1), cp%qiu(km1), cp%ciu(km1), &
-                               cp%wu(km1), cp%crate(k), cp%prate(k),   &
-                               qrj, qsj, qlu_new, clu_new, qiu_new, &
-                               ciu_new, hlu_new, qctu_new, temp, &
-                               cpn%do_ice, Uw_p)
-       else if (cpn%mp_choice.eq.1) then
+       if (cpn%mp_choice.eq.1) then
           call precipitation_k (cp%zs(k), cp%ps(k), cp%hlu(k), &
                                 cp%qctu(k), cp%qnu(k), cpn, qrj, qsj, &
                                 hlu_new, qctu_new, qlu_new, qiu_new, &
@@ -979,6 +971,7 @@ contains
        total_condensate = cp%qlu(k) + cp%qiu(k) + qrj + qsj ! kg/kg
        total_rain = qrj * air_density ! kg/m3
        total_snow = qsj * air_density ! kg/m3
+
        if (total_rain+total_snow > 0.) then
           do n=1,size(cp%tru,2)
              if (cpn%wetdep(n)%Lwetdep) then
@@ -1472,108 +1465,6 @@ contains
     return
 
   end subroutine precip_new_k
-
-
-
-  subroutine micro_donner_k (cpn, zs, ps, hlu, qctu, zs1, qlu1, clu1, &
-                             qiu1, ciu1, w1, cr12, pr12, qrj, qsj, &
-                             qlu_new, clu_new, qiu_new, ciu_new, &
-                             hlu_new, qctu_new, temp, doice, Uw_p)
-    type(cpnlist),  intent(in)    :: cpn
-    type(uw_params),  intent(inout)    :: Uw_p
-    real,           intent(in)    :: zs, ps, hlu, qctu
-    real,           intent(in)    :: zs1, qlu1, clu1, qiu1, ciu1, w1
-    real,           intent(inout) :: qrj, qsj, cr12, pr12
-    real,           intent(inout) :: qlu_new, clu_new, qiu_new, &
-                                     ciu_new, hlu_new, qctu_new, temp
-    logical,        intent(in)    :: doice
-
-    real    :: thj, qvj, qlj, qij, qse, thvj, nu, leff
-    real    :: dt_micro, rw1, cw1, drwa, drwb, flw, rw2, cw2, pw2, dcw
-
-    call findt_k (zs,ps,hlu,qctu,thj,qvj,qlj,qij,qse,thvj,doice, &
-                  Uw_p)
-    temp = thj*exn_k(ps,Uw_p)
-    if (doice) then
-      nu   = max(min((268. - temp)/Uw_p%tice0,1.0),0.0)
-    else
-      nu = 0.
-    endif
-
-    leff = (1.-nu)*Uw_p%HLv + nu*Uw_p%HLs
-    if (qlj+qij .gt. 0.0) then
-       flw  = qlj/(qlj+qij)
-    else
-       qrj      = 0.
-       qsj      = 0.
-       qlu_new  = 0.
-       qiu_new  = 0.
-       qctu_new = qctu
-       hlu_new  = hlu
-       clu_new  = 0.
-       ciu_new  = 0.
-       return
-    end if
-
-    cw1 = clu1 + ciu1
-
-    rw1 = qlu1 + qiu1 - cw1
-    rw1 = max(rw1, 0.0)
-
-    cw2 = qlj + qij - rw1
-
-    dcw = cw2 - cw1;
-
-    dt_micro = (zs - zs1) / w1
-
-    cr12 = dcw/dt_micro
-
-    drwa = cpn%auto_rate * (cw2 - cpn%auto_th0) * dt_micro
-
-    drwa=min(max(drwa, 0.0), cw2-cpn%auto_th0)
-
-    cw2 = cw2 - drwa
-
-    drwb = 5.26e-03 * cw2 * (rw1**0.875) * dt_micro
-
-    drwb=min(max(drwb, 0.0), cw2)
-
-    cw2 = cw2 - drwb
-
-    rw2 = rw1 + drwa + drwb
-
-    rw2 = max(rw2, 0.0)
-
-    pw2 = 5.1*(rw2**1.125)*dt_micro/100.
-
-    pw2 =min(pw2, rw2)
-
-    pw2 = min(pw2, qlj + qij)
-
-    pr12=pw2/dt_micro
-
-    rw2 =rw2-pw2
-
-    qrj = pw2*flw
-    qsj = pw2*(1.-flw)
-
-    qlu_new  = qlj - qrj
-    qiu_new  = qij - qsj
-    qctu_new = qctu - (qrj + qsj)
-    hlu_new  = hlu  + (qrj + qsj)*leff
-
-    cw2 = max(qlu_new + qiu_new -rw2, 0.0)
-    clu_new = cw2*flw
-    ciu_new  = cw2*(1. - flw)
-
-    if (qlu_new .lt. 0. .or. qiu_new .lt. 0. .or. clu_new .lt. 0.0 .or.&
-        ciu_new .lt. 0.0) then
-       print*, qlu_new, qiu_new, clu_new, ciu_new,   &
-                             qrj, qsj, qlj, qij, '??????????????????'
-    end if
-    return
-
-  end subroutine micro_donner_k
 
 
 

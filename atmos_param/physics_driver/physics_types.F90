@@ -123,8 +123,6 @@ type precip_flux_type
    real, dimension(:,:,:),        pointer :: fl_lsgrpl=>NULL()
    real, dimension(:,:,:),        pointer :: fl_ccrain=>NULL()
    real, dimension(:,:,:),        pointer :: fl_ccsnow=>NULL()
-   real, dimension(:,:,:),        pointer :: fl_donmca_rain=>NULL()
-   real, dimension(:,:,:),        pointer :: fl_donmca_snow=>NULL()
 end type precip_flux_type
 
 

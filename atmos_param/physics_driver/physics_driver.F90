@@ -221,9 +221,6 @@ end interface
 !  <DATA NAME="do_modis_yim" UNITS="" TYPE="logical" DIM="" DEFAULT=".true.">
 !   activate simple modis simulator ?
 !  </DATA>
-!  <DATA NAME="donner_meso_is_largescale" UNITS="" TYPE="logical" DIM="" DEFAULT=".true.">
-!   donner meso clouds are treated as largescale (rather than convective)
-!   as far as the COSP simulator is concerned ?
 !  </DATA>
 !  <DATA NAME="do_moist_processes" UNITS="" TYPE="logical" DIM="" DEFAULT="     .true.">
 !   call moist_processes routines ?
@@ -312,7 +309,6 @@ end interface
 logical :: do_radiation = .true.
 logical :: do_cosp = .false.   
 logical :: do_modis_yim = .true.
-logical :: donner_meso_is_largescale = .true.
 logical :: do_moist_processes = .true.
 real    :: tau_diff = 3600.    
 real    :: diff_min = 1.e-3   
@@ -335,7 +331,7 @@ real    :: cosp_frequency = 10800.
 
 
 namelist / physics_driver_nml / do_radiation, do_cosp, &
-                                do_modis_yim, donner_meso_is_largescale, &
+                                do_modis_yim, &
                                 do_moist_processes, tau_diff,      &
                                 diff_min, diffusion_smooth, &
                                 override_aerosols_cloud,    &
@@ -383,9 +379,6 @@ public  surf_diff_type   ! defined in  vert_diff_driver_mod, republished
 ! version 5: adds radturbten when strat_cloud_mod is active, adds 
 !            lw_tendency when edt_mod or entrain_mod is active.
 !
-! version 6: adds donner cell and meso cloud variables when donner_deep
-!            is activated.
-
 ! version 7: adds shallow convection cloud variables when uw_conv
 !            is activated.
 
@@ -394,7 +387,7 @@ public  surf_diff_type   ! defined in  vert_diff_driver_mod, republished
 
 
 !---------------------------------------------------------------------
-integer, dimension(8) :: restart_versions = (/ 1, 2, 3, 4, 5, 6, 7, 8 /)
+integer, dimension(7) :: restart_versions = (/ 1, 2, 3, 4, 5, 7, 8 /)
 
 !--------------------------------------------------------------------
 !    the following allocatable arrays are either used to hold physics 
@@ -504,7 +497,7 @@ type (clouds_from_moist_block_type) :: Restart
 
 type(precip_flux_type)              :: Precip_flux
 
-integer :: i_cell, i_meso, i_shallow
+integer :: i_shallow
 type (domain2D)               :: physics_domain !< Atmosphere domain
 
                             contains
@@ -864,8 +857,7 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       Exch_ctrl%max_diam_drop = max_diam_drop
 
       Exch_ctrl%do_cosp = do_cosp
-      Exch_ctrl%donner_meso_is_largescale =  donner_meso_is_largescale
-      Exch_ctrl%do_modis_yim              =  do_modis_yim
+      Exch_ctrl%do_modis_yim = do_modis_yim
       Exch_ctrl%doing_prog_clouds = doing_prog_clouds
 
 !-----------------------------------------------------------------------
@@ -1003,8 +995,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
 !    save convective cloud indices to be passed to convection_driver_mod.
 !------------------------------------------------------------------------
      i_shallow = Moist_clouds(1)%block(1)%index_uw_conv
-     i_cell    = Moist_clouds(1)%block(1)%index_donner_cell
-     i_meso    = Moist_clouds(1)%block(1)%index_donner_meso
 
 !--------------------------------------------------------------------
 !    call physics_driver_read_restart to obtain initial values for the module
@@ -1075,21 +1065,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
    endif
       do nc = 1, size(Restart%Cloud_data,1)
         ! NOTE: the order of the checksums in stdout will be different
-        if ( trim(Restart%Cloud_data(nc)%scheme_name).eq.'donner_cell' ) then
-          write(outunit,100) 'cell_cld_frac          ', mpp_chksum(Restart%Cloud_data(nc)%cloud_area )
-          write(outunit,100) 'cell_liq_amt           ', mpp_chksum(Restart%Cloud_data(nc)%liquid_amt )
-          write(outunit,100) 'cell_liq_size          ', mpp_chksum(Restart%Cloud_data(nc)%liquid_size)
-          write(outunit,100) 'cell_ice_amt           ', mpp_chksum(Restart%Cloud_data(nc)%ice_amt    )
-          write(outunit,100) 'cell_ice_size          ', mpp_chksum(Restart%Cloud_data(nc)%ice_size   )
-        endif
-        if ( trim(Restart%Cloud_data(nc)%scheme_name).eq.'donner_meso' ) then
-          write(outunit,100) 'meso_cld_frac          ', mpp_chksum(Restart%Cloud_data(nc)%cloud_area )
-          write(outunit,100) 'meso_liq_amt           ', mpp_chksum(Restart%Cloud_data(nc)%liquid_amt )
-          write(outunit,100) 'meso_liq_size          ', mpp_chksum(Restart%Cloud_data(nc)%liquid_size)
-          write(outunit,100) 'meso_ice_amt           ', mpp_chksum(Restart%Cloud_data(nc)%ice_amt    )
-          write(outunit,100) 'meso_ice_size          ', mpp_chksum(Restart%Cloud_data(nc)%ice_size   )
-          write(outunit,100) 'nsum_out               ', mpp_chksum(Restart%Cloud_data(nc)%nsum_out   )
-        endif
         if ( trim(Restart%Cloud_data(nc)%scheme_name).eq.'uw_conv' ) then
           write(outunit,100) 'shallow_cloud_area     ', mpp_chksum(Restart%Cloud_data(nc)%cloud_area    )
           write(outunit,100) 'shallow_liquid         ', mpp_chksum(Restart%Cloud_data(nc)%liquid_amt    )
@@ -1135,14 +1110,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
             Moist_clouds(1)%block(nb)%Cloud_data(nc)%snow_size  = Restart%Cloud_data(nc)%snow_size  (ibs:ibe,jbs:jbe,:)
           endif
   
-          ! properties specific to donner deep clouds (both cell and meso)
-          if (trim(Restart%Cloud_data(nc)%scheme_name) .eq. 'donner_cell' .or. &
-              trim(Restart%Cloud_data(nc)%scheme_name) .eq. 'donner_meso') then
-            Moist_clouds(1)%block(nb)%Cloud_data(nc)%liquid_size = Restart%Cloud_data(nc)%liquid_size (ibs:ibe,jbs:jbe,:)
-            Moist_clouds(1)%block(nb)%Cloud_data(nc)%ice_size    = Restart%Cloud_data(nc)%ice_size    (ibs:ibe,jbs:jbe,:)
-            Moist_clouds(1)%block(nb)%Cloud_data(nc)%nsum_out    = Restart%Cloud_data(nc)%nsum_out    (ibs:ibe,jbs:jbe)
-          endif
-
           ! properties specific to uw shallow convective clouds
           if (trim(Restart%Cloud_data(nc)%scheme_name) .eq. 'uw_conv') then
             Moist_clouds(1)%block(nb)%Cloud_data(nc)%ice_number = Restart%Cloud_data(nc)%ice_number (ibs:ibe,jbs:jbe,:)
@@ -1410,7 +1377,7 @@ logical,                 intent(in)             :: step_to_call_cosp_in
 !    call moist_processes_time_vary to pass needed time-dependent fields 
 !    to subordinate modules.
 !----------------------------------------------------------------------
-      call moist_processes_time_vary (Time_next, dt, i_cell, i_meso, i_shallow)
+      call moist_processes_time_vary (Time_next, dt, i_shallow)
     endif
 !----------------------------------------------------------------------
 !    call cosp_driver_time_vary to obtain satellite location at current
@@ -2615,18 +2582,6 @@ real,dimension(:,:),    intent(inout)             :: gust
             if (allocated(Removal_mp%liq_precflxh)) then
                 deallocate(Removal_mp%liq_precflxh)
             endif
-            if (allocated(Removal_mp%frz_mesoh)) then
-                deallocate(Removal_mp%frz_mesoh)
-            endif
-            if (allocated(Removal_mp%liq_mesoh)) then
-                deallocate(Removal_mp%liq_mesoh)
-            endif
-            if (allocated(Removal_mp%frz_cellh)) then
-                deallocate(Removal_mp%frz_cellh)
-            endif
-            if (allocated(Removal_mp%liq_cellh)) then
-                deallocate(Removal_mp%liq_cellh)
-            endif
             if (allocated(Removal_mp%rain3d)) then
                 deallocate(Removal_mp%rain3d)
             endif
@@ -2771,14 +2726,6 @@ integer :: moist_processes_term_clock, damping_term_clock, turb_term_clock, &
             Restart%Cloud_data(nc)%snow_size (ibs:ibe,jbs:jbe,:) = Moist_clouds(1)%block(nb)%Cloud_data(nc)%snow_size
           endif
  
-          ! properties specific to donner deep clouds (both cell and meso)
-          if (trim(Moist_clouds(1)%block(nb)%Cloud_data(nc)%scheme_name) .eq. 'donner_cell' .or. &
-              trim(Moist_clouds(1)%block(nb)%Cloud_data(nc)%scheme_name) .eq. 'donner_meso') then
-            Restart%Cloud_data(nc)%liquid_size(ibs:ibe,jbs:jbe,:) = Moist_clouds(1)%block(nb)%Cloud_data(nc)%liquid_size
-            Restart%Cloud_data(nc)%ice_size   (ibs:ibe,jbs:jbe,:) = Moist_clouds(1)%block(nb)%Cloud_data(nc)%ice_size
-            Restart%Cloud_data(nc)%nsum_out   (ibs:ibe,jbs:jbe)   = Moist_clouds(1)%block(nb)%Cloud_data(nc)%nsum_out
-          endif
-
           ! properties specific to uw shallow convective clouds
           if (trim(Moist_clouds(1)%block(nb)%Cloud_data(nc)%scheme_name) .eq. 'uw_conv') then
             Restart%Cloud_data(nc)%ice_number(ibs:ibe,jbs:jbe,:) = Moist_clouds(1)%block(nb)%Cloud_data(nc)%ice_number
@@ -3203,23 +3150,6 @@ subroutine physics_driver_register_restart_domain (Restart, Til_restart)
       call register_restart_field(Til_restart, 'lsc_rain_size',      Restart%Cloud_data(nc)%rain_size, dim_names_4d,      is_optional = .true.)
     endif
     if (trim(Restart%Cloud_data(nc)%scheme_name).eq.'strat_cloud' .and. reproduce_ulm_restart) index_strat = nc
-
-    if (trim(Restart%Cloud_data(nc)%scheme_name).eq.'donner_cell') then
-      call register_restart_field(Til_restart, 'cell_cloud_frac',  Restart%Cloud_data(nc)%cloud_area, dim_names_4d,  is_optional = .true.)
-      call register_restart_field(Til_restart, 'cell_liquid_amt',  Restart%Cloud_data(nc)%liquid_amt, dim_names_4d,  is_optional = .true.)
-      call register_restart_field(Til_restart, 'cell_liquid_size', Restart%Cloud_data(nc)%liquid_size, dim_names_4d, is_optional = .true.)
-      call register_restart_field(Til_restart, 'cell_ice_amt',     Restart%Cloud_data(nc)%ice_amt, dim_names_4d,     is_optional = .true.)
-      call register_restart_field(Til_restart, 'cell_ice_size',    Restart%Cloud_data(nc)%ice_size, dim_names_4d,    is_optional = .true.)
-    endif
-
-    if (trim(Restart%Cloud_data(nc)%scheme_name).eq.'donner_meso') then
-      call register_restart_field(Til_restart, 'meso_cloud_frac',  Restart%Cloud_data(nc)%cloud_area, dim_names_4d,  is_optional = .true.)
-      call register_restart_field(Til_restart, 'meso_liquid_amt',  Restart%Cloud_data(nc)%liquid_amt, dim_names_4d,  is_optional = .true.)
-      call register_restart_field(Til_restart, 'meso_liquid_size', Restart%Cloud_data(nc)%liquid_size, dim_names_4d, is_optional = .true.)
-      call register_restart_field(Til_restart, 'meso_ice_amt',     Restart%Cloud_data(nc)%ice_amt, dim_names_4d,     is_optional = .true.)
-      call register_restart_field(Til_restart, 'meso_ice_size',    Restart%Cloud_data(nc)%ice_size, dim_names_4d,    is_optional = .true.)
-      call register_restart_field(Til_restart, 'nsum',             Restart%Cloud_data(nc)%nsum_out, dim_names_3d,    is_optional = .true.)
-    endif
 
     if (trim(Restart%Cloud_data(nc)%scheme_name).eq.'uw_conv') then
       call register_restart_field(Til_restart, 'shallow_cloud_area',     Restart%Cloud_data(nc)%cloud_area, dim_names_4d,     is_optional = .true.)

@@ -809,7 +809,7 @@ end subroutine microphys_rad_init
 !  </DESCRIPTION>
 !  <TEMPLATE>
 !   call microphys_sw_driver (is, ie, js, je, Cloud_microphysics,  &
-!                                Cloud_rad_props, donner_flag )
+!                                Cloud_rad_props)
 !
 !  </TEMPLATE>
 !  <IN NAME="is" TYPE="integer">

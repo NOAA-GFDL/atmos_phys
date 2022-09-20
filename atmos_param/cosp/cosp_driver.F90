@@ -203,11 +203,9 @@ real,dimension(RTTOV_MAX_CHANNELS) :: Surfem = 0.0
                                ! the radiatively-active clouds defined by
                                ! variable cloud_type_form in cloud_spec_nml
                                ! will be sent. Other available choices:
-                               ! 'strat', 'deep', 'uw', 'stratdeep',
-                               ! 'stratuw', deepuw', 'stratdeepuw',
-                               ! 'noprecip'.
-                               ! CURRENTLY NOT AVAILABLE: precip from ras,
-                               ! lsc and mca. For completeness, these could
+                               ! 'strat', 'uw', stratuw', 'noprecip'.
+                               ! CURRENTLY NOT AVAILABLE: precip from
+                               ! lsc. For completeness, these could
                                ! be made available, but since no cloud
                                ! fields are saved for these schemes to be
                                ! made available to COSP, they are also
