@@ -482,6 +482,7 @@ type precip_state_type
                                         qrout3d_mg     =>NULL(), &
                                         qsout3d_mg     =>NULL()
 
+
   real, dimension(:,:), pointer   ::   &
 
                                         precip         =>NULL(), &

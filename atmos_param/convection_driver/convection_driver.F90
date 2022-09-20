@@ -8,15 +8,11 @@
 !         moist_processes_nml.
 !
 !         ---------------------------------------
-!         4)  donner deep convection
-!         6)  uw convection
+!         1)  uw convection
 !
 !         The following convective implementations are available:
 !         -------------------------------------------------
-!         6)  donner convection alone
-!         7)  uw convection  alone
-!         9)  donner convection followed by uw convection
-!        10)  uw convection followed by donner convection
+!         1)  uw convection  alone
 !             
 !------------------------------------------------------------------------
 !
@@ -68,11 +64,6 @@ use physics_radiation_exch_mod,        &
                             only: clouds_from_moist_block_type, &
                                   exchange_control_type,  &
                                   cloud_scheme_data_type
-use donner_deep_mod,        only: donner_deep_init,               &
-                                  donner_deep_time_vary,  &
-                                  donner_deep_endts,         &
-                                  donner_deep, donner_deep_end,   &
-                                  donner_deep_restart
 use uw_conv_mod,            only: uw_conv, uw_conv_end, uw_conv_init
 use detr_ice_num_mod,       only: detr_ice_num, detr_ice_num_init,   &
                                   detr_ice_num_end
@@ -86,8 +77,8 @@ use moist_proc_utils_mod,   only: capecalcnew, column_diag, rh_calc, &
                                   mp_removal_control_type, &
                                   mp_conv2ls_type, mp_output_type
 use convection_utilities_mod,         &
-                            only: conv_tendency_type,                 &
-                                  conv_output_type, donner_input_type,&
+                            only: conv_tendency_type, &
+                                  conv_output_type,   &
                                   conv_results_type
 use atmos_tracer_utilities_mod,         &
                             only: wet_deposition
@@ -112,14 +103,6 @@ private                             &
            compute_convective_area,  & 
            define_inputs_for_cosp, prevent_neg_precip_fluxes, &
            convection_driver_dealloc, &
-!   associated with donner convection:
-           donner_driver, donner_alloc, donner_prep,   &
-           process_donner_output, check_donner_conservation, &
-           prevent_unrealizable_water, define_output_fields,  &
-           output_donner_diagnostics,  &
-           donner_dealloc, &
-!   associated with uw-then-donner convection:
-           uw_then_donner_driver, &
 !   associated with uw convection:
            uw_conv_driver, uw_conv_driver_part,  uw_alloc,  &
            finalize_uw_outputs, update_inputs, uw_diagnostics, &
@@ -143,9 +126,7 @@ character(len=128) :: tagname = '$Name: $'
 !   do_cmt     = compute cumulus momentum transport (default = T).
 !   cmt_mass_flux_source = parameterization(s) being used to supply the 
 !                mass flux profiles seen by the cumulus momentum transport
-!                module; currently either 'donner', 'uw', 
-!                'donner_and_uw', 
-!                'all' (default = 'all').
+!                module; currently 'uw', 'all' (default = 'all').
  
 !   do_gust_cv = switch to use convective gustiness (default = F).
 !   do_gust_cv_new = switch to use newer convective gustiness expression   
@@ -155,57 +136,14 @@ character(len=128) :: tagname = '$Name: $'
 !                matter for convective gustiness (kg/m2/sec)
 !                default = 1. cm/day = 10. mm/da
 
-!   do_limit_donner = limit Donner deep tendencies to prevent the
-!                formation of grid points with negative water vapor,
-!                liquid or ice (default = T).
-!
 !   do_limit_uw = limit UW shallow tendencies to prevent the formation
 !                of grid points with negative total water specific 
 !                humidities. This situation can occur because both
 !                shallow and deep convection operate on the same
 !                soundings without knowledge of what the other is doing
 !                (default = T).
-!
-!   do_unified_convective_closure = use cloud base mass flux calculated
-!                in uw_conv module as value for donner deep parameter-
-!                ization; adjust cbmf available for uw shallow appropr-
-!                iately. only available when uw shallow and donner deep
-!                are the active convective schemes, CURRENTLY IS NOT
-!                AVAILABLE (default = F).
-
-!   do_donner_before_uw =  calculate convection seen by donner scheme
-!                before calculating what is seen by uw (default = T).
-!   use_updated_profiles_for_uw = when donner convection is calculated 
-!                first, update the profiles with its effects before 
-!                calculating the uw convection (default = F).
-!   use_updated_profiles_for_donner = when uw convection is calculated 
-!                first, update the profiles with its effects before 
-!                calculating the donner convection (default = F).
-!   only_one_conv_scheme_per_column = once convection has been predicted 
-!                in a column, do not allow another scheme to also compute
-!                convection in that column (default = F).
-
-!   force_donner_moist_conserv = adjust donner precip to exactly balance 
-!                the moisture change in each model column (default = F).
-!   do_donner_conservation_checks = Perform various checks to verify the
-!                conservation of enthalpy and moisture as a result of the
-!                donner convection calculation (default = T).
-
-!   detrain_liq_num = if true, convective droplets may be detrained into
-!                the large-scale clouds (default =  F).
 !   detrain_ice_num = if true, convective ice particles may be detrained
 !                into the large-scale clouds (default = F).
-
-!   remain_detrain_bug = setting this to T will result in retaining a bug
-!                which resulted in 10x fewer liquid droplets being 
-!                detrained into the large-scale clouds than should have 
-!                been (default = F). 
-!   keep_icenum_detrain_bug = setting this to T will result in retaining
-!                a bug where the ice number detrainment calculation module
-!                receives an inconsistent temperature field with which to
-!                perform the calculation, whereas in the
-!                corrected code, all fields are updated before uw 
-!                convection is calculated.  (default = F).
 !   reproduce_AM4 = setting this to T will reproduce legacy 
 !                (warsaw) results because the model will use temperature 
 !                and tracer fields that have not been updated with the uw 
@@ -225,33 +163,16 @@ logical            :: do_gust_cv = .false.
 logical            :: do_gust_cv_new = .false.
 real               :: gustmax = 3.     
 real               :: gustconst = 10./SECONDS_PER_DAY 
-logical            :: do_limit_donner =.true. 
-logical            :: do_limit_uw = .true.    
-logical            :: do_unified_convective_closure = .false.
-logical            :: do_donner_before_uw = .true.
-logical            :: use_updated_profiles_for_uw = .false.
-logical            :: use_updated_profiles_for_donner = .false.
-logical            :: only_one_conv_scheme_per_column = .false.
-logical            :: force_donner_moist_conserv = .false.
-logical            :: do_donner_conservation_checks = .true.
-logical            :: detrain_liq_num = .false.
+logical            :: do_limit_uw = .true.
 logical            :: detrain_ice_num = .false.
-logical            :: remain_detrain_bug = .false.
-logical            :: keep_icenum_detrain_bug = .false.
 logical            :: reproduce_AM4 = .true.
 
 
 namelist /convection_driver_nml/    &
               do_cmt, cmt_mass_flux_source,   &
               do_gust_cv,  do_gust_cv_new, gustmax, gustconst, &
-              do_limit_donner, do_limit_uw, &
-              do_unified_convective_closure, &
-              do_donner_before_uw,  use_updated_profiles_for_uw,  &
-              use_updated_profiles_for_donner,  &
-              only_one_conv_scheme_per_column,   &
-              force_donner_moist_conserv, do_donner_conservation_checks, &
-              detrain_liq_num, detrain_ice_num, &
-              remain_detrain_bug, keep_icenum_detrain_bug, &
+              do_limit_uw, &
+              detrain_ice_num, &
               reproduce_AM4
 
 
@@ -266,15 +187,9 @@ logical :: do_ice_num              ! prognostic ice particle number ?
 logical :: do_cosp                 ! call COSP diagnostic package ?
 logical :: do_lsc                  ! using bulk large scale condensation ?
 logical :: do_uw_conv              ! uw convection scheme is active ?
-logical :: do_donner_deep          ! donner convection scheme is active ?
-logical :: limit_conv_cloud_frac   ! total convective cloud area in a box 
-                                   ! is limited to 0.999, when donner and 
-                                   ! uw schemes are both active ?
 logical :: do_simple               ! a simple formulation for rh is to be 
                                    ! used with the betts-miller scheme ?
-integer :: num_donner_tracers, &   ! number of tracers transported by the
-                                   ! donner scheme
-           num_uw_tracers          ! number of tracers to be transported 
+integer :: num_uw_tracers          ! number of tracers to be transported 
                                    ! by the uw scheme
 logical :: doing_prog_clouds       ! prognostic clouds are active ?
 integer :: nsphum,   &             ! tracer index for specific humidity
@@ -292,8 +207,6 @@ logical, dimension(:), allocatable ::   &
            cloud_tracer            ! logical array indicating which tracers
                                    ! are cloud tracers 
 logical, dimension(:), allocatable ::   &
-           tracers_in_donner,   &  ! logical array indicating which tracers
-                                   ! are transported by donner convection
            tracers_in_uw           ! logical array indicating which tracers
                                    ! are transported by uw convection
 
@@ -303,33 +216,15 @@ real    :: dt                      ! model timestep [s]
 real    :: dtinv                   ! inverse of model timestep
 type(time_type) :: Time            ! Time at end of current step, used for
                                    ! diagnostics
-integer :: i_cell,     &           ! index of donner cell clouds in cloud
-                                   ! array
-           i_meso,     &           ! index of donner meso clouds in cloud
-                                   ! array
-           i_shallow               ! index of uw clouds in cloud array
+integer :: i_shallow               ! index of uw clouds in cloud array
 
 !  variables used to define the active convective implementation: 
 logical :: luwconv = .false.       ! uw only
-logical :: ldonner = .false.       ! donner only
-logical :: luw_then_donner = .false. 
-                                   ! uw and then donner
-logical :: ldonner_then_uw = .false.   
-                                   ! donner first, then uw
-
-real, allocatable, dimension(:,:)   ::  &
-       max_enthalpy_imbal_don,   & ! max enthalpy budget imbalance from
-                                   ! donner parameterization during 
-                                   ! current job segment
-       max_water_imbal_don         ! max h2o budget imbalance from
-                                   ! donner parameterization during 
-                                   ! current job segment
 
 
 !-------------------- clock definitions --------------------------------
 
 integer :: convection_clock,  &    ! clock to time total convection 
-           donner_clock,      &    ! clock to time donner paramaeterization
            uw_clock,     &         ! clock to time uw parameterization
            cmt_clock               ! clock to time cumulus momentum
                                    !                  transport calculation
@@ -340,26 +235,6 @@ integer :: convection_clock,  &    ! clock to time total convection
 integer, public          :: id_pr_g, id_prc_g, id_prsn_g, id_prsnc, id_prrc
 integer                  :: id_prc, id_ci, id_ccb, id_cct
 type(cmip_diag_id_type)  :: ID_tntc, ID_tnhusc, ID_mc, ID_emilnox_area
-
-!donner convection diagnostics
-integer :: id_cell_cld_frac,  id_meso_cld_frac, id_donner_humidity_area, &
-           id_mc_donner, id_mc_donner_half, &
-           id_tdt_deep_donner, id_qdt_deep_donner, &
-           id_qadt_deep_donner, id_qldt_deep_donner, id_qidt_deep_donner, &
-           id_qndt_deep_donner,  id_qnidt_deep_donner, &
-           id_prec_deep_donner, id_precret_deep_donner,&
-           id_prec1_deep_donner, id_snow_deep_donner,  &
-           id_enth_donner_col, id_wat_donner_col, &
-           id_enth_donner_col2,  id_enth_donner_col3,  &
-           id_enth_donner_col4,  id_enth_donner_col5,  &
-           id_enth_donner_col6,  id_enth_donner_col7,  &
-           id_scale_donner, id_scale_donner_REV, &
-           id_m_cdet_donner, id_m_cellup,   &
-           id_don_precip, id_don_freq
-integer :: id_max_enthalpy_imbal_don, id_max_water_imbal_don
-integer :: id_vaporint, id_condensint, id_precipint, id_diffint
-integer :: id_vertmotion
-integer :: id_enthint, id_lprcp, id_lcondensint, id_enthdiffint
 
 ! uw diagnostics:
 integer :: id_tdt_uw, id_qdt_uw, &
@@ -498,8 +373,6 @@ real, dimension(:),            intent(in)    :: pref
       do_lsc = Nml_mp%do_lsc
       do_cosp = Exch_ctrl%do_cosp
       do_uw_conv = Nml_mp%do_uw_conv
-      do_donner_deep = Nml_mp%do_donner_deep
-      limit_conv_cloud_frac = Nml_mp%limit_conv_cloud_frac
       do_simple = Nml_mp%do_simple
       doing_prog_clouds = Exch_ctrl%doing_prog_clouds
       nsphum = Physics_control%nsphum
@@ -513,14 +386,11 @@ real, dimension(:),            intent(in)    :: pref
       nqg = Physics_control%nqg
       num_prog_tracers = Physics_control%num_prog_tracers
 
-      num_donner_tracers = Control%num_donner_tracers
       num_uw_tracers = Control%num_uw_tracers
  
-      allocate (tracers_in_donner (num_prog_tracers))
       allocate (tracers_in_uw (num_prog_tracers))
 
-      tracers_in_donner = Control%tracers_in_donner
-      tracers_in_uw     = Control%tracers_in_uw    
+      tracers_in_uw = Control%tracers_in_uw    
 
       allocate (cloud_tracer(size(Physics_control%cloud_tracer)))
       cloud_tracer = Physics_control%cloud_tracer
@@ -529,68 +399,10 @@ real, dimension(:),            intent(in)    :: pref
 !    define logical controls indicating the status of the available
 !    convective implementations in this experiment.
 !----------------------------------------------------------------------
-      if (do_uw_conv) then
-          if (do_donner_deep) then
-            if (do_donner_before_uw) then
-              ldonner_then_uw = .true.
-            else
-              luw_then_donner = .true. 
-            endif
-          else
-            luwconv = .true.
-          endif           
-      else if (do_donner_deep) then
-          ldonner = .true.
-      endif
-      
-!----------------------------------------------------------------------
-!    check for inconsistent / invalid settings involving 
-!    convection_driver_nml variables.
-!----------------------------------------------------------------------
-      if (do_donner_deep) then 
-        if (do_cosp .and. .not. (do_donner_conservation_checks)) then
-          do_donner_conservation_checks = .true.
-          call error_mesg ('convection_driver_init', &
-              'setting do_donner_conservation_checks to true so that &
-                 &needed fields for COSP are produced.', NOTE)
-        endif
-      endif
-
-      if (use_updated_profiles_for_uw .and.   &     
-                            .not. (do_donner_before_uw) ) then
-        call error_mesg ('convection_driver_init', &
-         'use_updated_profiles_for_uw is only meaningful when &
-                              &do_donner_before_uw is true', FATAL)
-      endif
-
-      if (use_updated_profiles_for_donner .and.   &     
-                             (do_donner_before_uw) ) then
-        call error_mesg ('convection_driver_init', &
-         'use_updated_profiles_for_donner is only meaningful when &
-                              &do_donner_before_uw is false', FATAL)
-      endif
-
-      if (only_one_conv_scheme_per_column .and.   &
-                .not. (do_donner_before_uw) ) then
-        call error_mesg ('convection_driver_init', &
-          'only_one_conv_scheme_per_column is only meaningful when &
-                             &do_donner_before_uw is true', FATAL)
-      endif
- 
-      if (limit_conv_cloud_frac .and.  (.not. do_donner_before_uw)) then
-        call error_mesg ('convection_driver_init', &
-            'when limit_conv_cloud_frac is .true., &
-                             &do_donner_before_uw must be .true.', FATAL)
-      endif
-
-      if (do_unified_convective_closure) then
-        call error_mesg ('convection_driver_init', &
-         'do_unified_convective_closure is currently not allowed', FATAL)
-      endif
+      if (do_uw_conv) luwconv = .true.
 
       if (do_cmt) then
-        if ( .not. do_donner_deep  .and. &
-                                          .not. do_uw_conv) then
+        if ( .not.  do_uw_conv) then
           call error_mesg ( 'convection_driver_init', &
                 'do_cmt is active but no cumulus schemes activated', &
                                                               FATAL)
@@ -608,21 +420,6 @@ real, dimension(:),            intent(in)    :: pref
 !--------------------------------------------------------------------
 !    continue the initialization of the convection scheme modules.
 !--------------------------------------------------------------------
-      if (do_donner_deep) then
-        call get_time (Time, secs, days)
-        call donner_deep_init (domain, lonb, latb, pref, axes, secs, days,  &
-                               Control%tracers_in_donner,  &
-                               do_donner_conservation_checks, &
-                               do_unified_convective_closure, &
-                               doing_prog_clouds)
-        if (do_donner_conservation_checks) then
-          allocate (max_enthalpy_imbal_don (id, jd))
-          allocate (max_water_imbal_don (id, jd))
-          max_enthalpy_imbal_don = 0.
-          max_water_imbal_don = 0.
-        endif
-      endif ! (do_donner_deep)
- 
       if (do_uw_conv) call uw_conv_init (doing_prog_clouds, axes, Time,   &
                                          kd, Nml_mp, Control%tracers_in_uw)
 
@@ -630,8 +427,6 @@ real, dimension(:),            intent(in)    :: pref
 !    initialize clocks.
 !-----------------------------------------------------------------------
       convection_clock = mpp_clock_id( '   Physics_up: Moist Proc: Conv' ,&
-                                             grain=CLOCK_MODULE_DRIVER )
-      donner_clock     = mpp_clock_id( '   Moist Processes: Donner_deep' ,&
                                              grain=CLOCK_MODULE_DRIVER )
       uw_clock         = mpp_clock_id( '   Moist Processes: UW'  ,&
                                              grain=CLOCK_MODULE_DRIVER )
@@ -656,8 +451,7 @@ end subroutine convection_driver_init
 
 !#######################################################################
 
-subroutine convection_driver_time_vary    &
-                     (Time_in, dt_in, i_cell_in, i_meso_in, i_shallow_in)
+subroutine convection_driver_time_vary(Time_in, dt_in, i_shallow_in)
 
 !------------------------------------------------------------------------
 !    subroutine convection_driver_time_vary saves needed input arguments
@@ -668,14 +462,12 @@ subroutine convection_driver_time_vary    &
 !-------------------------------------------------------------------------
 type(time_type), intent(in) :: Time_in 
 real,            intent(in) :: dt_in  
-integer,         intent(in) :: i_cell_in, i_meso_in, i_shallow_in
+integer,         intent(in) :: i_shallow_in
 !-------------------------------------------------------------------------
 
 !-------------------------------------------------------------------------
 !    Time_in       ! time used for diagnostics [ time_type ]
 !    dt_in         ! time step [ seconds ]
-!    i_cell_in     ! index in cloud arrays for donner cell clouds
-!    i_meso_in     ! index in cloud arrays for donner meso clouds
 !    i_shallow_in  ! index in cloud arrays for uw clouds
 !-------------------------------------------------------------------------
 
@@ -694,28 +486,11 @@ integer,         intent(in) :: i_cell_in, i_meso_in, i_shallow_in
 !------------------------------------------------------------------------
       dt = dt_in
       dtinv = 1./dt
-      if (do_donner_deep) then
-        call donner_deep_time_vary (dt)
-      endif
 
-      i_cell = i_cell_in
-      i_meso = i_meso_in
       i_shallow = i_shallow_in
 
-      Time     = Time_in
-
-!---------------------------------------------------------------------
-!    if donner parameterization is active,  be sure the donner cloud field 
-!    arguments are valid.
-!---------------------------------------------------------------------
-      if (do_donner_deep) then
-        if (i_cell /= 0 .and. i_meso /= 0 ) then  
-        else
-          call error_mesg ('convection_driver_mod',   &
-               'input args for donner clouds not correct', FATAL)
-        endif
-      endif
-
+      Time = Time_in
+      
 !---------------------------------------------------------------------
 !    if uw parameterization is active, be sure the uw cloud field argument 
 !    is valid.
@@ -881,74 +656,7 @@ type(aerosol_type),     intent(in), optional :: Aerosol
                 ( is, ie, js, je, Input_mp, Aerosol, Phys_mp_exch,   &
                   Output_mp, Tend_mp, Conv_results, Removal_mp,      &
                                  Moist_clouds_block%cloud_data(i_shallow))
-
-!        @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-!        @                                            @
-!        @         UW CONVECTION SCHEME, FOLLOWED BY  @
-!        @         DONNER CONVECTION SCHEME           @
-!        @                                            @
-!        @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
-!---------------------------------------------------------------------
-!    if the uw convection scheme followed by a call to the donner scheme
-!    is desired, call subroutine uw_then_donner_driver.
-!---------------------------------------------------------------------
-      else if (luw_then_donner ) then
-        call uw_then_donner_driver &
-                ( is, ie, js, je, Input_mp, Aerosol, Phys_mp_exch,   &
-                   Output_mp, Tend_mp, Conv_results, Removal_mp,     &
-                     Moist_clouds_block, C2ls_mp)
-
-
-!        @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-!        @                                            @
-!        @         DONNER CONVECTION SCHEME, FOLLOWED @
-!        @         BY UW CONVECTION SCHEME            @
-!        @                                            @
-!        @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
-!---------------------------------------------------------------------
-!    if  the donner scheme followed by uw convection is desired, call 
-!    donner_driver to execute the donner_deep parameterization:
-!---------------------------------------------------------------------
-      else if (ldonner_then_uw) then
-        call donner_driver ( is, ie, js, je, Input_mp,             &
-                             Moist_clouds_block, Conv_results,          &
-                             C2ls_mp, Removal_mp, Tend_mp, Output_mp)
-
-!---------------------------------------------------------------------
-!    then call the uw_conv wrapper routine:
-!---------------------------------------------------------------------
-        call uw_conv_driver   &
-                ( is, ie, js, je, Input_mp, Aerosol, Phys_mp_exch,   &
-                   Output_mp, Tend_mp, Conv_results, Removal_mp,   &
-                                 Moist_clouds_block%cloud_data(i_shallow))
-
-!        @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-!        @                                            @
-!        @        DONNER CONVECTION SCHEME ONLY       @
-!        @                                            @
-!        @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
-!---------------------------------------------------------------------
-!    if only the donner scheme is desired, call donner_driver to execute 
-!    the donner_deep parameterization.
-!---------------------------------------------------------------------
-      else if (ldonner) then
-        call donner_driver ( is, ie, js, je, Input_mp,             &
-                             Moist_clouds_block, Conv_results,           &
-                             C2ls_mp, Removal_mp, Tend_mp, Output_mp )
-
-      else
-
-!-----------------------------------------------------------------------
-!    if no available convective implementations were requested, exit 
-!    with an error message.
-!-----------------------------------------------------------------------
-        call error_mesg ('convection_driver',    &
-                        'no convective implementation specified', FATAL)
-      endif
-
+      end if
 !&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 !&                                                                      &
 !&             END OF INDIVIDUAL CONVECTIVE SCHEMES                     &
@@ -1035,17 +743,6 @@ subroutine convection_driver_endts
 !    upon exiting the prognostic loop.
 !-----------------------------------------------------------------------
 
-!-----------------------------------------------------------------------
-!    if donner convection is active, call the end-of-timestep routine of 
-!    that module.
-!-----------------------------------------------------------------------
-      if (do_donner_deep) then
-        call donner_deep_endts
-      endif 
-
-!-----------------------------------------------------------------------
-
-
 end subroutine convection_driver_endts
 
 !########################################################################
@@ -1061,7 +758,6 @@ subroutine convection_driver_end
 !--------------------------------------------------------------------- 
 !    call the destructor routines for the active convection modules.
 !--------------------------------------------------------------------- 
-      if (do_donner_deep) call donner_deep_end 
       if (do_uw_conv    ) call uw_conv_end 
       if (do_cmt        ) call cu_mo_trans_end 
       call detr_ice_num_end 
@@ -1069,12 +765,6 @@ subroutine convection_driver_end
 !----------------------------------------------------------------------
 !    deallocate module variables.
 !----------------------------------------------------------------------
-      if (do_donner_deep .and. do_donner_conservation_checks) then 
-        deallocate (max_water_imbal_don) 
-        deallocate (max_enthalpy_imbal_don)
-      endif
-
-      deallocate (tracers_in_donner)
       deallocate (tracers_in_uw    )
 
       deallocate (cloud_tracer)
@@ -1107,14 +797,6 @@ character(len=*), intent(in), optional :: timestamp
 !                   used for writing restart. timestamp will append to
 !                   the any restart file name as a prefix.
 !-----------------------------------------------------------------------
-
-!-----------------------------------------------------------------------
-!    process the donner convection restart file.
-!-----------------------------------------------------------------------
-      if (do_donner_deep) call donner_deep_restart (timestamp)
-
-!-----------------------------------------------------------------------
-
 
 end subroutine convection_driver_restart
 
@@ -1528,272 +1210,6 @@ type(mp_removal_control_type), intent(in) :: Control
                'klzb', axes(1:2), Time, 'Index of LZB', 'none') 
 
 !------------------------------------------------------------------------
-!    register diagnostics specific to the donner parameterization.
-!------------------------------------------------------------------------
-      if (do_donner_deep) then
-        id_don_precip = register_diag_field ( mod_name, &
-                        'don_precip', axes(1:2), Time, &
-                          'Precipitation rate from donner ', 'kg/m2/s', & 
-                                        interp_method = "conserve_order1")
-
-        id_don_freq = register_diag_field ( mod_name, &
-                         'don_freq', axes(1:2), Time, &
-                          'frequency of precip from donner ', 'number', &
-                               missing_value = missing_value, &
-                                      interp_method = "conserve_order1"  )
-
-        id_enth_donner_col2 =   &
-                      register_diag_field ( mod_name, &
-                         'enth_donner_col2', axes(1:2), Time, &
-                            'column enthalpy tendency from Donner liq&
-                                                      & precip','W/m2' )
- 
-        id_enth_donner_col3 =   &
-                      register_diag_field ( mod_name, &
-                        'enth_donner_col3', axes(1:2), Time, &
-                           'Column enthalpy tendency from Donner &
-                                                  &frzn precip','W/m2' )
- 
-        id_enth_donner_col4 =   &
-                      register_diag_field ( mod_name, &
-                         'enth_donner_col4', axes(1:2), Time, &
-                            'Atmospheric column enthalpy tendency from&
-                                           & Donner convection', 'W/m2' )
- 
-        id_enth_donner_col5 =    &
-                      register_diag_field ( mod_name, &
-                         'enth_donner_col5', axes(1:2), Time, &
-                              'Column enthalpy tendency due to condensate&
-                                       & xfer from Donner to lsc','W/m2' )
-
-        id_enth_donner_col6 =   &
-                      register_diag_field ( mod_name, &
-                          'enth_donner_col6', axes(1:2), Time, &
-                            'Column enthalpy tendency from donner &
-                              &moisture  conservation  adjustment','W/m2' )
- 
-        id_enth_donner_col7 =    &
-                      register_diag_field ( mod_name, &
-                          'enth_donner_col7', axes(1:2), Time, &
-                             'Precip adjustment needed to balance donner&
-                                   & moisture  adjustment','kg(h2o)/m2/s' )
-
-        id_enth_donner_col =    &
-                      register_diag_field ( mod_name, &
-                         'enth_donner_col', axes(1:2), Time, &
-                             'Column enthalpy imbalance from Donner &
-                                                    &convection','W/m2' )
-
-        id_wat_donner_col =    &
-                     register_diag_field ( mod_name, &
-                        'wat_donner_col', axes(1:2), Time, &
-                            'Column total water tendency from Donner&
-                                          & convection','kg(h2o)/m2/s' )
-  
-        id_scale_donner =    &
-                     register_diag_field ( mod_name, &
-                       'scale_donner', axes(1:2), Time, &
-                       'Scaling factor applied to donner convection&
-                                                      & tendencies','1' )
-
-        id_scale_donner_REV =   &
-                     register_diag_field ( mod_name, &
-                        'scale_donner_REV', axes(1:2), Time, &
-                          ' Revised scaling factor for donner convection&
-                                                        & tendencies','1' )
-
-        id_tdt_deep_donner=    &
-                     register_diag_field ( mod_name, &
-                         'tdt_deep_donner', axes(1:3), Time, &
-                              ' heating rate - deep portion',   &
-                                  'deg K/s', missing_value=missing_value )
-
-        id_qdt_deep_donner =   &
-                     register_diag_field ( mod_name, &
-                          'qdt_deep_donner', axes(1:3), Time, &
-                            ' moistening rate - deep portion', 'kg/kg/s',&
-                                            missing_value=missing_value  )
-
-        id_qadt_deep_donner =   &
-                       register_diag_field ( mod_name, &
-                         'qadt_deep_donner', axes(1:3), Time, &
-                            ' cloud amount tendency - deep portion',  &
-                                      '1/s', missing_value=missing_value )
-
-        id_qldt_deep_donner =   &
-                       register_diag_field ( mod_name, &
-                          'qldt_deep_donner', axes(1:3), Time, &
-                              ' cloud liquid tendency - deep portion',  &
-                                   'kg/kg/s', missing_value=missing_value)
-
-        id_qidt_deep_donner =   &
-                       register_diag_field ( mod_name, &
-                           'qidt_deep_donner', axes(1:3), Time, &
-                              ' ice water tendency - deep portion',  &
-                                   'kg/kg/s', missing_value=missing_value)
-        if (do_liq_num) &
-          id_qndt_deep_donner =  &
-                     register_diag_field ( mod_name, &
-                        'qndt_deep_donner', axes(1:3), Time, &
-                            'deep convection cloud drop tendency',  &
-                                '#/kg/s', missing_value=missing_value )
-
-        if (do_ice_num) &
-          id_qnidt_deep_donner =  &
-                    register_diag_field ( mod_name, &
-                           'qnidt_deep_donner', axes(1:3), Time, &
-                              ' ice number tendency - deep portion', &
-                                '#/kg/s', missing_value=missing_value )
-
-        id_prec_deep_donner =   &
-                     register_diag_field ( mod_name, &
-                       'prc_deep_donner', axes(1:2), Time, &
-                         ' total precip rate - deep portion',  &
-                             'kg/m2/s', missing_value=missing_value, &
-                                        interp_method = "conserve_order1")
-
-        id_precret_deep_donner =  &
-                     register_diag_field ( mod_name, &
-                         'prc_ret_deep_donner', axes(1:2), Time, &
-                           ' precip_returned - per timestep',   &
-                                'kg/m2/timestep', &
-                                   missing_value=missing_value, &
-                                       interp_method = "conserve_order1" )
-
-        id_prec1_deep_donner =   &
-                     register_diag_field ( mod_name, &
-                        'prc1_deep_donner', axes(1:2), Time, &
-                          ' change in precip for conservation&
-                              & in donner', 'kg/m2/s ', &
-                                 missing_value=missing_value,  &
-                                    mask_variant = .true., &
-                                       interp_method = "conserve_order1")
-
-        id_snow_deep_donner =    &
-                    register_diag_field ( mod_name, &
-                        'snow_deep_donner', axes(1:2), Time, &
-                          ' frozen precip rate - deep portion',   &
-                               'kg/m2/s', missing_value=missing_value, &
-                                      interp_method = "conserve_order1" )
-
-        id_mc_donner =   &
-                 register_diag_field ( mod_name, &
-                     'mc_donner', axes(1:3), Time, &
-                         'Net Mass Flux from donner',   'kg/m2/s', &
-                                           missing_value=missing_value )
-
-        id_mc_donner_half =   &
-                 register_diag_field ( mod_name, &
-                        'mc_donner_half', axes(half), Time, &
-                            'Net Mass Flux from donner at half levs',  &
-                                'kg/m2/s', missing_value=missing_value )
-
-        id_m_cdet_donner =   &
-                   register_diag_field ( mod_name, &
-                     'm_cdet_donner', axes(1:3), Time, &
-                        'Detrained Cell Mass Flux from donner',  &
-                               'kg/m2/s', missing_value=missing_value )
-
-        id_m_cellup =   &
-                 register_diag_field ( mod_name, &
-                     'm_cellup', axes(half), Time, &
-                        'Upward Cell Mass Flux from donner', 'kg/m2/s', &
-                                              missing_value=missing_value )
-
-        id_cell_cld_frac =   &
-                  register_diag_field ( mod_name, &
-                      'cell_cld_frac', axes(1:3), Time, & 
-                           'cell cloud fraction from donner',   '', &
-                                         missing_value=missing_value )
-
-        id_meso_cld_frac =   &
-                 register_diag_field ( mod_name, &
-                     'meso_cld_frac', axes(1:3), Time, & 
-                          'meso-scale cloud fraction from donner',   '', &
-                                             missing_value=missing_value )
-
-        id_donner_humidity_area =   &
-                  register_diag_field ( mod_name, &
-                           'donner_humidity_area', axes(1:3), Time,&
-                                  'donner humidity area',  '', &
-                                           missing_value=missing_value  )
-
-        if (do_donner_conservation_checks) then
-
-          id_enthint =    &
-                register_diag_field (mod_name, 'enthint_don', axes(1:2), &
-                  Time, 'atmospheric column enthalpy change from donner', &
-                                      'W/m2', missing_value=missing_value)
-
-          id_lcondensint =    &
-                 register_diag_field    &
-                        (mod_name, 'lcondensint_don', axes(1:2), Time, &
-                             'enthalpy transferred by condensate from &
-                                     &donner to lscale', 'W/m2',  &
-                                            missing_value=missing_value)
-
-          id_lprcp =   &
-                 register_diag_field    &
-                     (mod_name, 'lprcpint_don', axes(1:2), Time,  &
-                          'enthalpy removed by donner precip', 'W/m2',   &
-                                              missing_value=missing_value)
-
-          id_vertmotion =   &
-                register_diag_field    &
-                    (mod_name, 'vertmotion_don', axes(1:2), Time,  &
-                      'enthalpy change due to cell and meso motion &
-                          &in donner', 'W/m2',  &
-                                             missing_value=missing_value)
-
-          id_enthdiffint =    &
-                 register_diag_field    &
-                     (mod_name, 'enthdiffint_don', axes(1:2),   &
-                        Time, 'enthalpy  imbalance due to donner',  &
-                                    'W/m2', missing_value=missing_value)
-
-          id_vaporint =    &
-                    register_diag_field    &
-                           (mod_name, 'vaporint_don', axes(1:2),   &
-                                 Time, 'column water vapor change',   &
-                                     'kg(h2o)/m2/s',   &
-                                            missing_value=missing_value)
-
-          id_max_enthalpy_imbal_don =   &
-                    register_diag_field    &
-                         (mod_name, 'max_enth_imbal_don', axes(1:2),&
-                           Time, 'max enthalpy  imbalance from donner',  &
-                                    'W/m**2', missing_value=missing_value)
-
-          id_max_water_imbal_don =   &
-                     register_diag_field    &
-                         (mod_name, 'max_water_imbal_don', &
-                             axes(1:2), Time, 'max water imbalance&
-                                & from donner', 'kg(h2o)/m2/s', &
-                                             missing_value=missing_value)
-
-          id_condensint =   &
-                    register_diag_field    &
-                       (mod_name, 'condensint_don', axes(1:2), Time,  &
-                          'column condensate exported from donner&
-                              & to lscale', 'kg(h2o)/m2/s',  &
-                                      missing_value=missing_value )
-
-          id_precipint =   &
-                     register_diag_field    &
-                         (mod_name, 'precipint_don', axes(1:2),   &
-                            Time, 'column precip from donner',  &
-                              'kg(h2o)/m2/s', missing_value=missing_value)
-
-          id_diffint=    &
-                   register_diag_field    &
-                      (mod_name, 'diffint_don', axes(1:2),   &
-                         Time, 'water imbalance due to donner', &
-                             'kg(h2o)/m2/s', missing_value=missing_value)
-
-        endif
-      endif
-
-!------------------------------------------------------------------------
 !    register diagnostics specific to the uw parameterization.
 !------------------------------------------------------------------------
       if (do_uw_conv) then
@@ -1891,8 +1307,7 @@ type(mp_removal_control_type), intent(in) :: Control
       do n = 1,num_prog_tracers
         call get_tracer_names (MODEL_ATMOS, n, name = tracer_name,  &
                                                   units = tracer_units)
-        if (Control%tracers_in_donner(n) .or. &
-            Control%tracers_in_uw(n)) then
+        if (Control%tracers_in_uw(n)) then
           diaglname = trim(tracer_name)//  &
                         ' total tendency from moist convection'
           id_tracerdt_conv(n) =    &
@@ -2001,23 +1416,8 @@ type(conv_results_type), intent(inout)   :: Conv_results
 !    allocate and initialize the massflux-related components of the 
 !    conv_results_type variable Conv_results.
 !------------------------------------------------------------------------
-      if (do_donner_deep) then
-        allocate (Conv_results%donner_mflux(ix, jx, kx+1)) ! m_cellup
-        allocate (Conv_results%donner_det_mflux(ix, jx, kx)) !m_cdet_donner
-      endif
       allocate (Conv_results%uw_mflux(ix, jx, kx+1))  ! cmf
-      if (do_donner_deep) then
-        Conv_results%donner_mflux = 0.
-        Conv_results%donner_det_mflux = 0.
-      endif
       Conv_results%uw_mflux = 0.
-
-      allocate (Conv_results%mc_donner       (ix, jx, kx))  
-      allocate (Conv_results%mc_donner_up    (ix, jx, kx)) 
-      allocate (Conv_results%mc_donner_half  (ix, jx, kx+1))  
-      Conv_results%mc_donner = 0.
-      Conv_results%mc_donner_up = 0.
-      Conv_results%mc_donner_half = 0.
 
 !------------------------------------------------------------------------
 !    allocate the components of the conv_results_type variable Conv_results
@@ -2108,12 +1508,10 @@ type(phys_mp_exch_type),  intent(inout) :: Phys_mp_exch
       C2ls_mp%mc_half(:,:,1)=0.; 
       do k=2,kx   
         C2ls_mp%mc_full(:,:,k) = 0.5*(Conv_results%uw_mflux(:,:,k)+   &
-                                      Conv_results%uw_mflux(:,:,k-1)) +   &
-                                      Conv_results%mc_donner(:,:,k)
+                                      Conv_results%uw_mflux(:,:,k-1)) 
       end do
       do k=2,kx+1   
-        C2ls_mp%mc_half(:,:,k) = Conv_results%uw_mflux(:,:,k-1)+   &
-                                 Conv_results%mc_donner_half(:,:,k)
+        C2ls_mp%mc_half(:,:,k) = Conv_results%uw_mflux(:,:,k-1)
       end do
 
 !------------------------------------------------------------------------ 
@@ -2313,16 +1711,14 @@ type(mp_output_type),        intent(in)    :: Output_mp
       used = send_cmip_data_3d (ID_mc, C2ls_mp%mc_half, Time, is, js, 1)
 
 !---------------------------------------------------------------------
-!    total convective updraft mass flux (uw + donner cell up + 
-!    donner meso up) on full levels.
+!    total convective updraft mass flux on full levels.
 !---------------------------------------------------------------------
       if (id_mc_conv_up > 0 ) then
         do k=1,kx
           uw_massflx_full(:,:,k) = 0.5*(Conv_results%uw_mflux(:,:,k) + &
                                          Conv_results%uw_mflux(:,:,k+1))
         end do
-        used = send_data (id_mc_conv_up, uw_massflx_full(:,:,:) + &
-                      Conv_results%mc_donner_up(:,:,:), Time, is, js, 1 )
+        used = send_data (id_mc_conv_up, uw_massflx_full(:,:,:), Time, is, js, 1 )
       endif
 
 !------------------------------------------------------------------------
@@ -2564,8 +1960,7 @@ type(mp_output_type),        intent(in)    :: Output_mp
 !    are to be transported by any convective parameterization.
 !---------------------------------------------------------------------
       do n=1,size(Output_mp%rdt,4)
-        if ( tracers_in_donner(n) .or.   &
-             tracers_in_uw(n))    then
+        if ( tracers_in_uw(n))    then
  
 !---------------------------------------------------------------------
 !    output diagnostics for tracer tendency and column integrated 
@@ -2633,13 +2028,8 @@ type(mp_input_type),                intent(in)    :: Input_mp
 !      rh_wtd_conv_area sum of convective area times relative humidity,
 !                       summed over active convective cloud schemes 
 !                       (relative-humidity-weighted convective area). 
-!                       uw, donner cell and donner meso clouds above meso
-!                       updraft level each contribute  CF*1.0 (their 
-!                       cloud areas are assumed saturated), while the
-!                       donner meso area below downdraft level but above
-!                       cloud base contributes CF * an assumed height-
-!                       dependent relative humidity (details in donner_deep
-!                       parameterization.
+!                       uw, updraft level each contribute  CF*1.0 (their 
+!                       cloud areas are assumed saturated)
 !---------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
@@ -2648,19 +2038,7 @@ type(mp_input_type),                intent(in)    :: Input_mp
 !    if no convective scheme which produces convective clouds is active,
 !    set these fields to 0.0.
 !-----------------------------------------------------------------------
-      if (do_uw_conv .and. do_donner_deep ) then
-        conv_area_input = C2ls_mp%donner_humidity_area +  &
-                    Moist_clouds_block%cloud_data(i_shallow)%cloud_area
-        rh_wtd_conv_area =   &
-                    Moist_clouds_block%cloud_data(i_cell)%cloud_area + &
-                    C2ls_mp%donner_humidity_factor +  &
-                    Moist_clouds_block%cloud_data(i_shallow)%cloud_area
-      else if (do_donner_deep) then
-        conv_area_input = C2ls_mp%donner_humidity_area 
-        rh_wtd_conv_area =   &
-                     Moist_clouds_block%cloud_data(i_cell)%cloud_area + &
-                                           C2ls_mp%donner_humidity_factor 
-      else if (do_uw_conv) then
+      if (do_uw_conv) then
         conv_area_input =   &
                     Moist_clouds_block%cloud_data(i_shallow)%cloud_area
         rh_wtd_conv_area = &
@@ -2789,16 +2167,12 @@ real, dimension(:,:,:),  intent(out)  :: humidity_ratio, convective_area
 !      q(ENVIRONMENT) =  (q(GRIDBOX) -q(ConvectiveArea)*ConvectiveArea)/ &
 !                                                     (1 - ConvectiveArea).
 !
-!    the convective cloud area is assumed saturated for the uw clouds, in 
-!    the donner cell clouds and in the region of donner meso updraft, but 
-!    is assumed subsaturated in the donner meso downdraft layer above cloud
-!    base, with the degree of saturation given by the 
-!    donner_humidity_factor (mesoscale area times assumed RH).
-!
+!    the convective cloud area is assumed saturated for the uw clouds
+!      
 !    variable env_qv is defined as the numerator in the above expression.
 !    where the ConvectiveArea has been passed in as rh_wtd_conv_area, 
 !    taking account of the different treatment of qs in the cloud area by 
-!    meso, cell and uw clouds.
+!    uw clouds.
 !-------------------------------------------------------------------
       env_qv = qrf - qs*rh_wtd_conv_area
       do k=1,kx
@@ -2871,18 +2245,9 @@ type(mp_removal_type),  intent(inout) :: Removal_mp
 !--------------------------------------------------------------------
 
 !---------------------------------------------------------------------
-!    define precip fluxes from donner schemes at each layer interface. 
-!    (index 1 is model lid)
+!    define precip fluxes (index 1 is model lid)
 !---------------------------------------------------------------------
-      do k=2, size(Removal_mp%liq_mesoh,3)
-        Removal_mp%liq_mesoh(:,:,k) = Removal_mp%liq_mesoh (:,:,k-1) + &
-                                      Removal_mp%liq_meso (:,:,k-1)
-        Removal_mp%frz_mesoh(:,:,k) = Removal_mp%frz_mesoh (:,:,k-1) + &
-                                      Removal_mp%frz_meso (:,:,k-1)
-        Removal_mp%liq_cellh(:,:,k) = Removal_mp%liq_cellh (:,:,k-1) + &
-                                      Removal_mp%liq_cell (:,:,k-1)
-        Removal_mp%frz_cellh(:,:,k) = Removal_mp%frz_cellh (:,:,k-1) + &
-                                      Removal_mp%frz_cell (:,:,k-1)
+      do k=2, size(Removal_mp%ice_precflxh,3)
         Removal_mp%ice_precflxh(:,:,k) =                  &
                                       Removal_mp%ice_precflxh(:,:,k-1) +  &
                                       Removal_mp%ice_precflx(:,:,k-1)
@@ -2897,10 +2262,6 @@ type(mp_removal_type),  intent(inout) :: Removal_mp
 !    moisture tendency, so at top of clouds a positive moisture tendency 
 !    sometimes results in a negative precipitation contribution. 
 !----------------------------------------------------------------------
-      call prevent_neg_precip_fluxes (Removal_mp%liq_mesoh)
-      call prevent_neg_precip_fluxes (Removal_mp%frz_mesoh)
-      call prevent_neg_precip_fluxes (Removal_mp%liq_cellh)
-      call prevent_neg_precip_fluxes (Removal_mp%frz_cellh)
       call prevent_neg_precip_fluxes (Removal_mp%ice_precflxh)
       call prevent_neg_precip_fluxes (Removal_mp%liq_precflxh)
 !-----------------------------------------------------------------------
@@ -2990,14 +2351,7 @@ type(conv_results_type), intent(inout)   :: Conv_results
 !    deallocate the components of the conv_results_type variable
 !    Conv_results.
 !------------------------------------------------------------------------
-      if (do_donner_deep) then
-        deallocate (Conv_results%donner_mflux) ! m_cellup
-        deallocate (Conv_results%donner_det_mflux) ! m_cdet_donner
-      endif
       deallocate (Conv_results%uw_mflux)  ! cmf
-      deallocate (Conv_results%mc_donner)  
-      deallocate (Conv_results%mc_donner_up)  
-      deallocate (Conv_results%mc_donner_half)  
 
       deallocate(Conv_results%available_cf_for_uw)
       deallocate(Conv_results%conv_calc_completed)
@@ -3010,1604 +2364,6 @@ type(conv_results_type), intent(inout)   :: Conv_results
 
 
 end subroutine convection_driver_dealloc
-
-
-
-!*******************************************************************
-!
-!                     PRIVATE, DONNER-RELATED SUBROUTINES
-!
-!*******************************************************************
-
-!######################################################################
-
-subroutine donner_driver ( is, ie, js, je, Input_mp, Moist_clouds_block, &
-                           Conv_results, C2ls_mp, Removal_mp, Tend_mp,  &
-                           Output_mp)
-
-!------------------------------------------------------------------------
-!    subroutine donner_driver prepares for the execution of 
-!    donner_deep_mod, calls its module driver, processes its
-!    output into the form needed by other parameterizations active in 
-!    the atmospheric model while assuring that output is realizable and
-!    conserves desired properties, calls moist convective adjustment if 
-!    that is executed as part of the donner scheme, and then outputs 
-!    diagnostics from the donner scheme.
-!------------------------------------------------------------------------
-
-integer,                             intent(in)    :: is, ie, js, je
-type(mp_input_type),                 intent(inout) :: Input_mp
-type(clouds_from_moist_block_type),  intent(inout) :: Moist_clouds_block
-type(conv_results_type),             intent(inout) :: Conv_results
-type(mp_conv2ls_type),               intent(inout) :: C2ls_mp
-type(mp_removal_type),               intent(inout) :: Removal_mp
-type(mp_tendency_type),              intent(inout) :: Tend_mp
-type(mp_output_type),                intent(inout) :: Output_mp
-!------------------------------------------------------------------------
-
-!----------------------------------------------------------------------
-!    is,ie      starting and ending i indices for window
-!    js,je      starting and ending j indices for window
-!    Input_mp   derived type used to transfer needed input data between
-!               moist_processes and convection_driver
-!    Moist_clouds_block 
-!               derived type used to transfer cloud data between 
-!               atmos_model and convection_driver via physics_driver and
-!               moist_processes
-!    Conv_results
-!               conv_results_type variable containing variables 
-!               used in multiple convective parameterizations and for
-!               diagnostic output
-!    C2ls_mp    derived type used to transfer data from convection_driver
-!               to lscloud_driver via moist_processes.
-!    Removal_mp derived type used to transfer precipitation and tracer
-!               removal fields between convection_driver and 
-!               moist_processes
-!    Tend_mp    derived type used to transfer calculated tendency data
-!               between convection_driver and moist_processes
-!    Output_mp  derived type used to transfer output fields between
-!               convection_driver and moist_processes
-!----------------------------------------------------------------------
-
-      type(donner_input_type)  :: Input_don
-      type(conv_output_type)   :: Output_don
-      type(conv_tendency_type) :: Don_tend
-      integer                  :: ix, jx, kx
-
-!--------------------------------------------------------------------
-!         Input_don       donner_input_type variable containing input
-!                         fields used by donner_deep_mod
-!         Output_don      conv_output_type variable containing output
-!                         fields from donner_deep_mod
-!         Don_tend        conv_tendency_type variable containing tendency
-!                         output form donner_deep_mod
-!         ix, jx, kx      sizes of the physics window
-!--------------------------------------------------------------------
-
-!---------------------------------------------------------------------
-!    activate the donner clock.
-!---------------------------------------------------------------------
-      call mpp_clock_begin (donner_clock)
-
-!-----------------------------------------------------------------------
-!    define array dimensions.
-!-----------------------------------------------------------------------
-      ix = size(Input_mp%t,1) 
-      jx = size(Input_mp%t,2) 
-      kx = size(Input_mp%t,3) 
-
-!-----------------------------------------------------------------------
-!    call donner_alloc to allocate and initialize components of Input_don,
-!    Output_don, Don_tend.
-!-----------------------------------------------------------------------
-      call donner_alloc (ix, jx, kx, Input_don, Output_don, Don_tend) 
-
-!---------------------------------------------------------------------
-!    call donner_prep to collect some additional inputs needed by the 
-!    donner parameterization.
-!---------------------------------------------------------------------
-      call donner_prep (Input_mp, Input_don, Output_don)
-
-!---------------------------------------------------------------------
-!    call donner_deep to compute the effects of deep convection on the 
-!    temperature, vapor mixing ratio, tracers, cloud liquid, cloud ice
-!    cloud area and precipitation fields.
-!---------------------------------------------------------------------
-      call donner_deep     &
-        (is, ie, js, je, dt, Input_mp%tin, Input_don%rin,    &
-         Input_mp%pfull, Input_mp%phalf, Input_mp%zfull, Input_mp%zhalf,  &
-         Input_mp%omega, Input_mp%pblht, Input_don%ke_bl, Input_mp%qstar, &
-         Input_mp%cush, Input_mp%coldT, Input_mp%land,     &
-         Input_don%sfc_sh_flux, Input_don%sfc_vapor_flux,   &
-         Input_don%tr_flux, Output_don%donner_tracer,   &
-         Input_don%secs, Input_don%days, Input_mp%cbmf,            &
-         Moist_clouds_block%cloud_data(i_cell)%cloud_area, &
-         Moist_clouds_block%cloud_data(i_cell)%liquid_amt, &
-         Moist_clouds_block%cloud_data(i_cell)%liquid_size, &
-         Moist_clouds_block%cloud_data(i_cell)%ice_amt    , &
-         Moist_clouds_block%cloud_data(i_cell)%ice_size   , &
-         Moist_clouds_block%cloud_data(i_cell)%droplet_number, &
-         Moist_clouds_block%cloud_data(i_meso)%cloud_area, &
-         Moist_clouds_block%cloud_data(i_meso)%liquid_amt, &
-         Moist_clouds_block%cloud_data(i_meso)%liquid_size, &
-         Moist_clouds_block%cloud_data(i_meso)%ice_amt    , &
-         Moist_clouds_block%cloud_data(i_meso)%ice_size   , &
-         Moist_clouds_block%cloud_data(i_meso)%droplet_number, &
-         Moist_clouds_block%cloud_data(i_meso)%nsum_out, &
-         Input_don%maxTe_launch_level,   &
-         Output_don%precip_returned, Output_don%delta_temp,   &
-         Output_don%delta_vapor, Conv_results%donner_det_mflux,   &
-         Conv_results%donner_mflux, Conv_results%mc_donner,   &
-         Conv_results%mc_donner_up,    &
-         Conv_results%mc_donner_half, C2ls_mp%donner_humidity_area,    &
-         C2ls_mp%donner_humidity_factor, Input_don%qtr,  &
-         Removal_mp%donner_wetdep, Output_don%lheat_precip,   &
-         Output_don%vert_motion, Output_don%total_precip,    &
-         Output_don%liquid_precip, Output_don%frozen_precip, &
-         Removal_mp%frz_meso,  Removal_mp%liq_meso, &
-         Removal_mp%frz_cell, Removal_mp%liq_cell, &
-         Input_don%qlin, Input_don%qiin, Input_don%qain,    &
-         Output_don%delta_ql, Output_don%delta_qi, Output_don%delta_qa)  
-
-!------------------------------------------------------------------------
-!    call process_donner_output to 1) add tracer tendencies from 
-!    donner_deep_mod to the arrays accumulating the total tracer 
-!    tendencies, and 2) define the change in vapor specific humidity
-!    resulting from donner_deep_mod.
-!------------------------------------------------------------------------
-      call process_donner_output (Input_don, Input_mp, Output_don,   &
-                                                            Output_mp)
-
-!------------------------------------------------------------------------
-!    if column conservation checks on the water and enthalpy changes 
-!    produced within the donner deep convection scheme have been requested,
-!    call check_donner_conservation to compute the needed vertical 
-!    integrals.
-!------------------------------------------------------------------------
-      if (do_donner_conservation_checks) then
-        call check_donner_conservation (is, js, ie, je, Input_mp,   &
-                                                             Output_don) 
-      endif
-
-!---------------------------------------------------------------------
-!    scale the donner_deep_mod tendencies to prevent the formation of 
-!    negative condensate, cloud areas smaller than a specified minimum,
-!    and water vapor specific humidity below a specified limit. 
-!---------------------------------------------------------------------
-      if (doing_prog_clouds .and. do_limit_donner) then
-        call define_and_apply_scale ( Input_mp, Don_tend, Output_don,&
-                                      .true., .false., Input_don%qtr)
-      endif
-
-!---------------------------------------------------------------------
-!    call prevent_unrealizable_water to adjust raw forcings from 
-!    donner_deep so as to prevent unrealizable mixing ratios for 
-!    water substance and cloud area, and to adjust precipitation field to 
-!    force moisture conservation in each model column.
-!---------------------------------------------------------------------
-      call prevent_unrealizable_water    &
-                             (Input_mp, Output_don, Removal_mp, Don_tend)
-
-!------------------------------------------------------------------------
-!    call define output fields to 1) define quantities needed for use by
-!    other modules, 2) to update the input fields which will be supplied to
-!    to other active moist_processes parameterizations, and 3) to define 
-!    donner tendencies in the desired units used in moist_processes_mod. 
-!------------------------------------------------------------------------
-      call define_output_fields     &
-                (Input_mp, Input_don, Output_don, Conv_results,   &
-                                                      C2ls_mp, Don_tend)
-
-!-----------------------------------------------------------------------
-!    call update_outputs to update tendency fields in Output_mp% and
-!    Don_tend% that are needed later.
-!-----------------------------------------------------------------------
-      call update_outputs (Don_tend, Output_mp,  Tend_mp)
-
-!------------------------------------------------------------------------
-!    call output_donner_diagnostics to output netcdf diagnostics of 
-!    diagnostic fields from donner_deep_mod.
-!------------------------------------------------------------------------
-      call output_donner_diagnostics    &
-              (is, js, Input_mp, Conv_results, Moist_clouds_block,  &
-                   Input_don, Output_don, C2ls_mp, Don_tend)
-                      
-!----------------------------------------------------------------------
-!    call donner_dealloc to deallocate the components of the derived types
-!    local to this subroutine.
-!----------------------------------------------------------------------
-      call donner_dealloc (Input_don, Output_don, Don_tend) 
-
-!-----------------------------------------------------------------------
-!    turn off the donner clock.
-!-----------------------------------------------------------------------
-      call mpp_clock_end (donner_clock)
-
-!---------------------------------------------------------------------
-
-
-end subroutine donner_driver
-
-
-
-!#########################################################################
-
-subroutine donner_alloc (ix, jx, kx, Input_don, Output_don, Don_tend) 
-
-!-----------------------------------------------------------------------
-!    subroutine donner_alloc allocates the components of derived type
-!    arrays local to subroutine donner_driver.
-!-----------------------------------------------------------------------
-
-!----------------------------------------------------------------------
-integer,                  intent(in)    :: ix, jx, kx
-type(donner_input_type),  intent(inout) :: Input_don
-type(conv_output_type),   intent(inout) :: Output_don
-type(conv_tendency_type), intent(inout) :: Don_tend
-
-!--------------------------------------------------------------------
-!         ix, jx, kx      sizes of the physics window
-!         Input_don       donner_input_type variable containing input
-!                         fields used by donner_deep_mod
-!         Output_don      conv_output_type variable containing output
-!                         fields from donner_deep_mod
-!         Don_tend        conv_tendency_type variable containing tendency
-!                         output form donner_deep_mod
-!--------------------------------------------------------------------
-
-!-------------------------------------------------------------------
-!    allocate  and initialize the Don_tend components.
-!-------------------------------------------------------------------
-      allocate (Don_tend%delta_q  (ix, jx, kx))
-      allocate (Don_tend%rain     (ix, jx))
-      allocate (Don_tend%snow     (ix, jx))
-      allocate (Don_tend%ttnd     (ix, jx, kx))
-      allocate (Don_tend%qtnd     (ix, jx, kx))
-      allocate (Don_tend%qtr      (ix, jx, kx, num_donner_tracers))
-      if (doing_prog_clouds) then
-        allocate (Don_tend%qltnd    (ix, jx, kx))
-        allocate (Don_tend%qitnd    (ix, jx, kx))
-        allocate (Don_tend%qatnd    (ix, jx, kx))
-        allocate (Don_tend%qntnd    (ix, jx, kx))
-        allocate (Don_tend%qnitnd   (ix, jx, kx))
-      endif
-      Don_tend%delta_q = 0.
-      Don_tend%rain    = 0.
-      Don_tend%snow    = 0.
-      Don_tend%ttnd    = 0.
-      Don_tend%qtnd    = 0.
-      Don_tend%qtr     = 0.
-      if (doing_prog_clouds) then
-        Don_tend%qltnd  = 0.
-        Don_tend%qitnd  = 0.
-        Don_tend%qatnd  = 0.
-        Don_tend%qntnd  = 0.
-        Don_tend%qnitnd = 0.
-      endif
-
-!-------------------------------------------------------------------
-!    allocate  and initialize the Input_don components.
-!
-!     sfc_sh_flux      sensible heat flux across the surface
-!                      [ watts / m**2 ]
-!     sfc_vapor_flux   water vapor flux across the surface
-!                      [ kg(h2o) / (m**2 sec) ]
-!     tr_flux          tracer fux across the surface
-!                      [ kg(tracer) / (m**2 sec) ]
-!----------------------------------------------------------------------
-      allocate (Input_don%rin(ix, jx, kx) )
-      allocate (Input_don%sfc_sh_flux(ix, jx) )
-      allocate (Input_don%sfc_vapor_flux(ix, jx) )
-      allocate (Input_don%tr_flux(ix, jx, num_donner_tracers) )
-      allocate (Input_don%ke_bl(ix, jx) )
-      allocate (Input_don%maxTe_launch_level(ix, jx) )
-      allocate (Input_don%qtr(ix, jx, kx, num_donner_tracers) )
-      allocate (Input_don%qlin(ix, jx, kx) )
-      allocate (Input_don%qiin(ix, jx, kx) )
-      allocate (Input_don%qain(ix, jx, kx) )
-      allocate (Input_don%nllin(ix, jx, kx) )
-      allocate (Input_don%nilin(ix, jx, kx) )
- 
-      Input_don%rin = 0.
-      Input_don%sfc_sh_flux = 0.
-      Input_don%sfc_vapor_flux = 0.
-      Input_don%tr_flux = 0.
-      Input_don%ke_bl = 0.
-      Input_don%maxTe_launch_level = 0.
-      Input_don%qtr = 0.
-      Input_don%qlin = 0.
-      Input_don%qiin = 0.
-      Input_don%qain = 0.
-      Input_don%nllin = 0.
-
-!-------------------------------------------------------------------
-!    allocate  and initialize the Output_don components.
-!-------------------------------------------------------------------
-      allocate (Output_don%delta_temp(ix, jx, kx))
-      allocate (Output_don%delta_vapor(ix, jx, kx))
-      allocate (Output_don%delta_q   (ix, jx, kx))
-      allocate (Output_don%delta_ql  (ix, jx, kx))
-      allocate (Output_don%delta_qi  (ix, jx, kx))
-      allocate (Output_don%delta_qa  (ix, jx, kx))
-      allocate (Output_don%delta_qn  (ix, jx, kx))
-      allocate (Output_don%delta_qni (ix, jx, kx))
-      allocate (Output_don%ttnd_adjustment(ix, jx, kx))
-      allocate (Output_don%liquid_precip  (ix, jx, kx))
-      allocate (Output_don%frozen_precip  (ix, jx, kx))
-      allocate (Output_don%precip_adjustment(ix, jx))
-      allocate (Output_don%precip_returned  (ix, jx))
-      allocate (Output_don%adjust_frac      (ix, jx))
-      allocate (Output_don%lheat_precip     (ix, jx))
-      allocate (Output_don%vert_motion      (ix, jx))
-      allocate (Output_don%total_precip     (ix, jx))
-      allocate (Output_don%scale            (ix, jx))
-      allocate (Output_don%scale_REV        (ix, jx))
-      allocate (Output_don%donner_tracer    (ix, jx,kx,num_donner_tracers))
-
-      Output_don%delta_temp = 0.
-      Output_don%delta_vapor= 0.
-      Output_don%delta_q    = 0.
-      Output_don%delta_ql   = 0.
-      Output_don%delta_qi   = 0.
-      Output_don%delta_qa   = 0.
-      Output_don%delta_qn   = 0.
-      Output_don%delta_qni  = 0.
-      Output_don%liquid_precip= 0.
-      Output_don%frozen_precip= 0.
-      Output_don%ttnd_adjustment = 0.
-      Output_don%vert_motion = 0.
-      Output_don%lheat_precip = 0.
-      Output_don%total_precip = 0.
-      Output_don%scale        = 1.0
-      Output_don%scale_REV = 1.0
-      Output_don%precip_adjustment = 0.
-      Output_don%precip_returned   = 0.
-      Output_don%adjust_frac       = 0.
-      Output_don%donner_tracer     = 0.
-
-!----------------------------------------------------------------------
-
-
-end subroutine donner_alloc 
- 
-
-
-!#######################################################################
-
-subroutine donner_prep (Input_mp, Input_don, Output_don)
-
-!-----------------------------------------------------------------------
-!    subroutine donner_prep consolidates the input fields needed by 
-!    donner_deep_mod.
-!-----------------------------------------------------------------------
-
-type(mp_input_type),      intent(in)    :: Input_mp
-type(donner_input_type),  intent(inout) :: Input_don
-type(conv_output_type),   intent(inout) :: Output_don
-
-!--------------------------------------------------------------------
-!    Input_mp   derived type used to transfer needed input data between
-!               moist_processes and convection_driver
-!    Input_don  donner_input_type variable containing input fields used by
-!               donner_deep_mod
-!    Output_don conv_output_type variable containing output fields from 
-!               donner_deep_mod
-!--------------------------------------------------------------------
-
-      integer :: n, nn
-
-!------------------------------------------------------------------------
-!     n       do loop index
-!     nn      counter
-!------------------------------------------------------------------------
-
-!--------------------------------------------------------------------
-!    if prognostic clouds are active in the model, define the cloud liquid,
-!    and cloud ice specific humidities, cloud area, and droplet and ice
-!    particle numbers associated with them. if not using prognostic clouds,
-!    these fields remain set to their initialized value of 0.0. 
-!--------------------------------------------------------------------
-      if (doing_prog_clouds) then
-        Input_don%qlin = Input_mp%tracer(:,:,:,nql)
-        Input_don%qiin = Input_mp%tracer(:,:,:,nqi)
-        Input_don%qain = Input_mp%tracer(:,:,:,nqa)
-        if (do_liq_num ) Input_don%nllin =  Input_mp%tracer(:,:,:,nqn)
-        if (do_ice_num ) Input_don%nilin =  Input_mp%tracer(:,:,:,nqni)
-      endif
-
-!--------------------------------------------------------------------
-!    convert vapor specific humidity to vapor mixing ratio, which is
-!    needed in donner_deep_mod.
-!--------------------------------------------------------------------
-      Input_don%rin = Input_mp%qin/(1.0 - Input_mp%qin)
-
-!---------------------------------------------------------------------
-!    if any tracers are to be transported by donner convection, 
-!    check each active tracer to find those to be transported and fill 
-!    the donner_tracer array with these fields. If none are to be 
-!    transported, the array remains at its initialized value of 0.0.
-!---------------------------------------------------------------------
-      if (num_donner_tracers > 0) then
-        nn = 1
-        do n=1,num_prog_tracers
-          if (tracers_in_donner(n)) then
-            Output_don%donner_tracer(:,:,:,nn) = Input_mp%tracer(:,:,:,n)
-            nn = nn + 1
-          endif
-        end do
-      endif
-
-!---------------------------------------------------------------------
-!    If one desires donner_deep_mod to see model-supplied surface fluxes of
-!    sensible heat (Input_don%sfc_sh_flux), water vapor 
-!    (Input_don%sfc_vapor_flux) or tracers  (Input_don%tr_flux), they
-!    should be input here. They will need to be passed down in Surf_diff
-!    from flux_exchange through moist_processes to convection_driver, and 
-!    then to donner_deep through this interface.
-!    FOR NOW, these values retain their initialized values of 0.0, as these
-!    fields are not passed to donner_deep_mod.
-!---------------------------------------------------------------------
-!     Input_don%sfc_sh_flux    = 0.0
-!     Input_don%sfc_vapor_flux = 0.0
-!     if (num_donner_tracers > 0) then
-!       nn = 1
-!       do n=1, num_prog_tracers
-!         if (tracers_in_donner(n)) then
-!           Input_don%tr_flux(:,:,nn) = 0.0                          
-!           nn = nn + 1
-!         endif
-!       end do
-!     else
-!       Input_don%tr_flux = 0.
-!     endif
-
-!-----------------------------------------------------------------------
-!    define boundary layer kinetic energy to pass to donner deep routine.
-!-----------------------------------------------------------------------
-      Input_don%ke_bl = Input_mp%pblht
-      Input_don%ke_bl = min(max(Input_don%ke_bl, 0.0),5000.)
-      Input_don%ke_bl = Input_mp%ustar**3. +   &
-                          0.6*Input_mp%ustar*Input_mp%bstar*Input_don%ke_bl
-      where (Input_don%ke_bl .gt. 0.)
-        Input_don%ke_bl = Input_don%ke_bl**(2./3.)
-      end where
-      Input_don%ke_bl = MAX (1.e-6, Input_don%ke_bl)
-
-!----------------------------------------------------------------------
-!    define model time in days and secs from base time.
-!----------------------------------------------------------------------
-      call get_time (Time, Input_don%secs, Input_don%days)
-
-!---------------------------------------------------------------------
-
-
-end subroutine donner_prep 
-
-
-
-!#######################################################################
-
-subroutine process_donner_output    &
-                         (Input_don, Input_mp, Output_don, Output_mp)
-
-!------------------------------------------------------------------------
-type(donner_input_type),  intent(inout) :: Input_don
-type(mp_input_type),      intent(inout) :: Input_mp
-type(conv_output_type),   intent(inout) :: Output_don
-type(mp_output_type),     intent(inout) :: Output_mp
-
-!-------------------------------------------------------------------------
-!    Input_don  donner_input_type variable containing input fields used by
-!               donner_deep_mod
-!    Input_mp   derived type used to transfer needed input data between
-!               moist_processes and convection_driver
-!    Output_don conv_output_type variable containing output fields from 
-!               donner_deep_mod
-!    Output_mp  derived type used to transfer output fields between
-!               convection_driver and moist_processes
-!-------------------------------------------------------------------------
-
-      real    :: qnew
-      integer :: ix, jx, kx
-      integer :: i, j, k, n, nn
-
-!------------------------------------------------------------------------
-!     qnew          updated specific humidity after donner is executed
-!     ix, jx, kx    physics window sizes
-!     i, j, k, n    do loop indice
-!     nn            counter
-!------------------------------------------------------------------------
-
-!-----------------------------------------------------------------------
-!    define array dimensions.
-!-----------------------------------------------------------------------
-      ix = size(Output_mp%rdt, 1)
-      jx = size(Output_mp%rdt, 2)
-      kx = size(Output_mp%rdt, 3)
-
-!---------------------------------------------------------------------
-!    update the current tracer tendencies with the contributions 
-!    just obtained from donner convection.
-!---------------------------------------------------------------------
-      if (num_donner_tracers > 0) then
-        nn = 1
-        do n=1, num_prog_tracers
-          if (tracers_in_donner(n)) then
-            Output_mp%rdt(:,:,:,n) = Output_mp%rdt(:,:,:,n) +   &
-                                                   Input_don%qtr(:,:,:,nn)
-            nn = nn + 1
-          endif
-        end do
-      endif
-
-!--------------------------------------------------------------------
-!    obtain updated vapor specific humidity (qnew) resulting from deep 
-!    convection  so that the vapor specific humidity change due to deep 
-!    convection (delta_q) can be defined.
-!--------------------------------------------------------------------
-      do k=1,kx
-        do j=1,jx
-          do i=1,ix
-            if (Output_don%delta_vapor(i,j,k) /= 0.0) then
-              qnew =    &
-                  (Input_don%rin(i,j,k) + Output_don%delta_vapor(i,j,k))/ &
-                        (1.0 + (Input_don%rin(i,j,k) +     &
-                                            Output_don%delta_vapor(i,j,k)))
-              Output_don%delta_q(i,j,k) = qnew - Input_mp%qin(i,j,k)
-            else
-              Output_don%delta_q(i,j,k) = 0.
-            endif
-          enddo
-        enddo
-      end do
-
-!---------------------------------------------------------------------
-
-
-end subroutine process_donner_output 
-
-
-
-!#######################################################################
-
-subroutine check_donner_conservation (is, js, ie, je, Input_mp,   &
-                                                             Output_don) 
-
-!-----------------------------------------------------------------------
-!    subroutine check_donner_conservation checks the water substance
-!    and enthalpy changes in model columns as a result of donner deep
-!    convection, and provides netcdf output of the appropriate terms and
-!    net imbalances. Note that this is the raw output from the donner 
-!    scheme so that moisture imbalances are to be expected at this 
-!    juncture; they will be balanced if moisture conservation is enforced 
-!    in subroutine prevent_unrealizable_water.
-!    a second call to this subroutine after adjustments are completed
-!    is recommended if it is desired to see final balances. {ADD NEW CODE
-!    TO ENABLE THIS OPTION.}
-!-----------------------------------------------------------------------
-
-!---------------------------------------------------------------------
-integer,                  intent(in)    :: is, ie, js, je
-type(mp_input_type),      intent(inout) :: Input_mp
-type(conv_output_type),   intent(inout) :: Output_don
-
-!-------------------------------------------------------------------------
-!    is,ie      starting and ending i indices for window
-!    js,je      starting and ending j indices for window
-!    Input_mp   derived type used to transfer needed input data between
-!               moist_processes and convection_driver
-!    Output_don conv_output_type variable containing output fields from 
-!               donner_deep_mod
-!-------------------------------------------------------------------------
-!------------------------------------------------------------------------
-      real, dimension( size(Input_mp%t,1), size(Input_mp%t,2)) ::    &
-                          vaporint, lcondensint, condensint, diffint,   &
-                          enthint, enthdiffint, precipint
-      integer :: k, i, j
-      integer :: kx
-      logical :: used
-
-!-------------------------------------------------------------------------
-!    vertical integrals in each model column.
-!      vaporint:    pressure-weighted sum of vapor changes in column
-!      lcondensint: presuure-weighted sum of latent heat release in column
-!      condensint:  pressure-weighted sum of condensation in the column
-!      diffint:     imbalance between water substance change in column;  
-!                   the sum of vapor change (vaporint) should balance the
-!                   column precipitation (precipint) and the condensate
-!                   transferred to the large-scale (condensint) 
-!      enthint :    pressure-weighted sum of enthalpy changes in column
-!      enthdiffint: imbalance in enthalpy change in column:
-!                   the enthalpy change in the column should be balanced by
-!                   the enthalpy associated with the latent heat removed by
-!                   1) condensate that was transferred to the large-scale 
-!                   clouds (lcondensint), and 2) lost by precipitation 
-!                   (lheat_precip). An additional roundoff term due to
-!                   column vertical motion is also included (vert_motion).
-!      precipint:   precipitation rate from column
-!
-!      i, j, k:     do loop indices
-!      kx           vertical size of physics window
-!      used         logical used to indicate data has been received by
-!                   diag_manager_mod
-!-------------------------------------------------------------------------
-
-!------------------------------------------------------------------------
-!    define vertical array size. initialize vertical integrals.
-!------------------------------------------------------------------------
-      kx = size(output_don%delta_temp,3)
-
-!--------------------------------------------------------
-!    initialize column integrals.
-!--------------------------------------------------------
-      vaporint = 0.
-      lcondensint = 0.
-      condensint = 0.
-      diffint = 0.
-      enthint = 0.
-      enthdiffint = 0.
-    
-!------------------------------------------------------------------------
-!    compute vertical integrals in each model column.
-!------------------------------------------------------------------------
-      do k=1,kx
-        vaporint = vaporint + Input_mp%pmass(:,:,k)*  &
-                                                  Output_don%delta_q(:,:,k)
-        enthint = enthint + CP_AIR*Input_mp%pmass(:,:,k)*   &
-                                               Output_don%delta_temp(:,:,k)
-        condensint = condensint + Input_mp%pmass(:,:,k) *  &
-                  (Output_don%delta_ql(:,:,k) + Output_don%delta_qi(:,:,k))
-        lcondensint = lcondensint + Input_mp%pmass(:,:,k) *  &
-                                   (HLV*Output_don%delta_ql(:,:,k) +   &
-                                            HLS*Output_don%delta_qi(:,:,k))
-      end do
-
-      precipint = Output_don%total_precip/seconds_per_day
-      diffint = (vaporint + condensint)*dtinv  + precipint
-      enthdiffint = (enthint - lcondensint)*dtinv -    &
-                                Output_don%lheat_precip/seconds_per_day - &
-                                     Output_don%vert_motion/seconds_per_day
-
-!------------------------------------------------------------------------
-!    update the variable collecting the maximum imbalance over the entire
-!    model run, if the present imbalance value is larger than the 
-!    previously recorded.
-!------------------------------------------------------------------------
-      do j=1,size(enthdiffint,2)
-        do i=1,size(enthdiffint,1)
-          max_enthalpy_imbal_don(i+is-1,j+js-1) =    &
-                         max( abs(enthdiffint(i,j)), &
-                                    max_enthalpy_imbal_don(i+is-1,j+js-1) )
-          max_water_imbal_don(i+is-1,j+js-1) =     &
-                         max( abs(diffint(i,j)), &
-                                       max_water_imbal_don(i+is-1,j+js-1) )
-        end do
-      end do
-
-!------------------------------------------------------------------------
-!    output diagnostics related to water and enthalpy conservation.
-!------------------------------------------------------------------------
-      used = send_data(id_max_enthalpy_imbal_don,    &
-                       max_enthalpy_imbal_don(is:ie,js:je), Time, is, js)
-      used = send_data(id_max_water_imbal_don,     &
-                          max_water_imbal_don(is:ie,js:je), Time, is, js)
-      used = send_data(id_vaporint, vaporint*dtinv, Time, is, js)
-      used = send_data(id_condensint, condensint*dtinv, Time, is, js)
-      used = send_data(id_vertmotion,   &
-                              Output_don%vert_motion/seconds_per_day,  &
-                                                             Time, is, js)
-      used = send_data(id_precipint, precipint, Time, is, js)
-      used = send_data(id_diffint, diffint, Time, is, js)
-      used = send_data(id_enthint, enthint*dtinv, Time, is, js)
-      used = send_data(id_lcondensint, lcondensint*dtinv, Time, is, js)
-      used = send_data(id_lprcp, Output_don%lheat_precip/seconds_per_day, &
-                                                             Time, is, js)
-      used = send_data(id_enthdiffint, enthdiffint, Time, is, js)
-
-!-------------------------------------------------------------------------
-
-
-end subroutine check_donner_conservation 
-
-
-
-!#######################################################################
-
-subroutine prevent_unrealizable_water     &
-                             (Input_mp, Output_don, Removal_mp, Don_tend)
-
-!--------------------------------------------------------------------------
-!    subroutine prevent_unrealizable_water adjusts the tendencies coming 
-!    out of the donner deep parameterization to prevent the formation of 
-!    negative water vapor, liquid or ice.
-!--------------------------------------------------------------------------
-
-!-------------------------------------------------------------------------
-type(mp_input_type),      intent(inout) :: Input_mp
-type(mp_removal_type),    intent(inout) :: Removal_mp
-type(conv_output_type),   intent(inout) :: Output_don
-type(conv_tendency_type), intent(inout) :: Don_tend
-!-----------------------------------------------------------------------
-
-!----------------------------------------------------------------------
-!    Input_mp   derived type used to transfer needed input data between
-!               moist_processes and convection_driver
-!    Removal_mp derived type used to transfer precipitation and tracer
-!               removal fields between convection_driver and 
-!               moist_processes
-!    Output_don conv_output_type variable containing output fields from 
-!               donner_deep_mod
-!    Don_tend   conv_tendency_type variable containing tendency output from
-!               donner_deep_mod
-!-----------------------------------------------------------------------
-
-      real, dimension(size(Output_don%delta_q,1),    &
-                               size(Output_don%delta_q,2)) :: temp_2d
-      integer :: ix, jx, kx
-      integer :: i, j, k, n
-      integer :: nn
-
-!------------------------------------------------------------------------
-!    temp_2d        temporary array
-!    ix, jx, kx     physics window dimensions
-!    i, j, k, n     do loop indices
-!    nn             counter
-!----------------------------------------------------------------------
-
-!------------------------------------------------------------------------
-!    define array sizes.
-!------------------------------------------------------------------------
-      ix = size(Input_mp%qin,1)
-      jx = size(Input_mp%qin,2)
-      kx = size(Input_mp%qin,3)
-
-!----------------------------------------------------------------------
-!    if limiting tendencies is active, scale the precipitation fields and 
-!    associated enthalpy terms. precip returned from Donner scheme is 
-!    recalculated below, after the adjustments (precip_returned).
-!----------------------------------------------------------------------
-      if (doing_prog_clouds .and. do_limit_donner) then
-        do j=1,jx
-          do i=1,ix
-            if (Output_don%scale(i,j) /= 1.0) then
-              Output_don%total_precip(i,j) =   &
-                             Output_don%scale(i,j)* &
-                                               Output_don%total_precip(i,j)
-              Output_don%lheat_precip(i,j) =   &
-                             Output_don%scale(i,j)* &
-                                              Output_don%lheat_precip(i,j)
-              do k=1, kx
-                Output_don%liquid_precip(i,j,k) =    &
-                              Output_don%scale(i,j)*  &
-                                           Output_don%liquid_precip(i,j,k)
-                Output_don%frozen_precip(i,j,k) =    &
-                              Output_don%scale(i,j)*  &
-                                           Output_don%frozen_precip(i,j,k)
-              end do
-            endif
-          end do
-        end do
-
-!---------------------------------------------------------------------
-!    prevent liquid and frozen precip from having negative values.
-!-------------------------------------------------------------------------
-        where ( Output_don%liquid_precip(:,:,:) .lt. 0.)
-          Output_don%liquid_precip(:,:,:) = 0.0
-        end where
-
-        where ( Output_don%frozen_precip(:,:,:) .lt. 0.)
-          Output_don%frozen_precip(:,:,:) = 0.0
-        end where
-
-!-------------------------------------------------------------------------
-!    dimensions of liquid_precip is [kg(H20)/(kg s)]*(SECONDS_PER_DAY)
-!    dimensions of frozen_precip is [kg(H20)/(kg s)]*(SECONDS_PER_DAY)
-!
-!    Note that (dt/seconds_per_day) * sum of (liquid_precip(k) + 
-!    frozen_precip( k) *pmass(k)) gives precip_returned.
-!-------------------------------------------------------------------------
-        Output_don%precip_returned(:,:) = 0.0
-        do k=1, kx
-          Output_don%precip_returned(:,:) =    &
-                Output_don%precip_returned(:,:) +   &
-                    (Output_don%liquid_precip(:,:,k) +     &
-                           Output_don%frozen_precip(:,:,k))*  &
-                                 Input_mp%pmass(:,:,k) *dt/SECONDS_PER_DAY
-        end do
-
-      endif  ! doing_clouds and do_limit_donner)
-
-!-----------------------------------------------------------------------
-!    if one is to force moisture conservation with donner, then determine
-!    the imbalance between the net pressure-weighted moisture changes in
-!    each column and the predicted precip in that column (they should be
-!    equal). this difference is Output_don%precip_adjustment.
-!-----------------------------------------------------------------------
-      if (force_donner_moist_conserv) then
-        temp_2d = 0.
-        do k=1,kx
-          temp_2d (:,:) = temp_2d (:,:) + (-Output_don%delta_q(:,:,k) -  &
-                              Output_don%delta_ql(:,:,k) -   &
-                                       Output_don%delta_qi(:,:,k))*  &
-                                                      Input_mp%pmass(:,:,k)
-        end do
-        Output_don%precip_adjustment = (temp_2d -    &
-                                             Output_don%precip_returned)
-
-!---------------------------------------------------------------------
-!    process the water imbalance, so that it is resolved. define a new 
-!    scale (scale_REV) for those cases where donner convection must be 
-!    turned off because it will produce negative values of precipitation.
-!---------------------------------------------------------------------
-        Output_don%scale_REV = Output_don%scale
-        do j=1,jx
-          do i=1,ix
-
-!---------------------------------------------------------------------
-!    If the net change of water content is less than qmin, the imbalance
-!    is ignored.
-!---------------------------------------------------------------------
-            if (ABS(Output_don%precip_adjustment(i,j)) < 1.0e-10) then
-              Output_don%precip_adjustment (i,j) = 0.0
-            endif
-
-!-----------------------------------------------------------------------
-!    a net gain to the sum of vapor, liquid and ice in the column implies
-!    negative precip, which is unrealizable. in such a case any precip 
-!    that had been predicted in the column is zeroed out, and the effects
-!    of donner convection on the column become non-existent. note that 
-!    additional arrays associated with the precip field must be modified 
-!    for consistency when a change is made, and any non-zero value for 
-!    scale is set to 0.0.
-!---------------------------------------------------------------------
-            if ( Output_don%precip_adjustment(i,j) < 0.0 .and. &
-                     (Output_don%precip_adjustment(i,j) +    &
-                              Output_don%precip_returned(i,j)) < 0.0 ) then
-!             write (warn_mesg,'(2i4,2e12.4)') i,j,  &
-!                       precip_adjustment(i,j), precip_returned(i,j)
-!             call error_mesg ('moist_processes_mod', 'moist_processes: &
-!                 &Change in water content does not balance precip &
-!                 &from donner_deep routine.'//trim(warn_mesg), WARNING)
-              Output_don%scale_REV(i,j) = 0.0
-              Output_don%delta_vapor(i,j,:) = 0.0
-              Output_don%delta_q(i,j,:) = 0.0
-              Output_don%delta_qi(i,j,:) = 0.0
-              Output_don%delta_ql(i,j,:) = 0.0
-              Output_don%delta_qa(i,j,:) = 0.0
-              Output_don%total_precip(i,j) = 0.0
-              Output_don%precip_returned(i,j) = 0.0
-              Output_don%liquid_precip(i,j,:) = 0.0
-              Output_don%frozen_precip(i,j,:) = 0.0
-              Output_don%lheat_precip(i,j) = 0.0
-            endif
-          end do
-        end do
-
-!---------------------------------------------------------------------
-!    define the fractional change to the  precipitation that must be made
-!    in order to balance the net change in water in the column.
-!---------------------------------------------------------------------
-        do j=1,jx
-          do i=1,ix
-            if (Output_don%precip_returned(i,j) > 0.0) then
-              Output_don%adjust_frac(i,j) =     &
-                          Output_don%precip_adjustment(i,j)/  &
-                                         Output_don%precip_returned(i,j)
-            else
-              Output_don%adjust_frac(i,j) = 0.
-            endif
-          end do
-        end do
-
-!---------------------------------------------------------------------
-!    if the predicted precip exceeds the net loss to vapor, liquid and 
-!    ice in the column, the precip is reduced  by the adjustment fraction
-!    so that a balance is obtained (adjust_frac is negative). 
-!    if the predicted precip is less than the net loss of vapor, liquid 
-!    and ice from the column, the precip is increased by the adjustment
-!    fraction to balance that net loss adjust_frac is positive). 
-!    also adjust the temperature to balance the precip adjustment
-!    and so conserve enthalpy in the column, and  define the new values
-!    of liquid and frozen precipitation after adjustment.
-!--------------------------------------------------------------------- 
-        do k=1,kx
-          Output_don%ttnd_adjustment(:,:,k) = &
-                    ((HLV*Output_don%liquid_precip(:,:,k)*  &
-                                         Output_don%adjust_frac(:,:) + &
-                      HLS*Output_don%frozen_precip(:,:,k)*  &
-                                        Output_don%adjust_frac(:,:))  &
-                                               *dt/seconds_per_day)/CP_AIR
-          Output_don%liquid_precip(:,:,k) =    &
-                        Output_don%liquid_precip(:,:,k)*  &
-                                         (1.0+Output_don%adjust_frac(:,:))
-          Output_don%frozen_precip(:,:,k) =   &
-                         Output_don%frozen_precip(:,:,k)*   &
-                                          (1.0+Output_don%adjust_frac(:,:))
-        end do
-
-!------------------------------------------------------------------------
-!    define the adjustments to be 0.0 if conservation is not being forced.
-!------------------------------------------------------------------------
-      else ! (force_donner_moist_conserv)
-        Output_don%precip_adjustment = 0.0
-        Output_don%adjust_frac       = 0.0
-        Output_don%ttnd_adjustment = 0.
-      endif  ! (force_donner_moist_conserv)
-
-!-------------------------------------------------------------------------
-!    define the column rainfall and snowfall from the donner scheme,
-!    using the recently-adjusted values.
-!-------------------------------------------------------------------------
-      do k=1,kx
-        Don_tend%rain = Don_tend%rain + Output_don%liquid_precip(:,:,k)*  &
-                                    Input_mp%pmass(:,:,k)/seconds_per_day
-        Don_tend%snow = Don_tend%snow + Output_don%frozen_precip(:,:,k)*  &
-                                    Input_mp%pmass(:,:,k)/seconds_per_day
-      end do
-
-!----------------------------------------------------------------------
-!   modify the 3d precip fluxes used by COSP to account for the 
-!   conservation adjustment.
-!----------------------------------------------------------------------
-      if (do_cosp) then
-        do k=1, kx
-          do j=1,jx  
-            do i=1,ix  
-              Removal_mp%frz_meso(i,j,k) =   &
-                   Removal_mp%frz_meso(i,j,k)*Input_mp%pmass(i,j,k)*  &
-                             Output_don%scale_REV(i,j)* &
-                                 (1.0 + Output_don%adjust_frac(i,j))/  &
-                                                           SECONDS_PER_DAY
-              Removal_mp%liq_meso(i,j,k) =    &
-                   Removal_mp%liq_meso(i,j,k)*Input_mp%pmass(i,j,k)*  &
-                              Output_don%scale_REV(i,j)* &
-                                  (1.0 + Output_don%adjust_frac(i,j))/  &
-                                                           SECONDS_PER_DAY
-              Removal_mp%frz_cell(i,j,k) =    &
-                   Removal_mp%frz_cell(i,j,k)*Input_mp%pmass(i,j,k)*   &
-                               Output_don%scale_REV(i,j)* &
-                                  (1.0 + Output_don%adjust_frac(i,j))/  &
-                                                           SECONDS_PER_DAY
-              Removal_mp%liq_cell(i,j,k) =    &
-                   Removal_mp%liq_cell(i,j,k)*Input_mp%pmass(i,j,k)*   &
-                                Output_don%scale_REV(i,j)* &
-                                 (1.0 + Output_don%adjust_frac(i,j))/   &
-                                                           SECONDS_PER_DAY
-            end do
-          end do
-        end do
-      endif 
-
-!------------------------------------------------------------------------
-
-
-end subroutine prevent_unrealizable_water
-
-
-
-!#######################################################################
-
-
-subroutine define_output_fields   &
-                 (Input_mp, Input_don, Output_don, Conv_results,   &
-                                                   C2ls_mp, Don_tend)
-                      
-!------------------------------------------------------------------------
-!    subroutine define_output_fields 1) defines quantities needed for use
-!    by other modules, 2) updates the input fields which will be supplied
-!    to other active moist_processes parameterizations, and 3) defines 
-!    donner tendencies in the desired units used in moist_processes_mod. 
-!-------------------------------------------------------------------------
-
-type(mp_input_type),        intent(inout) :: Input_mp
-type(donner_input_type),    intent(inout) :: Input_don
-type(conv_output_type),     intent(inout) :: Output_don
-type(conv_results_type),    intent(inout) :: Conv_results
-type(mp_conv2ls_type),      intent(in)    :: C2ls_mp
-type(conv_tendency_type),   intent(inout) :: Don_tend
-
-!-----------------------------------------------------------------------
-!    Input_mp   derived type used to transfer needed input data between
-!               moist_processes and convection_driver
-!    Input_don  donner_input_type variable containing input
-!               fields used by donner_deep_mod
-!    Output_don conv_output_type variable containing output
-!               fields from donner_deep_mod
-!    Conv_results
-!               conv_results_type variable containing variables 
-!               used in multiple convective parameterizations and for
-!               diagnostic output
-!    C2ls_mp    derived type used to transfer data from convection_driver
-!               to lscloud_driver via moist_processes.
-!    Don_tend   conv_tendency_type variable containing tendency
-!               output form donner_deep_mod
-!---------------------------------------------------------------------
-
-      real, dimension(size(Input_mp%t,1), size(Input_mp%t,2),      &
-                                     size(Input_mp%t,3)) :: targ, qarg
-      logical, dimension(size(Input_mp%t,1),size( Input_mp%t,2)) :: ltemp
-
-      integer :: ix, jx, kx
-      logical :: used
-      integer :: i, j, k
-
-!-----------------------------------------------------------------------
-!   targ            variable to hold temperature field passed to
-!                   subroutine detr_ice_num. that field will vary dependent
-!                   on namelist options selected
-!   qarg            variable to hold specific humidity field passed to
-!                   subroutine detr_ice_num. that field will vary dependent
-!                   on namelist options selected
-!   ltemp           temporary logical variable
-!   ix, jx, kx      physics window dimensions
-!   used            logical used to indicate data has been received by
-!                   diag_manager_mod
-!   i, j, k         do loop indices
-!-----------------------------------------------------------------------
-
-!------------------------------------------------------------------------
-!    define array dimensions.
-!------------------------------------------------------------------------
-      ix = size(Input_mp%t,1)
-      jx = size(Input_mp%t,2)
-      kx = size(Input_mp%t,3)
-
-!-------------------------------------------------------------------------
-!    if the option to allow only one convective scheme per column is
-!    active, mark those columns which have undergone donner convection
-!    so they will not be used in any other convection scheme.
-!-------------------------------------------------------------------------
-      if (only_one_conv_scheme_per_column) then
-        Conv_results%conv_calc_completed =    &
-                                  (Don_tend%rain + Don_tend%snow) > 0.0
-      endif
-
-!-----------------------------------------------------------------------
-!    if a realizability constraint is to be placed on total cloud fraction,
-!    define the area remaining available for clouds from other schemes 
-!    after the donner cloud area has been accounted for.
-!    Note also that if the entire area (>= 0.999) at any level is taken 
-!    up by donner clouds, then uw clouds will not be allowed in the 
-!    column ( set conv_calc_completed = T).
-!-----------------------------------------------------------------------
-      if (limit_conv_cloud_frac) then
-        ltemp = ANY(C2ls_mp%donner_humidity_area(:,:,:) >= 0.999,   &
-                                                                  dim = 3)
-        where (ltemp(:,:)) Conv_results%conv_calc_completed(:,:) = .true.
-        Conv_results%available_cf_for_uw = MAX(0.999 -    &
-                                 C2ls_mp%donner_humidity_area(:,:,:), 0.0)
-      endif
-
-!---------------------------------------------------------------------
-!    convert the deltas in temperature, vapor specific humidity and 
-!    precipitation resulting from donner convection to time tendencies 
-!    of these quantities. include the temperature adjustment made due
-!    to adjustments to ensure positive water fields.
-!---------------------------------------------------------------------
-      Don_tend%ttnd = Output_don%delta_temp*dtinv 
-      Don_tend%ttnd = Don_tend%ttnd + Output_don%ttnd_adjustment*dtinv
-
-      Don_tend%qtnd  = Output_don%delta_q*dtinv
-      Don_tend%qltnd = Output_don%delta_ql*dtinv
-      Don_tend%qitnd = Output_don%delta_qi*dtinv
-      Don_tend%qatnd = Output_don%delta_qa*dtinv
-
-!---------------------------------------------------------------------
-!    update the values of temperature and vapor specific humidity to
-!    include the effects of donner_deep convection. 
-!    define targ and qarg, the values to be passed to subroutine 
-!    detrain_ice_num. The ability to reproduce old buggy results  where
-!    detrain_ice_num received an un-updated temperature field is retained 
-!    at this time.
-!---------------------------------------------------------------------
-      if (keep_icenum_detrain_bug ) then 
-        targ = Input_mp%tin
-        qarg = Input_mp%qin
-        Input_mp%tin = Input_mp%tin + Output_don%delta_temp
-        Input_mp%qin = Input_mp%qin + Output_don%delta_q(:,:,:)
-      else
-        Input_mp%tin = Input_mp%tin + Output_don%delta_temp
-        Input_mp%qin = Input_mp%qin + Output_don%delta_q
-        targ = Input_mp%tin
-        qarg = Input_mp%qin
-      endif
-
-      if (doing_prog_clouds) then
-
-!------------------------------------------------------------------------
-!    calculate the amount of ice particles detrained from the donner
-!    convective clouds. Modify the ice particle number and ice particle
-!    number tendency from physics to account for this detrainment.  output
-!    a diagnostic if desired.
-!------------------------------------------------------------------------
-        if (do_ice_num .and. detrain_ice_num) then
-          call detr_ice_num (targ, Output_don%delta_qi,   &
-                                                     Output_don%delta_qni) 
-          Don_tend%qnitnd = Output_don%delta_qni*dtinv
-        endif  
-
-!-------------------------------------------------------------------------
-!    detrain liquid droplets if desired. the original code had a bug which
-!    may be preserved for test purposes with the remain_detrain_bug nml
-!    variable. assume 10 micron mean volume radius for detrained droplets. 
-!    Modify the particle number and particle number tendency from physics 
-!    to account for this detrainment. output a diagnostic if desired.
-!-------------------------------------------------------------------------
-        if (do_liq_num .and. detrain_liq_num) then
-          if (remain_detrain_bug ) then
-            Output_don%delta_qn =  Output_don%delta_ql/1000.*3./  &
-                                                        (4.*3.14*10.e-15)
-          else
-            Output_don%delta_qn =  Output_don%delta_ql/1000.*3./  &
-                                                            (4.*3.14e-15)
-          endif 
-          Don_tend%qntnd = Output_don%delta_qn*dtinv
-        endif
-
-!-----------------------------------------------------------------------
-!    update the largescale cloud fields and their total tendencies from
-!    physics  with the tendencies resulting from the donner deep 
-!    convection scheme.
-!-----------------------------------------------------------------------
-        Input_mp%tracer(:,:,:,nql) = Input_don%qlin + Output_don%delta_ql
-        Input_mp%tracer(:,:,:,nqi) = Input_don%qiin + Output_don%delta_qi
-        Input_mp%tracer(:,:,:,nqa) = Input_don%qain + Output_don%delta_qa
-        if (do_ice_num .and. detrain_ice_num) then
-          Input_mp%tracer(:,:,:,nqni) =  Input_don%nilin  +   &
-                                                     Output_don%delta_qni 
-        endif  
-        if (do_liq_num .and. detrain_liq_num) then
-          Input_mp%tracer(:,:,:,nqn) =  Input_don%nllin +   &
-                                                      Output_don%delta_qn 
-        endif
-      endif  ! doing_prog_clouds
-
-!-----------------------------------------------------------------------
-
-
-end subroutine define_output_fields 
-
-
-
-!########################################################################
-
-subroutine output_donner_diagnostics ( is, js, Input_mp, Conv_results,    &
-                   Moist_clouds_block, Input_don, Output_don,  C2ls_mp,   &
-                                                  Don_tend)
-
-!-----------------------------------------------------------------------
-!    subroutine output_donner_diagnostics outputs various netcdf 
-!    diagnostics that are associated with donner deep convection.
-!-----------------------------------------------------------------------
-                      
-!--------------------------------------------------------------------
-integer,                            intent(in)    :: is, js
-type(mp_input_type),                intent(inout) :: Input_mp
-type(conv_results_type),            intent(in)    :: Conv_results
-type(clouds_from_moist_block_type), intent(inout) :: Moist_clouds_block
-type(donner_input_type),            intent(inout) :: Input_don
-type(conv_output_type),             intent(inout) :: Output_don
-type(mp_conv2ls_type),              intent(in)    :: C2ls_mp
-type(conv_tendency_type),           intent(inout) :: Don_tend
-!------------------------------------------------------------------------
-
-!-----------------------------------------------------------------------
-!    is,js      starting i and j indices for window
-!    Input_mp   derived type used to transfer needed input data between
-!               moist_processes and convection_driver
-!    Conv_results
-!               conv_results_type variable containing variables 
-!               used in multiple convective parameterizations and for
-!               diagnostic output
-!    Moist_clouds_block 
-!               derived type used to transfer cloud data between 
-!               atmos_model and convection_driver via physics_driver and
-!               moist_processes
-!    Input_don  donner_input_type variable containing input
-!               fields used by donner_deep_mod
-!    Output_don conv_output_type variable containing output
-!               fields from donner_deep_mod
-!    C2ls_mp    derived type used to transfer data from convection_driver
-!               to lscloud_driver via moist_processes.
-!    Don_tend   conv_tendency_type variable containing tendency
-!               output from donner convection
-!-----------------------------------------------------------------------
-
-      logical, dimension(size(Input_mp%t,1),size(Input_mp%t,2)) ::    &
-                                                     ltemp
-      real, dimension(size(Don_tend%ttnd,1),    &
-                                     size(Don_tend%ttnd,2)) :: temp_2d
-
-      logical :: used
-      integer :: ix, jx, kx
-      integer :: k, n
-
-!----------------------------------------------------------------------
-!   ltemp         temporary logical array
-!   temp_2d       temporary real array
-!   used          logical used to indicate data has been received by
-!                 diag_manager_mod
-!   ix, jx, kx    physics window dimensions
-!   k, n          do loop indices
-!----------------------------------------------------------------------
-
-!-----------------------------------------------------------------------
-!    define array dimensions.
-!-----------------------------------------------------------------------
-      ix = size(Don_tend%ttnd, 1)
-      jx = size(Don_tend%ttnd, 2)
-      kx = size(Don_tend%ttnd, 3)
-
-!-----------------------------------------------------------------------
-!    output scaling factors which were applied to donner tendencies to
-!    preserve realizable water quantities. the difference between scale
-!    and scale_REV reflects the absence of scaling where no conservation
-!    is possible.
-!-----------------------------------------------------------------------
-      used = send_data (id_scale_donner, Output_don%scale,   &
-                                                             Time, is, js )
-      used = send_data (id_scale_donner_REV, Output_don%scale_REV, &
-                                                             Time, is, js )
-
-!--------------------------------------------------------------------
-!    output diagnostics for the time tendencies of temperature, vapor 
-!    specific humidity and large scale cloud fields, and various precip 
-!    and mass flux diagnostics due to donner deep convection.
-!--------------------------------------------------------------------
-      used = send_data (id_tdt_deep_donner, Don_tend%ttnd, Time, is, js, 1)
-      used = send_data (id_qdt_deep_donner, Don_tend%qtnd, Time, is, js, 1)
-      used = send_data (id_qadt_deep_donner, Don_tend%qatnd,   &
-                                                        Time, is, js, 1)
-      used = send_data (id_qldt_deep_donner, Don_tend%qltnd,    &
-                                                        Time, is, js, 1)
-      used = send_data (id_qidt_deep_donner, Don_tend%qitnd,    &
-                                                        Time, is, js, 1)
-
-      used = send_data (id_mc_donner, Conv_results%mc_donner,   &
-                                                        Time, is, js, 1)
-      used = send_data (id_mc_donner_half, Conv_results%mc_donner_half,   &
-                                                        Time, is, js, 1 )
-      used = send_data (id_m_cdet_donner, Conv_results%donner_det_mflux,  &
-                                                        Time,  is, js, 1 )
-      used = send_data (id_m_cellup, Conv_results%donner_mflux,     &
-                                                        Time, is, js, 1 )
-      used = send_data (id_snow_deep_donner, Don_tend%snow, Time, is, js)
-      used = send_data (id_prec_deep_donner,    &
-                         Don_tend%rain + Don_tend%snow, Time, is, js )
-      used = send_data (id_prec1_deep_donner,   &
-                          Output_don%precip_adjustment, Time, is, js,   &
-                                   mask = Output_don%precip_returned > 0.0)
-      used = send_data (id_precret_deep_donner,  &
-                            Output_don%precip_returned, Time, is, js)  
-        used = send_data (id_don_precip, Don_tend%rain + Don_tend%snow,   &
-                                                             Time, is, js)
-        if (id_don_freq > 0) then
-          ltemp = Don_tend%rain > 0. .or. Don_tend%snow > 0.0 
-          where (ltemp) 
-            temp_2d = 1.
-          elsewhere
-            temp_2d = 0.
-          end where
-          used = send_data (id_don_freq, temp_2d, Time, is, js)
-        endif
-
-!------------------------------------------------------------------------
-!    if donner conservation checks have been done, output various
-!    diagnostics describing the results. 
-!------------------------------------------------------------------------
-      if (do_donner_conservation_checks) then
-        used = send_data (id_enth_donner_col2, -hlv*Don_tend%rain,    &
-                                                            Time, is, js)
-        used = send_data (id_enth_donner_col3, -hls*Don_tend%snow,    &
-                                                            Time, is, js)
-        if (id_enth_donner_col4 > 0)   &
-                     call column_diag(id_enth_donner_col4, is, js, Time, &
-                             Don_tend%ttnd(:,:,:), CP_AIR, Input_mp%pmass)
-        if (id_enth_donner_col5 > 0)    &
-                     call column_diag(id_enth_donner_col5, is, js, Time, &
-                             Output_don%delta_ql(:,:,:), -HLV*dtinv,   &
-                             Output_don%delta_qi(:,:,:), -HLS*dtinv,   &
-                                                           Input_mp%pmass)
-        if (id_enth_donner_col6 > 0)     &
-                     call column_diag(id_enth_donner_col6, is, js, Time, &
-                                 Output_don%ttnd_adjustment, CP_AIR,   &
-                                                           Input_mp%pmass)
-        used = send_data (id_enth_donner_col7, Output_don%adjust_frac,  &
-                                                            Time, is, js)
-       
-!------------------------------------------------------------------------
-!    compute and output column enthalpy change due to donner deep 
-!    convection.
-!------------------------------------------------------------------------
-        temp_2d = 0.
-        do k=1,kx
-          temp_2d(:,:) = temp_2d(:,:)   + &
-             (-HLV*Output_don%liquid_precip(:,:,k)/seconds_per_day -  &
-               hls*Output_don%frozen_precip(:,:,k)/seconds_per_day  + &
-               CP_AIR*Don_tend%ttnd(:,:,k)  -  &
-              (HLV*Don_tend%qltnd(:,:,k) + HLS*Don_tend%qitnd(:,:,k)))*   &
-                                                     Input_mp%pmass(:,:,k)
-        end do
-        used = send_data (id_enth_donner_col, temp_2d, Time, is, js)
-
-!------------------------------------------------------------------------
-!    compute and output column water change due to donner deep convection.
-!------------------------------------------------------------------------
-        if (id_wat_donner_col > 0) then
-          temp_2d = Don_tend%rain + Don_tend%snow
-          call column_diag (id_wat_donner_col, is, js, Time,    &
-                            Don_tend%qtnd, 1.0, Output_don%delta_ql,   &
-                            dtinv, Output_don%delta_qi, dtinv, &
-                                                   Input_mp%pmass, temp_2d)
-        endif
-      endif ! (donner_conservation_checks)
-
-!------------------------------------------------------------------------
-!    output additional diagnostics related to the clouds associated with
-!    donner convection.
-!------------------------------------------------------------------------
-      used = send_data (id_cell_cld_frac,   &
-                     Moist_clouds_block%cloud_data(i_cell)%cloud_area, &
-                                                         Time, is, js, 1 )
-      used = send_data (id_meso_cld_frac,   &
-                     Moist_clouds_block%cloud_data(i_meso)%cloud_area, &
-                                                         Time, is, js, 1)
-      used = send_data (id_donner_humidity_area,    &
-                     C2ls_mp%donner_humidity_area(:,:,:), Time, is, js, 1 )
-
-
-      if (doing_prog_clouds) then
-        if (do_ice_num .and. detrain_ice_num) then
-          used = send_data (id_qnidt_deep_donner, Don_tend%qnitnd,   &
-                                                          Time, is, js, 1)
-        endif  
-
-!-------------------------------------------------------------------------
-!    detrain liquid droplets if desired. the original code had a bug which
-!    may be preserved for test purposes with the remain_detrain_bug nml
-!    variable. assume 10 micron mean volume radius for detrained droplets. 
-!    Modify the particle number and particle number tendency from physics 
-!    to account for this detrainment. output a diagnostic if desired.
-!-------------------------------------------------------------------------
-        if (do_liq_num .and. detrain_liq_num) then
-          used = send_data (id_qndt_deep_donner,   &
-                                        Don_tend%qntnd, Time, is, js, 1)
-        endif
-      endif  ! doing_prog_clouds
-
-!-----------------------------------------------------------------------
-
-
-end subroutine output_donner_diagnostics
-
-
-
-!#######################################################################
-
-subroutine donner_dealloc (Input_don, Output_don, Don_tend)
-
-!-------------------------------------------------------------------
-!    subroutine donner_dealloc deallocates the components of the 
-!    derived type variables rsident in subroutine donner_driver.
-!-------------------------------------------------------------------
-
-type(donner_input_type),  intent(inout) :: Input_don
-type(conv_output_type),   intent(inout) :: Output_don
-type(conv_tendency_type), intent(inout) :: Don_tend
-
-!--------------------------------------------------------------------
-!    Input_don  donner_input_type variable containing input
-!               fields used by donner_deep_mod
-!    Output_don conv_output_type variable containing output
-!               fields from donner_deep_mod
-!    Don_tend   conv_tendency_type variable containing tendency
-!               output from donner convection
-!-----------------------------------------------------------------------
-
-!-------------------------------------------------------------------
-!    deallocate the components of Input_don.
-!-------------------------------------------------------------------
-      deallocate (Input_don%rin)
-      deallocate (Input_don%sfc_sh_flux)
-      deallocate (Input_don%sfc_vapor_flux)
-      deallocate (Input_don%tr_flux)
-      deallocate (Input_don%ke_bl)
-      deallocate (Input_don%maxTe_launch_level)
-      deallocate (Input_don%qtr)
-      deallocate (Input_don%qlin)
-      deallocate (Input_don%qiin)
-      deallocate (Input_don%qain)
-      deallocate (Input_don%nllin)
-      deallocate (Input_don%nilin)
-
-!-------------------------------------------------------------------
-!    deallocate the components of Output_don.
-!-------------------------------------------------------------------
-      deallocate (Output_don%delta_temp)
-      deallocate (Output_don%delta_vapor)
-      deallocate (Output_don%delta_q   )
-      deallocate (Output_don%delta_ql  )
-      deallocate (Output_don%delta_qi  )
-      deallocate (Output_don%delta_qa  )
-      deallocate (Output_don%delta_qn  )
-      deallocate (Output_don%delta_qni )
-      deallocate (Output_don%ttnd_adjustment)
-      deallocate (Output_don%liquid_precip  )
-      deallocate (Output_don%frozen_precip  )
-      deallocate (Output_don%lheat_precip   )
-      deallocate (Output_don%vert_motion    )
-      deallocate (Output_don%total_precip   )
-      deallocate (Output_don%scale          )
-      deallocate (Output_don%scale_REV   )
-      deallocate (Output_don%precip_adjustment)
-      deallocate (Output_don%precip_returned  )
-      deallocate (Output_don%adjust_frac      )
-      deallocate (Output_don%donner_tracer    )
-
-!-------------------------------------------------------------------
-!    deallocate the components of Don_tend.  
-!-------------------------------------------------------------------
-      deallocate (Don_tend%delta_q)
-      deallocate (Don_tend%rain)
-      deallocate (Don_tend%snow)
-      deallocate (Don_tend%ttnd)
-      deallocate (Don_tend%qtnd)
-      deallocate (Don_tend%qtr    )
-      if (doing_prog_clouds) then
-        deallocate (Don_tend%qltnd)
-        deallocate (Don_tend%qitnd)
-        deallocate (Don_tend%qatnd)
-        deallocate (Don_tend%qntnd)
-        deallocate (Don_tend%qnitnd)
-      endif
-
-!--------------------------------------------------------------------
-
-
-end subroutine donner_dealloc 
-
-
-
-!#######################################################################
-
-
-
-!*******************************************************************
-!
-!                     PRIVATE, UW-THEN-DONNER RELATED SUBROUTINES
-!
-!*******************************************************************
-
-subroutine uw_then_donner_driver &
-                (is, ie, js, je, Input_mp, Aerosol, Phys_mp_exch,   &
-                       Output_mp, Tend_mp, Conv_results, Removal_mp, &
-                                              Moist_clouds_block, C2ls_mp)
-
-!-----------------------------------------------------------------------
-!    subroutine uw_then_donner_driver handles the case when uw convection 
-!    is calculated first, followed by calculation of donner convection.
-!-----------------------------------------------------------------------
-
-integer,                             intent(in)    :: is, ie, js, je
-type(mp_input_type),                 intent(inout) :: Input_mp
-type(aerosol_type),                  intent(in)    :: Aerosol
-type(phys_mp_exch_type),             intent(inout) :: Phys_mp_exch
-type(mp_output_type),                intent(inout) :: Output_mp
-type(mp_tendency_type),              intent(inout) :: Tend_mp
-type(conv_results_type),             intent(inout) :: Conv_results
-type(mp_removal_type),               intent(inout) :: Removal_mp
-type(clouds_from_moist_block_type),  intent(inout) :: Moist_clouds_block
-type(mp_conv2ls_type),               intent(inout) :: C2ls_mp
-
-!-----------------------------------------------------------------------
-!    is,js      starting i and j indices for window
-!    ie,je      ending i and j indices for window
-!    Input_mp   derived type used to transfer needed input data between
-!               moist_processes and convection_driver
-!    Aerosol    derived type containing model aerosol fields to be input
-!               to model convective schemes
-!    Phys_mp_exch
-!               derived type used to transfer data between physics_driver
-!               and convection_driver via moist_processes
-!    Output_mp  derived type used to transfer output fields between
-!               convection_driver and moist_processes
-!    Tend_mp    derived type used to transfer calculated tendency data
-!               between convection_driver and moist_processes
-!    Conv_results
-!               conv_results_type variable containing variables 
-!               used in multiple convective parameterizations and for
-!               diagnostic output
-!    Removal_mp derived type used to transfer precipitation and tracer
-!               removal fields between convection_driver and 
-!               moist_processes
-!    Moist_clouds_block 
-!               derived type used to transfer cloud data between 
-!               atmos_model and convection_driver via physics_driver and
-!               moist_processes
-!    C2ls_mp    derived type used to transfer data from convection_driver
-!               to lscloud_driver via moist_processes.
-!-----------------------------------------------------------------------
-
-      type(conv_tendency_type) ::   Uw_tend
-      type(conv_output_type)   ::   Output_uw
-
-!------------------------------------------------------------------------
-!    Uw_tend      conv_tendency_type variable containing tendency
-!                 output from uw convection
-!    Output_uw    conv_output_type variable containing output
-!                 fields from uw convection
-!------------------------------------------------------------------------
-
-!-----------------------------------------------------------------------
-!    use the nml variable use_updated_profiles_for_donner to determine
-!    execution path through this module. 
-!-----------------------------------------------------------------------
-      if (use_updated_profiles_for_donner) then  ! ORIG4
-
-!----------------------------------------------------------------------
-!    if one is using profiles updated by uw convection as inputs to the
-!    donner parameterization, call uw first (doing both parts of that 
-!    calculation), followed by a call to donner convection.
-!----------------------------------------------------------------------
-        call mpp_clock_begin (uw_clock)
-        call uw_conv_driver_part  &
-                (is, ie, js, je, Input_mp, Aerosol, Phys_mp_exch,   &
-                      Output_mp, Tend_mp, Conv_results, Removal_mp,     &
-                           Moist_clouds_block%cloud_data(i_shallow),    &
-                                      Uw_tend, Output_uw,  .true., .true.)
-        call mpp_clock_end (uw_clock)
-
-        call donner_driver ( is, ie, js, je, Input_mp,             &
-                              Moist_clouds_block, Conv_results,     &
-                                 C2ls_mp, Removal_mp, Tend_mp, Output_mp)
-
-!----------------------------------------------------------------------
-!    if not using updated fields for donner, execute the following.  
-!    this path will also reproduce results obtained using base warsaw
-!    code if nml variable reproduce_AM4 is set to .true., using
-!    some inconsistent values in the cmt calculation;  if
-!    reproduce_AM4 is set .false., then consistent (unupdated)
-!    values will be used in the cmt and other calculations.
-!----------------------------------------------------------------------
-      else    ! ORIG2 and ORIG5
-
-!---------------------------------------------------------------------
-!    call uw_conv_driver_part to execute the first part of the uw conv
-!    calculation.
-!---------------------------------------------------------------------
-        call mpp_clock_begin (uw_clock)
-        call uw_conv_driver_part    &
-                ( is, ie, js, je, Input_mp, Aerosol, Phys_mp_exch,   &
-                      Output_mp, Tend_mp, Conv_results, Removal_mp,     &
-                           Moist_clouds_block%cloud_data(i_shallow),    &
-                                     Uw_tend, Output_uw,  .true., .false.)
-        call mpp_clock_end (uw_clock)
-
-!---------------------------------------------------------------------
-!    call donner_driver to execute the donner_deep parameterization.
-!---------------------------------------------------------------------
-        call donner_driver ( is, ie, js, je, Input_mp,             &
-                             Moist_clouds_block, Conv_results,          &
-                             C2ls_mp, Removal_mp, Tend_mp, Output_mp)
-
-!---------------------------------------------------------------------
-!    call uw_conv_driver_part to execute the second part of the uw conv
-!    calculation.
-!---------------------------------------------------------------------
-        call mpp_clock_begin (uw_clock)
-        call uw_conv_driver_part  &
-                ( is, ie, js, je, Input_mp, Aerosol, Phys_mp_exch,   &
-                     Output_mp, Tend_mp, Conv_results, Removal_mp,     &
-                           Moist_clouds_block%cloud_data(i_shallow),    &
-                                 Uw_tend, Output_uw,  .false., .true.)
-        call mpp_clock_end (uw_clock)
-      endif
-
-!----------------------------------------------------------------------
-
-
-  end subroutine uw_then_donner_driver 
-
 
 
 !#######################################################################
@@ -4791,8 +2547,7 @@ logical,                        intent(in)    :: do_segment1, do_segment2
 
 !-----------------------------------------------------------------------
 !    this first part is executed when do_segment1 = .true.. to reproduce
-!    the warsaw results it is necessary to execute the first part, call 
-!    donner, and then finish the uw execution (do_segment2 = .true.)
+!    the warsaw results it is necessary to execute the first part
 !-----------------------------------------------------------------------
       if (do_segment1) then
 
@@ -4802,37 +2557,9 @@ logical,                        intent(in)    :: do_segment1, do_segment2
 !----------------------------------------------------------------------
         call uw_alloc (ix, jx, kx, Uw_tend, Output_uw)
 
-!------------------------------------------------------------------------
-!    define arguments to be used in uw convection calculation, either the
-!    fields upon entry to convection, or the fields after having been
-!    modified by another convective parameterization.
-!------------------------------------------------------------------------
-        if (use_updated_profiles_for_uw) then
-
-!---------------------------------------------------------------------
-!    if arguments are to be updated, update the tracer fields with 
-!    tendencies due to donner convection and wet deposition by donner 
-!    deep precipitation.
-!---------------------------------------------------------------------
-          do n=1,nt  
-            if (.not. cloud_tracer(n)) then
-              Input_mp%tracer(:,:,:,n) = Input_mp%tracer_orig(:,:,:,n) +  &
-                                (Output_mp%rdt(:,:,:,n) -     &
-                                         Output_mp%rdt_init(:,:,:,n)) *dt
-            endif
-          end do
-
-!---------------------------------------------------------------------
-!    define the t, q and tracer fields to be passed to uw convection.
-!---------------------------------------------------------------------
-          targ = Input_mp%tin
-          qarg = Input_mp%qin
-          tracerarg = Input_mp%tracer
-        else
-          targ = Input_mp%tin_orig
-          qarg = Input_mp%qin_orig
-          tracerarg = Input_mp%tracer_orig
-        endif
+        targ = Input_mp%tin_orig
+        qarg = Input_mp%qin_orig
+        tracerarg = Input_mp%tracer_orig
 
 !----------------------------------------------------------------------
 !    if any tracers are to be transported by UW convection, check each
@@ -4892,7 +2619,7 @@ logical,                        intent(in)    :: do_segment1, do_segment2
 !---------------------------------------------------------------------
         if (do_limit_uw) then
           call define_and_apply_scale   &
-              (Input_mp, Uw_tend, Output_uw, .false., .true., Uw_tend%qtr)
+              (Input_mp, Uw_tend, Output_uw, .true., Uw_tend%qtr)
         else  
           Output_uw%scale = 1.0
         endif 
@@ -5384,12 +3111,7 @@ type(mp_tendency_type),    intent(inout) :: Tend_mp
 !    operations with the warsaw code release and avoid answer change
 !    with this revised code.
 !-----------------------------------------------------------------------
-      if (ldonner_then_uw) then
-        Output_mp%precip = Output_mp%precip + Conv_tend%rain +   &
-                                                        Conv_tend%snow
-      else
-        Output_mp%precip = Output_mp%lprec + Output_mp%fprec     
-      endif
+      Output_mp%precip = Output_mp%lprec + Output_mp%fprec     
 
 !-----------------------------------------------------------------------
 !    define tendencies for prognostic clloud fields, if that option is
@@ -5425,14 +3147,14 @@ end subroutine update_outputs
 !########################################################################
 
 subroutine define_and_apply_scale (Input_mp, Conv_tend, Output_conv,&
-                                          donner_scheme, uw_scheme, qtr)
+                                          uw_scheme, qtr)
 
 !-----------------------------------------------------------------------
 !    subroutine define_and_apply_scale defines a factor to modify
 !    predicted tendencies so that negative values of water and water
 !    phases are not produced by the convection scheme, and values lower
 !    than a specified minimum are not retained.
-!    it is called by both the donner and uw parameterizations, but in
+!    it is called by uw parameterizations, but in
 !    slightly different ways in earlier code versions (warsaw and earlier).
 !    those differences are preserved here to avoid changing answers; 
 !    ultimately it is desirable to treat the functionality of this
@@ -5442,7 +3164,7 @@ subroutine define_and_apply_scale (Input_mp, Conv_tend, Output_conv,&
 type(mp_input_type),       intent(in)     :: Input_mp
 type(conv_tendency_type),  intent(inout)  :: Conv_tend
 type(conv_output_type),    intent(inout)  :: Output_conv
-logical,                   intent(in)     :: donner_scheme, uw_scheme
+logical,                   intent(in)     :: uw_scheme
 real, dimension(:,:,:,:),  intent(inout)  :: qtr
 
 !-----------------------------------------------------------------------
@@ -5453,9 +3175,6 @@ real, dimension(:,:,:,:),  intent(inout)  :: qtr
 !    Output_conv 
 !               conv_output_type variable containing output
 !               fields from the convection parameterization being processed
-!    donner_scheme
-!               logical indicating if the routine is to be handled as the
-!               original donner convection code did
 !    uw_scheme  logical indicating if the routine is to be handled as the
 !               original uw convection code did
 !    qtr        set of tracers being transported by the current convective
@@ -5506,87 +3225,8 @@ real, dimension(:,:,:,:),  intent(inout)  :: qtr
           Conv_tend%qitnd = Conv_tend%qitnd - temp
         end where
 
-!------------------------------------------------------------------------
-!    if the amount of condensate formed by convective activity is below a 
-!    prescribed minimum, set the change in cloud area on this step to be
-!    0.0.
-!------------------------------------------------------------------------
-        where (abs(Conv_tend%qltnd + Conv_tend%qitnd)*dt .lt. qmin)
-          Conv_tend%qatnd = 0.0
-        end where
-
-      else if (donner_scheme) then
-!------------------------------------------------------------------------
-!    prevent the formation of negative liquid and ice, following the 
-!    method employed in the warsaw code for the donner parameterization.
-!    in this case if more evaporation is requested than there is condensate
-!    available, the evaporation is limited to the amount present, and the
-!    necessary changes to the temperature and specific humidity are made
-!    to reflect this modification in cloud evaporation.
-!------------------------------------------------------------------------
-
-!--------------------------------------------------------------------------
-!  in this case donner requests more cloud evaporation than there is
-!  cloudwater present. Therefore we limit the conversion to be simply the 
-!  evaporation of the cloud water initially present to prevent the creation
-!  of negative water. 
-!  the condensation tendencies  are of opposite sign in the qv and ql
-!  equations and so
-!        delta_qvc = -delta_qlc
-!  Thus we want to replace the delta_qlc and delta_qvc with ql_in in both 
-!  the qv and ql equations.
-!     Adjusted tendencies:
-!        delta q = delta_qvc - delta_qvc + ql_in 
-! (a)            = delta_qvc + (delta_qlc + ql_in)  
-!        delta ql = delta_qlc - delta_qlc - ql_in 
-! (b)             = delta_qlc - ( delta_qlc + ql_in)
-!                 = -ql_in
-
-!   Here (a) and (b) are the expressions used below and so the new values 
-!   of qv and ql:
-!      new qv = qv_in + delta_q  = qv_in + delta_qvc + delta_qlc + ql_in 
-!                            = qv_in + (delta_qvc + delta_qlc) + ql_in
-!                            = qv_in + ql_in
-!      new ql = ql_in + delta_ql = ql_in - ql_in  = 0.0
-!   so that conservation of water substance is preserved.
-!----------------------------------------------------------------------- 
-        where ((Input_mp%tracer(:,:,:,nql) + Output_conv%delta_ql) .lt. 0.)
-          Output_conv%delta_temp  = Output_conv%delta_temp -   &
-                                    (Input_mp%tracer(:,:,:,nql) +    &
-                                      Output_conv%delta_ql)*HLV/CP_AIR
-          Output_conv%delta_q     = Output_conv%delta_q +   &
-                                        (Input_mp%tracer(:,:,:,nql) +   &
-                                                    Output_conv%delta_ql)
-          Output_conv%delta_ql    = Output_conv%delta_ql -   &
-                                       (Input_mp%tracer(:,:,:,nql) +    &
-                                                    Output_conv%delta_ql)
-        end where
-
-!------------------------------------------------------------------------
-!    same treatment for ice as was done for liquid immediately above.
-!------------------------------------------------------------------------
-        where ((Input_mp%tracer(:,:,:,nqi) + Output_conv%delta_qi) .lt. 0.)
-          Output_conv%delta_temp  = Output_conv%delta_temp -   &
-                         (Input_mp%tracer(:,:,:,nqi) +    &
-                                        Output_conv%delta_qi)*HLS/CP_AIR
-          Output_conv%delta_q     = Output_conv%delta_q +    &
-                                    (Input_mp%tracer(:,:,:,nqi) +   &
-                                                    Output_conv%delta_qi)
-          Output_conv%delta_qi    = Output_conv%delta_qi -    &
-                                     (Input_mp%tracer(:,:,:,nqi)+    &
-                                                  Output_conv%delta_qi)
-        end where
-
-!-------------------------------------------------------------------------
-!    if the amount of condensate formed by convective activity is below a 
-!    prescribed minimum, set the change in cloud area on this step to be
-!    0.0.
-!------------------------------------------------------------------------
-        where (abs(Output_conv%delta_ql + Output_conv%delta_qi) .lt. qmin )
-          Output_conv%delta_qa = 0.0
-        end where
-      endif
-
+      end if
+        
 !-----------------------------------------------------------------------
 !    compute a scaling factor for each grid point.  when this factor is
 !    multiplied by the predicted tendencies, they will be reduced in
@@ -5606,14 +3246,6 @@ real, dimension(:,:,:,:),  intent(inout)  :: qtr
               delta_posdef  = ( Conv_tend%qtnd(i,j,k) +    &
                                       Conv_tend%qltnd(i,j,k) +   &
                                               Conv_tend%qitnd(i,j,k) )*dt
-
-!-----------------------------------------------------------------------
-!    the donner scheme used the specific humidity as the positive 
-!    definite quantity that was to be preserved.
-!-----------------------------------------------------------------------
-            else if (donner_scheme) then
-              posdef = Input_mp%qin(i,j,k) 
-              delta_posdef  = (Output_conv%delta_q(i,j,k) )
             endif
 
 !-------------------------------------------------------------------------
@@ -5647,7 +3279,7 @@ real, dimension(:,:,:,:),  intent(inout)  :: qtr
 !-----------------------------------------------------------------------
 !    now apply the scaling factor to the water tracer, momentum, 
 !    temperature, precipitation  and transported tracer tendencies 
-!    returned from the convection scheme. NOte again that uw and donner
+!    returned from the convection scheme. NOte again that uw 
 !    were originally treated differently, and that different treatment
 !    is retained.
 !    NOTE THAT THE TRANSPORTED TRACERS WERE NOT SCALED IN THE WARSAW
@@ -5681,52 +3313,6 @@ real, dimension(:,:,:,:),  intent(inout)  :: qtr
         Conv_tend%rain(:,:) = Output_conv%scale*Conv_tend%rain(:,:)
         Conv_tend%snow(:,:) = Output_conv%scale*Conv_tend%snow(:,:)
 
-!----------------------------------------------------------------------
-!    apply scaling in the donner convection manner.
-!----------------------------------------------------------------------
-      else if (donner_scheme) then
-        do j=1,jx
-          do i=1,ix
-            if (Output_conv%scale(i,j) /= 1.0) then
-
-!-------------------------------------------------------------------------
-!    scale the convective tendencies of temperature, water tracers and
-!    tracers transported by the donner convection scheme. note donner 
-!    convection does not affect momentum, droplet number or ice crystal
-!    number tendencies.
-!RSH 7/28/18: SHOULD PROBABLY AFFECT QN AND QNI, ALSO PRECIP WHICH NOT
-!    MODIFIED HERE. CHECK THESE OUT AFTER COMPLETE BENCHMARK TESTING.
-!    MAY USE REPRODUCE_AM4 TO MAINTAIN PREVIOUS ANSWERS.
-!-------------------------------------------------------------------------
-              do k=1,kx
-                Output_conv%delta_temp(i,j,k)  =    &
-                            Output_conv%scale(i,j)*   &
-                                            Output_conv%delta_temp(i,j,k)
-                Output_conv%delta_q(i,j,k)  =  &
-                            Output_conv%scale(i,j)* &
-                                              Output_conv%delta_q (i,j,k)
-                Output_conv%delta_qa(i,j,k) =    &
-                            Output_conv%scale(i,j)*  &
-                                              Output_conv%delta_qa(i,j,k)
-                Output_conv%delta_ql(i,j,k) =    &
-                            Output_conv%scale(i,j)* &
-                                              Output_conv%delta_ql(i,j,k)
-                Output_conv%delta_qi(i,j,k) =   &
-                             Output_conv%scale(i,j)* &
-                                              Output_conv%delta_qi(i,j,k)
-              end do
-              nn = 1
-              do n=1, num_prog_tracers
-                if (tracers_in_donner(n)) then
-                  do k=1,kx
-                    qtr(i,j,k,nn) = Output_conv%scale(i,j)*qtr(i,j,k,nn)
-                  end do
-                  nn = nn + 1
-                endif
-              end do
-            endif
-          end do
-        end do
       endif
 
 !-------------------------------------------------------------------------

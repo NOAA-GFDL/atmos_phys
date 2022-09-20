@@ -124,8 +124,6 @@ end type mp_output_type
 
 
 type mp_conv2ls_type
-    real, dimension(:,:,:),   allocatable   :: donner_humidity_area
-    real, dimension(:,:,:),   allocatable   :: donner_humidity_factor
     real, dimension(:,:,:),   allocatable   :: convective_humidity_area
     real, dimension(:,:,:),   allocatable   ::    &
                             convective_humidity_ratio
@@ -143,7 +141,6 @@ type mp_nml_type
     logical  :: limit_conv_cloud_frac
     real     :: pdepth
     logical  :: do_rh_clouds
-    logical  :: do_donner_deep
     logical  :: do_simple
     logical  :: do_unified_clouds
     logical  :: use_online_aerosol
@@ -170,9 +167,7 @@ type mp_tendency_type
 end type mp_tendency_type
 
 type mp_removal_control_type
-    logical, dimension(:),  allocatable :: tracers_in_donner
     logical, dimension(:),  allocatable :: tracers_in_uw
-    integer  :: num_donner_tracers
     integer  :: num_uw_tracers
 end type mp_removal_control_type
 
@@ -182,21 +177,10 @@ type mp_removal_type
     real, dimension(:,:,:), allocatable :: liq_precflx
     real, dimension(:,:,:), allocatable :: ice_precflxh
     real, dimension(:,:,:), allocatable :: liq_precflxh
-    real, dimension(:,:,:), allocatable :: frz_meso
-    real, dimension(:,:,:), allocatable :: liq_meso
-    real, dimension(:,:,:), allocatable :: frz_mesoh
-    real, dimension(:,:,:), allocatable :: liq_mesoh
-    real, dimension(:,:,:), allocatable :: frz_cell
-    real, dimension(:,:,:), allocatable :: liq_cell
-    real, dimension(:,:,:), allocatable :: frz_cellh
-    real, dimension(:,:,:), allocatable :: liq_cellh
     real, dimension(:,:,:), allocatable :: rain3d
     real, dimension(:,:,:), allocatable :: snow3d
     real, dimension(:,:,:), allocatable :: snowclr3d
     real, dimension(:,:,:), allocatable :: uw_wetdep
-    real, dimension(:,:,:), allocatable :: donner_wetdep
-    real, dimension(:,:,:), allocatable :: donner_wetdepm
-    real, dimension(:,:,:), allocatable :: donner_wetdepc
     real, dimension(:,:,:), allocatable :: ls_wetdep
 end type mp_removal_type
 
@@ -1008,11 +992,8 @@ integer,                       intent(in)    :: num_prog_tracers
 !    the number of tracers being affected by each available convective 
 !    scheme.
 !------------------------------------------------------------------------
-      allocate (control%tracers_in_donner(num_prog_tracers))
       allocate (control%tracers_in_uw(num_prog_tracers))
-      control%tracers_in_donner = .false.
       control%tracers_in_uw     = .false.
-      control%num_donner_tracers   = 0       
       control%num_uw_tracers   = 0       
 
 !----------------------------------------------------------------------
@@ -1026,18 +1007,10 @@ integer,                       intent(in)    :: num_prog_tracers
         if (query_method ('convection', MODEL_ATMOS, n, scheme)) then
           select case (scheme)
             case ("none")
-            case ("donner")
-               Control%num_donner_tracers = Control%num_donner_tracers + 1
-               Control%tracers_in_donner(n) = .true.
             case ("uw")
                Control%num_uw_tracers = Control%num_uw_tracers + 1
                Control%tracers_in_uw(n) = .true.
             case ("all")
-               Control%num_donner_tracers = Control%num_donner_tracers + 1
-               Control%tracers_in_donner(n) = .true.
-               Control%num_uw_tracers = Control%num_uw_tracers + 1
-               Control%tracers_in_uw(n) = .true.
-            case ("all_nodonner")
                Control%num_uw_tracers = Control%num_uw_tracers + 1
                Control%tracers_in_uw(n) = .true.
             case default  ! corresponds to "none"
@@ -1054,7 +1027,6 @@ subroutine deallocate_mp_removal_control_type (Removal_mp_control)
 
 type(mp_removal_control_type), intent(inout)  :: Removal_mp_control
 
-      deallocate (Removal_mp_control%tracers_in_donner )   
       deallocate (Removal_mp_control%tracers_in_uw  )   
 
 

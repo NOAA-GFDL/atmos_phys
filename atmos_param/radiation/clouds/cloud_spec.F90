@@ -508,7 +508,6 @@ type(cloudrad_control_type), intent(inout) ::  Cldrad_control
 !BW   Cldrad_control%do_rh_clouds_iz = .true.
 !BW   Cldrad_control%do_strat_clouds_iz = .true.
 !BW   Cldrad_control%do_no_clouds_iz = .true.
-!BW   Cldrad_control%do_donner_deep_clouds_iz = .true.
 !BW   Cldrad_control%do_uw_clouds_iz = .true.
 
 !--------------------------------------------------------------------
@@ -962,10 +961,10 @@ integer :: istrat, ishallow
 
 !---------------------------------------------------------------------
 !    call combine_cloud_properties to combine (if necessary) the cloud
-!    properties from multiple cloud types (large-scale, donner deep,
+!    properties from multiple cloud types (large-scale,
 !    uw shallow) into a single set for use by the radiation package.
 !    this is only needed when microphysically-based properties are
-!    present, and when either strat clouds, donner deep and / or uw
+!    present, and when either strat clouds and / or uw
 !    shallow clouds is activated.
 !---------------------------------------------------------------------
 !BW     if (Cldrad_control%do_sw_micro .or. Cldrad_control%do_lw_micro) then
@@ -1176,7 +1175,7 @@ type(cld_specification_type),           intent(inout) :: Cld_spec
       endif
 
 !---------------------------------------------------------------------
-!    randomly-overlapped clouds are being assumed for donner_deep and
+!    randomly-overlapped clouds are being assumed for 
 !    strat cloud module clouds. set the max overlap cloud fraction to
 !    zero, be certain that the random overlap fraction is .le. 1. after
 !    the summing of the component cloud fractions, and define the total
@@ -1225,7 +1224,7 @@ type(cld_specification_type),           intent(inout) :: Cld_spec
 
 !----------------------------------------------------------------------
 !    compare the uw shallow cloud amount to a random number, and replace
-!    the donner cloud, large-scale cloud or clear sky previously
+!    the large-scale cloud or clear sky previously
 !    assigned in each subcolumn with an assignment of uw shallow cloud
 !    when the number is less than the cloud fraction. use the maximum
 !    overlap assumption. treat the random number as the location with
