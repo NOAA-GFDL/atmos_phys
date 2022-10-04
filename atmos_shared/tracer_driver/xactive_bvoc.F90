@@ -280,8 +280,9 @@ namelist /xactive_bvoc_nml/                     &
                              T_s,               &
                              scale_isoprene_emissions, &
                              scale_terpene_emissions,  &
-                             use_isop_shrub_crop_bug
-
+                             use_isop_shrub_crop_bug,  &
+                             fix_megan2_isop,   &
+                             verbose
 
 logical                     :: Ldebug = .false.
 logical                     :: module_is_initialized = .false.
