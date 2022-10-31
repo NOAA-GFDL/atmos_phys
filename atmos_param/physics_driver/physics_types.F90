@@ -15,7 +15,6 @@ use mpp_domains_mod,    only: domain2D
      integer :: nqnr,   nqns
      integer :: num_prog_tracers
      logical :: hydrostatic, phys_hydrostatic, do_uni_zfull !miz
-     logical :: l_host_applies_sfc_fluxes
      logical :: use_tau
      logical, dimension(:), _ALLOCATABLE :: cloud_tracer _NULL
      type (domain2D) :: domain !< Atmosphere domain
@@ -82,7 +81,6 @@ use mpp_domains_mod,    only: domain2D
       real, dimension(:,:,:), pointer :: diff_t => null()
       real, dimension(:,:,:), pointer :: radturbten => null()
       real, dimension(:,:,:), pointer :: diff_cu_mo => null()
-      real, dimension(:,:,:), pointer :: diff_t_clubb => null()
       real, dimension(:,:  ), pointer :: cush        => null()
       real, dimension(:,:  ), pointer :: cbmf        => null()
       real, dimension(:,:  ), pointer :: pbltop      => null()
@@ -91,7 +89,6 @@ use mpp_domains_mod,    only: domain2D
       real, dimension(:,:  ), pointer :: qdt_lhf     => null() 
       real, dimension(:,:  ), pointer :: hmint       => null() 
       real, dimension(:,:  ), pointer :: cgust       => null() 
-      real, dimension(:,:  ), pointer :: tke         => null() 
       real, dimension(:,:  ), pointer :: pblhto      => null() 
       real, dimension(:,:  ), pointer :: rkmo        => null() 
       real, dimension(:,:  ), pointer :: taudpo     => null() 
@@ -102,7 +99,6 @@ use mpp_domains_mod,    only: domain2D
       real, dimension(:,:,:), pointer :: qtsrc_prev => null() 
       real, dimension(:,:,:), pointer ::  cape_prev => null() 
       real, dimension(:,:,:), pointer ::   cin_prev => null() 
-      real, dimension(:,:,:), pointer ::   tke_prev => null() 
  end type phys_mp_exch_type
 
 public Phys2cosp_type
@@ -127,8 +123,6 @@ type precip_flux_type
    real, dimension(:,:,:),        pointer :: fl_lsgrpl=>NULL()
    real, dimension(:,:,:),        pointer :: fl_ccrain=>NULL()
    real, dimension(:,:,:),        pointer :: fl_ccsnow=>NULL()
-   real, dimension(:,:,:),        pointer :: fl_donmca_rain=>NULL()
-   real, dimension(:,:,:),        pointer :: fl_donmca_snow=>NULL()
 end type precip_flux_type
 
 

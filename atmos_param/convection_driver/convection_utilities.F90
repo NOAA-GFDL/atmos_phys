@@ -5,7 +5,7 @@ implicit none
 private
 
 public conv_tendency_type, mp2uwconv_type,   conv_output_type, &
-       donner_input_type,  conv_results_type
+       conv_results_type
 
 
 !-------------version number ----------------------------------------
@@ -20,15 +20,7 @@ integer, dimension(:,:), allocatable    :: cldbot
 integer, dimension(:,:), allocatable    :: cldtop
 real,    dimension(:,:,:), allocatable  :: prod_no
 
-real, dimension(:,:,:), allocatable     :: ras_mflux
-real, dimension(:,:,:), allocatable     :: donner_mflux
-real, dimension(:,:,:), allocatable     :: donner_mflux_up
 real, dimension(:,:,:), allocatable     :: uw_mflux
-real, dimension(:,:,:), allocatable     :: ras_det_mflux
-real, dimension(:,:,:), allocatable     :: donner_det_mflux
-real, dimension(:,:,:), allocatable     :: mc_donner
-real, dimension(:,:,:), allocatable     :: mc_donner_half
-real, dimension(:,:,:), allocatable     :: mc_donner_up  
 logical, dimension(:,:  ), allocatable  :: conv_calc_completed
 real   , dimension(:,:,:), allocatable  :: available_cf_for_uw
 
@@ -77,8 +69,6 @@ type conv_output_type
       real, dimension(:,:,:), allocatable    :: delta_qni
       real, dimension(:,:,:), allocatable    :: liquid_precip
       real, dimension(:,:,:), allocatable    :: frozen_precip
-      real, dimension(:,:,:), allocatable    :: mc_donner
-      real, dimension(:,:,:), allocatable    :: mc_donner_half
       real, dimension(:,:  ), allocatable    :: vert_motion
       real, dimension(:,:  ), allocatable    :: lheat_precip  
       real, dimension(:,:  ), allocatable    :: total_precip  
@@ -88,29 +78,8 @@ type conv_output_type
       real, dimension(:,:  ), allocatable    :: adjust_frac      
       real, dimension(:,:,:), allocatable    :: ttnd_adjustment
       real, dimension(:,:  ), allocatable    :: precip_returned  
-      real, dimension(:,:,:,:), allocatable    :: donner_tracer    
 
 end type   conv_output_type
-
-
-type donner_input_type
-
-      real, dimension(:,:,:), allocatable    :: rin
-      real, dimension(:,:  ), allocatable    :: sfc_sh_flux
-      real, dimension(:,:  ), allocatable    :: sfc_vapor_flux
-      real, dimension(:,:,:), allocatable    :: tr_flux
-      real, dimension(:,:  ), allocatable    :: ke_bl  
-      integer, dimension(:,:  ), allocatable :: maxTe_launch_level
-      real, dimension(:,:,:,:), allocatable  :: qtr
-      real, dimension(:,:,:), allocatable    :: qlin
-      real, dimension(:,:,:), allocatable    :: qiin
-      real, dimension(:,:,:), allocatable    :: qain
-      real, dimension(:,:,:), allocatable    :: nllin
-      real, dimension(:,:,:), allocatable    :: nilin
-      integer                                :: secs, days
-
-end type donner_input_type
-
 
 
                             contains

@@ -6,29 +6,13 @@ module vert_turb_driver_mod
 !       driver for compuing vertical diffusion coefficients
 !
 !         choose either:
-!              1) mellor-yamada 2.5 (with tke)
 !              2) non-local K scheme
-!              3) entrainment and diagnostic turbulence (edt) from
-!                 Bretherton and Grenier
-!
 !-----------------------------------------------------------------------
 !---------------- modules ---------------------
 
 
-use      my25_turb_mod, only: my25_turb_init, my25_turb_end,  &
-                              my25_turb, tke_surf, get_tke,   &
-                              my25_turb_restart
-
-use       tke_turb_mod, only: tke_turb_init, tke_turb_end, tke_turb
-
-use    diffusivity_mod, only: diffusivity, molecular_diff
-
-use            edt_mod, only: edt_init, edt, edt_end
-
 use physics_radiation_exch_mod, only: exchange_control_type
 use  physics_types_mod, only: physics_control_type
-
-use   shallow_conv_mod, only: shallow_conv_init, shallow_conv
 
 use stable_bl_turb_mod, only: stable_bl_turb_init, stable_bl_turb
 
@@ -68,8 +52,6 @@ private
 !---------------- interfaces ---------------------
 
 public   vert_turb_driver_init, vert_turb_driver_end, vert_turb_driver
-public   vert_turb_driver_restart
-
 
 !-----------------------------------------------------------------------
 !--------------------- version number ----------------------------------
@@ -81,19 +63,13 @@ logical            :: module_is_initialized = .false.
 !-----------------------------------------------------------------------
  real, parameter :: p00    = 1000.0E2
  real, parameter :: p00inv = 1./p00
- real, parameter :: d622   = rdgas/rvgas
- real, parameter :: d378   = 1.-d622
- real, parameter :: d608   = d378/d622
 
 !---------------- private data -------------------
 
  real :: gust_zi = 1000.   ! constant for computed gustiness (meters)
 
  integer :: nql, nqi, nqa    !  tracer indices for stratiform clouds
- integer :: ntke             !  tracer index for TKE
  integer :: ntp              !  number of prognostic tracers
-
- integer         :: outunit
 
  logical :: doing_prog_clouds
  logical :: use_tau
@@ -101,15 +77,8 @@ logical            :: module_is_initialized = .false.
 !-----------------------------------------------------------------------
 !-------------------- namelist -----------------------------------------
 
- logical :: do_shallow_conv  = .false.
- logical :: do_mellor_yamada = .true.
- logical :: do_tke_turb      = .false.
- logical :: do_diffusivity         = .false.
- logical :: do_molecular_diffusion = .false.
- logical :: do_edt                 = .false.
  logical :: do_stable_bl     = .false.
  logical :: do_entrain    = .false.
- logical :: do_simple = .false. 
 
  character(len=24) :: gust_scheme  = 'constant' ! valid schemes are:
                                                 !   => 'constant'
@@ -119,33 +88,27 @@ logical            :: module_is_initialized = .false.
 
  integer           :: alternate_zpbl = 0        ! alternate algorith to compute PBL height
 
-!-->h1g, 2012-07-16
- integer :: do_clubb
  integer :: nwp2
  real    :: wp2_min = 4.e-4
  real    :: diff_min = 1.e-3    ! minimum value of a diffusion 
                                 ! coefficient beneath which the
                                 ! coefficient is reset to zero
  
- integer :: id_clubb_on
  integer :: id_stable_on                     ! ( diff_m_stab > diff_m  or diff_t_stab > diff_t)
  
  integer :: id_stable_effective              !     ( diff_m_stab > diff_m  or diff_t_stab > diff_t) 
                                              ! and ( diff_m_stab > diff_min  or diff_t_stab > diff_min)
-!<--h1g, 2012-07-16 
  
- namelist /vert_turb_driver_nml/ do_shallow_conv, do_mellor_yamada, &
-                                 do_tke_turb, &
-                                 gust_scheme, constant_gust,          &
-                                 do_molecular_diffusion, do_stable_bl, &
-                                 do_diffusivity, do_edt, do_entrain, &
-                                 gust_factor, do_simple, wp2_min, &
+ namelist /vert_turb_driver_nml/ gust_scheme, constant_gust, &
+                                 do_stable_bl, &
+                                 do_entrain, &
+                                 gust_factor, wp2_min, &
                                  alternate_zpbl   ! cjg: PBL depth mods
 
 !-------------------- diagnostics fields -------------------------------
 
-integer :: id_tke,    id_lscale, id_lscale_0, id_z_pbl, id_gust,  &
-           id_diff_t, id_diff_m, id_diff_sc, id_z_full, id_z_half,&
+integer :: id_z_pbl, id_gust,                                     &
+           id_diff_t, id_diff_m, id_z_full, id_z_half,            &
            id_uwnd,   id_vwnd,   id_diff_t_stab, id_diff_m_stab,  &
            id_diff_t_entr, id_diff_m_entr,                        &
            id_z_Ri_025, id_tref, id_qref, id_rh_Ri_025  ! cjg: PBL depth mods, h1g, add RH diagnostics at Ri_025, 2015-04-02
@@ -170,7 +133,7 @@ subroutine vert_turb_driver (is, js, Time, Time_next, dt, tdtlw,       &
                              lat, convect,                             &
                              u, v, t, q, r, um, vm, tm, qm, rm, rdiag, &
                              udt, vdt, tdt, qdt, rdt, diff_t, diff_m,  &
-                             gust, z_pbl, mask, kbot, tke_avg          )  ! h1g: output averaged TKE within PBL  
+                             gust, z_pbl, mask, kbot )  ! h1g: output averaged TKE within PBL  
 
 !-----------------------------------------------------------------------
 integer,         intent(in)         :: is, js
@@ -190,40 +153,30 @@ logical, intent(in), dimension(:,:) :: convect
    real, intent(in),optional, dimension(:,:,:) :: mask
 integer, intent(in),optional, dimension(:,:) :: kbot
 
-!---> h1g, 2015-08-11
-  real, intent(out), optional, dimension(:,:) :: tke_avg  !averaged TKE within PBL
-!<--- h1g, 2015-08-11
-
 !-----------------------------------------------------------------------
-real   , dimension(size(t,1),size(t,2),size(t,3))   :: ape, thv
 logical, dimension(size(t,1),size(t,2),size(t,3)+1) :: lmask
-real   , dimension(size(t,1),size(t,2),size(t,3)+1) :: el, diag3
-real   , dimension(size(t,1),size(t,2),size(t,3)+1) :: tke
-real   , dimension(size(t,1),size(t,2))             :: stbltop
+real   , dimension(size(t,1),size(t,2),size(t,3)+1) :: diag3
 real   , dimension(size(t,1),size(t,2))             :: z_Ri_025    ! cjg: PBL depth mods
 
 real   , dimension(size(t,1),size(t,2))             :: RH_Ri_025   ! h1g: relative humidity at Ri_025, 2015-04-02
 
 real   , dimension(size(t,1),size(t,2),size(t,3))   :: RH_3D_tmp   ! h1g: 3D relative humidity, 2015-04-02
 
-real   , dimension(size(t,1),size(t,2))             :: el0, vspblcap
+real   , dimension(size(t,1),size(t,2))             :: vspblcap
 real   , dimension(size(diff_t,1),size(diff_t,2), &
-                                  size(diff_t,3))   :: diff_sc,     &
-                                                       diff_t_stab, &
+                                  size(diff_t,3))   :: diff_t_stab, &
                                                        diff_m_stab, &
        diff_t_entr, &
        diff_m_entr, &
        use_entr
 real   , dimension(size(t,1),size(t,2),size(t,3))   :: tt, qq, uu, vv
 real   , dimension(size(t,1),size(t,2),size(t,3))   :: qlin, qiin, qain
-real    :: dt_tke
 integer :: ie, je, nlev, sec, day, nt
 integer :: i,j,kk
 logical :: used
 !-->h1g, 2012-08-07
 real   , dimension(size(diff_t,1),size(diff_t,2), &
-                                  size(diff_t,3))   :: clubb_on,   &
-                                                       stable_on,  &
+                                  size(diff_t,3))   :: stable_on,  &
                                                        stable_effective
 !<--h1g, 2012-08-07 
 
@@ -239,7 +192,6 @@ real   , dimension(size(diff_t,1),size(diff_t,2), &
      ie = is + size(p_full,1) - 1
      je = js + size(p_full,2) - 1
 
-     if ( present(tke_avg) ) tke_avg = 0.0   ! h1g, 2015-08-11
 !-----------------------------------------------------------------------
 !---- set up state variable used by this module ----
 
@@ -286,160 +238,12 @@ real   , dimension(size(diff_t,1),size(diff_t,2), &
 
    diff_t = 0.0
    diff_m = 0.0
-   el     = 0.0
-   el0    = 0.0
    z_pbl = -999.0
    
 !-------------------------------------------------------------------
 ! initiallize variables   
    vspblcap = 0.0   
    
-!-----------------------------------------------------------------------
-if (do_mellor_yamada) then
-
-!    ----- virtual temp ----------
-     ape(:,:,:)=(p_full(:,:,:)*p00inv)**(-kappa)
-     if(do_simple) then 
-       thv(:,:,:)=tt(:,:,:)*ape(:,:,:)
-     else
-       thv(:,:,:)=tt(:,:,:)*(qq(:,:,:)*d608+1.0)*ape(:,:,:)
-     endif  
-     if (present(mask)) where (mask < 0.5) thv = 200.
-
- endif
-
-!---------------------------
- if (do_mellor_yamada) then
-!---------------------------
-
-!    ----- time step for prognostic tke calculation -----
-     call get_time (Time_next-Time, sec, day)
-     dt_tke = real(sec+day*86400)
-
-!    --------------------- update tke-----------------------------------
-!    ---- compute surface tke --------
-!    ---- compute tke, master length scale (el0),  -------------
-!    ---- length scale (el), and vert mix coeffs (diff_t,diff_m) ----
-
-     call tke_surf  (is, js, u_star, kbot=kbot)
-
-
-
-     if ( id_z_pbl > 0 .or. id_bldep > 0 ) then
-     !------ compute pbl depth from k_profile if diagnostic needed -----
-     call my25_turb (is, js, dt_tke, frac_land, p_half, p_full, thv, uu, vv, &
-                     z_half, z_full, rough,   &
-                     el0, el, diff_m, diff_t, &
-                     mask=mask, kbot=kbot, &
-                     ustar=u_star,bstar=b_star,h=z_pbl)
-     else
-     call my25_turb (is, js, dt_tke, frac_land, p_half, p_full, thv, uu, vv, &
-                     z_half, z_full, rough,   &
-                     el0, el, diff_m, diff_t, &
-                     mask=mask, kbot=kbot)
-     end if
-
-!---------------------------
- else if (do_tke_turb) then
-!---------------------------
-
-!-->cjg debug
-!100 format("BEFORE TURB:",A32," = ",Z20)
-!  outunit = stdout()
-! write(outunit,100) 't                ', mpp_chksum(t)
-! write(outunit,100) 'q                ', mpp_chksum(q)
-! write(outunit,100) 'z_full           ', mpp_chksum(z_full)
-! write(outunit,100) 'z_half           ', mpp_chksum(z_half)
-! write(outunit,100) 'qa               ', mpp_chksum(rdiag(:,:,:,nqa))
-! write(outunit,100) 'tke              ', mpp_chksum(rdiag(:,:,:,ntke))
-! write(outunit,100) 'el0              ', mpp_chksum(el0)
-! write(outunit,100) 'el               ', mpp_chksum(el)
-! write(outunit,100) 'diff_m           ', mpp_chksum(diff_m)
-! write(outunit,100) 'diff_t           ', mpp_chksum(diff_t)
-! write(outunit,100) 'z_pbl            ', mpp_chksum(z_pbl)
-!<--cjg debug
-
-!    ----- time step for prognostic tke calculation -----
-     call get_time (Time_next-Time, sec, day)
-     dt_tke = real(sec+day*86400)
-
-!    --------------------- update tke-----------------------------------
-!    ---- compute tke, master length scale (el0),  -------------
-!    ---- length scale (el), and vert mix coeffs (diff_t,diff_m) ----
-
-     if( present(tke_avg) ) then
-      call tke_turb (is, ie, js, je, Time_next, dt_tke, frac_land,      &
-                     p_half, p_full, z_half, z_full,                    &
-                     tt, qq, qain, qlin, qiin, uu, vv,                  &
-                     rough, u_star, b_star,                             &
-                     rdiag(:,:,:,ntke),                                 &
-                     el0, el, diff_m, diff_t, z_pbl, tke_avg=tke_avg)
-     else
-      call tke_turb (is, ie, js, je, Time_next, dt_tke, frac_land,      &
-                     p_half, p_full, z_half, z_full,                    &
-                     tt, qq, qain, qlin, qiin, uu, vv,                  &
-                     rough, u_star, b_star,                             &
-                     rdiag(:,:,:,ntke),                                 &
-                     el0, el, diff_m, diff_t, z_pbl)
-     endif   ! h1g, 2015-08-11
-!-->cjg debug
-!101 format("AFTER TURB: ",A32," = ",Z20)
-!  outunit = stdout()
-! write(outunit,101) 't                ', mpp_chksum(t)
-! write(outunit,101) 'q                ', mpp_chksum(q)
-! write(outunit,101) 'z_full           ', mpp_chksum(z_full)
-! write(outunit,101) 'z_half           ', mpp_chksum(z_half)
-! write(outunit,101) 'qa               ', mpp_chksum(rdiag(:,:,:,nqa))
-! write(outunit,101) 'tke              ', mpp_chksum(rdiag(:,:,:,ntke))
-! write(outunit,101) 'el0              ', mpp_chksum(el0)
-! write(outunit,101) 'el               ', mpp_chksum(el)
-! write(outunit,101) 'diff_m           ', mpp_chksum(diff_m)
-! write(outunit,101) 'diff_t           ', mpp_chksum(diff_t)
-! write(outunit,101) 'z_pbl            ', mpp_chksum(z_pbl)
-!<--cjg debug
-
-!---------------------------
- else if (do_diffusivity) then
-!--------------------------------------------------------------------
-!----------- compute molecular diffusion, if desired  ---------------
-
-    if (do_molecular_diffusion) then
-      call molecular_diff (tt, p_half, diff_m, diff_t)
-    else
-      diff_m = 0.0
-      diff_t = 0.0
-    endif
-
-!---------------------------
-!------------------- non-local K scheme --------------
-
-
-    call diffusivity ( tt, qq, uu, vv, p_full, p_half, z_full, z_half,   &
-                       u_star, b_star, z_pbl, diff_m, diff_t, &
-                       kbot = kbot)
-
-!---------------------------
-else if (do_edt) then
-!----------------------------
-
-!    ----- time step for prognostic tke calculation -----
-      call get_time (Time_next-Time, sec, day)
-      dt_tke = real(sec+day*86400)
- 
-
-      tke = 0.0
-
-    call edt(is,ie,js,je,dt_tke,Time_next,tdtlw, u_star,b_star,q_star, &
-             tt,qq,  &
-             qlin,qiin,qain,uu,vv,z_full,p_full,z_half,p_half,stbltop, &
-             diff_m,diff_t,z_pbl,kbot=kbot,tke=tke)
-
-
- endif
- 
-
-
- 
 !------------------------------------------------------------------
 ! --- boundary layer entrainment parameterization
 
@@ -486,37 +290,14 @@ CALL STABLE_BL_TURB( is, js, Time_next, tt, qq, qlin, qiin, uu,&
      diff_m_stab, diff_t_stab,kbot=kbot)
 
 ! --->h1g, 2012-07-16
-     if(  do_clubb > 0 ) then
-        clubb_on = 1.0
-        where ( rdiag(:,:,:, nwp2) <= wp2_min )
-            where( diff_m_stab > diff_m .or. diff_t_stab > diff_t )
-               stable_on = 1.0
-               where( diff_m_stab >= diff_min .or. diff_t_stab >= diff_min )
-                   stable_effective = 1.0
-               endwhere
-            endwhere
-            diff_m = diff_m +  MAX( diff_m_stab - diff_m, 0.0 )
-            diff_t = diff_t +  MAX( diff_t_stab - diff_t, 0.0 )
-            clubb_on = 0.0
-        endwhere
-     else
-        diff_m = diff_m +  MAX( diff_m_stab - diff_m, 0.0 )
-        diff_t = diff_t +  MAX( diff_t_stab - diff_t, 0.0 )
-     endif
+     diff_m = diff_m +  MAX( diff_m_stab - diff_m, 0.0 )
+     diff_t = diff_t +  MAX( diff_t_stab - diff_t, 0.0 )
 ! <---h1g, 2012-07-16
 
 end if
         
     endif
    
-!-----------------------------------------------------------------------
-!------------------ shallow convection ???? ----------------------------
-
-   if (do_shallow_conv) then
-        call shallow_conv (tt, qq, p_full, p_half, diff_sc, kbot)
-        diff_t = diff_t + diff_sc
-   endif
-
 !-----------------------------------------------------------------------
 !------------- define gustiness ------------
 
@@ -533,54 +314,6 @@ end if
 
 !-----------------------------------------------------------------------
 !------------------------ diagnostics section --------------------------
-
-if (do_mellor_yamada .or. do_tke_turb) then
-
-!     --- set up local mask for fields with surface data ---
-      if ( present(mask) ) then
-         lmask(:,:,1)        = .true.
-         lmask(:,:,2:nlev+1) = mask(:,:,1:nlev) > 0.5
-      else
-         lmask = .true.
-      endif
-
-!------- tke --------------------------------
-      if ( id_tke > 0 ) then
-         call get_tke(is,ie,js,je,tke)
-         used = send_data ( id_tke, tke, Time_next, is, js, 1, &
-                            mask=lmask )
-      endif
-
-!------- length scale (at half levels) ------
-      if ( id_lscale > 0 ) then
-         used = send_data ( id_lscale, el, Time_next, is, js, 1,  &
-                            mask=lmask )
-      endif
-
-!------- master length scale -------
-      if ( id_lscale_0 > 0 ) then
-         used = send_data ( id_lscale_0, el0, Time_next, is, js )
-      endif
-
-end if
-
-if (do_edt) then 
-    
-!     --- set up local mask for fields with surface data ---
-    if ( present(mask) ) then
-          lmask(:,:,1)        = .true.
-          lmask(:,:,2:nlev+1) = mask(:,:,1:nlev) > 0.5
-     else   
-        lmask = .true.
-       endif
-
-!------- tke --------------------------------
-      if ( id_tke > 0 ) then
-        used = send_data ( id_tke, tke, Time_next, is, js, 1,     &
-                          mask=lmask )
-      endif
- 
-end if
 
 !-->cjg: addition for new PBL depth diagnostic
 
@@ -636,7 +369,7 @@ end if
 
 !------- output diffusion coefficients ---------
 
-  if ( id_diff_t > 0 .or. id_diff_m > 0 .or. id_diff_sc > 0 .or. &
+  if ( id_diff_t > 0 .or. id_diff_m > 0 .or.                     &
        id_diff_t_stab > 0 .or. id_diff_m_stab > 0 .or.           &
        id_diff_t_entr > 0 .or. id_diff_m_entr > 0 .or.           &
        query_cmip_diag_id(ID_edt) .or. query_cmip_diag_id(ID_evu) ) then
@@ -665,14 +398,6 @@ end if
       if (id_diff_m > 0) used = send_data ( id_diff_m, diag3, Time_next, is, js, 1, mask=lmask )
       if (query_cmip_diag_id(ID_evu)) used = send_cmip_data_3d (ID_evu, diag3, Time_next, is, js, 1, mask=lmask)
    endif
-
-!------- diffusion coefficient for shallow conv -------
- if (do_shallow_conv) then
-   if ( id_diff_sc > 0 ) then
-      diag3(:,:,1:nlev) = diff_sc(:,:,1:nlev)
-      used = send_data ( id_diff_sc, diag3, Time_next, is, js, 1, mask=lmask)
-   endif
- endif
 
 !------- diffusion coefficients for stable boudary layer -------
    if (do_stable_bl) then
@@ -736,14 +461,6 @@ end if
       used = send_data ( id_vwnd, vv, Time_next, is, js, 1, rmask=mask)
    endif
   
-! --->h1g, 2012-08-07, dump whether stable-scheme is on, clubb_on
-   if( do_clubb > 0) then
-     if ( id_clubb_on > 0 ) then
-        used = send_data ( id_clubb_on, clubb_on, Time_next, is, js, 1, mask=lmask )
-     endif
-   endif
-! <---h1g, 2012-08-07
-   
 !-----------------------------------------------------------------------
 
 end subroutine vert_turb_driver
@@ -752,7 +469,7 @@ end subroutine vert_turb_driver
 
 subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
                                   Exch_ctrl, Physics_control, &
-                                  doing_edt, doing_entrain, do_clubb_in)
+                                  doing_entrain)
 
 !-----------------------------------------------------------------------
    type(domain2D), target,      intent(in)    :: domain !< Atmosphere domain
@@ -761,11 +478,8 @@ subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
    type(exchange_control_type), intent(in) :: Exch_ctrl
    type(physics_control_type), intent(in) :: Physics_control
    type(time_type), intent(in) :: Time
-   logical,         intent(out) :: doing_edt, doing_entrain
+   logical,         intent(out) :: doing_entrain
 
-!-->h1g
-   integer, optional,    intent(in)    :: do_clubb_in
-!<--h1g
 !-----------------------------------------------------------------------
    integer, dimension(3) :: full = (/1,2,3/), half = (/1,2,4/)
    integer :: ierr, unit, io, logunit
@@ -797,23 +511,6 @@ subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
          ('vert_turb_driver_mod', 'invalid value for namelist '//&
           'variable GUST_SCHEME', FATAL)
 
-      if (do_molecular_diffusion .and. do_mellor_yamada)  &
-         call error_mesg ( 'vert_turb_driver_mod', 'cannot activate '//&
-              'molecular diffusion with mellor_yamada', FATAL)
- 
-      if (do_molecular_diffusion .and. do_tke_turb)  &
-         call error_mesg ( 'vert_turb_driver_mod', 'cannot activate '//&
-              'molecular diffusion with tke_turb', FATAL)
- 
-      if (do_tke_turb .and. do_mellor_yamada)  &
-         call error_mesg ( 'vert_turb_driver_mod', 'cannot activate '//&
-              'tke_turb with mellor_yamada', FATAL)
- 
-       if (do_molecular_diffusion .and. do_edt)  &
-         call error_mesg ( 'vert_turb_driver_mod', 'cannot activate '//&
-           'molecular diffusion with EDT', FATAL)
-
-
 !----------------------------------------------------
 !   get the number of prognostic tracers
 !   use later to determine prognostic vs. diagnostic
@@ -821,24 +518,9 @@ subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
       call get_number_tracers (MODEL_ATMOS, num_prog=ntp)
 
 !-----------------------------------------------------------------------
-! -->h1g, 2012-07-16
-    if (present(do_clubb_in)) then
-         do_clubb = do_clubb_in
-    else
-         do_clubb = 0
-    endif
-    
     doing_prog_clouds = Exch_ctrl%doing_prog_clouds
-
-    if( do_entrain .and. do_clubb>0 ) &
-         call error_mesg ( 'vert_turb_driver_mod', 'cannot activate '//&
-           'both do_entrain and CLUBB', FATAL)
-    nwp2 = get_tracer_index ( MODEL_ATMOS, 'wp2' )
-    if ( do_clubb>0 .and. nwp2 <= ntp ) then
-     ! nwp2 is a diagnostic tracer
-      call error_mesg ('vert_turb_driver_mod', &
-                      'wp2 is a diagnostic tracer in CLUBB', FATAL)
-    endif
+    nwp2 = get_tracer_index ( MODEL_ATMOS, 'wp2' )        
+    
 !<--h1g, 2012-07-16
 
 ! get tracer indices for stratiform cloud variables
@@ -856,21 +538,7 @@ subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
 
 !----------------------------------------------------------------------
 
-      if (do_mellor_yamada) call my25_turb_init (domain, id, jd, kd)
-
-      if (do_tke_turb) then
-        ntke = get_tracer_index ( MODEL_ATMOS, 'tke' )
-        ! tke must be a diagnostic tracer
-        if (ntke <= ntp) call error_mesg ('vert_turb_driver_mod', &
-                    'tke can not be a prognostic tracer', FATAL)
-        call tke_turb_init (lonb, latb, axes, Time, id, jd, kd)
-      end if
-
-      if (do_shallow_conv)  call shallow_conv_init (kd)
-
       if (do_stable_bl)     call stable_bl_turb_init ( axes, Time )
-
-      if (do_edt)           call edt_init (domain, lonb, latb, axes,Time,id,jd,kd)
 
       if (do_entrain)       call entrain_init (lonb, latb, axes,Time,id,jd,kd)
       
@@ -894,32 +562,6 @@ subroutine vert_turb_driver_init (domain, lonb, latb, id, jd, kd, axes, Time, &
    register_diag_field ( mod_name, 'z_half', axes(half), Time,    &
         'geopotential height relative to surface at half levels', &
         'meters' , missing_value=missing_value    )
-
-if (do_mellor_yamada .or. do_tke_turb) then
-
-   id_tke = &
-   register_diag_field ( mod_name, 'tke', axes(half), Time,      &
-                        'turbulent kinetic energy',  'm2/s2'   , &
-                        missing_value=missing_value               )
-
-   id_lscale = &
-   register_diag_field ( mod_name, 'lscale', axes(half), Time,    &
-                        'turbulent length scale',  'm'   ,        &
-                        missing_value=missing_value               )
-
-   id_lscale_0 = &
-   register_diag_field ( mod_name, 'lscale_0', axes(1:2), Time,   &
-                        'master length scale',  'm'               )
-endif
-
- if (do_edt) then
- 
-   id_tke = &
-   register_diag_field ( mod_name, 'tke', axes(half), Time,      &
-                         'turbulent kinetic energy',  'm2/s2'   , &
-                         missing_value=missing_value               )
- 
-  end if
 
    id_z_pbl = &
    register_diag_field ( mod_name, 'z_pbl', axes(1:2), Time,       &
@@ -973,16 +615,7 @@ endif
                       'Eddy Diffusivity Coefficient for Temperature Variable', 'm2 s-1', &
                        standard_name='atmosphere_heat_diffusivity', &
                        interp_method = 'conserve_order1', axis='half' )
-                     
-
-if (do_shallow_conv) then
-
-   id_diff_sc = &
-   register_diag_field ( mod_name, 'diff_sc', axes(half), Time,      &
-                        'vert diff coeff for shallow conv', 'm2/s' , &
-                        missing_value=missing_value               )
-endif
-
+ 
 if (do_stable_bl) then
   id_diff_t_stab = &
     register_diag_field ( mod_name, 'diff_t_stab', axes(half), Time,       &
@@ -1020,19 +653,9 @@ if (do_entrain) then
 
  endif
 
-! --->h1g, 2012-08-07, register id_clubb_on
-if( do_clubb > 0 ) then
-   id_clubb_on = &
-    register_diag_field ( mod_name, 'clubb_on', axes(half), Time,       &
-                       'frequency of clubb is on',  ' ',                &
-                        missing_value=missing_value               )
-endif
-! <---h1g, 2012-08-07
-
 
 !-----------------------------------------------------------------------
 
-   doing_edt = do_edt
    doing_entrain = do_entrain
    module_is_initialized =.true.
 
@@ -1046,34 +669,12 @@ end subroutine vert_turb_driver_init
 subroutine vert_turb_driver_end
 
 !-----------------------------------------------------------------------
-      if (do_mellor_yamada) call my25_turb_end
-      if (do_tke_turb)      call tke_turb_end
-      if (do_edt) call edt_end
       if (do_entrain) call entrain_end
       module_is_initialized =.false.
 
 !-----------------------------------------------------------------------
 
 end subroutine vert_turb_driver_end
-
-!#######################################################################
-! <SUBROUTINE NAME="vert_turb_driver_restart">
-!
-! <DESCRIPTION>
-! write out restart file.
-! Arguments: 
-!   timestamp (optional, intent(in)) : A character string that represents the model time, 
-!                                      used for writing restart. timestamp will append to
-!                                      the any restart file name as a prefix. 
-! </DESCRIPTION>
-!
-subroutine vert_turb_driver_restart(timestamp)
-  character(len=*), intent(in), optional :: timestamp
-
-   if (do_mellor_yamada) call my25_turb_restart(timestamp)
-end subroutine vert_turb_driver_restart
-! </SUBROUTINE> NAME="vert_turb_driver_restart"
-
 
 !-->cjg: addition for new PBL depth diagnostic
 
@@ -1130,7 +731,6 @@ real, dimension(size(t,3)) :: Ri
 ! Constants
 real, parameter :: eps = 1.0e-8
 real, parameter :: Ri_crit = 0.25
-real, parameter :: p00 = 1000.0e2
 
 !-----------------------------------------------------------------------
 
@@ -1236,7 +836,6 @@ real, dimension(size(t,3)+1) :: Ri, z
 ! Constants
 real, parameter :: eps = 1.0e-8
 real, parameter :: Ri_crit = 0.25
-real, parameter :: p00 = 1000.0e2
 
 !-----------------------------------------------------------------------
 

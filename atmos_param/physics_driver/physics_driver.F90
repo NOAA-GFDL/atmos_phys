@@ -134,8 +134,7 @@ use  moist_processes_mod,    only: moist_processes,    &
 
 use vert_turb_driver_mod,    only: vert_turb_driver,  &
                                    vert_turb_driver_init,  &
-                                   vert_turb_driver_end, &
-                                   vert_turb_driver_restart
+                                   vert_turb_driver_end
 
 use vert_diff_driver_mod,    only: vert_diff_driver_down,  &
                                    vert_diff_driver_up,    &
@@ -149,9 +148,6 @@ use damping_driver_mod,      only: damping_driver,      &
                                    damping_driver_endts, &
                                    damping_driver_end,  &
                                    damping_driver_restart
-
-use grey_radiation_mod,       only: grey_radiation_init, grey_radiation, &
-                                    grey_radiation_end
 
 use monin_obukhov_mod,        only: monin_obukhov_init
 
@@ -219,18 +215,12 @@ end interface
 !  <DATA NAME="do_radiation" UNITS="" TYPE="logical" DIM="" DEFAULT=".true.     ">
 !   calculating radiative fluxes and  heating rates?
 !  </DATA>
-!  <DATA NAME="do_clubb" UNITS="" TYPE="integer" DIM="" DEFAULT="0">
-!   do_clubb > 0 implies clubb is active in some manner
-!  </DATA>
 !  <DATA NAME="do_cosp" UNITS="" TYPE="logical" DIM="" DEFAULT=".false.">
 !   activate COSP simulator ?
 !  </DATA>
 !  <DATA NAME="do_modis_yim" UNITS="" TYPE="logical" DIM="" DEFAULT=".true.">
 !   activate simple modis simulator ?
 !  </DATA>
-!  <DATA NAME="donner_meso_is_largescale" UNITS="" TYPE="logical" DIM="" DEFAULT=".true.">
-!   donner meso clouds are treated as largescale (rather than convective)
-!   as far as the COSP simulator is concerned ?
 !  </DATA>
 !  <DATA NAME="do_moist_processes" UNITS="" TYPE="logical" DIM="" DEFAULT="     .true.">
 !   call moist_processes routines ?
@@ -245,30 +235,9 @@ end interface
 !  <DATA NAME="diffusion_smooth" UNITS="" TYPE="logical" DIM="" DEFAULT=".t     rue.">
 !   diffusion coefficients should be smoothed in time?
 !  </DATA>
-!  <DATA NAME="do_grey_radiation" UNITS="" TYPE="logical" DIM="" DEFAULT=".false.">
-!   do grey radiation scheme?
-! rif:(09/10/09) In Grey radiation we are computing just the total   
-! SW radiation. We need to divide it into 4 components
-! to go through the Coupler and Ice modules. Sum[R(i)*SW] = SW  
-!  </DATA>
-!  <DATA NAME="R1" UNITS="" TYPE="real" DIM="" DEFAULT="0.25">
-!   component  number 1 of SW radiation with grey radiation scheme
-!  </DATA>
-!  <DATA NAME="R2" UNITS="" TYPE="real" DIM="" DEFAULT="0.25">
-!   component  number 1 of SW radiation with grey radiation scheme
-!  </DATA>
-!  <DATA NAME="R3" UNITS="" TYPE="real" DIM="" DEFAULT="0.25">
-!   component  number 1 of SW radiation with grey radiation scheme
-!  </DATA>
-!  <DATA NAME="R4" UNITS="" TYPE="real" DIM="" DEFAULT="0.25">
-!   component  number 1 of SW radiation with grey radiation scheme
-!  </DATA>
 !  <DATA NAME="override_aerosols_cloud" UNITS="" TYPE="logical" DIM="" DEFA     ULT=".false.">
 !   use offline aerosols for cloud calculation
 !   (via data_override in aerosol_driver)?
-!  </DATA>
-!  <DATA NAME="l_host_applies_sfc_fluxes" UNITS="" TYPE="logical" DIM="" DEFAULT=".true.">
-!   applying surface fluxes in host-model ?
 !  </DATA>
 !  <DATA NAME="qmin" UNITS="kg h2o/kg air" TYPE="real"  DEFAULT="1.E-10">
 !   minimum permissible value of cloud liquid, cloud ice, saturated volume
@@ -338,21 +307,13 @@ end interface
  
 
 logical :: do_radiation = .true.
-integer :: do_clubb = 0        
 logical :: do_cosp = .false.   
 logical :: do_modis_yim = .true.
-logical :: donner_meso_is_largescale = .true.
 logical :: do_moist_processes = .true.
 real    :: tau_diff = 3600.    
 real    :: diff_min = 1.e-3   
 logical :: diffusion_smooth = .true.
-logical :: do_grey_radiation = .false.
-real    :: R1 = 0.25
-real    :: R2 = 0.25
-real    :: R3 = 0.25
-real    :: R4 = 0.25
 logical :: override_aerosols_cloud = .false.
-logical :: l_host_applies_sfc_fluxes = .true.
 real    :: qmin = 1.0e-10
 real    :: N_land = 3.e8
 real    :: N_ocean = 1.e8
@@ -369,13 +330,11 @@ logical :: use_tau = .false.
 real    :: cosp_frequency = 10800.
 
 
-namelist / physics_driver_nml / do_radiation, do_clubb,  do_cosp, &
-                                do_modis_yim, donner_meso_is_largescale, &
+namelist / physics_driver_nml / do_radiation, do_cosp, &
+                                do_modis_yim, &
                                 do_moist_processes, tau_diff,      &
                                 diff_min, diffusion_smooth, &
-                                do_grey_radiation, R1, R2, R3, R4,  &
                                 override_aerosols_cloud,    &
-                                l_host_applies_sfc_fluxes, &
                                 qmin, N_land, N_ocean, do_liq_num,  &
                                 do_ice_num, qcvar, overlap, N_min, &
                                 min_diam_ice, dcs, min_diam_drop, &
@@ -420,9 +379,6 @@ public  surf_diff_type   ! defined in  vert_diff_driver_mod, republished
 ! version 5: adds radturbten when strat_cloud_mod is active, adds 
 !            lw_tendency when edt_mod or entrain_mod is active.
 !
-! version 6: adds donner cell and meso cloud variables when donner_deep
-!            is activated.
-
 ! version 7: adds shallow convection cloud variables when uw_conv
 !            is activated.
 
@@ -431,7 +387,7 @@ public  surf_diff_type   ! defined in  vert_diff_driver_mod, republished
 
 
 !---------------------------------------------------------------------
-integer, dimension(8) :: restart_versions = (/ 1, 2, 3, 4, 5, 6, 7, 8 /)
+integer, dimension(7) :: restart_versions = (/ 1, 2, 3, 4, 5, 7, 8 /)
 
 !--------------------------------------------------------------------
 !    the following allocatable arrays are either used to hold physics 
@@ -464,26 +420,23 @@ integer, dimension(8) :: restart_versions = (/ 1, 2, 3, 4, 5, 6, 7, 8 /)
 !                   physics_driver_down on the next step.
 !    temp_last
 !    q_last
-!    diff_t_clubb
 !----------------------------------------------------------------------
 real,    dimension(:,:,:), allocatable,target :: diff_cu_mo, diff_t, diff_m
 real,    dimension(:,:,:), allocatable,target :: radturbten
 real,    dimension(:,:)  , allocatable,target :: pbltop, cush, cbmf
-real,    dimension(:,:)  , allocatable,target :: hmint, cgust, tke 
+real,    dimension(:,:)  , allocatable,target :: hmint, cgust
 real,    dimension(:,:)  , allocatable,target :: pblhto, rkmo, taudpo
 logical, dimension(:,:)  , allocatable,target :: convect
 integer, dimension(:,:,:), allocatable,target :: exist_shconv, exist_dpconv
 real,    dimension(:,:,:), allocatable,target :: pblht_prev, hlsrc_prev, &
                                                  qtsrc_prev, cape_prev,  &
-                                                 cin_prev, tke_prev !miz
-real,    dimension(:,:,:), allocatable,target ::  diff_t_clubb
+                                                 cin_prev
 
 real,    dimension(:,:,:), allocatable        :: temp_last, q_last
 
 integer                                :: vers
 integer                                :: now_doing_strat = 0
 integer                                :: now_doing_entrain = 0
-integer                                :: now_doing_edt = 0
 real, allocatable                      :: r_convect(:,:)
 
 type(aerosol_time_vary_type)           :: Aerosol_cld
@@ -502,7 +455,6 @@ logical   :: do_check_args = .true.   ! argument dimensions should
                                       ! be checked ?
 logical   :: module_is_initialized = .false.
                                       ! module has been initialized ?
-logical   :: doing_edt                ! edt_mod has been activated ?
 logical   :: doing_entrain            ! entrain_mod has been activated ?
 logical   :: doing_uw_conv            ! uw_conv shallow cu mod has been 
                                       ! activated ?
@@ -545,7 +497,7 @@ type (clouds_from_moist_block_type) :: Restart
 
 type(precip_flux_type)              :: Precip_flux
 
-integer :: i_cell, i_meso, i_shallow
+integer :: i_shallow
 type (domain2D)               :: physics_domain !< Atmosphere domain
 
                             contains
@@ -652,7 +604,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       integer          ::  moist_processes_init_clock, damping_init_clock,&
                            turb_init_clock, diff_init_clock, &
                            aerosol_init_clock, &
-                           grey_radiation_init_clock , &
                            tracer_init_clock
       real, dimension(:,:,:),   allocatable :: phalf
       real, dimension(:,:,:,:), allocatable :: trs
@@ -674,7 +625,7 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
 !       ndum          dummy argument
 !       x_clock_init  clock for timing the initialization of process x
 !                     where x is moist_processes, damping, turb, diff,
-!                     aerosol, grey_radiation, tracer 
+!                     aerosol, tracer 
 !-----------------------------------------------------------------------
 
 !---------------------------------------------------------------------
@@ -700,8 +651,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
 !--------------------------------------------------------------------
 !    consistency checks for namelist options
 !--------------------------------------------------------------------
-      if(do_radiation .and. do_grey_radiation) & 
-        call error_mesg('physics_driver_init','do_radiation and do_grey_radiation cannot both be .true.',FATAL)
       if (do_cosp .and. .not. do_radiation) &
         call error_mesg('physics_driver_init',  &
             'do_radiation must be .true. if do_cosp is .true.',FATAL)
@@ -768,9 +717,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       aerosol_init_clock       =       &
         mpp_clock_id( '   Physics_driver_init: Aerosol: Initialization', &
                        grain=CLOCK_MODULE_DRIVER )
-      grey_radiation_init_clock       =       &
-        mpp_clock_id( '   Physics_driver_init: Grey Radiation: Initialization', &
-                       grain=CLOCK_MODULE_DRIVER )
       tracer_init_clock          =      &
         mpp_clock_id( '   Physics_driver_init: Tracer: Initialization',    &
                  grain=CLOCK_MODULE_DRIVER )
@@ -789,7 +735,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
 !   into the Physics%control derived type for easy movement.
 !------------------------------------------------------------------------
       Physics%control%use_tau = use_tau
-      Physics%control%l_host_applies_sfc_fluxes = l_host_applies_sfc_fluxes
       Physics%control%nsphum = get_tracer_index ( MODEL_ATMOS, 'sphum' )
       Physics%control%nql = get_tracer_index ( MODEL_ATMOS, 'liq_wat' )
       Physics%control%nqi = get_tracer_index ( MODEL_ATMOS, 'ice_wat' )
@@ -911,10 +856,8 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       Exch_ctrl%min_diam_drop = min_diam_drop
       Exch_ctrl%max_diam_drop = max_diam_drop
 
-      Exch_ctrl%do_clubb = do_clubb
       Exch_ctrl%do_cosp = do_cosp
-      Exch_ctrl%donner_meso_is_largescale =  donner_meso_is_largescale
-      Exch_ctrl%do_modis_yim              =  do_modis_yim
+      Exch_ctrl%do_modis_yim = do_modis_yim
       Exch_ctrl%doing_prog_clouds = doing_prog_clouds
 
 !-----------------------------------------------------------------------
@@ -965,15 +908,14 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       call mpp_clock_begin ( turb_init_clock )
       call vert_turb_driver_init (physics_domain, lonb, latb, id, jd, kd, axes, Time, &
                                   Exch_ctrl, Physics%control,  &
-                                  doing_edt, doing_entrain, do_clubb)
+                                  doing_entrain)
       call mpp_clock_end ( turb_init_clock )
 
 !-----------------------------------------------------------------------
 !    initialize vert_diff_driver_mod.
 !-----------------------------------------------------------------------
       call mpp_clock_begin ( diff_init_clock )
-      call vert_diff_driver_init (Surf_diff, id, jd, kd, axes, Time,   &
-                                  do_clubb )
+      call vert_diff_driver_init (Surf_diff, id, jd, kd, axes, Time )
       call mpp_clock_end ( diff_init_clock )
 
       if (do_moist_processes) then
@@ -985,15 +927,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
         call mpp_clock_end ( aerosol_init_clock )
       endif ! do_moist_processes
 
-!----------------------------------------------------------------------
-!    if grey_radiation is active, initialize that module.
-!----------------------------------------------------------------------
-      if(do_grey_radiation) then
-         call mpp_clock_begin ( grey_radiation_init_clock )
-         call grey_radiation_init(axes, Time) 
-         call mpp_clock_end ( grey_radiation_init_clock )
-      endif
-        
 !-----------------------------------------------------------------------
 !    initialize atmos_tracer_driver_mod.
 !-----------------------------------------------------------------------
@@ -1012,7 +945,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       allocate ( cbmf       (id, jd) )     ; cbmf=0.0 !miz
       allocate ( hmint      (id, jd) )     ; hmint=0. !miz
       allocate ( cgust      (id, jd) )     ; cgust=0.0 !miz
-      allocate ( tke        (id, jd) )     ; tke  =0.0 !miz
       allocate ( pblhto     (id, jd) )     ; pblhto=0.0 !miz
       allocate ( rkmo       (id, jd) )     ; rkmo=15.0 !miz
       allocate ( taudpo     (id, jd) )     ; taudpo=28800.    !miz
@@ -1023,12 +955,10 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       allocate ( qtsrc_prev  (id, jd,48) ) ; qtsrc_prev   = 0.!miz
       allocate ( cape_prev   (id, jd,48) ) ; cape_prev    = 0.!miz
       allocate ( cin_prev    (id, jd,48) ) ; cin_prev     = 0.!miz
-      allocate ( tke_prev    (id, jd,48) ) ; tke_prev     = 0.!miz
 
       allocate ( convect    (id, jd) )     ; convect = .false.
       allocate ( radturbten (id, jd, kd))  ; radturbten = 0.0
       allocate ( r_convect  (id, jd) )     ; r_convect   = 0.0
-      allocate ( diff_t_clubb(id, jd, kd) ); diff_t_clubb = 0.0
 
 
       if (do_cosp) then
@@ -1042,8 +972,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
         allocate ( Precip_flux%fl_lsgrpl  (id, jd, kd))
         allocate ( Precip_flux%fl_ccrain  (id, jd, kd))
         allocate ( Precip_flux%fl_ccsnow  (id, jd, kd))
-        allocate ( Precip_flux%fl_donmca_snow  (id, jd, kd))
-        allocate ( Precip_flux%fl_donmca_rain  (id, jd, kd))
         allocate ( temp_last (id, jd, kd))
         allocate ( q_last    (id, jd, kd))
         Precip_flux%fl_lsrain = 0.
@@ -1051,8 +979,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
         Precip_flux%fl_lsgrpl = 0.
         Precip_flux%fl_ccrain = 0.
         Precip_flux%fl_ccsnow = 0.
-        Precip_flux%fl_donmca_rain = 0.
-        Precip_flux%fl_donmca_snow = 0.
         temp_last = 0.
         q_last    = 0.
       endif
@@ -1069,8 +995,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
 !    save convective cloud indices to be passed to convection_driver_mod.
 !------------------------------------------------------------------------
      i_shallow = Moist_clouds(1)%block(1)%index_uw_conv
-     i_cell    = Moist_clouds(1)%block(1)%index_donner_cell
-     i_meso    = Moist_clouds(1)%block(1)%index_donner_meso
 
 !--------------------------------------------------------------------
 !    call physics_driver_read_restart to obtain initial values for the module
@@ -1123,7 +1047,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       write(outunit,100) 'cbmf                   ', mpp_chksum(cbmf                  )
       write(outunit,100) 'hmint                  ', mpp_chksum(hmint                 )
       write(outunit,100) 'cgust                  ', mpp_chksum(cgust                 )
-      write(outunit,100) 'tke                    ', mpp_chksum(tke                   )
       write(outunit,100) 'pblhto                 ', mpp_chksum(pblhto                )
       write(outunit,100) 'rkmo                   ', mpp_chksum(rkmo                  )
       write(outunit,100) 'taudpo                 ', mpp_chksum(taudpo                )
@@ -1134,7 +1057,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
       write(outunit,100) 'qtsrc_prev             ', mpp_chksum(qtsrc_prev            )
       write(outunit,100) 'cape_prev              ', mpp_chksum(cape_prev             )
       write(outunit,100) 'cin_prev               ', mpp_chksum(cin_prev              )
-      write(outunit,100) 'tke_prev               ', mpp_chksum(tke_prev              )
       write(outunit,100) 'diff_t                 ', mpp_chksum(diff_t                )
       write(outunit,100) 'diff_m                 ', mpp_chksum(diff_m                )
       write(outunit,100) 'r_convect              ', mpp_chksum(r_convect             )
@@ -1143,21 +1065,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
    endif
       do nc = 1, size(Restart%Cloud_data,1)
         ! NOTE: the order of the checksums in stdout will be different
-        if ( trim(Restart%Cloud_data(nc)%scheme_name).eq.'donner_cell' ) then
-          write(outunit,100) 'cell_cld_frac          ', mpp_chksum(Restart%Cloud_data(nc)%cloud_area )
-          write(outunit,100) 'cell_liq_amt           ', mpp_chksum(Restart%Cloud_data(nc)%liquid_amt )
-          write(outunit,100) 'cell_liq_size          ', mpp_chksum(Restart%Cloud_data(nc)%liquid_size)
-          write(outunit,100) 'cell_ice_amt           ', mpp_chksum(Restart%Cloud_data(nc)%ice_amt    )
-          write(outunit,100) 'cell_ice_size          ', mpp_chksum(Restart%Cloud_data(nc)%ice_size   )
-        endif
-        if ( trim(Restart%Cloud_data(nc)%scheme_name).eq.'donner_meso' ) then
-          write(outunit,100) 'meso_cld_frac          ', mpp_chksum(Restart%Cloud_data(nc)%cloud_area )
-          write(outunit,100) 'meso_liq_amt           ', mpp_chksum(Restart%Cloud_data(nc)%liquid_amt )
-          write(outunit,100) 'meso_liq_size          ', mpp_chksum(Restart%Cloud_data(nc)%liquid_size)
-          write(outunit,100) 'meso_ice_amt           ', mpp_chksum(Restart%Cloud_data(nc)%ice_amt    )
-          write(outunit,100) 'meso_ice_size          ', mpp_chksum(Restart%Cloud_data(nc)%ice_size   )
-          write(outunit,100) 'nsum_out               ', mpp_chksum(Restart%Cloud_data(nc)%nsum_out   )
-        endif
         if ( trim(Restart%Cloud_data(nc)%scheme_name).eq.'uw_conv' ) then
           write(outunit,100) 'shallow_cloud_area     ', mpp_chksum(Restart%Cloud_data(nc)%cloud_area    )
           write(outunit,100) 'shallow_liquid         ', mpp_chksum(Restart%Cloud_data(nc)%liquid_amt    )
@@ -1203,14 +1110,6 @@ real,    dimension(:,:,:),    intent(out),  optional :: diffm, difft
             Moist_clouds(1)%block(nb)%Cloud_data(nc)%snow_size  = Restart%Cloud_data(nc)%snow_size  (ibs:ibe,jbs:jbe,:)
           endif
   
-          ! properties specific to donner deep clouds (both cell and meso)
-          if (trim(Restart%Cloud_data(nc)%scheme_name) .eq. 'donner_cell' .or. &
-              trim(Restart%Cloud_data(nc)%scheme_name) .eq. 'donner_meso') then
-            Moist_clouds(1)%block(nb)%Cloud_data(nc)%liquid_size = Restart%Cloud_data(nc)%liquid_size (ibs:ibe,jbs:jbe,:)
-            Moist_clouds(1)%block(nb)%Cloud_data(nc)%ice_size    = Restart%Cloud_data(nc)%ice_size    (ibs:ibe,jbs:jbe,:)
-            Moist_clouds(1)%block(nb)%Cloud_data(nc)%nsum_out    = Restart%Cloud_data(nc)%nsum_out    (ibs:ibe,jbs:jbe)
-          endif
-
           ! properties specific to uw shallow convective clouds
           if (trim(Restart%Cloud_data(nc)%scheme_name) .eq. 'uw_conv') then
             Moist_clouds(1)%block(nb)%Cloud_data(nc)%ice_number = Restart%Cloud_data(nc)%ice_number (ibs:ibe,jbs:jbe,:)
@@ -1478,7 +1377,7 @@ logical,                 intent(in)             :: step_to_call_cosp_in
 !    call moist_processes_time_vary to pass needed time-dependent fields 
 !    to subordinate modules.
 !----------------------------------------------------------------------
-      call moist_processes_time_vary (Time_next, dt, i_cell, i_meso, i_shallow)
+      call moist_processes_time_vary (Time_next, dt, i_shallow)
     endif
 !----------------------------------------------------------------------
 !    call cosp_driver_time_vary to obtain satellite location at current
@@ -1798,10 +1697,6 @@ real,  dimension(:,:,:), intent(out)  ,optional :: diffm, difft
       real                                   :: dt, alpha, dt2
       logical                                :: used
 
-!---> h1g, 2015-08-11
-      real, dimension(ie-is+1,je-js+1) :: tke_avg
-!<--- h1g, 2015-08-11
-
 !---------------------------------------------------------------------
 !   local variables:
 !
@@ -1894,19 +1789,11 @@ real,  dimension(:,:,:), intent(out)  ,optional :: diffm, difft
 
 !---------------------------------------------------------------------
 
-!rab      if(do_grey_radiation) then !rif:(09/10/09) 
-!rab        call grey_radiation(is, js, Time, Time_next, lat, lon, phalfgrey, albedo, t_surf_rad, t, tdt, flux_sw, flux_lw)
-!rab        coszen = 1.0
-!rab        flux_sw_dir     = R1*flux_sw
-!rab        flux_sw_dif     = R2*flux_sw
-!rab        flux_sw_vis_dir = R3*flux_sw
-!rab        flux_sw_vis_dif = R4*flux_sw
-!rab      endif
-
       if (do_radiation) then
         radturbten(is:ie,js:je,:) = radturbten(is:ie,js:je,:) + Rad_flux_block%tdt_rad(:,:,:)
         surf_diff%tdt_rad(is:ie,js:je,:)=Rad_flux_block%tdt_rad(:,:,:) !miz
       endif
+      
 #ifdef SCM
 ! Option to add SCM radiative tendencies from forcing to Rad_flux_block%tdt_lw
 ! and radturbten
@@ -1959,10 +1846,9 @@ real,  dimension(:,:,:), intent(out)  ,optional :: diffm, difft
                              u, v, t, r(:,:,:,1), r, um, vm,                  &
                              tm, rm(:,:,:,1), rm, rdiag,                      &
                              udt, vdt, tdt, rdt(:,:,:,1), rdt,                &
-                             diff_t_vert, diff_m_vert, gust, z_pbl, tke_avg = tke_avg)
+                             diff_t_vert, diff_m_vert, gust, z_pbl)
      call mpp_clock_end ( turb_clock )
      pbltop(is:ie,js:je) = z_pbl(:,:)
-     tke   (is:ie,js:je) = tke_avg(:,:)
 
       if (id_tdt_phys_turb > 0) then
         used = send_data ( id_tdt_phys_turb, +2.0*tdt(:,:,:), &
@@ -2054,26 +1940,14 @@ real,  dimension(:,:,:), intent(out)  ,optional :: diffm, difft
 
       call mpp_clock_begin ( diff_down_clock )
       radturbten(is:ie,js:je,:) = radturbten(is:ie,js:je,:) - tdt(:,:,:)
-      if (do_clubb > 0) then
-        call vert_diff_driver_down (is, js, Time_next, dt, p_half,   &
-                                    p_full, z_full,   &
-                                    diff_m(is:ie,js:je,:),         &
-                                    diff_t(is:ie,js:je,:),         &
-                                    u ,v ,t ,r(:,:,:,1) ,r(:,:,:,1:ntp), &
-                                    dtau_du, dtau_dv, tau_x, tau_y,  &
-                                    udt, vdt, tdt, rdt(:,:,:,1), rdt,       &
-                                    Surf_diff,                     &
-                                    diff_t_clubb=diff_t_clubb(is:ie,js:je,:))
-      else
-        call vert_diff_driver_down (is, js, Time_next, dt, p_half,   &
-                                    p_full, z_full,   &
-                                    diff_m(is:ie,js:je,:),         &
-                                    diff_t(is:ie,js:je,:),         &
-                                    u ,v ,t ,r(:,:,:,1) ,r(:,:,:,1:ntp), &
-                                    dtau_du, dtau_dv, tau_x, tau_y,  &
-                                    udt, vdt, tdt, rdt(:,:,:,1), rdt,        &
-                                    Surf_diff)
-      endif
+      call vert_diff_driver_down (is, js, Time_next, dt, p_half,   &
+          p_full, z_full,   &
+          diff_m(is:ie,js:je,:),         &
+          diff_t(is:ie,js:je,:),         &
+          u ,v ,t ,r(:,:,:,1) ,r(:,:,:,1:ntp), &
+          dtau_du, dtau_dv, tau_x, tau_y,  &
+          udt, vdt, tdt, rdt(:,:,:,1), rdt,        &
+          Surf_diff)
 
       if (id_tdt_phys_vdif_dn > 0) then
         used = send_data ( id_tdt_phys_vdif_dn, +2.0*tdt(:,:,:), &
@@ -2407,8 +2281,6 @@ real,dimension(:,:),    intent(inout)             :: gust
           allocate (MP2cosp%fl_lsgrpl(imax, jmax, kmax))
           allocate (MP2cosp%fl_ccrain(imax, jmax, kmax))
           allocate (MP2cosp%fl_ccsnow(imax, jmax, kmax))
-          allocate (MP2cosp%fl_donmca_rain(imax, jmax, kmax))
-          allocate (MP2cosp%fl_donmca_snow(imax, jmax, kmax))
 
           allocate (Phys2cosp%temp_last(imax, jmax, kmax))
           allocate (Phys2cosp%q_last(imax, jmax, kmax))
@@ -2446,16 +2318,6 @@ real,dimension(:,:),    intent(inout)             :: gust
         endif
       end do
 
-!--------------------------------------------------------------------------
-!    save temperature and moisture tendencies due to surface fluxes at 
-!    lowest-level before calculating vertical diffusion, in the case where
-!    these tendencies are not yet to be applied (ie, clubb is active).
-!------------------------------------------------------------------------
-      if( .not. l_host_applies_sfc_fluxes ) then
-          tdt_shf(:,:) = tdt(:, :, kmax)
-          qdt_lhf(:,:) = rdt(:, :, kmax, 1)
-      endif
-
       call mpp_clock_begin ( diff_up_clock )
 !------------------------------------------------------------------
 !    call vert_diff_driver_up to complete the vertical diffusion
@@ -2463,19 +2325,6 @@ real,dimension(:,:),    intent(inout)             :: gust
 !------------------------------------------------------------------
       call vert_diff_driver_up (is, js, Time_next, dt, p_half,   &
                                 Surf_diff, tdt, rdt(:,:,:,1), rdt )
-
-!--------------------------------------------------------------------------
-!    if the surface tendencies are not to be applied here (ie, clubb),  
-!    define those values and remove them from the accumulated time 
-!    tendencies. otherwise, set these tendencies to 0.0.
-!------------------------------------------------------------------------
-      if( .not. l_host_applies_sfc_fluxes ) then
-          tdt_shf(:,:) = tdt(:, :, kmax) - tdt_shf(:,:)
-          qdt_lhf(:,:) = rdt(:, :, kmax, 1) - qdt_lhf(:,:)
-
-          tdt(:, :, kmax) = tdt(:, :, kmax) - tdt_shf(:,:)
-          rdt(:, :, kmax, 1) = rdt(:, :, kmax, 1) - qdt_lhf(:,:)
-      endif
 
 !-----------------------------------------------------------------------
 !    add the temperature tendency due to vertical  diffusion to radturbten.
@@ -2524,17 +2373,15 @@ real,dimension(:,:),    intent(inout)             :: gust
 
 !-----------------------------------------------------------------------
 !    call aerosol driver to obtain aerosol data needed in condensation 
-!    calculations. if using grey radiation, this data is not needed.
+!    calculations.
 !-----------------------------------------------------------------------
-        if (.NOT. do_grey_radiation) then
-          pflux(:,:,1) = 0.0E+00
-          do k=2,size(p_full,3)
-            pflux(:,:,k) = 0.5E+00*(p_full(:,:,k-1) + p_full(:,:,k))
-          end do
-          pflux(:,:,size(p_full,3)+1) = p_full(:,:,size(p_full,3))
-          call aerosol_driver (is, js, Time, r, p_half, pflux, &
-                             Aerosol_cld,Aerosol, override_aerosols_cloud)
-        endif
+        pflux(:,:,1) = 0.0E+00
+        do k=2,size(p_full,3)
+          pflux(:,:,k) = 0.5E+00*(p_full(:,:,k-1) + p_full(:,:,k))
+        end do
+        pflux(:,:,size(p_full,3)+1) = p_full(:,:,size(p_full,3))
+        call aerosol_driver (is, js, Time, r, p_half, pflux, &
+            Aerosol_cld,Aerosol, override_aerosols_cloud)
 
 !------------------------------------------------------------------------
 !   set up pointers to the module variables that are transferred between
@@ -2547,12 +2394,10 @@ real,dimension(:,:),    intent(inout)             :: gust
         Phys_mp_exch%pbltop     => pbltop    (is:ie,js:je  )
         Phys_mp_exch%diff_cu_mo => diff_cu_mo(is:ie,js:je,:)
         Phys_mp_exch%convect    => convect   (is:ie,js:je  )
-        Phys_mp_exch%diff_t_clubb => diff_t_clubb(is:ie,js:je,:)
         Phys_mp_exch%tdt_shf    => tdt_shf 
         Phys_mp_exch%qdt_lhf    => qdt_lhf 
         Phys_mp_exch%hmint      => hmint     (is:ie,js:je  )
         Phys_mp_exch%cgust      => cgust    (is:ie,js:je  )
-        Phys_mp_exch%tke        => tke       (is:ie,js:je  )
         Phys_mp_exch%pblhto     => pblhto    (is:ie,js:je  )
         Phys_mp_exch%rkmo       => rkmo      (is:ie,js:je  )
         Phys_mp_exch%taudpo     => taudpo    (is:ie,js:je  )
@@ -2563,7 +2408,6 @@ real,dimension(:,:),    intent(inout)             :: gust
         Phys_mp_exch%qtsrc_prev    => pblht_prev   (is:ie,js:je,:)
         Phys_mp_exch%cape_prev     => pblht_prev   (is:ie,js:je,:)
         Phys_mp_exch%cin_prev      => pblht_prev   (is:ie,js:je,:)
-        Phys_mp_exch%tke_prev      => pblht_prev   (is:ie,js:je,:)
 
 !-----------------------------------------------------------------------
 !    call moist processes to compute moist physics, including convection 
@@ -2622,7 +2466,7 @@ real,dimension(:,:),    intent(inout)             :: gust
 !    if the Aerosol derived type variable component arrays were allocated, 
 !    call aerosol_dealloc to deallocate them.
 !----------------------------------------------------------------------
-        if (.not. do_grey_radiation) call aerosol_dealloc (Aerosol)
+        call aerosol_dealloc (Aerosol)
 
       !------ CMIP diagnostics (tendencies due to physics) ------
       if (query_cmip_diag_id(ID_tntmp) .or. query_cmip_diag_id(ID_tnhusmp)) then
@@ -2665,10 +2509,6 @@ real,dimension(:,:),    intent(inout)             :: gust
                                        Precip_flux%fl_ccrain(is:ie,js:je,:)
               MP2cosp%fl_ccsnow(:,:,:) =     &
                                        Precip_flux%fl_ccsnow(is:ie,js:je,:)
-              MP2cosp%fl_donmca_rain(:,:,:) =    &
-                                  Precip_flux%fl_donmca_rain(is:ie,js:je,:)
-              MP2cosp%fl_donmca_snow(:,:,:) =    &
-                                  Precip_flux%fl_donmca_snow(is:ie,js:je,:)
             endif
           else
 
@@ -2689,10 +2529,6 @@ real,dimension(:,:),    intent(inout)             :: gust
                                      Precip_flux%fl_ccrain(is:ie,js:je,:)
               MP2cosp%fl_ccsnow(:,:,:) =    &
                                      Precip_flux%fl_ccsnow(is:ie,js:je,:)
-              MP2cosp%fl_donmca_rain(:,:,:) =  &
-                                Precip_flux%fl_donmca_rain(is:ie,js:je,:)
-              MP2cosp%fl_donmca_snow(:,:,:) =  &
-                                Precip_flux%fl_donmca_snow(is:ie,js:je,:)
               Phys2cosp%temp_last(:,:,:) = temp_last(is:ie,js:je,:)
               Phys2cosp%q_last(:,:,:)    = q_last(is:ie,js:je,:)
             endif
@@ -2719,8 +2555,6 @@ real,dimension(:,:),    intent(inout)             :: gust
             deallocate (MP2cosp%fl_lsgrpl)
             deallocate (MP2cosp%fl_ccrain)
             deallocate (MP2cosp%fl_ccsnow)
-            deallocate (MP2cosp%fl_donmca_rain)
-            deallocate (MP2cosp%fl_donmca_snow)
  
             deallocate (Phys2cosp%temp_last)
             deallocate (Phys2cosp%q_last)
@@ -2748,24 +2582,6 @@ real,dimension(:,:),    intent(inout)             :: gust
             if (allocated(Removal_mp%liq_precflxh)) then
                 deallocate(Removal_mp%liq_precflxh)
             endif
-            if (allocated(Removal_mp%frz_mesoh)) then
-                deallocate(Removal_mp%frz_mesoh)
-            endif
-            if (allocated(Removal_mp%liq_mesoh)) then
-                deallocate(Removal_mp%liq_mesoh)
-            endif
-            if (allocated(Removal_mp%frz_cellh)) then
-                deallocate(Removal_mp%frz_cellh)
-            endif
-            if (allocated(Removal_mp%liq_cellh)) then
-                deallocate(Removal_mp%liq_cellh)
-            endif
-            if (allocated(Removal_mp%mca_frzh)) then
-                deallocate(Removal_mp%mca_frzh)
-            endif
-            if (allocated(Removal_mp%mca_liqh)) then
-                deallocate(Removal_mp%mca_liqh)
-            endif
             if (allocated(Removal_mp%rain3d)) then
                 deallocate(Removal_mp%rain3d)
             endif
@@ -2789,7 +2605,6 @@ real,dimension(:,:),    intent(inout)             :: gust
       Phys_mp_exch%diff_t => null()
       Phys_mp_exch%radturbten => null()
       Phys_mp_exch%diff_cu_mo => null()
-      Phys_mp_exch%diff_t_clubb => null()
       Phys_mp_exch%cush   => null()
       Phys_mp_exch%cbmf   => null()
       Phys_mp_exch%pbltop => null()
@@ -2798,7 +2613,6 @@ real,dimension(:,:),    intent(inout)             :: gust
       Phys_mp_exch%qdt_lhf => null()
       Phys_mp_exch%hmint   => null()
       Phys_mp_exch%cgust   => null()
-      Phys_mp_exch%tke     => null()
       Phys_mp_exch%pblhto  => null()
       Phys_mp_exch%rkmo    => null()
       Phys_mp_exch%taudpo  => null()
@@ -2809,7 +2623,6 @@ real,dimension(:,:),    intent(inout)             :: gust
       Phys_mp_exch%qtsrc_prev   => null()
       Phys_mp_exch%cape_prev   => null()
       Phys_mp_exch%cin_prev   => null()
-      Phys_mp_exch%tke_prev   => null()
 
 !-----------------------------------------------------------------------
 
@@ -2855,8 +2668,8 @@ type(block_control_type), intent(in) :: Atm_block
 !--------------------------------------------------------------------
 integer :: n, nb, nc, ibs, ibe, jbs, jbe
 integer :: moist_processes_term_clock, damping_term_clock, turb_term_clock, &
-           diff_term_clock, aerosol_term_clock, clubb_term_clock, &
-           grey_radiation_term_clock, tracer_term_clock, cosp_term_clock
+           diff_term_clock, aerosol_term_clock,  &
+           tracer_term_clock, cosp_term_clock
 
 !---------------------------------------------------------------------
 !    verify that the module is initialized.
@@ -2866,9 +2679,6 @@ integer :: moist_processes_term_clock, damping_term_clock, turb_term_clock, &
               'module has not been initialized', FATAL)
       endif
 
-      clubb_term_clock =      &
-        mpp_clock_id( '   Phys_driver_term: clubb: Termination', &
-                grain=CLOCK_MODULE_DRIVER )
       moist_processes_term_clock =      &
         mpp_clock_id( '   Phys_driver_term: MP: Termination', &
                 grain=CLOCK_MODULE_DRIVER )
@@ -2887,9 +2697,6 @@ integer :: moist_processes_term_clock, damping_term_clock, turb_term_clock, &
       if (do_moist_processes) &
       aerosol_term_clock       =       &
         mpp_clock_id( '   Phys_driver_term: Aerosol: Termination', &
-                       grain=CLOCK_MODULE_DRIVER )
-      grey_radiation_term_clock       =       &
-        mpp_clock_id( '   Phys_driver_term: Grey Radiation: Termination', &
                        grain=CLOCK_MODULE_DRIVER )
       tracer_term_clock          =      &
         mpp_clock_id( '   Phys_driver_term: Tracer: Termination',    &
@@ -2919,14 +2726,6 @@ integer :: moist_processes_term_clock, damping_term_clock, turb_term_clock, &
             Restart%Cloud_data(nc)%snow_size (ibs:ibe,jbs:jbe,:) = Moist_clouds(1)%block(nb)%Cloud_data(nc)%snow_size
           endif
  
-          ! properties specific to donner deep clouds (both cell and meso)
-          if (trim(Moist_clouds(1)%block(nb)%Cloud_data(nc)%scheme_name) .eq. 'donner_cell' .or. &
-              trim(Moist_clouds(1)%block(nb)%Cloud_data(nc)%scheme_name) .eq. 'donner_meso') then
-            Restart%Cloud_data(nc)%liquid_size(ibs:ibe,jbs:jbe,:) = Moist_clouds(1)%block(nb)%Cloud_data(nc)%liquid_size
-            Restart%Cloud_data(nc)%ice_size   (ibs:ibe,jbs:jbe,:) = Moist_clouds(1)%block(nb)%Cloud_data(nc)%ice_size
-            Restart%Cloud_data(nc)%nsum_out   (ibs:ibe,jbs:jbe)   = Moist_clouds(1)%block(nb)%Cloud_data(nc)%nsum_out
-          endif
-
           ! properties specific to uw shallow convective clouds
           if (trim(Moist_clouds(1)%block(nb)%Cloud_data(nc)%scheme_name) .eq. 'uw_conv') then
             Restart%Cloud_data(nc)%ice_number(ibs:ibe,jbs:jbe,:) = Moist_clouds(1)%block(nb)%Cloud_data(nc)%ice_number
@@ -2961,10 +2760,6 @@ integer :: moist_processes_term_clock, damping_term_clock, turb_term_clock, &
         call mpp_clock_end ( aerosol_term_clock )
       endif
 
-      call mpp_clock_begin ( grey_radiation_term_clock )
-      if(do_grey_radiation) call grey_radiation_end 
-      call mpp_clock_end ( grey_radiation_term_clock )
-
       if (do_moist_processes) then  
         call mpp_clock_begin ( moist_processes_term_clock )
         call moist_processes_end ()
@@ -2987,9 +2782,9 @@ integer :: moist_processes_term_clock, damping_term_clock, turb_term_clock, &
 !    deallocate the module variables.
 !---------------------------------------------------------------------
       deallocate (diff_cu_mo, diff_t, diff_m, pbltop, cush, cbmf,  &
-                  hmint, cgust, tke, pblhto, rkmo, taudpo, exist_shconv, &  ! h1g, 2017-01-31
+                  hmint, cgust, pblhto, rkmo, taudpo, exist_shconv, &  ! h1g, 2017-01-31
                   exist_dpconv, & 
-                  pblht_prev, hlsrc_prev, qtsrc_prev, cape_prev, cin_prev, tke_prev, & !h1g, 2017-01-31
+                  pblht_prev, hlsrc_prev, qtsrc_prev, cape_prev, cin_prev, & !h1g, 2017-01-31
                   convect, radturbten, r_convect)
 
       if (do_cosp) then
@@ -2997,12 +2792,9 @@ integer :: moist_processes_term_clock, damping_term_clock, turb_term_clock, &
         deallocate (&
            Precip_flux%fl_lsrain, Precip_flux%fl_lssnow,   &
            Precip_flux%fl_lsgrpl, Precip_flux%fl_ccrain,   &
-           Precip_flux%fl_ccsnow, Precip_flux%fl_donmca_rain,    &
-           Precip_flux%fl_donmca_snow)
+           Precip_flux%fl_ccsnow)
       endif
  
-      deallocate ( diff_t_clubb )
-      
       deallocate (id_tracer_phys_vdif_dn)
       deallocate (id_tracer_phys_vdif_up)
       deallocate (id_tracer_phys_turb)
@@ -3041,7 +2833,6 @@ subroutine physics_driver_restart(timestamp)
      call error_mesg('physics_driver_mod', 'Writing netCDF formatted restart file: RESTART/physics_driver.res.nc', NOTE)
   endif
   call physics_driver_netcdf(timestamp)
-  call vert_turb_driver_restart(timestamp)
 
   call moist_processes_restart(timestamp)
   call damping_driver_restart(timestamp)
@@ -3264,12 +3055,6 @@ subroutine physics_driver_register_restart_scalars (Restart, Phy_restart)
        now_doing_strat = 0
     endif
 
-    if(doing_edt) then
-       now_doing_edt = 1
-    else
-       now_doing_edt = 0
-    endif
-
     if(doing_entrain) then
        now_doing_entrain = 1
     else
@@ -3282,18 +3067,15 @@ subroutine physics_driver_register_restart_scalars (Restart, Phy_restart)
 
   call register_restart_field(Phy_restart, 'vers',          vers, dim_names)
   call register_restart_field(Phy_restart, 'doing_strat',   now_doing_strat, dim_names)
-  call register_restart_field(Phy_restart, 'doing_edt',     now_doing_edt, dim_names)
   call register_restart_field(Phy_restart, 'doing_entrain', now_doing_entrain, dim_names)
 
   if (.not. Phy_restart%is_readonly) then !If not reading the file,
     call register_variable_attribute(Phy_restart, "vers", "long_name", "vers", str_len=len_trim("vers"))
     call register_variable_attribute(Phy_restart, "doing_strat", "long_name", "doing_strat", str_len=len_trim("doing_strat"))
-    call register_variable_attribute(Phy_restart, "doing_edt", "long_name", "doing_edt", str_len=len_trim("doing_edt"))
     call register_variable_attribute(Phy_restart, "doing_entrain", "long_name", "doing_entrain", str_len=len_trim("doing_entrain"))
 
     call register_variable_attribute(Phy_restart, "vers", "units", "none", str_len=4)
     call register_variable_attribute(Phy_restart, "doing_strat", "units", "none", str_len=4)
-    call register_variable_attribute(Phy_restart, "doing_edt", "units", "none", str_len=4)
     call register_variable_attribute(Phy_restart, "doing_entrain", "units", "none", str_len=4)
   endif
 
@@ -3336,7 +3118,6 @@ subroutine physics_driver_register_restart_domain (Restart, Til_restart)
   call register_restart_field(Til_restart, 'cbmf',       cbmf, dim_names_3d, is_optional = .true.)
   call register_restart_field(Til_restart, 'hmint',      hmint, dim_names_3d, is_optional = .true.)
   call register_restart_field(Til_restart, 'cgust',      cgust, dim_names_3d, is_optional = .true.)
-  call register_restart_field(Til_restart, 'tke',        tke, dim_names_3d, is_optional = .true.)
   call register_restart_field(Til_restart, 'pblhto',     pblhto, dim_names_3d, is_optional = .true.)
   call register_restart_field(Til_restart, 'rkmo',       rkmo, dim_names_3d, is_optional = .true.)
   call register_restart_field(Til_restart, 'taudpo',     taudpo, dim_names_3d, is_optional = .true.)
@@ -3347,14 +3128,10 @@ subroutine physics_driver_register_restart_domain (Restart, Til_restart)
   call register_restart_field(Til_restart, 'qtsrc_prev',   qtsrc_prev, dim_names_4d2, is_optional = .true.)
   call register_restart_field(Til_restart, 'cape_prev',    cape_prev, dim_names_4d2, is_optional = .true.)
   call register_restart_field(Til_restart, 'cin_prev',     cin_prev, dim_names_4d2, is_optional = .true.)
-  call register_restart_field(Til_restart, 'tke_prev',     tke_prev, dim_names_4d2, is_optional = .true.)
   call register_restart_field(Til_restart, 'diff_t',     diff_t, dim_names_4d)
   call register_restart_field(Til_restart, 'diff_m',     diff_m, dim_names_4d)
   call register_restart_field(Til_restart, 'convect',    r_convect, dim_names_3d)
 
-  if (do_clubb > 0) then
-    call register_restart_field(Til_restart, 'diff_t_clubb', diff_t_clubb, dim_names_4d, is_optional = .true.)
-  end if
   if (doing_prog_clouds) then
     call register_restart_field(Til_restart, 'radturbten',       radturbten, dim_names_4d)
   endif
@@ -3373,23 +3150,6 @@ subroutine physics_driver_register_restart_domain (Restart, Til_restart)
       call register_restart_field(Til_restart, 'lsc_rain_size',      Restart%Cloud_data(nc)%rain_size, dim_names_4d,      is_optional = .true.)
     endif
     if (trim(Restart%Cloud_data(nc)%scheme_name).eq.'strat_cloud' .and. reproduce_ulm_restart) index_strat = nc
-
-    if (trim(Restart%Cloud_data(nc)%scheme_name).eq.'donner_cell') then
-      call register_restart_field(Til_restart, 'cell_cloud_frac',  Restart%Cloud_data(nc)%cloud_area, dim_names_4d,  is_optional = .true.)
-      call register_restart_field(Til_restart, 'cell_liquid_amt',  Restart%Cloud_data(nc)%liquid_amt, dim_names_4d,  is_optional = .true.)
-      call register_restart_field(Til_restart, 'cell_liquid_size', Restart%Cloud_data(nc)%liquid_size, dim_names_4d, is_optional = .true.)
-      call register_restart_field(Til_restart, 'cell_ice_amt',     Restart%Cloud_data(nc)%ice_amt, dim_names_4d,     is_optional = .true.)
-      call register_restart_field(Til_restart, 'cell_ice_size',    Restart%Cloud_data(nc)%ice_size, dim_names_4d,    is_optional = .true.)
-    endif
-
-    if (trim(Restart%Cloud_data(nc)%scheme_name).eq.'donner_meso') then
-      call register_restart_field(Til_restart, 'meso_cloud_frac',  Restart%Cloud_data(nc)%cloud_area, dim_names_4d,  is_optional = .true.)
-      call register_restart_field(Til_restart, 'meso_liquid_amt',  Restart%Cloud_data(nc)%liquid_amt, dim_names_4d,  is_optional = .true.)
-      call register_restart_field(Til_restart, 'meso_liquid_size', Restart%Cloud_data(nc)%liquid_size, dim_names_4d, is_optional = .true.)
-      call register_restart_field(Til_restart, 'meso_ice_amt',     Restart%Cloud_data(nc)%ice_amt, dim_names_4d,     is_optional = .true.)
-      call register_restart_field(Til_restart, 'meso_ice_size',    Restart%Cloud_data(nc)%ice_size, dim_names_4d,    is_optional = .true.)
-      call register_restart_field(Til_restart, 'nsum',             Restart%Cloud_data(nc)%nsum_out, dim_names_3d,    is_optional = .true.)
-    endif
 
     if (trim(Restart%Cloud_data(nc)%scheme_name).eq.'uw_conv') then
       call register_restart_field(Til_restart, 'shallow_cloud_area',     Restart%Cloud_data(nc)%cloud_area, dim_names_4d,     is_optional = .true.)

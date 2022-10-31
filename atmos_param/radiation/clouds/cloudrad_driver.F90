@@ -156,8 +156,7 @@ type(exchange_control_type), intent(inout) :: Exch_ctrl
       call cloud_spec_init (Exch_ctrl, pref, lonb, latb, axes, Time,   &
                             rad_time_step, Cldrad_control)
 
-      call cloudrad_package_init   (pref, lonb, latb, axes, Time, &
-                       Exch_ctrl%donner_meso_is_largescale, Cldrad_control)
+      call cloudrad_package_init   (pref, lonb, latb, axes, Time, Cldrad_control)
 
 !---------------------------------------------------------------------
 !    set flag to indicate that module has been successfully initialized.

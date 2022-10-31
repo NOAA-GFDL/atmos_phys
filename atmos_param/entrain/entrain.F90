@@ -171,9 +171,6 @@ logical :: convect_shutoff = .false.
 !  Stuff needed to write out extradiagnostics from a single point
 !
     
-integer, dimension(2) :: ent_pts = 0 ! the global indices for i,j
-                                     ! at which diagnostics will 
-                                     ! print out
 logical   :: do_print = .false.      ! should selected variables 
                                      ! be sent to logfile
 logical   :: column_match = .false.  ! should this column be printed 
@@ -194,7 +191,7 @@ namelist /entrain_nml/ wentrmax, parcel_buoy, frac_inner, beta_surf,   &
                        Ashear, beta_rad, radfmin, qdotmin, radperturb, &
                        critjump, zcldtopmax, pr, qamin, parcel_option, &
                        do_jump_exit, convect_shutoff, apply_entrain,   &
-                       ent_pts,  i_entprt_gl, j_entprt_gl, num_pts_ij, &
+                       i_entprt_gl, j_entprt_gl, num_pts_ij,           &
                        num_pts_latlon, lat_entprt, lon_entprt
 
 integer     :: num_pts           !  total number of columns in which
@@ -257,9 +254,6 @@ logical            :: module_is_initialized = .false.
 !      entrain         main driver program of the module
 !
 !      entrain_init    initialization routine       
-!
-!      entrain_tend    adds in the longwave heating rate to the 
-!                      global storage variable
 !
 !      entrain_end     ending routine
 !
@@ -1947,158 +1941,6 @@ end subroutine pbl_depth
 
 !======================================================================= 
 !
-!  Subroutine to do profile reconstuction
-!
-
-! <SUBROUTINE NAME="prof_recon">
-!  <OVERVIEW>
-!      
-!  </OVERVIEW>
-!  <DESCRIPTION>
-!
-!      Subroutine to do profile reconstruction
-!
-!      This is not turned on in the default version as I suspect there is a 
-!      bug in this subroutine.
-!
-!  </DESCRIPTION>
-!  <TEMPLATE>
-!   call prof_recon(rho,t,pf,ph,zt,dt)
-!
-!  </TEMPLATE>
-!  <IN NAME="rho" TYPE="real">
-!       Air density (kg/m3)
-!  </IN>
-!  <IN NAME="t" TYPE="real">
-!       Liquid water virtual static energy divided by cp (K)
-!  </IN>
-!  <IN NAME="pf" TYPE="real">
-!       Full level pressures (Pa)
-!  </IN>
-!  <IN NAME="ph" TYPE="real">
-!       Half level pressures (pa)
-!  </IN>
-!  <OUT NAME="zt" TYPE="real">
-!       Top of radiatively driven layer in distance relative to boundary between cloud top layer and the level below (m)
-!  </OUT>
-!  <OUT NAME="dt" TYPE="real">
-!       Cloud top jump in liquid water virtual static energy divided by cp (K)
-!  </OUT>
-! </SUBROUTINE>
-!
-subroutine prof_recon(rho,t,pf,ph,zt,dt)
-
-!
-!  -----
-!  INPUT
-!  -----
-!
-!  rho    air density (kg/m3)
-!  t      liquid water virtual static energy divided by cp (K)
-!  pf     full level pressure (Pa)
-!  ph     half level pressure (Pa)
-!       
-!  ------
-!  OUTPUT
-!  ------
-!
-!  zt     top of radiatively driven layer in distance relative to
-!         boundary between cloud top layer and the level below (m)
-!  dt     cloud top jump in liquid water virtual static energy divided 
-!         by cp (K)
-!
- 
-real,   intent(in)                    :: rho
-real,   intent(in) ,  dimension(-2:1) :: t, pf
-real,   intent(in) ,  dimension( 0:1) :: ph
-real,   intent(out)                   :: zt, dt
-
-real, dimension(-2:1) :: pfp
-real, dimension( 0:1) :: php
-
-real                         :: slope,textrap
-real                         :: a,b,c,det,pinv,ttop
-
-!-----------------------------------------
-! calculate all pressure relative to ph(0)
-!
-! pfp = full level relative pressures
-! php = half level relative pressures
-!
-!  pfp(-2) < pfp(-1) < php(0) < pfp(0) < php(1) < pfp(1)
-! 
-! Note the following coordinate system
-!
-!            - - - - - - - - - - - - - -    
-!
-!                       *                   pfp(-2)
-!
-!            - - - - - - - - - - - - - - 
-!
-!                       *                   pfp(-1)
-!
-!            - - - - - - - - - - - - - -    php(0)
-!
-!  ambiguous layer ---> *                   pfp(0)
-!
-!            - - - - - - - - - - - - - -    php(1)
-!
-!                       *                   pfp(1)
-!
-!            - - - - - - - - - - - - - -
-!
-
-pfp = pf - ph(0)
-php = ph - ph(0)
-
-!----------------
-! determine slope
-
-slope = min ( (t(-2)-t(-1))/(pfp(-2)-pfp(-1)) , 0. )
-
-! if this slope is such that the mean temperature of level 0 would
-! exceed its actual temperature then assume a minimum protusion of
-! mixed layer into ambiguous layer
-!
-! otherwise compute height of inversion using normal method
-
-
-textrap = t(-1)+slope*(pfp(0)-pfp(-1))
-
-if (textrap .lt. t(0)) then
-
-     zt = 0.1*php(1)/rho/grav
-     dt = t(0)-t(1)
-
-else
-
-     a = 0.5*slope
-     b = t(-1)-t(1)-slope*pfp(-1)
-     c = - php(1)*(t(0)-t(1))
-
-     det = b*b - 4*a*c
-
-     if (a.lt.0.) then
-          pinv = (-b+sqrt(det))/(2*a)
-     else
-          pinv = c/b
-     end if
-     
-     zt = (php(1)-pinv)/rho/grav
-     ttop = t(-1) + slope*(pinv-pfp(-1))
-     
-     dt = ttop - t(1)
-            
-end if
- 
-return
-
-end subroutine prof_recon
-
-!=======================================================================
-
-!======================================================================= 
-!
 !  Subroutine to calculate bottom and depth of radiatively driven mixed
 !  layer
 !
@@ -2285,56 +2127,6 @@ return
 end subroutine diffusivity_pbl
 
 !
-!======================================================================= 
-
-!======================================================================= 
-!
-!      subroutine entrain_tend
-!        
-!
-!      this subroutine takes the longwave heating rate and assigns it
-!      to tdtlw
-!        
-
-!subroutine entrain_tend(is,ie,js,je,tend)
-
-!-----------------------------------------------------------------------
-!
-!      variables
-!
-!      -----
-!      input
-!      -----
-!
-!      is,ie,js,je       i,j indices marking the slab of model 
-!      tend              longwave heating rate (deg K/sec)
-!
-!-----------------------------------------------------------------------
-
-!integer, intent(in)                   :: is,ie,js,je
-!real,    intent(in), dimension(:,:,:) :: tend
-
-!-----------------------------------------------------------------------
-!
-!      assign tendency
-!
-
-!      if (.not. entrain_on) return
-!      tdtlw(is:ie,js:je,:)=tend(:,:,:)
-
-!-----------------------------------------------------------------------
-! 
-!      subroutine end
-!
-
-!end subroutine entrain_tend
-
-!
-!======================================================================= 
-
-
-
-
 !======================================================================= 
 !
 !      subroutine entrain_end

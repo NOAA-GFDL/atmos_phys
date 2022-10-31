@@ -203,11 +203,9 @@ real,dimension(RTTOV_MAX_CHANNELS) :: Surfem = 0.0
                                ! the radiatively-active clouds defined by
                                ! variable cloud_type_form in cloud_spec_nml
                                ! will be sent. Other available choices:
-                               ! 'strat', 'deep', 'uw', 'stratdeep',
-                               ! 'stratuw', deepuw', 'stratdeepuw',
-                               ! 'noprecip'.
-                               ! CURRENTLY NOT AVAILABLE: precip from ras,
-                               ! lsc and mca. For completeness, these could
+                               ! 'strat', 'uw', stratuw', 'noprecip'.
+                               ! CURRENTLY NOT AVAILABLE: precip from
+                               ! lsc. For completeness, these could
                                ! be made available, but since no cloud
                                ! fields are saved for these schemes to be
                                ! made available to COSP, they are also
@@ -569,13 +567,6 @@ type(cosp_from_rad_block_type),  intent(inout) :: Cosp_rad_block
           end do
         end do
       endif
-
-!----------------------------------------------------------------------
-!    add in donner mca precip. if it is desired to not pass this to COSP,
-!    the fields will have been set to 0.0 previously.
-!----------------------------------------------------------------------
-      MP2cosp%fl_ccrain = Mp2cosp%fl_ccrain + MP2cosp%fl_donmca_rain
-      MP2cosp%fl_ccsnow = MP2cosp%fl_ccsnow + MP2cosp%fl_donmca_snow
 
 !---------------------------------------------------------------------
 !    pass in the large-scale graupel flux, lowest-level u and v wind

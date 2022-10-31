@@ -123,36 +123,16 @@ private combined_MP_diagnostics, MP_alloc, MP_dealloc, create_Nml_mp, &
 !                [logical, default: do_unified_clouds=false ]
 !   do_lsc   = switch to turn on/off large scale condensation
 !                [logical, default: do_lsc=false ]
-!   do_mca   = switch to turn on/off moist convective adjustment;
-!                [logical, default: do_mca=false ]
-!   do_ras   = switch to turn on/off relaxed arakawa shubert
-!                [logical, default: do_ras=false ]
 !   do_uw_conv = switch to turn on/off Univ of Wash shallow convect scheme
 !                [logical, default: do_uw_conv=false ]
-!   do_donner_deep = switch to turn on/off donner deep convection scheme
-!                [logical, default: do_donner_deep=false ]
-!   do_dryadj = switch to turn on/off dry adjustment scheme
-!                [logical, default: do_dryadj=false ]
-!   do_bm    = switch to turn on/off betts-miller scheme
-!                [logical, default: do_bm=false ]
-!   do_bmmass  = switch to turn on/off betts-miller massflux scheme
-!                [logical, default: do_bmmass=false ]
-!   do_bmomp  = switch to turn on/off olivier's version of the betts-miller
-!                scheme (with separated boundary layer)
-!                [logical, default: do_bmomp=false ]
 !   do_simple = switch to turn on alternative definition of specific 
 !                humidity. When true, specific humidity = 
 !                (rdgas/rvgas)*esat/pressure
-!   do_rh_clouds = switch to turn on/off simple relative humidity cloud 
-!                scheme
-!                [logical, default: do_rh_clouds=false ]
 !   pdepth   = boundary layer depth in pascals for determining mean
 !                temperature tfreeze (used for snowfall determination)
 !                [real, default =150.e2 Pa]
 !   limit_conv_cloud_frac = 
 !                [logical, default: limit_conv_cloud_frac=false] 
-!   include_donmca_in_cosp =
-!                [logical, default: include_donmca_in_cosp = true]
 !  <DATA NAME="use_online_aerosol" TYPE="logical"  DEFAULT=".true.">
 !   the online aerosol fields should be used for nucleation source
 !   (rather than climo values) ?
@@ -170,31 +150,20 @@ private combined_MP_diagnostics, MP_alloc, MP_dealloc, create_Nml_mp, &
 
 logical :: do_unified_clouds = .false. 
 logical :: do_lsc = .false.
-logical :: do_mca=.false. 
-logical :: do_ras=.false.
 logical :: do_uw_conv=.false.
-logical :: do_donner_deep=.false.
-logical :: do_dryadj=.false.
-logical :: do_bm=.false.
-logical :: do_bmmass =.false.
-logical :: do_bmomp  =.false.
 logical :: do_simple =.false.
-logical :: do_rh_clouds=.false.
 real    :: pdepth = 150.e2
 logical :: limit_conv_cloud_frac = .false.
-logical :: include_donmca_in_cosp = .true.
 logical :: use_online_aerosol = .true.
 logical :: use_sub_seasalt = .false.
 real    :: sea_salt_scale = 0.1
 real    :: om_to_oc = 1.67
 logical :: do_height_adjust = .false.
-   logical :: do_diag_clouds=.false.
 
-namelist /moist_processes_nml/ do_unified_clouds, do_lsc, do_mca, do_ras,   &
-                  do_uw_conv, do_donner_deep, do_dryadj, do_bm,             &
-                  do_bmmass, do_bmomp, do_simple, do_rh_clouds,             &
-                  do_diag_clouds,                         &
-                  pdepth, limit_conv_cloud_frac, include_donmca_in_cosp,    &
+namelist /moist_processes_nml/ do_unified_clouds, do_lsc, &
+                  do_uw_conv, &
+                  do_simple,                           &
+                  pdepth, limit_conv_cloud_frac,  &
                   use_online_aerosol, use_sub_seasalt, sea_salt_scale,      &
                   om_to_oc, do_height_adjust
 
@@ -223,8 +192,7 @@ integer :: id_wetdep_om, id_wetdep_SOA, id_wetdep_bc, &
 type(cmip_diag_id_type) :: ID_cl, ID_clw, ID_cli, ID_hur
 
 integer, dimension(:), allocatable ::  id_wetdep
-integer, dimension(:), allocatable :: id_wetdep_uw, id_wetdep_donner, &
-                                id_wetdepc_donner, id_wetdepm_donner  !f1p
+integer, dimension(:), allocatable :: id_wetdep_uw
 integer, dimension(:), allocatable :: id_wetdep_kg_m2_s
 real, dimension(:), allocatable    :: conv_wetdep, conv_wetdep_kg_m2_s, nb_N_ox, nb_N_red, nb_N
 
@@ -271,7 +239,6 @@ integer :: nH2O2     =0
 !------------------- other global variables and parameters -------------
 
 real    :: strat_precip_in_cosp = 0.
-real    :: donner_precip_in_cosp = 0.
 real    :: uw_precip_in_cosp = 0.
 
 
@@ -293,9 +260,7 @@ logical :: wetdep_diagnostics_desired = .false.
 !-----------------------------------------------------------------------
 !   variables extracted from control variables during _init
 !-----------------------------------------------------------------------
-logical :: donner_meso_is_largescale
 logical :: doing_prog_clouds
-integer :: do_clubb
 logical :: do_cosp
 logical :: use_tau
 integer :: nsphum, nql, nqi, nqa, nqn, nqni, nqr, nqs, nqg
@@ -360,10 +325,8 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
 !   exchange_control_type variable. these variables are needed in both
 !   radiation and physics modules.
 !-----------------------------------------------------------------------
-      do_clubb = Exch_ctrl%do_clubb
       do_cosp = Exch_ctrl%do_cosp
       doing_prog_clouds = Exch_ctrl%doing_prog_clouds
-      donner_meso_is_largescale = Exch_ctrl%donner_meso_is_largescale
 
 !---------------------------------------------------------------------
 !   define  variables needed here that are needed in other physics routines
@@ -408,10 +371,6 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
       if (doing_prog_clouds) then
         Exch_ctrl%ncld = Exch_ctrl%ncld + 1
       endif
-      if (do_donner_deep) then
-        Exch_ctrl%ncld = Exch_ctrl%ncld + 2
-        Exch_ctrl%doing_donner =  .true.      
-      endif
       if (do_uw_conv) then
         Exch_ctrl%ncld = Exch_ctrl%ncld + 1
         Exch_ctrl%doing_uw_conv =  .true.
@@ -424,18 +383,6 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
 !   namelists.
 !----------------------------------------------------------------------
       call create_Nml_mp 
-
-!-----------------------------------------------------------------------
-!   consistency checks for thes namelist variables
-!-----------------------------------------------------------------------
-      if ( (do_rh_clouds) .and. doing_prog_clouds ) &
-        call error_mesg ('moist_processes_init', &
-       'rh_clouds cannot be active when prognostic clouds are', FATAL)
-
-      if (do_donner_deep .and. do_rh_clouds) &  
-           call error_mesg ('moist_processes_init',  &
-            'Cannot currently activate donner_deep_mod with rh_clouds', &
-                                                                   FATAL)
 
 !-------------------------------------------------------------------------
 !   initialize quantities for global precip field
@@ -520,7 +467,7 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
 !    call lscloud_driver_init to initialize the large-scale cloud scheme.
 !-----------------------------------------------------------------------
       call lscloud_driver_init (domain, id,jd,kd, axes, Time, Exch_ctrl, Nml_mp, &
-                                 Physics_control, lon, lat, phalf, pref)
+                                 Physics_control, lon, lat, phalf)
  
 !-----------------------------------------------------------------------
 !   initialize quantities for diagnostics output 
@@ -539,16 +486,16 @@ end subroutine moist_processes_init
 
 !#####################################################################
  
-subroutine moist_processes_time_vary (Time_in, dt_in, i_cell, i_meso, i_shallow)
+subroutine moist_processes_time_vary (Time_in, dt_in, i_shallow)
 
 real, intent(in) :: dt_in
 type(time_type), intent(in) :: Time_in
-integer, intent(in) :: i_cell, i_meso, i_shallow
+integer, intent(in) :: i_shallow
 
 !-----------------------------------------------------------------------
 
       dt = dt_in
-      call convection_driver_time_vary (Time_in, dt_in, i_cell, i_meso, i_shallow)
+      call convection_driver_time_vary (Time_in, dt_in, i_shallow)
       call lscloud_driver_time_vary (dt_in)
 
 end subroutine moist_processes_time_vary
@@ -709,17 +656,12 @@ type(aerosol_type),intent(in), optional :: Aerosol
                Moist_clouds_block, Output_mp, Removal_mp)  
 
 !------------------------------------------------------------------------
-!    define needed output arguments. redefine r to be the value after 
-!    modification in moist_processes (only by clubb ? -- need to check why 
-!    this is) and pass it back to physics_driver.
+!    define needed output arguments. pass it back to physics_driver.
 !------------------------------------------------------------------------
       Phys_mp_exch%convect = Output_mp%convect
       lprec   = Output_mp%lprec  
       fprec   = Output_mp%fprec  
       gust_cv = Output_mp%gust_cv
-      if (do_clubb > 0) then
-        Phys_mp_exch%diff_t_clubb = Output_mp%diff_t_clubb
-      endif
       Phys_mp_exch%diff_cu_mo = Output_mp%diff_cu_mo
  
 !---------------------------------------------------------------------
@@ -816,23 +758,11 @@ character(len=16),        intent(in) :: cosp_precip_sources
 !    define which cloud-producing schemes will have their clouds seen by
 !    the COSP simulator.
 !------------------------------------------------------------------------
-      if (trim(cosp_precip_sources)  == 'stratdeepuw') then
+      if (trim(cosp_precip_sources)  == 'stratuw') then
         strat_precip_in_cosp = 1.
-        donner_precip_in_cosp = 1.
-        uw_precip_in_cosp = 1.
-      else if (trim(cosp_precip_sources)  == 'stratdeep') then
-        strat_precip_in_cosp = 1.
-        donner_precip_in_cosp = 1.
-      else if (trim(cosp_precip_sources)  == 'stratuw') then
-        strat_precip_in_cosp = 1.
-        uw_precip_in_cosp = 1.
-      else if (trim(cosp_precip_sources)  == 'deepuw') then
-        donner_precip_in_cosp = 1.
         uw_precip_in_cosp = 1.
       else if (trim(cosp_precip_sources)  == 'strat') then
         strat_precip_in_cosp = 1.
-      else if (trim(cosp_precip_sources)  == 'deep') then
-        donner_precip_in_cosp = 1.
       else if (trim(cosp_precip_sources)  == 'uw') then
         uw_precip_in_cosp = 1.
       else if (trim(cosp_precip_sources)  == 'noprecip') then
@@ -861,41 +791,11 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
 !    define the grid-box precip flux as the average of the interface 
 !    fluxes.
 !----------------------------------------------------------------------
-      do k=1, size(Removal_mp%frz_meso,3)
-        do j=1, size(Removal_mp%frz_meso,2)
-          do i=1, size(Removal_mp%frz_meso,1)
+      do k=1, size(Removal_mp%rain3d,3)-1
+        do j=1, size(Removal_mp%rain3d,2)
+          do i=1, size(Removal_mp%rain3d,1)
             ii = i+is-1
             jj = j+js-1
-            if (             donner_meso_is_largescale) then
-              Precip_flux%fl_lsrain(ii,jj,k) = 0.5* &
-                   ((strat_precip_in_cosp*  &
-                                  (Removal_mp%rain3d(i,j,k) +    &
-                                        Removal_mp%rain3d(i,j,k+1)) + &
-                     donner_precip_in_cosp*  &
-                                 (Removal_mp%liq_mesoh(i,j,k) +    &
-                                          Removal_mp%liq_mesoh(i,j,k+1))))
-              Precip_flux%fl_lssnow(ii,jj,k) = 0.5*   &
-                   ((strat_precip_in_cosp*   &
-                                   (Removal_mp%snowclr3d(i,j,k) +    &
-                                         Removal_mp%snowclr3d(i,j,k+1)) + &
-                     donner_precip_in_cosp*  &
-                                    (Removal_mp%frz_mesoh(i,j,k) +  &
-                                         Removal_mp%frz_mesoh(i,j,k+1))))
-              Precip_flux%fl_ccrain(ii,jj,k) =  0.5*  &
-                   ((donner_precip_in_cosp* &
-                                    (Removal_mp%liq_cellh(i,j,k) +  &
-                                        Removal_mp%liq_cellh(i,j,k+1)) +  &
-                     uw_precip_in_cosp*   &
-                                (Removal_mp%liq_precflxh(i,j,k) +  &
-                                       Removal_mp%liq_precflxh(i,j,k+1))))
-              Precip_flux%fl_ccsnow(ii,jj,k) =  0.5*  &
-                   ((donner_precip_in_cosp*  &
-                                 (Removal_mp%frz_cellh(i,j,k) +  &
-                                     Removal_mp%frz_cellh(i,j,k+1))  +  &
-                     uw_precip_in_cosp*  &
-                                 (Removal_mp%ice_precflxh(i,j,k) +   &
-                                      Removal_mp%ice_precflxh(i,j,k+1))))
-            else
               Precip_flux%fl_lsrain(ii,jj,k) =  0.5*   &
                      strat_precip_in_cosp*   &
                                    (Removal_mp%rain3d(i,j,k) +     &
@@ -905,34 +805,13 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
                                   (Removal_mp%snowclr3d(i,j,k) +    &
                                             Removal_mp%snowclr3d(i,j,k+1))
               Precip_flux%fl_ccrain(ii,jj,k) =    0.5* &
-                   ((donner_precip_in_cosp*  &
-                              (Removal_mp%liq_mesoh(i,j,k) +    &
-                                   Removal_mp%liq_mesoh(i,j,k+1) +  &
-                                       Removal_mp%liq_cellh(i,j,k) +    &
-                                        Removal_mp%liq_cellh(i,j,k+1)) +  &
                      uw_precip_in_cosp*   &
                              (Removal_mp%liq_precflxh(i,j,k) +    &
-                                      Removal_mp%liq_precflxh(i,j,k+1))))
+                                      Removal_mp%liq_precflxh(i,j,k+1))
                Precip_flux%fl_ccsnow(ii,jj,k) =  0.5*  &
-                   ((donner_precip_in_cosp*  &
-                              (Removal_mp%frz_mesoh(i,j,k) +    &
-                                  Removal_mp%frz_mesoh(i,j,k+1) +  &
-                                     Removal_mp%frz_cellh(i,j,k) +  &
-                                        Removal_mp%frz_cellh(i,j,k+1)) +  &
                      uw_precip_in_cosp*  &
                                (Removal_mp%ice_precflxh(i,j,k) +    &
-                                      Removal_mp%ice_precflxh(i,j,k+1))))
-            endif
-
-            if (include_donmca_in_cosp .and. &
-                              donner_precip_in_cosp .eq. 1.0) then
-               Precip_flux%fl_donmca_snow(ii,jj,k) =   0.5*  &
-                            (Removal_mp%mca_frzh(i,j,k) +   &
-                                           Removal_mp%mca_frzh(i,j,k+1))
-               Precip_flux%fl_donmca_rain(ii,jj,k) =   0.5*  &
-                            (Removal_mp%mca_liqh(i,j,k) +   &
-                                           Removal_mp%mca_liqh(i,j,k+1))
-            endif
+                                      Removal_mp%ice_precflxh(i,j,k+1))
           end do
         end do
       end do
@@ -943,12 +822,6 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
 !-------------------------------------------------------------------------
       deallocate (Removal_mp%ice_precflxh)
       deallocate (Removal_mp%liq_precflxh)
-      deallocate (Removal_mp%frz_mesoh   )
-      deallocate (Removal_mp%liq_mesoh   )
-      deallocate (Removal_mp%frz_cellh   )
-      deallocate (Removal_mp%liq_cellh   )
-      deallocate (Removal_mp%mca_frzh    )
-      deallocate (Removal_mp%mca_liqh    )
       deallocate (Removal_mp%rain3d      )
       deallocate (Removal_mp%snowclr3d      )
 
@@ -990,8 +863,7 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
       real, dimension   &
             (size(Output_mp%rdt,1),size(Output_mp%rdt,2),  &
                                               size(Output_mp%rdt,4)) ::  &
-                       total_wetdep, total_wetdep_uw, total_wetdep_donner,&
-                       total_wetdepc_donner, total_wetdepm_donner
+                       total_wetdep, total_wetdep_uw
       real, dimension  &
             (size(Output_mp%rdt,1),size(Output_mp%rdt,2),   &
                                              size(Output_mp%rdt,3) ) ::  &
@@ -1003,11 +875,9 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
       logical :: used
       real    :: temp
 
-      integer :: i_lsc, i_meso, i_cell, i_shallow
+      integer :: i_lsc, i_shallow
 
       i_lsc = Moist_clouds_block%index_strat
-      i_cell = Moist_clouds_block%index_donner_cell
-      i_meso = Moist_clouds_block%index_donner_meso
       i_shallow = Moist_clouds_block%index_uw_conv
 
 !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1031,7 +901,6 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
 !    obtain wet deposition removal for each tracer species n from:
 !     a) all precip sources combined;
 !     b) from uw convection; 
-!     c) from donner convection.
 !    the wet deposition removal of each species by ls precip is available 
 !    in ls_wetdep. The arrays holding the wet depo removal by the various
 !    convective schemes only have entries for those tracers designated as
@@ -1047,17 +916,6 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
         m = 1
         mm = 1
         do n=1,size(Output_mp%rdt,4)
-          if (Removal_mp_control%tracers_in_donner(n) .and.   &
-                                                    do_donner_deep) then
-            total_wetdep(:,:,n) = total_wetdep(:,:,n) -  &
-                                            Removal_mp%donner_wetdep(:,:,m)
-            total_wetdep_donner(:,:,n) = -Removal_mp%donner_wetdep(:,:,m)
-            total_wetdepc_donner(:,:,n) = -Removal_mp%donner_wetdepc(:,:,m)
-            total_wetdepm_donner(:,:,n) = -Removal_mp%donner_wetdepm(:,:,m)
-            m = m + 1
-          else
-            total_wetdep_donner(:,:,n) = 0.                               
-          endif
           if (Removal_mp_control%tracers_in_uw(n) .and. do_uw_conv) then
             total_wetdep(:,:,n) = total_wetdep(:,:,n) -  &
                                                Removal_mp%uw_wetdep(:,:,mm)
@@ -1090,30 +948,6 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
           endif
         end do
 
-        do n=1, size(Output_mp%rdt,4)
-          if (id_wetdep_donner(n) > 0) then
-             used = send_data (id_wetdep_donner(n),   &
-                      total_wetdep_donner(:,:,n)*conv_wetdep(n),  &
-                                                             Time, is, js)
-          endif
-        end do
-  
-        do n=1, size(Output_mp%rdt,4)
-          if (id_wetdepm_donner(n) > 0) then
-            used = send_data (id_wetdepm_donner(n),    &
-                       total_wetdepm_donner(:,:,n)*conv_wetdep(n),  &
-                                                            Time, is, js)
-           endif
-        end do
-  
-        do n=1, size(Output_mp%rdt,4)
-          if (id_wetdepc_donner(n) > 0) then
-            used = send_data (id_wetdepc_donner(n),   &
-                      total_wetdepc_donner(:,:,n)*conv_wetdep(n),  &
-                                                             Time, is, js)
-          endif
-        end do
- 
         do n=1, size(Output_mp%rdt,4)
           if (id_wetdep_uw(n) > 0) then
             used = send_data (id_wetdep_uw(n),   &
@@ -1164,7 +998,6 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
        temp_2d = 0.0
        do n=1,size(nso4)
           if (nso4(n)>0) then
-             if( do_donner_deep ) temp_2d = temp_2d + (96.0/WTMAIR)*total_wetdep_donner(:,:,nso4(n))
              if( do_uw_conv  )    temp_2d = temp_2d + (96.0/WTMAIR)*total_wetdep_uw    (:,:,nso4(n))
              if( doing_prog_clouds )       temp_2d = temp_2d - 0.096*Removal_mp%ls_wetdep(:,:,nso4(n))
           end if
@@ -1176,7 +1009,6 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
 
      if (id_wetdep_so2 > 0 .or. id_wetso2_cmip > 0) then
        temp_2d = 0.0
-       if( do_donner_deep ) temp_2d = temp_2d + (64.0/WTMAIR)*total_wetdep_donner(:,:,nso2) 
        if( do_uw_conv  )    temp_2d = temp_2d + (64.0/WTMAIR)*total_wetdep_uw    (:,:,nso2)
        if( doing_prog_clouds )       temp_2d = temp_2d - 0.064*Removal_mp%ls_wetdep(:,:,nso2)
        if (id_wetdep_so2  > 0) used = send_data (id_wetdep_so2,  temp_2d, Time, is,js)
@@ -1185,7 +1017,6 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
 
      if (id_wetdep_DMS > 0 .or. id_wetdms_cmip > 0) then
        temp_2d = 0.0
-       if( do_donner_deep ) temp_2d = temp_2d + (62.0/WTMAIR)*total_wetdep_donner(:,:,nDMS) 
        if( do_uw_conv  )    temp_2d = temp_2d + (62.0/WTMAIR)*total_wetdep_uw    (:,:,nDMS)
        if( doing_prog_clouds )       temp_2d = temp_2d - 0.062*Removal_mp%ls_wetdep(:,:,nDMS)
        if (id_wetdep_DMS  > 0) used = send_data (id_wetdep_DMS,  temp_2d, Time, is,js)
@@ -1194,8 +1025,6 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
 
      if (id_wetdep_NH4NO3 > 0 .or. id_wetnh4_cmip > 0) then
        temp_2d = 0.0
-       if( do_donner_deep ) temp_2d = temp_2d + (18.0/WTMAIR)*(total_wetdep_donner(:,:,nnH4NO3) + &
-                                                               total_wetdep_donner(:,:,nNH4) )
        if( do_uw_conv  )    temp_2d = temp_2d + (18.0/WTMAIR)*(total_wetdep_uw(:,:,nNH4NO3) + &
                                                                total_wetdep_uw(:,:,nNH4) )
        if( doing_prog_clouds )       temp_2d = temp_2d - 0.018*(Removal_mp%ls_wetdep(:,:,nNH4NO3) + Removal_mp%ls_wetdep(:,:,nNH4))
@@ -1341,40 +1170,6 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
       if (i_lsc > 0) then
         total_cloud_area = total_cloud_area +   &
                            Moist_clouds_block%cloud_data(i_lsc)%cloud_area
-      endif
-      if (i_cell > 0) then
-        total_cloud_area = total_cloud_area +   &
-                         Moist_clouds_block%cloud_data(i_cell)%cloud_area 
-        total_conv_cloud =  total_conv_cloud + &                   
-             Moist_clouds_block%cloud_data(i_cell)%cloud_area*   &
-                     Moist_clouds_block%cloud_data(i_cell)%ice_amt  +  &
-             Moist_clouds_block%cloud_data(i_cell)%cloud_area*   &
-                     Moist_clouds_block%cloud_data(i_cell)%liquid_amt
-        conv_cld_frac = conv_cld_frac +   &
-               Moist_clouds_block%cloud_data(i_cell)%cloud_area      
-        tot_conv_liq =  tot_conv_liq +  &
-          Moist_clouds_block%cloud_data(i_cell)%cloud_area*    &
-                     Moist_clouds_block%cloud_data(i_cell)%liquid_amt
-        tot_conv_ice =  tot_conv_ice +  &
-          Moist_clouds_block%cloud_data(i_cell)%cloud_area*    &
-                     Moist_clouds_block%cloud_data(i_cell)%ice_amt
-      endif
-      if (i_meso > 0) then
-        total_cloud_area = total_cloud_area +   &
-                          Moist_clouds_block%cloud_data(i_meso)%cloud_area 
-        total_conv_cloud =  total_conv_cloud + &
-             Moist_clouds_block%cloud_data(i_meso)%cloud_area*   &
-                     Moist_clouds_block%cloud_data(i_meso)%ice_amt  +  &
-             Moist_clouds_block%cloud_data(i_meso)%cloud_area*   &
-                     Moist_clouds_block%cloud_data(i_meso)%liquid_amt
-        conv_cld_frac = conv_cld_frac +   &
-               Moist_clouds_block%cloud_data(i_meso)%cloud_area      
-        tot_conv_liq =  tot_conv_liq +  &
-          Moist_clouds_block%cloud_data(i_meso)%cloud_area*    &
-                     Moist_clouds_block%cloud_data(i_meso)%liquid_amt
-        tot_conv_ice =  tot_conv_ice +  &
-          Moist_clouds_block%cloud_data(i_meso)%cloud_area*    &
-                     Moist_clouds_block%cloud_data(i_meso)%ice_amt
       endif
       if (i_shallow > 0) then
         total_cloud_area = total_cloud_area +   &
@@ -1654,29 +1449,23 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
 !    relative humidity:         
 !---------------------------------------------------------------------
       if (id_rh > 0) then
-        if (.not. (       do_rh_clouds                           )) then 
-          call rh_calc (Input_mp%pfull, Input_mp%tin(:,:,:),  &
-                   Input_mp%qin(:,:,:), RH(:,:,:), do_simple )
-           used = send_data (id_rh, rh*100., Time, is, js, 1)
-        endif
+        call rh_calc (Input_mp%pfull, Input_mp%tin(:,:,:),  &
+            Input_mp%qin(:,:,:), RH(:,:,:), do_simple )
+        used = send_data (id_rh, rh*100., Time, is, js, 1)
       endif
 
 !---------------------------------------------------------------------
 !    relative humidity (CMIP formulation):         
 !---------------------------------------------------------------------
       if (id_rh_cmip > 0) then
-        if (.not. (       do_rh_clouds                           )) then
-          call rh_calc (Input_mp%pfull, input_mp%tin, Input_mp%qin, RH, &
-                                   .false.,      do_cmip=.true.)
-          used = send_data (id_rh_cmip, rh*100., Time, is, js, 1)
-        endif
+        call rh_calc (Input_mp%pfull, input_mp%tin, Input_mp%qin, RH, &
+            .false.,      do_cmip=.true.)
+        used = send_data (id_rh_cmip, rh*100., Time, is, js, 1)
       endif
 
     if (query_cmip_diag_id(ID_hur)) then
-      if (.not. (do_rh_clouds .or. do_diag_clouds)) then
-        call rh_calc (Input_mp%pfull, input_mp%tin, Input_mp%qin, RH, &
-                                        .false., do_cmip=.true.)
-      endif
+      call rh_calc (Input_mp%pfull, input_mp%tin, Input_mp%qin, RH, &
+          .false., do_cmip=.true.)
       used = send_cmip_data_3d (ID_hur, rh*100., Time, is, js, 1, phalf=log(Input_mp%phalf))
     endif
 
@@ -1933,18 +1722,10 @@ type(mp2uwconv_type),     intent(inout) :: Mp2uwconv
 !    hold quantities which need to be passed form the convection driver to
 !    the large-scale driver.
 !------------------------------------------------------------------------
-      allocate (C2ls_mp%donner_humidity_area (ix,jx,kx))   
-                                          C2ls_mp%donner_humidity_area = 0.
-      allocate (C2ls_mp%donner_humidity_factor (ix,jx,kx))   
-                                        C2ls_mp%donner_humidity_factor = 0.
       allocate (C2ls_mp%convective_humidity_area (ix,jx,kx))   
                                       C2ls_mp%convective_humidity_area = 0.
       allocate (C2ls_mp%convective_humidity_ratio (ix,jx,kx))   
                                      C2ls_mp%convective_humidity_ratio = 0.
-      allocate (C2ls_mp%conv_frac_clubb    (ix,jx,kx))   
-                                          C2ls_mp%conv_frac_clubb      = 0.
-      allocate (C2ls_mp%convective_humidity_ratio_clubb (ix,jx,kx))   
-                              C2ls_mp%convective_humidity_ratio_clubb = 0.
       allocate (C2ls_mp%wet_data (ix,jx,kx,nt))   ; C2ls_mp%wet_data = 0.   
       allocate (C2ls_mp%cloud_wet (ix,jx,kx))   ; C2ls_mp%cloud_wet = 0.   
       allocate (C2ls_mp%cloud_frac (ix,jx,kx))   ; C2ls_mp%cloud_frac = 0.   
@@ -1969,8 +1750,6 @@ type(mp2uwconv_type),     intent(inout) :: Mp2uwconv
       allocate ( Output_mp%fprec  (ix,jx))    ; Output_mp%fprec   = 0.   
       allocate ( Output_mp%precip  (ix,jx))    ; Output_mp%precip   = 0.   
       allocate ( Output_mp%gust_cv(ix,jx))    ; Output_mp%gust_cv = 0.   
-      Output_mp%diff_t_clubb => Phys_mp_exch%diff_t_clubb
-                                              Output_mp%diff_t_clubb =0.  
       Output_mp%diff_cu_mo  => Phys_mp_exch%diff_cu_mo
                                              Output_mp%diff_cu_mo  = 0. 
 
@@ -1988,26 +1767,6 @@ type(mp2uwconv_type),     intent(inout) :: Mp2uwconv
                                               Removal_mp%ice_precflxh= 0.
       allocate ( Removal_mp%liq_precflxh(ix,jx,kx+1))  
                                               Removal_mp%liq_precflxh= 0.  
-      allocate ( Removal_mp%frz_meso(ix,jx,kx)) ; Removal_mp%frz_meso= 0.  
-      allocate ( Removal_mp%liq_meso(ix,jx,kx)) ; Removal_mp%liq_meso= 0.  
-      allocate ( Removal_mp%frz_cell(ix,jx,kx)) ; Removal_mp%frz_cell= 0.  
-      allocate ( Removal_mp%liq_cell(ix,jx,kx)) ; Removal_mp%liq_cell= 0.  
-      allocate ( Removal_mp%frz_mesoh(ix,jx,kx+1))  
-                                                 Removal_mp%frz_mesoh= 0.  
-      allocate ( Removal_mp%liq_mesoh(ix,jx,kx+1))   
-                                                 Removal_mp%liq_mesoh= 0.  
-      allocate ( Removal_mp%frz_cellh(ix,jx,kx+1))  
-                                                 Removal_mp%frz_cellh= 0.  
-      allocate ( Removal_mp%liq_cellh(ix,jx,kx+1))  
-                                                 Removal_mp%liq_cellh= 0.  
-      allocate ( Removal_mp%mca_frz  (ix,jx,kx))  
-                                                 Removal_mp%mca_frz  = 0. 
-      allocate ( Removal_mp%mca_liq  (ix,jx,kx))  
-                                                 Removal_mp%mca_liq  = 0.  
-      allocate ( Removal_mp%mca_frzh (ix,jx,kx+1))  
-                                                  Removal_mp%mca_frzh = 0. 
-      allocate ( Removal_mp%mca_liqh (ix,jx,kx+1))  
-                                                 Removal_mp%mca_liqh = 0.  
       allocate ( Removal_mp%rain3d   (ix,jx,kx+1))  
                                                  Removal_mp%rain3d   = 0.  
       allocate ( Removal_mp%snow3d   (ix,jx,kx+1))  
@@ -2017,18 +1776,6 @@ type(mp2uwconv_type),     intent(inout) :: Mp2uwconv
       allocate ( Removal_mp%uw_wetdep (ix,jx,  &
                                        Removal_mp_control%num_uw_tracers)) 
                                                Removal_mp%uw_wetdep   = 0. 
-      allocate ( Removal_mp%donner_wetdep  &
-                                  (ix,jx,    &
-                                   Removal_mp_control%num_donner_tracers)) 
-                                          Removal_mp%donner_wetdep   = 0.  
-      allocate ( Removal_mp%donner_wetdepm  &
-                                  (ix,jx,    &
-                                   Removal_mp_control%num_donner_tracers)) 
-                                         Removal_mp%donner_wetdepm   = 0.  
-      allocate ( Removal_mp%donner_wetdepc  &
-                                  (ix,jx,    &
-                                   Removal_mp_control%num_donner_tracers)) 
-                                         Removal_mp%donner_wetdepc   = 0.  
       allocate ( Removal_mp%ls_wetdep   (ix,jx,nt)) 
                                                Removal_mp%ls_wetdep   = 0.
 
@@ -2128,12 +1875,8 @@ type(mp2uwconv_type),   intent(inout) :: Mp2uwconv
       deallocate (Tend_mp%qnidt_conv )
       deallocate (Tend_mp%q_tnd      )
 
-      deallocate (C2ls_mp%donner_humidity_area)
-      deallocate (C2ls_mp%donner_humidity_factor)
       deallocate (C2ls_mp%convective_humidity_area)
       deallocate (C2ls_mp%convective_humidity_ratio)
-      deallocate (C2ls_mp%conv_frac_clubb   )
-      deallocate (C2ls_mp%convective_humidity_ratio_clubb)
       deallocate (C2ls_mp%wet_data              )
       deallocate (C2ls_mp%cloud_wet             )
       deallocate (C2ls_mp%cloud_frac            )
@@ -2143,18 +1886,7 @@ type(mp2uwconv_type),   intent(inout) :: Mp2uwconv
       deallocate (Removal_mp%ice_precflx)
       deallocate (Removal_mp%liq_precflx)
 
-      deallocate (Removal_mp%frz_meso    )
-      deallocate (Removal_mp%liq_meso    )
-      deallocate (Removal_mp%frz_cell    )
-      deallocate (Removal_mp%liq_cell    )
-
-      deallocate (Removal_mp%mca_frz     )
-      deallocate (Removal_mp%mca_liq     )
-
       deallocate (Removal_mp%uw_wetdep      )
-      deallocate (Removal_mp%donner_wetdep      )
-      deallocate (Removal_mp%donner_wetdepm     )
-      deallocate (Removal_mp%donner_wetdepc     )
       deallocate (Removal_mp%ls_wetdep      )
 
       Output_mp%tdt => null()
@@ -2169,7 +1901,6 @@ type(mp2uwconv_type),   intent(inout) :: Mp2uwconv
       deallocate (Output_mp%gust_cv)
 
       Output_mp%convect => null()
-      Output_mp%diff_t_clubb => null()
       Output_mp%diff_cu_mo    => null()
 
       deallocate (Mp2uwconv%shflx  )
@@ -2188,20 +1919,11 @@ end subroutine MP_dealloc
 subroutine create_Nml_mp 
 
 
-      Nml_mp%do_mca =  do_mca
       Nml_mp%do_lsc =  do_lsc
-      Nml_mp%do_ras =  do_ras
       Nml_mp%do_uw_conv  = do_uw_conv
       Nml_mp%limit_conv_cloud_frac = limit_conv_cloud_frac
-      Nml_mp%do_dryadj = do_dryadj
       Nml_mp%pdepth = pdepth
-      Nml_mp%include_donmca_in_cosp  = include_donmca_in_cosp
       Nml_mp%do_simple = do_simple
-      Nml_mp%do_rh_clouds = do_rh_clouds
-      Nml_mp%do_donner_deep = do_donner_deep
-      Nml_mp%do_bm =  do_bm  
-      Nml_mp%do_bmmass = do_bmmass
-      Nml_mp%do_bmomp = do_bmomp
       Nml_mp%do_unified_clouds = do_unified_clouds
       Nml_mp%use_online_aerosol = use_online_aerosol
       Nml_mp%use_sub_seasalt = use_sub_seasalt
@@ -2226,7 +1948,7 @@ integer                     :: id_wetdep_cmip
 !   local variables:
 
       character(len=32)     :: tracer_units, tracer_name
-      character(len=128)    :: diaglname, diaglname_uw, diaglname_donner
+      character(len=128)    :: diaglname, diaglname_uw
       integer, dimension(3) :: half = (/1,2,4/)
       integer               :: n, nn, outunit
 
@@ -2520,9 +2242,6 @@ integer                     :: id_wetdep_cmip
 !------------------------------------------------------------------------
       allocate (id_wetdep          (num_prog_tracers))
       allocate (id_wetdep_uw       (num_prog_tracers))
-      allocate (id_wetdep_donner   (num_prog_tracers))
-      allocate (id_wetdepc_donner  (num_prog_tracers))
-      allocate (id_wetdepm_donner  (num_prog_tracers))
       allocate (id_wetdep_kg_m2_s  (num_prog_tracers))
       allocate (conv_wetdep        (num_prog_tracers))
       allocate (conv_wetdep_kg_m2_s(num_prog_tracers))
@@ -2531,9 +2250,6 @@ integer                     :: id_wetdep_cmip
       allocate (nb_N               (num_prog_tracers))
       id_wetdep         = -1
       id_wetdep_uw      = -1
-      id_wetdep_donner  = -1
-      id_wetdepc_donner = -1
-      id_wetdepm_donner = -1
       id_wetdep_kg_m2_s = -1
       
        outunit = stdout()
@@ -2571,9 +2287,6 @@ integer                     :: id_wetdep_cmip
         diaglname_uw = trim(tracer_name)//  &
                         ' wet deposition from uw'
 
-        diaglname_donner = trim(tracer_name)//  &
-                        ' wet deposition from donner'
-
         if ( tracer_units .eq. "vmr" ) then
           id_wetdep(n) = register_diag_field ( mod_name, &
               TRIM(tracer_name)//'_wet_depo',  &
@@ -2584,27 +2297,6 @@ integer                     :: id_wetdep_cmip
                        register_diag_field ( mod_name, &
                        TRIM(tracer_name)//'_wet_depo_uw',  &
                        axes(1:2), Time, trim(diaglname_uw), &
-                       'mole/m2/s',  &
-                       missing_value=missing_value)
-
-          id_wetdep_donner(n) = &
-                       register_diag_field ( mod_name, &
-                       TRIM(tracer_name)//'_wet_depo_donner',  &
-                       axes(1:2), Time, trim(diaglname_donner), &
-                       'mole/m2/s',  &
-                       missing_value=missing_value)
-
-          id_wetdepm_donner(n) = &
-                       register_diag_field ( mod_name, &
-                       TRIM(tracer_name)//'_wet_depo_m_donner',  &
-                       axes(1:2), Time, trim(diaglname_donner)//" meso", &
-                       'mole/m2/s',  &
-                       missing_value=missing_value)
-
-          id_wetdepc_donner(n) = &
-                       register_diag_field ( mod_name, &
-                       TRIM(tracer_name)//'_wet_depo_c_donner',  &
-                       axes(1:2), Time, trim(diaglname_donner)//" deep ",&
                        'mole/m2/s',  &
                        missing_value=missing_value)
 
@@ -2626,27 +2318,6 @@ integer                     :: id_wetdep_cmip
                        axes(1:2), Time, trim(diaglname_uw), &
                        'kg/m2/s',  &
                        missing_value=missing_value)
-
-          id_wetdep_donner(n) = &
-                       register_diag_field ( mod_name, &
-                       TRIM(tracer_name)//'_wet_depo_donner',  &
-                       axes(1:2), Time, trim(diaglname_donner), &
-                       'kg/m2/s',  &
-                       missing_value=missing_value)
-
-          id_wetdepm_donner(n) = &
-                       register_diag_field ( mod_name, &
-                       TRIM(tracer_name)//'_wet_depo_m_donner',  &
-                       axes(1:2), Time, trim(diaglname_donner)//" meso", &
-                       'kg/m2/s',  &
-                       missing_value=missing_value)
-
-          id_wetdepc_donner(n) = &
-                      register_diag_field ( mod_name, &
-                      TRIM(tracer_name)//'_wet_depo_c_donner',  &
-                      axes(1:2), Time, trim(diaglname_donner)//" deep " , &
-                      'kg/m2/s',  &
-                      missing_value=missing_value)
 
         conv_wetdep(n) = 1.
         conv_wetdep_kg_m2_s(n) = 1. ! no conversion needed
@@ -2682,8 +2353,6 @@ subroutine moist_processes_restart(timestamp)
   character(len=*), intent(in), optional :: timestamp
  
 ! if (doing_prog_clouds)       call strat_cloud_restart(timestamp)
-! if (do_diag_clouds) call diag_cloud_restart(timestamp)
-!  if (do_donner_deep) call donner_deep_restart(timestamp)
   call convection_driver_restart (timestamp)
 
 end subroutine moist_processes_restart
