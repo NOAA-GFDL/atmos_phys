@@ -1,83 +1,52 @@
-## The basics:
+# Contributing To am5_phys
 
-#### 1. Create  a local copy of the default branch of a repository.
-```
-git clone https://gitlab.gfdl.noaa.gov/fms/{repo_name}.git 
-```
-If you are running from an xml, you can skip this step and cd to your source directory. 
+Thank you for taking time to contribute.
 
-#### 2. Create a new local branch to make changes on
-Your branch should be in the format of /user/**ini**/**BranchName** where **ini** 
-are your initals and **BranchName** is a name that describes the purpose of your
-branch.  Avoid using a BranchName like *bugfix* or *update* because this is not
-descritive.
-```
-git checkout -b {branch name}
-```
-#### 3. Make code changes
-#### 4. Commit changes
+am5_phys is the repository where AM5 phys code exists. 
 
-##### 4.1 See the changes that you made:
-```
-git status
-```
+What follows is a set of guidelines and how-tos for contributing to am5_phys.
+These are guidelines, not rules.  Use your best judgement and feel free to
+propose changes to this document in a merge request.
 
-##### 4.2 Add changes to the commit:
-```
-git add path/file
-```
-which will add only the files specified. 
+Table of Contents
+* [Quick Start Workflow](#quick-start-workflow)
+* [Policies](#policies)
+* [Merge Requests](#merge-requests)
+* [Reporting bugs or issues](#Reporting bugs or issues)
+* [Tests](#tests)
+* [Style Guide](#styleguides)
+* [Release Schedule](#release-schedule)
 
-```
-git add -u 
-```
-which will add only the files that were changed and already exist in the repo.
+## Quick Start Workflow
 
-```
-git add .
-```
-which will add all the files that were changed including any new files.
+To contribute to this repository see this [step by step guide](MERGE_FOR_AM5_PHYS.md)
 
-##### 4.3 Create the commit:
-```
-git commit -m "Descriptive message of what was done"
-```
-#### 5. Push changes
-```
-git push origin branch_name
-```
+## Policies 
 
-#### 6. Repeat steps 3-6 until code is finished!
+* Branch names should be descriptive of what they change.  A branch name of `bugFix` is not specific enough
+* Commit messages must be descriptive.  `"Typo"` or `"Bug fix"` is not an acceptable git message. Write the
+message with the knowlege that someone will look at it in a year and want to know what this commit does.
+* Commit messages should be in the present tense. `"Updates the coupler_nml hyperthreading switch"` 
+* Branches must be kept up-to-date with the main branch.
 
-## Creating a merge request:
-Once your code updates at pushed to gitlab, you are ready to create a merge request!
-#### 1. Pulling changes from main branch:
-Before submitted a merge request, it is important to keep your development branch in synch with the main repo, this will help avoid any merge conflicts that may arise. 
-```
-git fetch
-git pull origin main
-```
-#### 1.2 Fixing merge conflicts:
-At some point, you will receive messages that files have merge conflicts after pulling changes from the main branch. This happens when both branches/commits changed the same lines of code. These must be resolved before your code is merged to the main branch. 
-- `git status` will show files that need to be resolved. 
-- Open the file with your favorite text editor
-- Fix the conflicts and delete the <<<<< ====== >>>>>> lines
-- Add your files `git add file`
-- Commit your changes
+## Merge Requests
 
-#### 2. Opening a merge request:
-[Submit a merge request using the web interface](https://gitlab.gfdl.noaa.gov/fms/am5_phys/-/merge_requests/new)
+Submit merge requests for bug fixes, improvements, including tests, or alerts to
+particular problems in the code.  We perform merge requests based on an internal
+GFDL schedule that addresses the needs of the GFDL scientists.  This release
+schedule is better described in the Release Schedule sections.  
 
-- The source branch is your branch.
-- The target branch is the `main` branch.
-- The merge request tile should be short and descriptive
-- Add a description of what you changed
-- If there is a issue that this merge request is solving link it to the merge request
-- Indicate how the code was tested. What xml was used? What experiments did you used? What compiler? What system? And any other information.
-- Indicate whether your answers reproduce and any namelist options that need to be added. If answers do not reproduce provide an explanation. 
-- Indicate at least one reviewer to review your code
-- Complete the checklist
-- Once the reviewer(s) approves assign the merge request to Uriel Ramirez
+Please keep the changes in a single merge to be as small as possible to help
+reviewer(s) quickly evaluate changes.  If you do have a large update, try to
+split the update into small, logical merge requests.
+
+Once a merge request is created, a maintainer of the am5_phys repository will 
+review the changes, and, if necessary, will work with the author of the merge 
+request to modify their code changes. Note that merging merge requests is
+contingent on several factors, including the ability to support the changes
+long-term, portability, and the scope of the impact on the code base. Therefore,
+we do not guarantee that all merge requests will be accepted,
+even if the changes pass the initial testing phases, and are otherwise correct.
 
 ## Reporting bugs or issues
 [Open a new issue using the web interface](https://gitlab.gfdl.noaa.gov/fms/am5_phys/-/issues/new) describing the bug you are solving or the feature you are adding to the code. 
@@ -86,27 +55,18 @@ At some point, you will receive messages that files have merge conflicts after p
 - The issue description should be clear and concise. Include enough information to help others reproduce the issue, or understand the change requested. 
 - Assign the issue to the person that will be fixing it.
 
-## Other helpful commands
-```
-git diff
-```
-This will show you the uncomitted changes.
+## Tests
 
-```
-git diff <commit hash> <commit hash> 
-```
-This will show you the difference between two commits
+Users are reponsible for testing their updates and ensuring reproducibility.  If 
+reproducibility is broken, then the user must document the reasons for changing the
+answers, and this must be accepted by a maintainer of the am5_phys.
 
-```
-git revert <commit hash> 
-```
-This will undo a commit, while keeping past commits. It will also create a new commit showing that it has been reverted. Best for keeping the history intact when the reverted commits have already been pushed to the remote repository.
+If adding new experiments, regression tests and continuous integration must be updated
+ to support the new experiment.  More on this as we work through what this will look like.
 
-```
-git reset <commit hash>
-```
-This will go back to the given commit while deleting any past commits after the given hash. This essentially sets the repository back to it's state from the given commit. Best for when commits only exist locally and can be lost without changing the remote's commit history.
-```
-git cherry-pick <commit hash>
-```
-This will apply an existing commit from another branch to your current branch, a commit can be 'cherrypicked' and added on top of the current history. Similar to a merge, but only adds one commit to the top instead of merging an entire history.
+## Style Guide
+Code updates should follow the coding style for the project, contained in the [style guide](#STYLE.md)
+
+## Release Schedule
+
+Releases will be tagged using the format yyyy.rr[.pp], where yyyy is the 4-digit year, rr is the 2-digit release number, and pp is the 2-digit patch number. Preliminary releases mean for testing (i.e., code that is still under development) will be marked yyyy.rr.alpha.pp or yyyy.rr.beta.pp. Alpha tags mark code updates that are intended for developers to include in their baseline regression tests to determine whether the code contains bugs not encountered during baseline testing. Beta tags are intended for a wider audience of developers and end users to ensure that their simulations run as expected and reproduce prior results.
