@@ -34,7 +34,7 @@ If you haven't followed the quickstart, you can clone the original repository to
 version, and then add the remote to access your fork:
 ```
 git clone https://gitlab.gfdl.noaa.gov/fms/am5_phys.git
-cd am5xml
+cd am5_phys
 git add myfork https://gitlab.gfdl.noaa.gov/{gitlab_username}/am5_phys.git
 ```
 
