@@ -1,13 +1,27 @@
 # AM5_Phys
 This is the repository that contains AM5 physics!
-## Table of contents
-* [Running AM5](README.md#running-am5)
-* [Guidelines for Contributing](README.md#guidelines-for-contributing)
-* [Using am5_phys in existing xmls](README.md#using-am5_phys-in-existing-xmls)
-## Running AM5
-To run this code please refer to the instuctions in the [AM5xml repo](https://gitlab.gfdl.noaa.gov/m5/am5xml#quickstart)
-## Guidelines for Contributing
-To contribute to this code. Please refer to the [contribution guide](https://gitlab.gfdl.noaa.gov/fms/am5_phys/-/blob/main/CONTRIBUTING.md)
+## How to get started?
+- ### [Quickstart for running AM5 models](https://gitlab.gfdl.noaa.gov/m5/am5xml#quickstart)
+	-  Commands for running models, post-processing and testing with this code base with the AM5 XML
+- ### [Quickstart for submitting AM5_physics **code** merge requests](MERGE_FOR_AM5_PHYS.md)
+	- Please also see the repository [policies](POLICIES.md) and [contribution guide](CONTRIBUTING.md) before submitting a merge request
+	- For updates to the am5 **xmls** please see the [instructions](https://gitlab.gfdl.noaa.gov/m5/am5xml/-/blob/main/MERGE_FOR_XML.md) for that repository.
+
+## Documentation and Policies
+- ### [Reproducibility Checking](https://gitlab.gfdl.noaa.gov/m5/am5xml/-/blob/main/REPRODUCIBILITY.md)
+- ### [Contributing Guidelines](CONTRIBUTING.md)
+- ### [Style Guide](STYLE.md)
+- ### [FRE and XML tips](https://gitlab.gfdl.noaa.gov/m5/am5xml#fre-and-xml-tips-1)
+- ### [Policies](POLICIES.md)
+- ### Git and Gitlab documentation
+	- ### [Git and Gitlab FAQ and Best Practices](FAQ.md)
+	- ### [MSD General Guide to git](https://sites.google.com/noaa.gov/oar-gfdl-msd-docs/github-gitlab/git-guide-and-best-practices)
+- ### [GFDL Fair Use Policy](#gfdl-fair-use-policy-for-code-and-data)
+Please visit the above link for the entire fair use policy.  Below is the appendix related to Experimental Models
+
+### GFDL Fair Use Policy for Experimental GFDL models
+Experimental GFDL models refers to models (e.g., a coupled climate model), model components (e.g., parameterization schemes), and model configurations (e.g., the specific arrangement and parameter settings of model components) arising from model development efforts at GFDL, but whose formulation and configuration have not yet been documented in the peer-reviewed literature, as well as outputs from simulations with these models. Those wishing to make use of such data should contact the model developers to discuss potential model use, and request approval from the developers for planned use of the data. It is strongly desired that such use would be in the form of a collaboration with the developers. Any products derived from the model use (papers, presentations, etc.) should give appropriate credit to both the model developers and the collaborators.
+
 ## Using am5_phys in existing xmls
 There are a few modifications to an XML in order switch to the am5_phys code. 
 An XML will have a section in the compile experiment that looks like the following:
