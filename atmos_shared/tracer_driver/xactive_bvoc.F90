@@ -227,6 +227,7 @@ logical             :: do_ONLINE_LAI     = .false.,  &         ! flag: online le
                        do_ONLINE_SM      = .false.,  &         ! flag: online soil mositure
                        do_ONLINE_CO2     = .false.             ! flag: online CO2 concentrations
 
+logical             :: use_isop_shrub_crop_bug = .false.       ! if T, swap shrub and crop emission potentials and distributions
 logical             :: fix_megan2_isop   = .TRUE.              ! if T, increases isop emis factors by 50% to achieve ~500 Tg/yr global
 
 real                :: T_s = 297.                              ! Temperature that represents standard conditions [K]
@@ -277,9 +278,11 @@ namelist /xactive_bvoc_nml/                     &
                              RHO_CANOPY,        &
                              min_land_frac,     &
                              T_s,               &
-                             scale_isoprene_emissions,      &
-                             scale_terpene_emissions      
-
+                             scale_isoprene_emissions, &
+                             scale_terpene_emissions,  &
+                             use_isop_shrub_crop_bug,  &
+                             fix_megan2_isop,   &
+                             verbose
 
 logical                     :: Ldebug = .false.
 logical                     :: module_is_initialized = .false.
@@ -786,7 +789,8 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                                                     'pft05','pft06','pft07','pft08',             &
                                                     'pft09','pft10','pft11','pft12',             &
                                                      'pft13','pft14','pft15','pft16', 'pft17'/)
-   character(len=3) :: vegnames(nVEG)         =  (/ 'ntr', 'btr', 'crp', 'grs', 'shr' /)
+!  character(len=3) :: vegnames(nVEG)         =  (/ 'ntr', 'btr', 'crp', 'grs', 'shr' /)
+   character(len=3) :: vegnames(nVEG)         =  (/ 'ntr', 'btr', 'shr', 'grs', 'crp' /)
 
    character(len=7) :: terpnames_megan3(8)    =  (/'MT_PINE', 'MT_ACYC', 'MT_CAMP',         &
                                                    'MT_SABI', 'MT_AROM', 'MT_OXY ',         &
@@ -936,6 +940,9 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
          ALLOCATE( LDFg_TERP (nlon,nlat,nTERP) )
       ENDIF
    ENDIF
+
+
+   if (use_isop_shrub_crop_bug) vegnames(:) =  (/ 'ntr', 'btr', 'crp', 'grs', 'shr' /)
 
    indices(:) = 0
    xknt = 0
