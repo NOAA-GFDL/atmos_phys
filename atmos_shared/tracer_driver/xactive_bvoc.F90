@@ -169,7 +169,8 @@ use           constants_mod, only : SECONDS_PER_DAY,       &
 use         horiz_interp_mod, only: horiz_interp_type,     &
                                     horiz_interp_init,     &
                                     horiz_interp_new,      &
-                                    horiz_interp
+                                    horiz_interp,          &
+                                    horiz_interp_del
 use       diag_manager_mod, only  : send_data,             &
                                     register_diag_field,   &
                                     register_static_field, &
@@ -358,9 +359,6 @@ real, allocatable, dimension(:,:,:)       :: diag_gamma_age,  &
 real, allocatable, dimension(:,:)         :: diag_gamma_age_megan3, &
                                              diag_gamma_lai_megan3, &
                                              diag_gamma_bdlai_megan3
-
-
-type (horiz_interp_type), save :: Interp
 
 !---- version number ---------------------------------------------------
 character(len=128), parameter :: version     = '$Id$'
@@ -840,6 +838,7 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
    type(FmsNetcdfFile_t)       ::  ecfile_obj !< Netcdf fileobj
    type(FmsNetcdfDomainFile_t) ::  Til_restart !< Domain decomposed fileobj
    integer, allocatable, dimension(:) :: pes !< Array of pes in the current pelist
+   type (horiz_interp_type)    :: Interp
 
    nlon = size(lonb,1) - 1
    nlat = size(latb,2) - 1
@@ -1064,6 +1063,7 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                   call read_data (ecfile_obj,vegnames(j),AM3_ISOP_DATAIN)
                   call horiz_interp (Interp,AM3_ISOP_DATAIN,ECISOP_AM3(:,:,j), verbose=verbose)
                ENDDO
+               call horiz_interp_del( Interp )
                call close_file(ecfile_obj)
             ELSE
                   call error_mesg ('xactive_bvoc_init',  &
@@ -1123,6 +1123,7 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                         call horiz_interp (Interp,MEGAN3_DATAIN,                  &
                                            LDFg_TERP(:,:,k), verbose=verbose)
                      ENDDO!nterp
+                     call horiz_interp_del( Interp )
                      call close_file(ecfile_obj)
                     else
                      call error_mesg ('xactive_bvoc_init',  &
@@ -1136,11 +1137,12 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                     ENDIF
                     if (open_file(ecfile_obj,ecfile,"read")) then
                      call horiz_interp_init
-                     call horiz_interp_new (Interp, m3inlone, m3inlate, lonb, latb )
+                     call horiz_interp_new ( Interp, m3inlone, m3inlate, lonb, latb )
                      call read_data (ecfile_obj,'EF',MEGAN3_DATAIN)
                      call horiz_interp (Interp, MEGAN3_DATAIN,ECBVOC_MEGAN3(:,:,xknt))
                      call read_data (ecfile_obj,'LDF',MEGAN3_DATAIN)
                      call horiz_interp (Interp, MEGAN3_DATAIN, LDFg(:,:,xknt ))
+                     call horiz_interp_del( Interp )
                      call close_file(ecfile_obj)
                     else
                      call error_mesg ('xactive_bvoc_init',  &
@@ -1177,6 +1179,7 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                      call horiz_interp (Interp,MEGAN3_DATAIN,ECBVOC_MEGAN3(:,:,xknt), verbose=verbose)
                      call read_data (ecfile_obj,'LDF',MEGAN3_DATAIN)
                      call horiz_interp (Interp,MEGAN3_DATAIN,LDFg(:,:,xknt), verbose=verbose)
+                     call horiz_interp_del( Interp )
                      call close_file(ecfile_obj)
                ENDIF
             ENDIF ! xactive_algorithm
@@ -2862,6 +2865,7 @@ end function fGAMMA_PAR_AM4
    logical                               :: used
    real                                  :: dlat, dlon
    type(FmsNetcdfFile_t)                 :: tasfile_obj !< Fms2io fileobj
+   type (horiz_interp_type)              :: Interp
 
    nlon = size(lonb,1) - 1
    nlat = size(latb,2) - 1
@@ -2907,6 +2911,7 @@ end function fGAMMA_PAR_AM4
             used = send_data(id_tas(m),Tmo(:,:,m))
          ENDIF
       ENDDO
+      call horiz_interp_del( Interp )
       call close_file(tasfile_obj)
    ELSE
       call error_mesg ('temp_init_AM3',  &
@@ -2948,6 +2953,7 @@ subroutine ppfd_init_AM3 (lonb, latb, axes)
    real                                    :: dlat, dlon
    real, parameter                         :: const0 = 4.766
    type(FmsNetcdfFile_t)                   :: dswfile_obj !< Fms2io fileobj
+   type (horiz_interp_type)                :: Interp
 
    nlon = size(lonb,1) - 1
    nlat = size(latb,2) - 1
@@ -2999,6 +3005,7 @@ subroutine ppfd_init_AM3 (lonb, latb, axes)
            used = send_data(id_dsw(m),Pmo(:,:,m))
         ENDIF
      ENDDO
+     call horiz_interp_del( Interp )
      call close_file(dswfile_obj)
   ELSE
      call error_mesg ('ppfd_init_AM3',  &
@@ -3047,6 +3054,7 @@ subroutine pft_init_AM3( lonb, latb, axes )
    integer                                  :: id_pft(nPFT)
    real, dimension(nlonin,nlatin,nPFT)      :: datapft
    type(FmsNetcdfFile_t)                    :: file_PFT_obj !< Fms2io fileobj
+   type (horiz_interp_type)                 :: Interp
 
    nlon = size(lonb,1) - 1
    nlat = size(latb,1) - 1
@@ -3107,6 +3115,7 @@ subroutine pft_init_AM3( lonb, latb, axes )
       ENDDO
 ! Scale the percentages to a fraction
       PCTPFT(:,:,:) = 0.01 * PCTPFT(:,:,:)
+      call horiz_interp_del( Interp )
       call close_file(file_PFT_obj)
    ELSE
       call error_mesg ('lai_pft_init', &
@@ -3152,6 +3161,8 @@ subroutine lai_init_AM3( lonb,latb, axes )
                                             'lai09','lai10','lai11','lai12', &
                                             'lai13','lai14','lai15','lai16', &
                                             'lai17'/)
+   type (horiz_interp_type)                  :: Interp
+
    nlon = size(lonb,1) - 1
    nlat = size(latb,1) - 1
 
@@ -3212,6 +3223,7 @@ subroutine lai_init_AM3( lonb,latb, axes )
             ENDIF
          ENDDO
       ENDDO
+      call horiz_interp_del( Interp )
       call close_file(file_LAI_obj)
    ELSE
       call error_mesg ('lai_init_AM3',  &
@@ -3252,6 +3264,7 @@ subroutine lai_init_megan3( lonb,latb, axes )
    logical                                   :: used
    real, dimension(nlonin,nlatin,nMOS)       :: datalai
    type(FmsNetcdfFile_t)                     :: file_LAI_obj !< Fms2io fileobj
+   type (horiz_interp_type)                  :: Interp
 
    IF ( file_LAI =='INPUT/mksrf_lai.060929.nc' ) THEN
       call error_mesg ('lai_init_megan3, incorrect file for MEGAN3', &
@@ -3291,6 +3304,7 @@ subroutine lai_init_megan3( lonb,latb, axes )
             ENDIF
          ENDIF
       ENDDO
+      call horiz_interp_del( Interp )
       call close_file(file_LAI_obj)
    ELSE
       call error_mesg ('lai_init_megan3',  &
@@ -3330,6 +3344,7 @@ subroutine fcover_init_megan3( lonb,latb, axes )
    logical                                   :: used
    real, dimension(nlonin,nlatin,nMOS)       :: datain
    type(FmsNetcdfFile_t)                     :: file_FCOVER_obj !< Fms2io fileobj
+   type (horiz_interp_type)                  :: Interp
 
    IF (open_file(file_FCOVER_obj, file_FCOVER, "read")) THEN
 ! Set up for input grid
@@ -3363,6 +3378,8 @@ subroutine fcover_init_megan3( lonb,latb, axes )
             ENDIF
          ENDIF
       ENDDO
+      call horiz_interp_del( Interp )
+      call close_file(file_FCOVER_obj)
    ELSE
       call error_mesg ('fcover_init_megan3',  &
            'fcover file: '//file_FCOVER//' does not exist', FATAL)
