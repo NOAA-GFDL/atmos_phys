@@ -35,9 +35,9 @@ module qe_moist_convection_mod
   ! approximating the relation between vapor pressure and specific
   ! humidity.) 
   !----------------------------------------------------------------------
-  use            fms_mod, only:  error_mesg,  &
+  use            fms_mod, only:  error_mesg, stdlog, &
                                  check_nml_error, mpp_pe, FATAL
-  use         fms_io_mod, only:  close_file, open_file, file_exist
+  use            mpp_mod, only:  input_nml_file, mpp_pe, mpp_root_pe
   use sat_vapor_pres_mod, only:  escomp, descomp
   use      constants_mod, only:  HLv, HLs, Cp_air, Grav, rdgas, rvgas, &
                                  kappa
@@ -110,28 +110,18 @@ contains
     !
     !-----------------------------------------------------------------------
   
-    integer  lcl_temp_table_size, unit, io, ierr
+    integer  lcl_temp_table_size, logunit, io, ierr
 
     !----------- read namelist ---------------------------------------------
-
-    if (file_exist('input.nml')) then
-       unit = open_file (file='input.nml', action='read')
-       ierr = 1
-       do while (ierr /= 0)
-          read  (unit, nml=qe_moist_convection_nml, iostat=io, end=10)
-          ierr = check_nml_error(io, 'qe_moist_convection_nml')
-       end do
-10     call close_file(unit)
-    endif
+    read (input_nml_file, nml=qe_moist_convection_nml, iostat=io)
+    ierr = check_nml_error(io,"qe_moist_convection_nml")
 
     !---------- output namelist --------------------------------------------
-
-    unit = open_file (file='logfile.out', action='append')
-    if ( mpp_pe() == 0 ) then
-       write (unit,'(/,80("="),/(a))') trim(version), trim(tag)
-       write (unit,nml=qe_moist_convection_nml)
+    logunit = stdlog()
+    if (mpp_pe() == mpp_root_pe() ) then
+      write(logunit, nml=qe_moist_convection_nml)
+      call write_version_number (version, tag)
     endif
-    call close_file(unit)
 
     do_init = .false.
     
