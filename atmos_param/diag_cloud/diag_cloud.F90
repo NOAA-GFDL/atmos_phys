@@ -1,5 +1,5 @@
 MODULE DIAG_CLOUD_MOD
-
+#ifdef use_deprecated_io
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !
@@ -3458,5 +3458,5 @@ end subroutine diag_cloud_restart
 
 !#######################################################################
 
-
+#endif
 end MODULE DIAG_CLOUD_MOD
