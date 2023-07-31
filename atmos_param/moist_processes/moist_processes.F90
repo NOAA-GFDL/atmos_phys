@@ -1197,7 +1197,6 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
        if (id_wetss_cmip     > 0) used = send_data (id_wetss_cmip,     total_wetdep_seasalt, Time, is,js) 
      endif
 
-     if (id_wetdep_dust > 0 .or. id_wetdust_cmip > 0) then
      do n=1, n_dust_tracers
         nbin_dust=dust_tracers(n)%tr
         total_wetdep_dust(:,:)=total_wetdep_dust(:,:)+total_wetdep(:,:,nbin_dust)
@@ -1205,7 +1204,6 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
      call atmos_dust_wetdep_flux_set(-total_wetdep_dust, is,ie,js,je)
        if (id_wetdep_dust  > 0) used = send_data (id_wetdep_dust,  total_wetdep_dust, Time, is,js) 
        if (id_wetdust_cmip > 0) used = send_data (id_wetdust_cmip, total_wetdep_dust, Time, is,js) 
-     endif
 
 
      total_wetdep_nred  = 0.
