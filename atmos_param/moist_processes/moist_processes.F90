@@ -288,7 +288,6 @@ type(MP_nml_type)      :: Nml_mp
 !ype(MP_removal_type)  :: Removal_mp
 type(MP_removal_control_type)  :: Removal_mp_control
 
-logical :: wetdep_diagnostics_desired = .false.
 
 !-----------------------------------------------------------------------
 !   variables extracted from control variables during _init
@@ -1015,7 +1014,6 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
 !-----------------------------------------------------------------------
 !    if any wet deposition diagnostics are desired, execute the following.
 !-----------------------------------------------------------------------
-      if (wetdep_diagnostics_desired) then
 
 !--------------------------------------------------------------------
 !    obtain wet deposition removal for each tracer species n from:
@@ -1225,7 +1223,6 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
      endif
 
      
-      endif ! (wetdep_diagnostics_desired)
 
 !---------------------------------------------------------------------
 !    total precipitation (all sources):
@@ -2402,32 +2399,26 @@ integer                     :: id_wetdep_cmip
       id_wetdep_om = register_diag_field ( mod_name, &
         'om_wet_dep',  axes(1:2), Time,  &
         'total om wet deposition', 'kg/m2/s',  missing_value=missing_value)
-      if (id_wetdep_om > 0) wetdep_diagnostics_desired = .true.
 
       id_wetdep_SOA = register_diag_field ( mod_name, &
         'SOA_wet_dep',  axes(1:2), Time,  &
         'total SOA wet deposition', 'kg/m2/s', missing_value=missing_value)
-      if (id_wetdep_SOA > 0) wetdep_diagnostics_desired = .true.
 
       id_wetdep_bc = register_diag_field ( mod_name, &
         'bc_wet_dep',  axes(1:2), Time,  &
         'total bc wet deposition', 'kg/m2/s',  missing_value=missing_value)
-      if (id_wetdep_bc > 0) wetdep_diagnostics_desired = .true.
 
       id_wetdep_so4 = register_diag_field ( mod_name, &
         'so4_wet_dep',  axes(1:2), Time,  &
         'total so4 wet deposition', 'kg/m2/s', missing_value=missing_value)
-      if (id_wetdep_so4 > 0) wetdep_diagnostics_desired = .true.
 
       id_wetdep_so2 = register_diag_field ( mod_name, &
         'so2_wet_dep',  axes(1:2), Time,  &
         'total so2 wet deposition', 'kg/m2/s', missing_value=missing_value)
-      if (id_wetdep_so2 > 0) wetdep_diagnostics_desired = .true.
 
       id_wetdep_DMS = register_diag_field ( mod_name, &
         'DMS_wet_dep',  axes(1:2), Time,  &
         'total DMS wet deposition', 'kg/m2/s', missing_value=missing_value)
-      if (id_wetdep_DMS > 0) wetdep_diagnostics_desired = .true.
 
       if (nNH4NO3 .ne. NO_TRACER .and. nNH4 .ne. NO_TRACER) then
         id_wetdep_NH4NO3 =  register_diag_field ( mod_name, &
@@ -2437,19 +2428,16 @@ integer                     :: id_wetdep_cmip
       else
         id_wetdep_NH4NO3 = 0
       endif
-      if (id_wetdep_NH4NO3 > 0) wetdep_diagnostics_desired = .true.
 
       id_wetdep_seasalt   =  register_diag_field ( mod_name, &
         'ssalt_wet_dep',  axes(1:2), Time,  &
         'total seasalt wet deposition', 'kg/m2/s',  &
                                                missing_value=missing_value)
-      if (id_wetdep_seasalt > 0) wetdep_diagnostics_desired = .true.
 
       id_wetdep_dust   =  register_diag_field ( mod_name, &
         'dust_wet_dep',  axes(1:2), Time,  &
         'total dust wet deposition', 'kg/m2/s',   &
                                               missing_value=missing_value)
-      if (id_wetdep_dust > 0) wetdep_diagnostics_desired = .true.
 
       id_n_ox_wdep = register_cmip_diag_field_2d ( mod_name, 'fam_noy_wetdep_kg_m2_s', Time,  &
            'wet deposition of noy incl aerosol nitrate', 'kg m-2 s-1', &
@@ -2480,7 +2468,6 @@ integer                     :: id_wetdep_cmip
         if (TRIM(cmip_names(ic)) .eq. 'so2'  ) id_wetso2_cmip  = id_wetdep_cmip
         if (TRIM(cmip_names(ic)) .eq. 'dms'  ) id_wetdms_cmip  = id_wetdep_cmip
         if (TRIM(cmip_names(ic)) .eq. 'nh4'  ) id_wetnh4_cmip  = id_wetdep_cmip
-        if (id_wetdep_cmip > 0) wetdep_diagnostics_desired = .true.
       enddo
      !-----------------------------------------------
 
@@ -2525,7 +2512,6 @@ integer                     :: id_wetdep_cmip
                                'Wet Deposition Rate of '//TRIM(cmip_longname2), 'kg m-2 s-1', &
                            standard_name='minus_tendency_of_atmosphere_mass_content_of_'//TRIM(cmip_name)//'_due_to_wet_deposition')
         end if
-        if (id_wetdep_kg_m2_s(n) > 0) wetdep_diagnostics_desired = .true.
  
         if (id_wetdep_kg_m2_s(n) > 0) then
           if (tracer_mw < 0.0) then
@@ -2626,7 +2612,6 @@ integer                     :: id_wetdep_cmip
           conv_wetdep_kg_m2_s(n) = 0.
         end if 
 
-        if (id_wetdep(n) > 0) wetdep_diagnostics_desired = .true.
 
       end do
 
