@@ -984,7 +984,6 @@ subroutine cg_drag_register_restart(Cg_restart)
 
   dim_names(1) = "Time"
   call register_axis(Cg_restart, dim_names(1), unlimited)
-  call register_restart_field(Cg_restart, "restart_version", vers, dim_names)
   call register_restart_field(Cg_restart, "cgdrag_alarm", cgdrag_alarm, dim_names)
   call register_restart_field(Cg_restart, "cg_drag_freq", old_time_step, dim_names)
 

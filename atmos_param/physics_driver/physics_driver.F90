@@ -3280,22 +3280,22 @@ subroutine physics_driver_register_restart_scalars (Restart, Phy_restart)
   dim_names(1) = "Time"
   call register_axis(Phy_restart, dim_names(1), unlimited)
 
-  call register_restart_field(Phy_restart, 'vers',          vers, dim_names)
-  call register_restart_field(Phy_restart, 'doing_strat',   now_doing_strat, dim_names)
-  call register_restart_field(Phy_restart, 'doing_edt',     now_doing_edt, dim_names)
-  call register_restart_field(Phy_restart, 'doing_entrain', now_doing_entrain, dim_names)
+!  call register_restart_field(Phy_restart, 'vers',          vers, dim_names)
+!  call register_restart_field(Phy_restart, 'doing_strat',   now_doing_strat, dim_names)
+!  call register_restart_field(Phy_restart, 'doing_edt',     now_doing_edt, dim_names)
+!  call register_restart_field(Phy_restart, 'doing_entrain', now_doing_entrain, dim_names)
 
-  if (.not. Phy_restart%is_readonly) then !If not reading the file,
-    call register_variable_attribute(Phy_restart, "vers", "long_name", "vers", str_len=len_trim("vers"))
-    call register_variable_attribute(Phy_restart, "doing_strat", "long_name", "doing_strat", str_len=len_trim("doing_strat"))
-    call register_variable_attribute(Phy_restart, "doing_edt", "long_name", "doing_edt", str_len=len_trim("doing_edt"))
-    call register_variable_attribute(Phy_restart, "doing_entrain", "long_name", "doing_entrain", str_len=len_trim("doing_entrain"))
+!  if (.not. Phy_restart%is_readonly) then !If not reading the file,
+!    call register_variable_attribute(Phy_restart, "vers", "long_name", "vers", str_len=len_trim("vers"))
+!    call register_variable_attribute(Phy_restart, "doing_strat", "long_name", "doing_strat", str_len=len_trim("doing_strat"))
+!    call register_variable_attribute(Phy_restart, "doing_edt", "long_name", "doing_edt", str_len=len_trim("doing_edt"))
+!    call register_variable_attribute(Phy_restart, "doing_entrain", "long_name", "doing_entrain", str_len=len_trim("doing_entrain"))
 
-    call register_variable_attribute(Phy_restart, "vers", "units", "none", str_len=4)
-    call register_variable_attribute(Phy_restart, "doing_strat", "units", "none", str_len=4)
-    call register_variable_attribute(Phy_restart, "doing_edt", "units", "none", str_len=4)
-    call register_variable_attribute(Phy_restart, "doing_entrain", "units", "none", str_len=4)
-  endif
+!    call register_variable_attribute(Phy_restart, "vers", "units", "none", str_len=4)
+!    call register_variable_attribute(Phy_restart, "doing_strat", "units", "none", str_len=4)
+!    call register_variable_attribute(Phy_restart, "doing_edt", "units", "none", str_len=4)
+!    call register_variable_attribute(Phy_restart, "doing_entrain", "units", "none", str_len=4)
+!  endif
 
 end subroutine physics_driver_register_restart_scalars
 
