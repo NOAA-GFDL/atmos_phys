@@ -1691,6 +1691,8 @@ subroutine physics_driver_down (is, ie, js, je, npz,              &
                                 gust,                             &
                                 Rad_flux_control,                 &
                                 Rad_flux_block,                   &
+                                shflx, lhflx,                     & ! optional input not used by am4 physics
+                                wind, thv_atm, thv_surf,          & ! optional input not used by am4 physics
                                 diffm, difft  )
 
 !---------------------------------------------------------------------
@@ -1718,6 +1720,8 @@ real,dimension(:,:),     intent(out)            :: gust
 type(surf_diff_type),    intent(inout)          :: Surf_diff
 type(radiation_flux_control_type),  intent(in)  :: Rad_flux_control
 type(radiation_flux_block_type),    intent(in)  :: Rad_flux_block
+real,  dimension(:,:),   intent(in), optional   :: shflx, lhflx            ! optional input not used by am4 physics
+real,  dimension(:,:),   intent(in), optional   :: wind, thv_atm, thv_surf ! optional input not used by am4 physics
 real,  dimension(:,:,:), intent(out)  ,optional :: diffm, difft 
 
 !-----------------------------------------------------------------------
