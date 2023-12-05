@@ -590,6 +590,10 @@ subroutine micro_mg2_tend (  lon, lat, &
   real(r8) :: qstend1(mgncol,nlev)
   real(r8) :: nrtend1(mgncol,nlev)
   real(r8) :: nstend1(mgncol,nlev)
+
+  real(r8) :: prect1(mgncol)
+  real(r8) :: preci1(mgncol)
+
 !<-- h1g, 2019-12-05
 
   ! local workspace
@@ -1110,6 +1114,9 @@ subroutine micro_mg2_tend (  lon, lat, &
   qstend1 = 0._r8
   nrtend1 = 0._r8
   nstend1 = 0._r8
+
+  prect1 = 0._r8
+  preci1 = 0._r8
 !<-- h1g, 2019-12-05
 
   ! initialize microphysics output
@@ -1175,7 +1182,7 @@ subroutine micro_mg2_tend (  lon, lat, &
   meltsdttot=0._r8
   frzrdttot=0._r8
   mnuccdtot=0._r8 
- 
+
   rflx=0._r8
   sflx=0._r8
   lflx=0._r8
@@ -2624,8 +2631,11 @@ if ( do_implicit_fall ) then
       qcsedten(i,k)= qcsedten(i,k) + (dum_1D(k) - dumc(i,k))/deltat
       qctend(i,k)  = qctend(i,k)   + (dum_1D(k) - dumc(i,k))/deltat
     enddo
-    if ( precip .ge. 0.0 ) then  !h1g, 2019-11-26, ensure numerical stability
-      prect(i) = prect(i)+precip/g/deltat/1000._r8  
+    if ( precip .ge. 0.0_r8 ) then  !h1g, 2019-11-26, ensure numerical stability
+      prect(i) = prect(i)+precip/g/deltat/1000._r8 
+    else 
+      qvlat(i,nlev) = qvlat(i,nlev) + precip/deltat/pdel(i,nlev)
+      tlat(i,nlev)  = tlat(i,nlev) - precip/deltat/pdel(i,nlev) * xxlv 
     endif
   enddo
 
@@ -2650,9 +2660,12 @@ if ( do_implicit_fall ) then
       qisedten(i,k)= qisedten(i,k) + (dum_1D(k) - dumi(i,k))/deltat
       qitend(i,k)  = qitend(i,k)   + (dum_1D(k) - dumi(i,k))/deltat
     enddo
-    if ( precip .ge. 0.0 ) then !h1g, 2019-11-26, ensure numerical stability
+    if ( precip .ge. 0.0_r8 ) then !h1g, 2019-11-26, ensure numerical stability
       prect(i) = prect(i) + precip/g/deltat/1000._r8
       preci(i) = preci(i) + precip/g/deltat/1000._r8
+    else 
+      qvlat(i,nlev) = qvlat(i,nlev) + precip/deltat/pdel(i,nlev)
+      tlat(i,nlev)  = tlat(i,nlev) - precip/deltat/pdel(i,nlev) * xxls
     endif
   enddo
 
@@ -2677,8 +2690,11 @@ if ( do_implicit_fall ) then
        qrsedten(i,k)= qrsedten(i,k) + (dum_1D(k) - dumr(i,k))/deltat
        qrtend (i,k) = qrtend(i,k)   + (dum_1D(k) - dumr(i,k))/deltat
      enddo
-     if ( precip .ge. 0.0 ) then !h1g, 2019-11-26, ensure numerical stability
+     if ( precip .ge. 0.0_r8 ) then !h1g, 2019-11-26, ensure numerical stability
        prect(i) = prect(i)+precip/g/deltat/1000._r8
+     else 
+      qvlat(i,nlev) = qvlat(i,nlev) + precip/deltat/pdel(i,nlev)
+      tlat(i,nlev)  = tlat(i,nlev) - precip/deltat/pdel(i,nlev) * xxlv 
      endif
   enddo
 
@@ -2704,9 +2720,12 @@ if ( do_implicit_fall ) then
        qssedten(i,k)= qssedten(i,k) + (dum_1D(k) - dums(i,k))/deltat
        qstend(i,k)  = qstend(i,k)   + (dum_1D(k) - dums(i,k))/deltat
     enddo
-    if ( precip .ge. 0.0 ) then !h1g, 2019-11-26, ensure numerical stability
+    if ( precip .ge. 0.0_r8 ) then !h1g, 2019-11-26, ensure numerical stability
       prect(i) = prect(i)+precip/g/deltat/1000._r8
       preci(i) = preci(i)+precip/g/deltat/1000._r8
+    else 
+      qvlat(i,nlev) = qvlat(i,nlev) + precip/deltat/pdel(i,nlev)
+      tlat(i,nlev)  = tlat(i,nlev) - precip/deltat/pdel(i,nlev) * xxls
     endif
   enddo
  ! snow water (number) sedimentation
@@ -3065,6 +3084,9 @@ endif
   nstend1 = nstend1 + nstend
   ns = ns + nstend*deltat
 
+  prect1 = prect1 + prect
+  preci1 = preci1 + preci
+
 !--> h1g, 2019-12-12, remove tiny or negative hydrometeor mass or number 
 !--> in order to avoid numerical instability
   do k=1, nlev
@@ -3074,12 +3096,11 @@ endif
             diag_4l(i,j,k,diag_pt%qidt_tiny) =           &
             diag_4l(i,j,k,diag_pt%qidt_tiny) - qi(i,k)/deltat
         qitend1(i,k)     = qitend1(i,k) - qi(i,k)/deltat
-        qi(i,k)          = 0.0  
-
         qvlat1(i,k)      = qvlat1(i,k) + qi(i,k)/deltat
         q(i,k)           = q(i,k)      + qi(i,k)
         tlat1(i,k)       = tlat1(i,k)  - qi(i,k)/deltat*xxls
         t(i,k)           = t(i,k)      - qi(i,k)*xxls/cpp
+        qi(i,k)          = 0.0
       endif
     enddo
   enddo
@@ -3090,7 +3111,6 @@ endif
         if (diag_id%qnidt_tiny + diag_id%qni_tiny_col > 0) &
             diag_4l(i,j,k,diag_pt%qnidt_tiny) =           &
             diag_4l(i,j,k,diag_pt%qnidt_tiny) - ni(i,k)/deltat
-
         nitend1(i,k)     = nitend1(i,k) - ni(i,k)/deltat
         ni(i,k)          = 0.0
       endif
@@ -3103,14 +3123,12 @@ endif
         if (diag_id%qsdt_tiny + diag_id%qs_tiny_col > 0) &
             diag_4l(i,j,k,diag_pt%qsdt_tiny) =           &
             diag_4l(i,j,k,diag_pt%qsdt_tiny) - qs(i,k)/deltat
-
         qstend1(i,k)     = qstend1(i,k) - qs(i,k)/deltat
-        qs(i,k)          = 0.0  
-
         qvlat1(i,k)      = qvlat1(i,k) + qs(i,k)/deltat
         q(i,k)           = q(i,k)      + qs(i,k)
         tlat1(i,k)       = tlat1(i,k)  - qs(i,k)/deltat*xxls
         t(i,k)           = t(i,k)      - qs(i,k)*xxls/cpp
+        qs(i,k)          = 0.0  
       endif
     enddo
   enddo
@@ -3121,7 +3139,6 @@ endif
         if (diag_id%qnsdt_tiny + diag_id%qns_tiny_col > 0) &
             diag_4l(i,j,k,diag_pt%qnsdt_tiny) =           &
             diag_4l(i,j,k,diag_pt%qnsdt_tiny) - ns(i,k)/deltat
-
         nstend1(i,k)     = nstend1(i,k) - ns(i,k)/deltat
         ns(i,k)          = 0.0
       endif
@@ -3135,12 +3152,11 @@ endif
             diag_4l(i,j,k,diag_pt%qldt_tiny) =           &
             diag_4l(i,j,k,diag_pt%qldt_tiny) - qc(i,k)/deltat
         qctend1(i,k)     = qctend1(i,k) - qc(i,k)/deltat
-        qc(i,k)          = 0.0  
-
         qvlat1(i,k)      = qvlat1(i,k) + qc(i,k)/deltat
         q(i,k)           = q(i,k)      + qc(i,k)
         tlat1(i,k)       = tlat1(i,k)  - qc(i,k)/deltat*xxlv
         t(i,k)           = t(i,k)      - qc(i,k)*xxlv/cpp
+        qc(i,k)          = 0.0  
       endif
     enddo
   enddo
@@ -3151,7 +3167,6 @@ endif
         if (diag_id%qndt_tiny + diag_id%qn_tiny_col > 0) &
             diag_4l(i,j,k,diag_pt%qndt_tiny) =           &
             diag_4l(i,j,k,diag_pt%qndt_tiny) - nc(i,k)/deltat
-
         nctend1(i,k)     = nctend1(i,k) - nc(i,k)/deltat
         nc(i,k)          = 0.0
       endif
@@ -3165,12 +3180,11 @@ endif
             diag_4l(i,j,k,diag_pt%qrdt_tiny) =           &
             diag_4l(i,j,k,diag_pt%qrdt_tiny) - qr(i,k)/deltat
         qrtend1(i,k)     = qrtend1(i,k) - qr(i,k)/deltat
-        qr(i,k)          = 0.0
-
         qvlat1(i,k)      = qvlat1(i,k) + qr(i,k)/deltat
         q(i,k)           = q(i,k)      + qr(i,k)
         tlat1(i,k)       = tlat1(i,k)  - qr(i,k)/deltat*xxlv
         t(i,k)           = t(i,k)      - qr(i,k)*xxlv/cpp
+        qr(i,k)          = 0.0
       endif
     enddo
   enddo
@@ -3181,7 +3195,6 @@ endif
         if (diag_id%qnrdt_tiny + diag_id%qnr_tiny_col > 0) &
             diag_4l(i,j,k,diag_pt%qnrdt_tiny) =           &
             diag_4l(i,j,k,diag_pt%qnrdt_tiny) - nr(i,k)/deltat
-
         nrtend1(i,k)     = nrtend1(i,k) - nr(i,k)/deltat
         nr(i,k)          = 0.0
       endif
@@ -3214,8 +3227,8 @@ endif
 end do substepping ! iter loop, sub-step
   deltat = deltatin
 
-prect  = prect/real(iter) 
-preci  = preci/real(iter)
+prect  = prect1/real(iter) 
+preci  = preci1/real(iter)
 
 lflx   = lflx /real(iter)
 iflx   = iflx /real(iter)

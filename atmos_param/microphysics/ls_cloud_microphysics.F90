@@ -1212,13 +1212,13 @@ real,                        intent(in), dimension(:,:) :: lon, lat
                 do i=1,ix
                   do k=1,kx
                     enth_micro_col(i,j) = enth_micro_col(i,j)   +         &
-                        ( ST_micro(i,j,k) - HLV*SL_micro(i,j,k) -   &
-                                         HLS*SI_micro(i,j,k) )*    &
+                        ( ST_micro(i,j,k) - HLV*SL_micro(i,j,k) - HLV*SR_micro(i,j,k)  &
+                                          - HLS*SI_micro(i,j,k) - HLS*SS_micro(i,j,k) )*    &
                                              Atmos_state%delp(i,j,k)/grav
 
                     wat_micro_col(i,j) = wat_micro_col(i,j)  +            &
-                         ( SQ_micro(i,j,k) + SL_micro(i,j,k) +  &
-                                        SI_micro(i,j,k) )*   &
+                         ( SQ_micro(i,j,k) + SL_micro(i,j,k) +  SR_micro(i,j,k) &
+                                           + SI_micro(i,j,k) +  SS_micro(i,j,k) )*   &
                                              Atmos_state%delp(i,j,k)/grav
                   enddo
   
@@ -1478,6 +1478,10 @@ real, dimension (:,:,:),    intent(in)    :: SL_micro, SI_micro, SQ_micro, SR_mi
         do j=1,jx
           do i=1,ix
             m1(i,j) = 0.
+            Lsdiag_mp%diag_4d(i,j,1,   &
+                            Lsdiag_mp_control%diag_pt%rain_mass_conv) = 0.0
+            Lsdiag_mp%diag_4d(i,j,1,   &
+                            Lsdiag_mp_control%diag_pt%snow_mass_conv) = 0.0
             do k=1,kx
               m1(i,j) = m1(i,j) +   &
                    (SQ_micro(i,j,k) + SL_micro(i,j,k) + SI_micro(i,j,k) + SR_micro(i,j,k) + SS_micro(i,j,k) )* &

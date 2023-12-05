@@ -3653,21 +3653,42 @@ type(mp_removal_type),   intent(inout) :: Removal_mp
 !---------------------------------------------------------------------
         if (id_enth_ls_col > 0) then
           temp_2d = -HLV*Precip_state%surfrain -HLS*Precip_state%surfsnow
-          call column_diag(id_enth_ls_col, is, js, Time,  &
+!--> h1g, 2022-03-18
+          if ( nqr /= NO_TRACER .and. nqs /= NO_TRACER   )  then   
+            call column_diag(id_enth_ls_col, is, js, Time,  &
+                        Tend_mp%ttnd(:,:,:), CP_AIR,   &
+                        Tend_mp%q_tnd(:,:,:,nql)+Tend_mp%q_tnd(:,:,:,nqr), -HLV,  &
+                        Tend_mp%q_tnd(:,:,:,nqi)+Tend_mp%q_tnd(:,:,:,nqs), -HLS,   &
+                                                  Input_mp%pmass, temp_2d) 
+          else     
+            call column_diag(id_enth_ls_col, is, js, Time,  &
                         Tend_mp%ttnd(:,:,:), CP_AIR,   &
                         Tend_mp%q_tnd(:,:,:,nql), -HLV,  &
                         Tend_mp%q_tnd(:,:,:,nqi), -HLS,   &
                                                   Input_mp%pmass, temp_2d) 
+          endif
+!<-- h1g, 2022-03-18
+
         endif
  
         if (id_wat_ls_col > 0) then
           temp_2d = Precip_state%surfrain+Precip_state%surfsnow
-          call column_diag(id_wat_ls_col, is, js, Time,   &
+!--> h1g, 2022-03-18
+          if ( nqr /= NO_TRACER .and. nqs /= NO_TRACER   )  then   
+            call column_diag(id_wat_ls_col, is, js, Time,   &
+                     Tend_mp%qtnd(:,:,:), 1.0, &
+                     Tend_mp%q_tnd(:,:,:,nql)+Tend_mp%q_tnd(:,:,:,nqr), 1.0,  &
+                     Tend_mp%q_tnd(:,:,:,nqi)+Tend_mp%q_tnd(:,:,:,nqs), 1.0,   &
+                                                Input_mp%pmass, temp_2d) 
+          else        
+            call column_diag(id_wat_ls_col, is, js, Time,   &
                      Tend_mp%qtnd(:,:,:), 1.0, &
                      Tend_mp%q_tnd(:,:,:,nql), 1.0,  &
                      Tend_mp%q_tnd(:,:,:,nqi), 1.0,   &
                                                 Input_mp%pmass, temp_2d) 
         endif
+!<-- h1g, 2022-03-18
+         endif
 
 !---------------------------------------------------------------------
 !    stratiform cloud volume tendency due to prognostic cloud 
