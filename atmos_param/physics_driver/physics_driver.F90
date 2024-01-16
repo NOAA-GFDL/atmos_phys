@@ -3284,7 +3284,9 @@ subroutine physics_driver_register_restart_scalars (Restart, Phy_restart)
   dim_names(1) = "Time"
   call register_axis(Phy_restart, dim_names(1), unlimited)
 
-!  call register_restart_field(Phy_restart, 'vers',          vers, dim_names)
+#ifdef USE_PHYS_RESTART_VERS
+  call register_restart_field(Phy_restart, 'vers',          vers, dim_names)
+#endif
 !  call register_restart_field(Phy_restart, 'doing_strat',   now_doing_strat, dim_names)
 !  call register_restart_field(Phy_restart, 'doing_edt',     now_doing_edt, dim_names)
 !  call register_restart_field(Phy_restart, 'doing_entrain', now_doing_entrain, dim_names)
