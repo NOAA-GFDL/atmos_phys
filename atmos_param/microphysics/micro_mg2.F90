@@ -293,6 +293,7 @@ logical           ::  do_qi_implicit_fall    = .true.
 logical           ::  do_qr_implicit_fall    = .true.
 logical           ::  do_qs_implicit_fall    = .true.
 
+logical           ::  include_ice_in_snowflx = .false.   ! h1g, 2024-01-31
 
 ! additional constants to help speed up code
 real(r8) :: gamma_br_plus1
@@ -324,6 +325,7 @@ logical            ::  use_FanAndCooper  = .false.    ! --> h1g, 2020-04-18
 real(r8)           ::  sublim_factor = 0.0
 real(r8)           ::  ice_nucl_factor = 1.0 
 
+logical            ::  include_homogeneous_for_wetdep = .true.  ! --> h1g, 2024-01-31, will change to false in NML
 namelist / micro_mg2_nml /   &
                  max_rho_factor_in_vt, &
                  rho_factor_in_max_vt, &
@@ -343,7 +345,8 @@ namelist / micro_mg2_nml /   &
                  do_liq_num_adjust, do_liq_num_riming, do_cotton_auto, rthresh, do_HM_splinter,       & ! h1g, 2020-03-06
                  remove_super_RK, use_const_ELI, ELI_RK, use_FanAndCooper, sublim_factor, &  ! h1g, 2020-04-18 
                  ice_nucl_factor, vfac_drop, vfac_ice, do_liq_num_ihom, micro_mg_bergs_eff_factor, &  ! h1g, 2020-06-22
-                 do_ice_num_adjust, icld_cri, evap_subl_fac, ice_sublim_factor     ! h1g, 2020-07-06                
+                 do_ice_num_adjust, icld_cri, evap_subl_fac, ice_sublim_factor, &                     ! h1g, 2020-07-06
+                 include_homogeneous_for_wetdep, include_ice_in_snowflx                               ! h1g, 2024-01-31
 
 !===============================================================================
 contains
@@ -3235,6 +3238,8 @@ iflx   = iflx /real(iter)
 rflx   = rflx /real(iter)
 sflx   = sflx /real(iter)
 
+if ( include_ice_in_snowflx ) sflx   = sflx + iflx  ! h1g, 2024-01-31
+
 qcsedten = qcsedten/real(iter)
 qisedten = qisedten/real(iter)
 qrsedten = qrsedten/real(iter)
@@ -4099,18 +4104,24 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
                      sum_freeze(i,k) + sum_freeze2(i,k) + sum_splinter(i,k)
           if ( ABS(qldt_sum) > 0.0            ) then
 ! ---> h1g, 2014-07-18, add option of including contact freeze in bergeron
-           if( include_contact_freeze_in_berg ) then
-            f_snow_berg(i,k) = (sum_berg(i,k) + sum_cond(i,k) +   &
+               if (include_homogeneous_for_wetdep) then
+           
+                  if( include_contact_freeze_in_berg ) then
+                    f_snow_berg(i,k) = (sum_berg(i,k) + sum_cond(i,k) +   &
                                   sum_ice_adj(i,k) +    &
                                   MAX( sum_bergs(i,k), 0.0) +     &
                                   sum_freeze (i,k) + sum_freeze2(i,k) )/qldt_sum
-           else
-            f_snow_berg(i,k) = (sum_berg(i,k) + sum_cond(i,k) +   &
+                  else
+                    f_snow_berg(i,k) = (sum_berg(i,k) + sum_cond(i,k) +   &
                                   sum_ice_adj(i,k) +    &
                                   MAX( sum_bergs(i,k), 0.0) +     &
                                   sum_freeze (i,k) + mnuccctot(i,k) )/qldt_sum  ! h1g 2015-06-05
 
-           endif
+                  endif
+               else
+                   f_snow_berg(i,k) = (sum_berg(i,k) + MAX( sum_bergs(i,k), 0.0))/qldt_sum  ! h1g 2024-01-31
+                 
+               endif
 ! <--- h1g, 2014-07-18
           else
             f_snow_berg(i,k) = 0._r8
