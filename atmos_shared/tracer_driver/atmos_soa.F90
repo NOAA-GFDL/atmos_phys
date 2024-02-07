@@ -47,6 +47,7 @@ use           interpolator_mod, only:  interpolate_type,        &
 use           xactive_bvoc_mod, only : ind_xbvoc_ISOP,          &
                                        ind_xbvoc_TERP
 
+use matrix_gfdl, only : set_matrix_source, matrix_source_type
 implicit none
 
 private
@@ -622,13 +623,13 @@ end subroutine atmos_SOA_endts
 
 !</SUBROUTINE>
 !-----------------------------------------------------------------------
-      SUBROUTINE atmos_SOA_chem(pwt,temp,pfull, phalf, dt,     &
+      SUBROUTINE atmos_SOA_chem(zhalf,pwt,temp,pfull, phalf, dt,     &
                           jday,hour,minute,second,lat,lon,     &
                           SOA, OH, C4H10, xbvoc, &
                           SOA_dt, Time,Time_next,is,ie,js,je,kbot)
 
 ! ****************************************************************************
-      real, intent(in),    dimension(:,:,:)          :: pwt
+      real, intent(in),    dimension(:,:,:)          :: pwt,zhalf
       real, intent(in),    dimension(:,:,:)          :: temp,pfull,phalf
       real, intent(in)                               :: dt
       integer, intent(in)                            :: jday, hour,minute,second
@@ -790,7 +791,8 @@ end subroutine atmos_SOA_endts
 !----------------------------------------------------------------------
       isoprene_emis(:,:) = isoprene_emis(:,:) * isoprene_factor * isoprene_SOA_yield
       terpene_emis(:,:) = terpene_emis(:,:) * terpene_factor * terpene_SOA_yield
-
+      !hook to matrix
+      !call set_matrix_source(MATRIX_SOURCE_TYPE%E_SOA, (isoprene_emis+terpene_emis)/1.5, MATRIX_SOURCE_TYPE%U_KG_M2_S, pwt,zhalf) !unit: Kg/m2/s 
       SOA_dt(:,:,kd) = SOA_dt(:,:,kd) &
                      + (isoprene_emis(:,:) + terpene_emis(:,:)) / pwt(:,:,kd)
 

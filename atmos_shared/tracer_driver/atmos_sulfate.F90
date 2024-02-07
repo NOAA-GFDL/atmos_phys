@@ -57,7 +57,9 @@ use              constants_mod, only : PI, GRAV, RDGAS, WTMAIR, PSTD_MKS
 
 !f1p
 use cloud_chem, only : cloud_so2_chem, CLOUD_CHEM_LEGACY, CLOUD_CHEM_F1P, &
-                       CLOUD_CHEM_F1P_BUG, CLOUD_CHEM_F1P_BUG2    ! h1g, 2016-09-07
+     CLOUD_CHEM_F1P_BUG, CLOUD_CHEM_F1P_BUG2    ! h1g, 2016-09-07
+
+use matrix_gfdl, only : set_matrix_source, matrix_source_type
 
 implicit none
 
@@ -126,7 +128,7 @@ integer ::   id_emiso4              = 0
 !cmip6 diagnostics
 type(cmip_diag_id_type) :: ID_pso4_aq_kg_m2_s, ID_pso4_gas_kg_m2_s
 
-logical :: do_MSA=.false.
+logical :: do_MSA=.false., do_h2so4=.false.
 integer :: number_SOx_tracers       = 0
 
 type(interpolate_type),save         ::  gas_conc_interp
@@ -1886,8 +1888,9 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
         end select
 !
       SO2_dt(:,:,:)= SO2_emis(:,:,:)/pwt(:,:,:)*WTMAIR/WTM_SO2
-      SO4_dt(:,:,:)= SO4_emis(:,:,:)/pwt(:,:,:)*WTMAIR/WTM_SO4
-
+      SO4_dt(:,:,:)= SO4_emis(:,:,:)/pwt(:,:,:)*WTMAIR/WTM_SO4 ! SO4_emis unit:kgSO4/m2/s, pwt: kg air/m2 = rho*h
+      !hook to matrix
+      call set_matrix_source(MATRIX_SOURCE_TYPE%E_SO4,SO4_dt,MATRIX_SOURCE_TYPE%U_VMR_S,pwt,zhalf,diag_time, is,js) !unit of SO4_dt(:,:,:): #SO4 / #humid_air / s 
 !------------------------------------------------------------------
 ! DIAGNOSTICS:      SO2 and SO4 emission in kg/timestep
 !--------------------------------------------------------------------
@@ -1968,7 +1971,7 @@ end subroutine atmos_SOx_emission
 !</SUBROUTINE>
 !-----------------------------------------------------------------------
 !#######################################################################
-      subroutine atmos_SOx_chem(pwt,temp,pfull, phalf, dt, lwc, fliq, cldfr, &
+      subroutine atmos_SOx_chem(zhalf, pwt, temp,pfull, phalf, dt, lwc, fliq, cldfr, &
         jday,hour,minute,second,lat,lon, &
         do_tr_sulfate, tr_sulfate, rt_sulfate, oh_vmr, &
         model_time,diag_time,is,ie,js,je,kbot)
@@ -1977,7 +1980,7 @@ end subroutine atmos_SOx_emission
       integer, intent(in)                :: jday, hour,minute,second
       logical, intent(in), dimension(:)  :: do_tr_sulfate
       real, intent(in),  dimension(:,:)  :: lat, lon  ! [radi
-      real, intent(in), dimension(:,:,:) :: pwt
+      real, intent(in), dimension(:,:,:) :: pwt,zhalf
       real, intent(in), dimension(:,:,:) :: lwc
       real, intent(in), dimension(:,:,:) :: fliq, cldfr !f1p
       real, intent(in), dimension(:,:,:) :: temp, pfull, phalf
@@ -1992,7 +1995,8 @@ end subroutine atmos_SOx_emission
       integer :: i,j,k,id,jd,kd
       integer                                    :: istep, nstep
       real, dimension(size(pfull,1),size(pfull,2),size(pfull,3)) :: SO2, SO4, DMS, MSA, &
-             H2O2,SO2_dt,SO4_dt,DMS_dt,MSA_dt,H2O2_dt
+             H2O2,SO2_dt,SO4_dt,DMS_dt,MSA_dt,H2O2_dt, H2SO4, H2SO4_dt
+     !real, dimension(size(pfull,1),size(pfull,2),size(pfull,3)) :: H2SO4, H2SO4_dt !XL
 !!! Input fields from interpolator
       real, dimension(size(pfull,1),size(pfull,2),size(pfull,3)) :: pH
       real, dimension(size(pfull,1),size(pfull,2),size(pfull,3)) :: O3_mmr
@@ -2031,6 +2035,7 @@ end subroutine atmos_SOx_emission
       real :: xlwc, xhnm, ccc1, ccc2
       real :: pmsa, pso2, ph2o2    ! chemical production terms
       real :: ldms, lso2, lh2o2          ! chemical loss terms
+      real :: xH2SO4, H2SO4_0 !XL
       real :: o2
       real, parameter        :: small_value=1.e-21
       real, parameter        :: t0 = 298.
@@ -2048,6 +2053,7 @@ end subroutine atmos_SOx_emission
       so4(:,:,:)    = 0.0
       dms(:,:,:)    = 0.0
       msa(:,:,:)    = 0.0
+      h2so4(:,:,:)  = 0.0
       h2o2(:,:,:)   = 0.0
       so2_dt(:,:,:) = 0.0
       so4_dt(:,:,:) = 0.0
@@ -2058,11 +2064,15 @@ end subroutine atmos_SOx_emission
       SO4_o3_prod(:,:,:)=0.0
       SO4_oh_prod(:,:,:)=0.0
 
-      if (do_tr_sulfate(1)) so4(:,:,:) =tr_sulfate(:,:,:,1)
-      if (do_tr_sulfate(2)) so2(:,:,:) =tr_sulfate(:,:,:,2)
-      if (do_tr_sulfate(3)) dms(:,:,:) =tr_sulfate(:,:,:,3)
-      if (do_tr_sulfate(4)) h2o2(:,:,:)=tr_sulfate(:,:,:,4)
-      if (do_tr_sulfate(5)) msa(:,:,:) =tr_sulfate(:,:,:,5)
+      if (do_tr_sulfate(1)) so4(:,:,:)   =tr_sulfate(:,:,:,1)
+      if (do_tr_sulfate(2)) so2(:,:,:)   =tr_sulfate(:,:,:,2)
+      if (do_tr_sulfate(3)) dms(:,:,:)   =tr_sulfate(:,:,:,3)
+      if (do_tr_sulfate(4)) h2o2(:,:,:)  =tr_sulfate(:,:,:,4)
+      if (do_tr_sulfate(5)) msa(:,:,:)   =tr_sulfate(:,:,:,5)
+      if (do_tr_sulfate(6)) then
+         h2so4(:,:,:) =tr_sulfate(:,:,:,6)
+         do_h2so4 = .true.
+      end if
 
       OH_conc(:,:,:)=1.e5  ! molec/cm3
       call interpolator(gas_conc_interp, gas_conc_time, phalf, OH_conc, &
@@ -2163,11 +2173,13 @@ end subroutine atmos_SOx_emission
        SO4_0 = max(0.,SO4(i,j,k))
        SO2_0 = max(0.,SO2(i,j,k))
        H2O2_0= max(0.,H2O2(i,j,k))
+       H2SO4_0 = max(0., H2SO4(i,j,k)) !XL
        xSO2  = SO2_0
        xSO4  = SO4_0
        xH2O2 = H2O2_0
        xDMS  = DMS_0
        xMSA  = MSA_0
+       xH2SO4 = H2SO4_0 !XL
        xph   = max(1.e-7,       pH(i,j,k))
        xoh   = max(0.         , OH_conc(i,j,k)  *fac_OH(i,j))
        xho2  = max(0.         , HO2_conc(i,j,k) *fac_HO2(i,j))
@@ -2232,8 +2244,13 @@ end subroutine atmos_SOx_emission
        end if
 ! ****************************************************************************
 ! *  Update SO4 concentration after gas phase chemistry                      *
-! ****************************************************************************
-       xso4 = SO4_0 + LSO2*xso2 * dt
+       ! ****************************************************************************
+       xso4   = SO4_0 + LSO2*xso2 * dt
+       
+       if (do_h2so4) then !if we have H2SO4, we assume that MATRIX is used. Note that MATRIX SO4 is another way to track SO4. "S" is conserved in the GFDL SO4 and MATRIX SO4, independently.
+          xh2so4 = h2so4_0 + LSO2*xso2 * dt !FP (XL)
+       !   xso4   = SO4_0
+       end if
 !f1p
        if ( cloud_chem_type .eq. CLOUD_CHEM_LEGACY ) then
 
@@ -2443,19 +2460,27 @@ end subroutine atmos_SOx_emission
        DMS_dt(i,j,k) = (xDMS-DMS_0)/dt
        SO2_dt(i,j,k) = (xso2-SO2_0)/dt
        SO4_dt(i,j,k) = (xso4-SO4_0)/dt
+       H2SO4_dt(i,j,k) = (xh2so4-H2SO4_0)/dt !FB (XL)      
        H2O2_dt(i,j,k)= (xh2o2-H2O2_0)/dt
        SO4_oh_prod(i,j,k)=LSO2*xso2
        SO4_o3_prod(i,j,k)=ccc2/dt
        SO4_h2o2_prod(i,j,k)=ccc1/dt
       end do
       end do
-      end do
+   end do
+
+   !xoh unit: #/cm3; xhnm unit: #/cm3
+   !hook to matrix
+   call set_matrix_source(MATRIX_SOURCE_TYPE%P_H2SO4,SO4_oh_prod,MATRIX_SOURCE_TYPE%U_VMR_S, pwt,zhalf,diag_time, is,js)
+   !call set_matrix_source(MATRIX_SOURCE_TYPE%P_H2SO4,H2SO4,MATRIX_SOURCE_TYPE%U_VMR_S, pwt,zhalf,diag_time, is,js)
+   call set_matrix_source(MATRIX_SOURCE_TYPE%P_AQSO4, SO4_o3_prod+SO4_h2o2_prod, MATRIX_SOURCE_TYPE%U_VMR_S, pwt,zhalf,diag_time, is,js) 
 
       if (do_tr_sulfate(1)) rt_sulfate(:,:,:,1)=so4_dt(:,:,:)
       if (do_tr_sulfate(2)) rt_sulfate(:,:,:,2)=so2_dt(:,:,:)
       if (do_tr_sulfate(3)) rt_sulfate(:,:,:,3)=dms_dt(:,:,:)
       if (do_tr_sulfate(4)) rt_sulfate(:,:,:,4)=h2o2_dt(:,:,:)
       if (do_tr_sulfate(5)) rt_sulfate(:,:,:,5)=msa_dt(:,:,:)
+      if (do_tr_sulfate(6)) rt_sulfate(:,:,:,6)=h2so4_dt(:,:,:)      
 
       if (number_SOx_tracers == 0) call error_mesg ('atmos_sulfate_mod', &
            'calling atmos_SOx_chem when number_SOx_tracers=0', FATAL)

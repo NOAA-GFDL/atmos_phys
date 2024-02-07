@@ -30,6 +30,9 @@ use interpolator_mod,           only:  interpolate_type, interpolator_init, &
                                        interpolator, interpolator_end, &
                                        CONSTANT, INTERP_WEIGHTED_P
 use constants_mod,              only : PI, GRAV, RDGAS, WTMAIR
+
+!use matrix_gfdl, only : set_matrix_source, matrix_source_type
+
 implicit none
 private
 !-----------------------------------------------------------------------
@@ -822,6 +825,10 @@ real, parameter                            :: yield_soa = 0.1
         enddo
       enddo
     endif
+
+!hook to matrix
+!call set_matrix_source(MATRIX_SOURCE_TYPE%E_OC, (omphil_emis+omphob_emis)/1.5, MATRIX_SOURCE_TYPE%U_MMR_S, pwt, z_half)!3d, mmr
+!call set_matrix_source(MATRIX_SOURCE_TYPE%E_BC, bcphil_emis+bcphob_emis, MATRIX_SOURCE_TYPE%U_MMR_S, pwt, z_half)!3d, mmr
 
 !------- compute black carbon phobic sink --------------
 !

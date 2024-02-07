@@ -226,6 +226,10 @@ use xactive_bvoc_mod,      only : xactive_bvoc,          &
 
 use interpolator_mod,      only : interpolate_type
 use atmos_ocean_fluxes_mod,only : aof_set_coupler_flux
+use matrix_gfdl,           only : matrix_init,   &
+                                  matrix_source_type, &
+                                  set_matrix_source, matrix_run
+                               
 implicit none
 private
 !-----------------------------------------------------------------------
@@ -254,7 +258,9 @@ logical :: prevent_flux_through_ice = .false.  , step_update_tracer = .false.
 logical  :: do_esm_nitrogen_flux = .false. !If set to .true. nitrogen fluxes will be prepared for exchange with Ocean
 logical  :: do_nh3_atm_ocean_exchange = .false.
 logical  :: do_cmip6_bug_diag         = .true.
-namelist /atmos_tracer_driver_nml / prevent_flux_through_ice, step_update_tracer, do_esm_nitrogen_flux,do_nh3_atm_ocean_exchange, do_cmip6_bug_diag
+logical  :: matrix_step_update_tracer = .true.
+namelist /atmos_tracer_driver_nml / prevent_flux_through_ice, step_update_tracer, do_esm_nitrogen_flux,do_nh3_atm_ocean_exchange, &
+                                    do_cmip6_bug_diag, matrix_step_update_tracer
 
 !-----------------------------------------------------------------------
 !
@@ -308,6 +314,7 @@ integer :: nSO4      =0
 integer :: nMSA      =0
 integer :: nSOA      =0
 integer :: nH2O2     =0
+integer :: nH2SO4    =0
 integer :: nch3i     =0
 integer :: nage      =0
 integer :: naoanh    =0
@@ -328,8 +335,8 @@ integer :: ne90 =0
 integer :: nsulfate  =0
 integer :: nISOP     =0
 
-integer, dimension(5) :: tr_nbr_sulfate=0
-logical, dimension(5) :: do_tracer_sulfate=.false.
+integer, dimension(6) :: tr_nbr_sulfate=0
+logical, dimension(6) :: do_tracer_sulfate=.false.
 
 real    :: ozon(11,48),cosp(14),cosphc(48),photo(132,14,11,48),   &
            solardata(1801),chlb(90,15),ozb(144,90,12),tropc(151,9),  &
@@ -550,7 +557,8 @@ real, intent(in), dimension(:,:),    optional :: con_atm
 !-----------------------------------------------------------------------
 real, dimension(size(r,1),size(r,2),size(r,3)) :: rtnd, pwt, ozone, o3_prod, &
                                                   aerosol, rho
-real, dimension(size(r,1),size(r,2),size(r,3),5) :: rt_sulfate, tr_sulfate
+!real, dimension(size(r,1),size(r,2),size(r,3),size(r,4)) :: rdt_matrix
+real, dimension(size(r,1),size(r,2),size(r,3),6) :: rt_sulfate, tr_sulfate
 real, dimension(size(r,1),size(r,2),size(r,3)) :: rtndso2, rtndso4,rtnddms
 real, dimension(size(r,1),size(r,2),size(r,3)) :: rtndbcphob, rtndbcphil
 real, dimension(size(r,1),size(r,2),size(r,3)) :: rtndomphob, rtndomphil
@@ -567,7 +575,7 @@ real, dimension(size(r,1),size(r,2),size(r,3)) :: cldf ! cloud fraction
 real, dimension(size(r,1),size(r,2),size(r,3)) :: rh  ! relative humidity
 real, dimension(size(r,1),size(r,2),size(r,3)) :: lwc ! liq water content
 real, dimension(size(r,1),size(r,2),size(r,3)) :: fliq! liq/lwc (f1p)
-real, dimension(size(r,1),size(r,2),size(r,3),nt) :: tracer, tracer_orig, tracer_diag
+real, dimension(size(r,1),size(r,2),size(r,3),nt) :: tracer, tracer_orig, tracer_diag, rdt_matrix
 real, dimension(size(r,1),size(r,3)) :: dp, temp
 real, dimension(size(r,1),size(r,2)) :: all_salt_settl, all_dust_settl
 real, dimension(size(r,1),size(r,2)) :: suma, ocn_flx_fraction, sum_n_ddep, sum_n_red_ddep, sum_n_ox_ddep, nh3_ddep
@@ -1527,7 +1535,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
         call atmos_DMS_emission(lon, lat, area, ocn_flx_fraction, t_surf_rad, &
              w10m_ocean, pwt, rtnddms, Time, Time_next, is,ie,js,je,kbot)
         rdt(:,:,kd,nDMS) = rdt(:,:,kd,nDMS) + rtnddms(:,:,kd)
-      endif
+     endif
       call atmos_SOx_emission(lon, lat, area, land, &
                z_pbl, z_half, phalf, pwt, rtndso2, rtndso4, &
                Time, Time_next, is,ie,js,je,kbot)
@@ -1537,7 +1545,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
         if (do_tracer_sulfate(isulf)) tr_sulfate(:,:,:,isulf)= &
               tracer(:,:,:,tr_nbr_sulfate(isulf))
       enddo
-      call atmos_SOx_chem( pwt, t, pfull, phalf, dt, lwc, fliq, cldf, &
+      call atmos_SOx_chem( z_half, pwt, t, pfull, phalf, dt, lwc, fliq, cldf, &
                 jday,hour,minute,second,lat,lon,    &
                 do_tracer_sulfate, tr_sulfate, rt_sulfate, &
                 tracer(:,:,:,nOH), &
@@ -1549,6 +1557,23 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
       call mpp_clock_end (sulfur_clock)
    endif
 
+! bug! FP & XL
+!   if (matrix_step_update_tracer) then
+!      !update using chemical tendencies
+!      do isulf=1,nsulfate
+!         if (do_tracer_sulfate(isulf)) then
+!            tracer(:,:,:,tr_nbr_sulfate(isulf)) = tracer(:,:,:,tr_nbr_sulfate(isulf)) + rt_sulfate(:,:,:,tr_nbr_sulfate(isulf))*dt
+!         end if         
+!      end do
+!
+!      !update using emission tendencies
+!      tracer(:,:,:,nso4)  = tracer(:,:,:,nso4)  + rtndso4(:,:,:)*dt
+!      tracer(:,:,:,nso2)  = tracer(:,:,:,nso2)  + rtndso2(:,:,:)*dt
+!      tracer(:,:,kd,ndms) = tracer(:,:,kd,ndms) + rtnddms(:,:,kd)*dt      
+!   end if
+!     
+   
+
 !------------------------------------------------------------------------
 ! Secondary organic aerosols
 !------------------------------------------------------------------------
@@ -1557,7 +1582,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
                      'Number of tracers .lt. number for SOA', FATAL)
 
       call mpp_clock_begin (SOA_clock)
-      call atmos_SOA_chem(pwt ,t, pfull, phalf, dt,      &
+      call atmos_SOA_chem(z_half, pwt ,t, pfull, phalf, dt,      &
                 jday, hour, minute, second, lat, lon,    &
                 tracer(:,:,:,nSOA),                      &
                 tracer(:,:,:,nOH),                       &
@@ -1570,6 +1595,14 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
 
    endif
 
+!------------------------------------------------------------------------
+! Matrix
+!------------------------------------------------------------------------   
+   !IMPORTNT note: rdt_matrix has the same dimension with tracer, instead of r
+   call matrix_run(tracer, pfull, rh, t, dt, pwt, z_half, rdt_matrix, Time,is,ie,js,je)
+   !rdt has the same dimension as r
+   rdt = rdt + rdt_matrix(:,:,:,1:size(r,4))
+   
 !------------------------------------------------------------------------
 ! Sulfur hexafluoride (SF6)
 !------------------------------------------------------------------------
@@ -1705,6 +1738,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
            kbot)
    end if
 
+
  end subroutine atmos_tracer_driver
 ! </SUBROUTINE>
 
@@ -1747,8 +1781,8 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
 !   <INOUT NAME="r" TYPE="real" DIM="(:,:,:,:)">
 !     Tracer fields dimensioned as (nlon,nlat,nlev,ntrace).
 !   </INOUT>
- subroutine atmos_tracer_driver_init (domain, lonb, latb, r, axes, Time, phalf, mask)
-
+!subroutine atmos_tracer_driver_init (domain, lonb, latb, r, axes, Time, phalf, mask, pfull, rh, t, pwt, zhalf) !XL QS 
+subroutine atmos_tracer_driver_init (domain, lonb, latb, r, axes, Time, phalf, mask)
 !-----------------------------------------------------------------------
 type(domain2D),target,intent(in)                           :: domain !< Atmosphere domain
            real, intent(in),    dimension(:,:)             :: lonb, latb
@@ -1756,8 +1790,8 @@ type(domain2D),target,intent(in)                           :: domain !< Atmosphe
 type(time_type), intent(in)                                :: Time
         integer, intent(in)                                :: axes(4)
            real, intent(in),    dimension(:,:,:)           :: phalf
+           !real, intent(in) :: pfull(:,:,:), rh(:,:,:), t(:,:,:), pwt(:,:,:), zhalf(:,:,:) !XL QS
            real, intent(in),    dimension(:,:,:), optional :: mask
-
 !-----------------------------------------------------------------------
 ! Local variables
 !-----------------------------------------------------------------------
@@ -1799,6 +1833,11 @@ type(time_type), intent(in)                                :: Time
 ! deposition, do it now.
       call atmos_tracer_utilities_init(lonb, latb, axes, Time)
 
+      ! -- initialize matrix -- (MOVE DOWN LATER)
+      call matrix_init(r, axes, time)
+      !call matrix_init(r, axes, time, pfull, rh, t, pwt, zhalf)
+
+      
 !----- set initial value of radon ------------
 
       call atmos_radon_init(r, axes, Time, nradon, mask)
@@ -1892,6 +1931,12 @@ type(time_type), intent(in)                                :: Time
         nsulfate=nsulfate+1
         tr_nbr_sulfate(5)=nMSA
         do_tracer_sulfate(5)=.true.
+      endif
+      nH2SO4    = get_tracer_index(MODEL_ATMOS,'simpleH2SO4')
+      if (nH2SO4 .gt. 0) then
+        nsulfate=6 !nsulfate+1
+        tr_nbr_sulfate(6)=nH2SO4
+        do_tracer_sulfate(6)=.true.
       endif
       nHNO3     = get_tracer_index(MODEL_ATMOS,'hno3')
       nNH4NO3   = get_tracer_index(MODEL_ATMOS,'nh4no3')

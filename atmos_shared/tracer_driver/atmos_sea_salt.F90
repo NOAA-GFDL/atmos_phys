@@ -26,7 +26,7 @@ use   tracer_manager_mod, only : get_number_tracers, get_tracer_index, &
 use    field_manager_mod, only : parse, MODEL_ATMOS
 use atmos_tracer_utilities_mod, only : sedimentation_velocity,sedimentation_flux
 use atmos_carbon_aerosol_mod, only : atmos_carbon_moa_fine_enrichment, get_moa_modulator
-
+use matrix_gfdl, only : set_matrix_source, matrix_source_type
 implicit none
 private
 !-----------------------------------------------------------------------
@@ -235,7 +235,8 @@ subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
 
      all_moa_fine_emis(:,:) = all_moa_fine_emis(:,:) + moa_fine_emis(:,:)
   enddo
-  
+ !hook to matrix source
+ ! call set_matrix_source(MATRIX_SOURCE_TYPE%E_SS,all_seasalt_emis, MATRIX_SOURCE_TYPE%U_KG_M2_S, pwt,zhalf) !unit: Kg/m2/s  
   if (id_seasalt_ddep > 0) then
      used = send_data (id_seasalt_ddep, all_seasalt_setl(:,:), Time, is_in=is, js_in=js)
   endif

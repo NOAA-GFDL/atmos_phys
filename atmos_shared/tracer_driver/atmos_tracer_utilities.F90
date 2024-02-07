@@ -289,6 +289,8 @@ contains
        select case (trim(tracer_units(n)))
        case ('mmr')
           units = 'kg/m2/s'
+       case ('#/kg') !XL
+          units = '#/m2/s'!XL
        case ('kg/kg')
           units = 'kg/m2/s'
        case ('vmr')
@@ -1030,7 +1032,7 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
     case ('mole/mole')
        diag_scale = mw_air
     case default
-       diag_scale = 1.
+       diag_scale = 1 !XL: this should works for (1) #/kg -> #/m2/s and (2) mmr -> kg/m2/s.
     end select
     used = send_data ( id_tracer_ddep(n), dsinku*pwt/diag_scale, Time_next, &
          is_in =is,js_in=js)
@@ -1711,11 +1713,14 @@ subroutine wet_deposition( n, T, pfull, phalf, zfull, zhalf, &
 
  endif ! End branching pag/lwh
  !
- ! Output diagnostics in kg/m2/s (if MMR) or mole/m2/s (if VMR)
+ ! Output diagnostics in kg/m2/s (if MMR) or mole/m2/s (if VMR) or #/m2/s (if #/kg) (XL)
+ ! Note: the #/kg is not mol/kg (XL)
  if(trim(units) .eq. 'mmr') then
     diag_scale = 1.
  elseif(trim(units) .eq. 'vmr') then
     diag_scale = mw_air ! kg/mole
+ elseif (trim(units) .eq. '#/kg') then !XL
+    diag_scale = 1 !XL
  else
     write(*,*) ' Tracer number =',n,' tracer_name=',tracer_name
     write(*,*) ' scheme=',text_in_scheme

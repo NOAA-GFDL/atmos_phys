@@ -34,7 +34,7 @@ use interpolator_mod,      only: interpolate_type, interpolator_init, &
                                  unset_interpolator_time_flag, &
                                  interpolator, interpolator_end, &
                                  CONSTANT, INTERP_WEIGHTED_P
-
+use matrix_gfdl, only : set_matrix_source, matrix_source_type
 implicit none
 private
 !-----------------------------------------------------------------------
@@ -242,7 +242,8 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
         end if
      endif
   enddo
-
+  !hook to matrix
+  !call set_matrix_source(MATRIX_SOURCE_TYPE%E_DUST,all_dust_emis,MATRIX_SOURCE_TYPE%U_KG_M2_S,pwt,zhalf) !unit: Kg/m2/s
   call atmos_dust_solFe_frac_set(all_dust_conc, is,ie,js,je) !This must be called before dry and wet dep flux set
   call atmos_dust_solP_frac_set(all_dust_conc, is,ie,js,je)  
   call atmos_dust_drydep_flux_set(all_dust_setl, is,ie,js,je)
