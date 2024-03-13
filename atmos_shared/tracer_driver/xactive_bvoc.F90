@@ -152,9 +152,6 @@ use            fms2_io_mod,  only : FmsNetcdfFile_t, FmsNetcdfDomainFile_t, &
                                     open_file, read_restart, write_restart, close_file, &
                                     register_field, write_data, get_global_io_domain_indices, &
                                     register_variable_attribute, read_data, file_exists
-use         M_TRACNAME_MOD,  only : tracnam
-use      tracer_manager_mod, only : get_tracer_index,      &
-                                    query_method
 use      field_manager_mod,  only : MODEL_ATMOS
 use       time_manager_mod,  only : time_type,             &
                                     get_date,              &
@@ -176,6 +173,7 @@ use       diag_manager_mod, only  : send_data,             &
                                     register_static_field, &
                                     get_base_time
 
+use tracer_manager_mod,     only  : get_tracer_index
 !use something_in_the_land_mod, only : get_LAI,            &
 !                                      get_SOIL_PARAM
 
@@ -287,21 +285,21 @@ namelist /xactive_bvoc_nml/                     &
 
 logical                     :: Ldebug = .false.
 logical                     :: module_is_initialized = .false.
-logical, dimension(pcnstm1) :: has_xactive_emis = .false.  ! Does the tracer have xactive emissions?
 
-integer, dimension(pcnstm1) :: indices,     &
-                               id_EMIS,     &
-                               id_G_TEMP,   &
-                               id_G_PAR,    &
-                               id_G_AGE,    &
-                               id_G_LAI,    &
-                               id_G_BDLAI,  &
-                               id_G_CO2,    &
-                               id_G_AQ,     &
-                               id_G_SM,     &
-                               id_G_HT,     &
-                               id_G_LT,     &
-                               id_G_HW
+integer                     :: nxactive
+
+integer, allocatable        :: id_EMIS(:),     &
+                               id_G_TEMP(:),   &
+                               id_G_PAR(:),    &
+                               id_G_AGE(:),    &
+                               id_G_LAI(:),    &
+                               id_G_BDLAI(:),  &
+                               id_G_CO2(:),    &
+                               id_G_AQ(:),     &
+                               id_G_SM(:),     &
+                               id_G_HT(:),     &
+                               id_G_LT(:),     &
+                               id_G_HW(:)
 
 
 real, allocatable, dimension(:,:)         :: MEGAN_PARAM      ! MEGAN MODEL PARAMETERS
@@ -427,7 +425,7 @@ contains
 !   </OUT>
 !
 subroutine xactive_bvoc( lon, lat, land, is, ie, js, je, Time, Time_next, coszen, &
-                         pwtsfc, T1, P1, WS1, CO2, O3, rtnd_xactive, xbvoc4soa   )
+                         pwtsfc, T1, P1, WS1, CO2, O3, xactive_trname, rtnd_xactive, xbvoc4soa   )
 
    real, intent(in), dimension(:,:)            :: lon, lat        ! Longitude, latitude []
    real, intent(in), dimension(:,:)            :: land            ! Land fraction []
@@ -440,6 +438,7 @@ subroutine xactive_bvoc( lon, lat, land, is, ie, js, je, Time, Time_next, coszen
    real, intent(in), dimension(:,:)            :: WS1             ! 10m wind speed [m/s]
    real, intent(in), dimension(:,:)            :: CO2             ! surface CO2 conc. [VMR]
    real, intent(in), dimension(:,:)            :: O3              ! surface O3 conc.  [VMR]
+   character(len=64), intent(in), dimension(:) :: xactive_trname
    real, intent(out), dimension(:,:,:)         :: rtnd_xactive    ! xactive tracer tendencies [VMR/s]
    real, intent(out), dimension(:,:,:)         :: xbvoc4soa       ! biogenic emissions (for SOA) [molec/cm2/s]
 
@@ -601,137 +600,133 @@ subroutine xactive_bvoc( lon, lat, land, is, ie, js, je, Time, Time_next, coszen
 !....................................................................
    rtnd_xactive(:,:,:) = 0.
    xbvoc4soa(:,:,:) = 0.
-   DO i = 1, pcnstm1
+   DO xactive_knt = 1, nxactive
 
-      IF ( has_xactive_emis(i) ) THEN
+      EMIS(:,:) = 0.
 
-         EMIS(:,:) = 0.
-         xactive_knt = xactive_knt + 1
-
-         IF ( trim(tracnam(i))=='DMS' ) THEN
-            ! SKIP - calculated in tropchem driver
-         ELSEIF ( do_AM3_ISOP .AND. trim(tracnam(i))=='ISOP' ) THEN
-! Reproduces AM3 isoprene emissions
-            call calc_xactive_bvoc_AM3 ( Time, Time_next, is, js,         &
-                                         lon, lat, land, coszen,          &
-                                         P1, T1, LAIp, LAIc,              &
-                                         Pmo(is:ie,js:je,:),              &
-                                         Tmo(is:ie,js:je,:),              &
-                                         ECISOP_AM3(is:ie,js:je,:), month, EMIS, &
-                                         id_GAMMA_TEMP=id_G_TEMP(i),      &
-                                         id_GAMMA_PAR=id_G_PAR(i),        &
-                                         id_GAMMA_LAI=id_G_LAI(i),        &
-                                         id_GAMMA_AGE=id_G_AGE(i))
-         ELSEIF ( do_PARSED_TERP .AND. trim(tracnam(i))=='C10H16' ) THEN
-! Calculates the emissions of each terpene separately
-            DO j = 1, nTERP
-               EMIS_TERP(:,:) = 0.
-               IF ( xactive_algorithm == 'MEGAN2' ) THEN
-                  call calc_xactive_bvoc_megan2 ( Time, Time_next, is, js,      &
-                                                  lon, lat, land, coszen,       &
-                                                  P1, P24, T1, T24, LAIp, LAIc, &
-                                                  Tmo(is:ie,js:je,:),           &
-                                                  TERP_PARAM(:,j),              &
-                                                  ECTERP(is:ie,js:je,:,j),      &
-                                                  month, tracnam(i), EMIS_TERP, &
-                                                  id_GAMMA_TEMP=id_G_TEMP(i),   &
-                                                  id_GAMMA_PAR=id_G_PAR(i),     &
-                                                  id_GAMMA_LAI=id_G_LAI(i),     &
-                                                  id_GAMMA_AGE=id_G_AGE(i),     &
-                                                  id_GAMMA_CO2=id_G_CO2(i),     &
-                                                  id_GAMMA_SM=id_G_SM(i))
-               ELSEIF ( xactive_algorithm == 'MEGAN3' ) THEN
-                  call calc_xactive_bvoc_megan3 ( Time, Time_next, is, js,      &
-                                                  lon, lat, land, coszen,       &
-                                                  P1, P24, T1, T24,             &
-                                                  LAIp3, LAIc3,                 &
-                                                  TMAX, TMIN,                   &
-                                                  Tmo(is:ie,js:je,:), WSMAX, AQI, &
-                                                  TERP_PARAM(:,j),              &
-                                                  LDFg_TERP(is:ie,js:je,j),     &
-                                                  ECTERP_MEGAN3(is:ie,js:je,j), &
-                                                  month, tracnam(i), EMIS_TERP, &
-                                                  id_GAMMA_TEMP=id_G_TEMP(i),   &
-                                                  id_GAMMA_PAR=id_G_PAR(i),     &
-                                                  id_GAMMA_LAI=id_G_LAI(i),     &
-                                                  id_GAMMA_AGE=id_G_AGE(i),     &
-                                                  id_GAMMA_BDLAI=id_G_BDLAI(i), &
-                                                  id_GAMMA_CO2=id_G_CO2(i),     &
-                                                  id_GAMMA_AQ=id_G_AQ(i),       &
-                                                  id_GAMMA_SM=id_G_SM(i),       &
-                                                  id_GAMMA_HT=id_G_HT(i),       &
-                                                  id_GAMMA_LT=id_G_LT(i),       &
-                                                  id_GAMMA_HW=id_G_HW(i))
-                ENDIF ! /megan version
-                EMIS(:,:) = EMIS(:,:) + EMIS_TERP(:,:)
-             ENDDO !/nTERP
-         ELSE
+      IF ( trim(xactive_trname(xactive_knt))=='dms' ) THEN
+         ! SKIP - calculated in tropchem driver
+      ELSEIF ( do_AM3_ISOP .AND. trim(xactive_trname(xactive_knt))=='isop' ) THEN
+         ! Reproduces AM3 isoprene emissions
+         call calc_xactive_bvoc_AM3 ( Time, Time_next, is, js,         &
+              lon, lat, land, coszen,          &
+              P1, T1, LAIp, LAIc,              &
+              Pmo(is:ie,js:je,:),              &
+              Tmo(is:ie,js:je,:),              &
+              ECISOP_AM3(is:ie,js:je,:), month, EMIS, &
+              id_GAMMA_TEMP=id_G_TEMP(xactive_knt),      &
+              id_GAMMA_PAR=id_G_PAR(xactive_knt),        &
+              id_GAMMA_LAI=id_G_LAI(xactive_knt),        &
+              id_GAMMA_AGE=id_G_AGE(xactive_knt))
+      ELSEIF ( do_PARSED_TERP .AND. trim(xactive_trname(xactive_knt))=='c10h16' ) THEN
+         ! Calculates the emissions of each terpene separately
+         DO j = 1, nTERP
+            EMIS_TERP(:,:) = 0.
             IF ( xactive_algorithm == 'MEGAN2' ) THEN
-            call calc_xactive_bvoc_megan2 ( Time, Time_next, is, js,         &
-                                            lon, lat, land, coszen,          &
-                                            P1, P24, T1, T24, LAIp, LAIc,    &
-                                            Tmo(is:ie,js:je,:),              &
-                                            MEGAN_PARAM(:,xactive_knt),      &
-                                            ECBVOC(is:ie,js:je,:,xactive_knt), &
-                                            month, tracnam(i), EMIS,         &
-                                            id_GAMMA_TEMP=id_G_TEMP(i),      &
-                                            id_GAMMA_PAR=id_G_PAR(i),        &
-                                            id_GAMMA_LAI=id_G_LAI(i),        &
-                                            id_GAMMA_AGE=id_G_AGE(i),        &
-                                            id_GAMMA_CO2=id_G_CO2(i),        &
-                                            id_GAMMA_SM=id_G_SM(i))
+               call calc_xactive_bvoc_megan2 ( Time, Time_next, is, js,      &
+                    lon, lat, land, coszen,       &
+                    P1, P24, T1, T24, LAIp, LAIc, &
+                    Tmo(is:ie,js:je,:),           &
+                    TERP_PARAM(:,j),              &
+                    ECTERP(is:ie,js:je,:,j),      &
+                    month, xactive_trname(xactive_knt), EMIS_TERP, &
+                    id_GAMMA_TEMP=id_G_TEMP(xactive_knt),   &
+                    id_GAMMA_PAR=id_G_PAR(xactive_knt),     &
+                    id_GAMMA_LAI=id_G_LAI(xactive_knt),     &
+                    id_GAMMA_AGE=id_G_AGE(xactive_knt),     &
+                    id_GAMMA_CO2=id_G_CO2(xactive_knt),     &
+                    id_GAMMA_SM=id_G_SM(xactive_knt))
             ELSEIF ( xactive_algorithm == 'MEGAN3' ) THEN
+               call calc_xactive_bvoc_megan3 ( Time, Time_next, is, js,      &
+                    lon, lat, land, coszen,       &
+                    P1, P24, T1, T24,             &
+                    LAIp3, LAIc3,                 &
+                    TMAX, TMIN,                   &
+                    Tmo(is:ie,js:je,:), WSMAX, AQI, &
+                    TERP_PARAM(:,j),              &
+                    LDFg_TERP(is:ie,js:je,j),     &
+                    ECTERP_MEGAN3(is:ie,js:je,j), &
+                    month, xactive_trname(xactive_knt), EMIS_TERP, &
+                    id_GAMMA_TEMP=id_G_TEMP(xactive_knt),   &
+                    id_GAMMA_PAR=id_G_PAR(xactive_knt),     &
+                    id_GAMMA_LAI=id_G_LAI(xactive_knt),     &
+                    id_GAMMA_AGE=id_G_AGE(xactive_knt),     &
+                    id_GAMMA_BDLAI=id_G_BDLAI(xactive_knt), &
+                    id_GAMMA_CO2=id_G_CO2(xactive_knt),     &
+                    id_GAMMA_AQ=id_G_AQ(xactive_knt),       &
+                    id_GAMMA_SM=id_G_SM(xactive_knt),       &
+                    id_GAMMA_HT=id_G_HT(xactive_knt),       &
+                    id_GAMMA_LT=id_G_LT(xactive_knt),       &
+                    id_GAMMA_HW=id_G_HW(xactive_knt))
+            ENDIF ! /megan version
+            EMIS(:,:) = EMIS(:,:) + EMIS_TERP(:,:)
+         ENDDO !/nTERP
+      ELSE
+         IF ( xactive_algorithm == 'MEGAN2' ) THEN
+            call calc_xactive_bvoc_megan2 ( Time, Time_next, is, js,         &
+                 lon, lat, land, coszen,          &
+                 P1, P24, T1, T24, LAIp, LAIc,    &
+                 Tmo(is:ie,js:je,:),              &
+                 MEGAN_PARAM(:,xactive_knt),      &
+                 ECBVOC(is:ie,js:je,:,xactive_knt), &
+                 month, xactive_trname(xactive_knt), EMIS,         &
+                 id_GAMMA_TEMP=id_G_TEMP(xactive_knt),      &
+                 id_GAMMA_PAR=id_G_PAR(xactive_knt),        &
+                 id_GAMMA_LAI=id_G_LAI(xactive_knt),        &
+                 id_GAMMA_AGE=id_G_AGE(xactive_knt),        &
+                 id_GAMMA_CO2=id_G_CO2(xactive_knt),        &
+                 id_GAMMA_SM=id_G_SM(xactive_knt))
+         ELSEIF ( xactive_algorithm == 'MEGAN3' ) THEN
             call calc_xactive_bvoc_megan3 ( Time, Time_next, is, js,         &
-                                            lon, lat, land, coszen,          &
-                                            P1, P24, T1, T24,                &
-                                            LAIp3, LAIc3,                    &
-                                            TMAX, TMIN,                      &
-                                            Tmo(is:ie,js:je,:), WSMAX, AQI,  &
-                                            MEGAN_PARAM(:,xactive_knt),      &
-                                            LDFg(is:ie,js:je,xactive_knt),   &
-                                            ECBVOC_MEGAN3(ie:ie,js:je,xactive_knt), &
-                                            month, tracnam(i), EMIS,         &
-                                            id_GAMMA_TEMP=id_G_TEMP(i),      &
-                                            id_GAMMA_PAR=id_G_PAR(i),        &
-                                            id_GAMMA_LAI=id_G_LAI(i),        &
-                                            id_GAMMA_AGE=id_G_AGE(i),        &
-                                            id_GAMMA_BDLAI=id_G_BDLAI(i),    &
-                                            id_GAMMA_CO2=id_G_CO2(i),        &
-                                            id_GAMMA_AQ=id_G_AQ(i),          &
-                                            id_GAMMA_SM=id_G_SM(i),          &
-                                            id_GAMMA_HT=id_G_HT(i),          &
-                                            id_GAMMA_LT=id_G_LT(i),          &
-                                            id_GAMMA_HW=id_G_HW(i))
-            ENDIF !/megan version
-         ENDIF !/species
-         ! Send emissions diagnostics
-         if ( trim(tracnam(i))=='ISOP' ) then
-            if (abs(scale_isoprene_emissions - 1.).gt.epsln) then
-               EMIS = EMIS*scale_isoprene_emissions
-            end if
+                 lon, lat, land, coszen,          &
+                 P1, P24, T1, T24,                &
+                 LAIp3, LAIc3,                    &
+                 TMAX, TMIN,                      &
+                 Tmo(is:ie,js:je,:), WSMAX, AQI,  &
+                 MEGAN_PARAM(:,xactive_knt),      &
+                 LDFg(is:ie,js:je,xactive_knt),   &
+                 ECBVOC_MEGAN3(ie:ie,js:je,xactive_knt), &
+                 month, xactive_trname(xactive_knt), EMIS,         &
+                 id_GAMMA_TEMP=id_G_TEMP(xactive_knt),      &
+                 id_GAMMA_PAR=id_G_PAR(xactive_knt),        &
+                 id_GAMMA_LAI=id_G_LAI(xactive_knt),        &
+                 id_GAMMA_AGE=id_G_AGE(xactive_knt),        &
+                 id_GAMMA_BDLAI=id_G_BDLAI(xactive_knt),    &
+                 id_GAMMA_CO2=id_G_CO2(xactive_knt),        &
+                 id_GAMMA_AQ=id_G_AQ(xactive_knt),          &
+                 id_GAMMA_SM=id_G_SM(xactive_knt),          &
+                 id_GAMMA_HT=id_G_HT(xactive_knt),          &
+                 id_GAMMA_LT=id_G_LT(xactive_knt),          &
+                 id_GAMMA_HW=id_G_HW(xactive_knt))
+         ENDIF !/megan version
+      ENDIF !/species
+      ! Send emissions diagnostics
+      if ( trim(xactive_trname(xactive_knt))=='isop' ) then
+         if (abs(scale_isoprene_emissions - 1.).gt.epsln) then
+            EMIS = EMIS*scale_isoprene_emissions
          end if
-         if ( trim(tracnam(i))=='C10H16' ) then
-            if (abs(scale_terpene_emissions - 1.).gt.epsln) then
-               EMIS = EMIS*scale_terpene_emissions
-            end if
+      end if
+      if ( trim(xactive_trname(xactive_knt))=='c10h16' ) then
+         if (abs(scale_terpene_emissions - 1.).gt.epsln) then
+            EMIS = EMIS*scale_terpene_emissions
          end if
+      end if
 
-         
-         IF ( id_EMIS(i) > 0 ) THEN
-            used = send_data ( id_EMIS(i), EMIS, Time_next, is_in=is, js_in=js)
-         ENDIF
-! Convert Emisisons (molecules/cm2/s) to VMR/s
-!  rdt(VMR/s) = EMIS(molec/cm2/s) * 1e4(cm2/m2) / &
-!                 ( pwt(kg/m2) / WTMAIR(g/mol) * 1e3(g/kg) * AVOGNO(molec/mole) )
-           rtnd_xactive(:,:,xactive_knt) = EMIS * 10. / pwtsfc * WTMAIR / AVOGNO
-           IF ( trim(tracnam(i))=='ISOP' ) THEN
-              xbvoc4soa(:,:,ind_xbvoc_ISOP) = EMIS
-           ELSEIF ( trim(tracnam(i))=='C10H16' ) THEN
-              xbvoc4soa(:,:,ind_xbvoc_TERP) = EMIS
-           ENDIF
 
-      ENDIF !has_xactive_emis
-   ENDDO !pctnstm1
+      IF ( id_EMIS(xactive_knt) > 0 ) THEN
+         used = send_data ( id_EMIS(xactive_knt), EMIS, Time_next, is_in=is, js_in=js)
+      ENDIF
+      ! Convert Emisisons (molecules/cm2/s) to VMR/s
+      !  rdt(VMR/s) = EMIS(molec/cm2/s) * 1e4(cm2/m2) / &
+      !                 ( pwt(kg/m2) / WTMAIR(g/mol) * 1e3(g/kg) * AVOGNO(molec/mole) )
+      rtnd_xactive(:,:,xactive_knt) = EMIS * 10. / pwtsfc * WTMAIR / AVOGNO
+      IF ( trim(xactive_trname(xactive_knt))=='isop' ) THEN
+         xbvoc4soa(:,:,ind_xbvoc_ISOP) = EMIS
+      ELSEIF ( trim(xactive_trname(xactive_knt))=='c10h16' ) THEN
+         xbvoc4soa(:,:,ind_xbvoc_TERP) = EMIS
+      ENDIF
+
+   ENDDO !xknt loop
 
 end subroutine xactive_bvoc
 !</SUBROUTINE>
@@ -773,12 +768,13 @@ end subroutine xactive_bvoc
 !     the tracer array
 !   </OUT>
 
-subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
+subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_trname, xactive_ndx)
 
    type(domain2D),target,intent(in)    :: domain !< Atmosphere domain
    real, intent(in), dimension(:,:)    :: lonb, latb     ! Lat/Lon corners
    type(time_type), intent(in)         :: Time           ! Model time
    integer, intent(in)                 :: axes(4)        ! Diagnostics axes
+   character(len=64), intent(in), dimension(:) :: xactive_trname
    integer, intent(out), dimension(:)  :: xactive_ndx    ! index into tracer array
 
 !----------------Local Variables---------------------------------------------------------
@@ -807,7 +803,7 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                                                     'A_new', 'A_gro', 'A_mat', 'A_old',    &
                                                     'mw   '/)
 
-   integer          :: nlon, nlat, i, j, k, n, xknt, nTERP, nxactive
+   integer          :: nlon, nlat, i, j, k, n, xknt, nTERP
    integer          :: ierr, io, logunit, nPARAMS
 
    integer, parameter             :: nlonin = 720, nlatin = 360
@@ -943,100 +939,100 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
 
    if (use_isop_shrub_crop_bug) vegnames(:) =  (/ 'ntr', 'btr', 'crp', 'grs', 'shr' /)
 
-   indices(:) = 0
-   xknt = 0
-   DO i = 1, pcnstm1
-      n = get_tracer_index(MODEL_ATMOS, tracnam(i))
-      if (Ldebug .and. mpp_pe()==mpp_root_pe()) &
-         write(*,*) 'xactive_bvoc_init:', TRIM(tracnam(i)),i,n
-      IF ( n .le. 0 ) THEN
-         IF ( mpp_pe()==mpp_root_pe()) call error_mesg('xactive_bvoc_init',       &
-              trim(tracnam(i)) // ' is not found', WARNING)
-         cycle
-      ENDIF
-      indices(i) = n
-      has_xactive_emis(i) = query_method('xactive_emissions',MODEL_ATMOS,         &
-                                         indices(i),name,control)
-      IF ( has_xactive_emis(i) ) THEN
-         xknt = xknt + 1
-         xactive_ndx(xknt) = get_tracer_index(MODEL_ATMOS,trim(tracnam(i)))
-      ENDIF
 
-      IF ( trim(tracnam(i))=='DMS' ) THEN
+   allocate(id_EMIS(nxactive))
+   allocate(id_G_TEMP(nxactive))
+   allocate(id_G_PAR(nxactive))
+   allocate(id_G_AGE(nxactive))
+   allocate(id_G_LAI(nxactive))
+   allocate(id_G_BDLAI(nxactive))
+   allocate(id_G_CO2(nxactive))
+   allocate(id_G_AQ(nxactive))
+   allocate(id_G_SM(nxactive))
+   allocate(id_G_HT(nxactive))
+   allocate(id_G_HW(nxactive))
+   allocate(id_G_LT(nxactive))   
+   
+   DO xknt = 1,nxactive
+      xactive_ndx(xknt) = get_tracer_index(MODEL_ATMOS,trim(xactive_trname(xknt)))      
+
+      IF ( trim(xactive_trname(xknt))=='dms' ) THEN
          IF ( mpp_pe()==mpp_root_pe()) call error_mesg('xactive_bvoc_init',       &
-              'skipping set up for non-BVOC tracer '//trim(tracnam(i)),NOTE)
+              'skipping set up for non-BVOC tracer '//trim(xactive_trname(xknt)),NOTE)
          cycle
       ENDIF
 
-! Register the diagnostics for emissions and all possible gammas
-      IF ( has_xactive_emis(i) ) THEN
-         IF ( mpp_pe()==mpp_root_pe()) call error_mesg('xactive_bvoc_init',       &
-              'Initializing xactive emissions for '//trim(tracnam(i)),NOTE)
+      IF ( mpp_pe()==mpp_root_pe()) call error_mesg('xactive_bvoc_init',       &
+           'Initializing xactive emissions for '//trim(xactive_trname(xknt)),NOTE)
 
 ! Emissions and standard gamma diagnostics for all species
-         id_EMIS(i)         = register_diag_field(module_name,                    &
-                              trim(tracnam(i))//'_xactive_emis', axes(1:2),       &
-                              Time, trim(tracnam(i))//'_xactive_emis',            &
-                              'molecules/cm2/s')
-         id_G_TEMP(i)       = register_diag_field(module_name,                    &
-                              trim(tracnam(i))//'_gamma_temp',                    &
-                              axes(1:2), Time, trim(tracnam(i))//'_gamma_temp',   &
-                              'unitless')
-         id_G_PAR(i)        = register_diag_field(module_name,                    &
-                              trim(tracnam(i))//'_gamma_light',                   &
-                              axes(1:2), Time, trim(tracnam(i))//'_gamma_light',  &
-                              'unitless')
-         id_G_LAI(i)        = register_diag_field(module_name,                    &
-                              trim(tracnam(i))//'_gamma_lai',                     &
-                              axes(1:2), Time, trim(tracnam(i))//'_gamma_lai',    &
-                              'unitless')
-         id_G_AGE(i)        = register_diag_field(module_name,                    &
-                              trim(tracnam(i))//'_gamma_age',                     &
-                              axes(1:2), Time, trim(tracnam(i))//'_gamma_age',    &
-                              'unitless')
+      id_EMIS(xknt)         = register_diag_field(module_name,                    &
+                           trim(xactive_trname(xknt))//'_xactive_emis', axes(1:2),       &
+                           Time, trim(xactive_trname(xknt))//'_xactive_emis',            &
+                           'molecules/cm2/s')
+
+      id_G_TEMP(xknt)       = register_diag_field(module_name,                    &
+                           trim(xactive_trname(xknt))//'_gamma_temp',                    &
+                           axes(1:2), Time, trim(xactive_trname(xknt))//'_gamma_temp',   &
+                           'unitless')
+      
+      id_G_PAR(xknt)        = register_diag_field(module_name,                    &
+                           trim(xactive_trname(xknt))//'_gamma_light',                   &
+                           axes(1:2), Time, trim(xactive_trname(xknt))//'_gamma_light',  &
+                           'unitless')
+
+      id_G_LAI(xknt)        = register_diag_field(module_name,                    &
+                           trim(xactive_trname(xknt))//'_gamma_lai',                     &
+                           axes(1:2), Time, trim(xactive_trname(xknt))//'_gamma_lai',    &
+                           'unitless')
+
+      id_G_AGE(xknt)        = register_diag_field(module_name,                    &
+                           trim(xactive_trname(xknt))//'_gamma_age',                     &
+                           axes(1:2), Time, trim(xactive_trname(xknt))//'_gamma_age',    &
+                           'unitless')
 ! Optional gamma diagnostics (only for MEGAN3)
-         IF ( do_GAMMA_HT ) THEN
-            id_G_HT(i)      = register_diag_field(module_name,                    &
-                              trim(tracnam(i))//'_gamma_high_temp', axes(1:2),    &
-                              Time, trim(tracnam(i))//'_gamma_high_temp',         &
-                              'unitless')
-         ENDIF
-         IF ( do_GAMMA_LT ) THEN
-            id_G_LT(i)      = register_diag_field(module_name,                    &
-                              trim(tracnam(i))//'_gamma_low_temp', axes(1:2),     &
-                              Time, trim(tracnam(i))//'_gamma_low_temp',          &
-                              'unitless')
-         ENDIF
-         IF ( do_GAMMA_HW ) THEN
-            id_G_HW(i)      = register_diag_field(module_name,                    &
-                              trim(tracnam(i))//'_gamma_high_wind', axes(1:2),    &
-                              Time, trim(tracnam(i))//'_gamma_high_wind',         &
-                              'unitless')
-         ENDIF
-         IF ( do_GAMMA_SM ) THEN
-            id_G_SM(i)      = register_diag_field(module_name,                    &
-                              trim(tracnam(i))//'_gamma_soil', axes(1:2),         &
-                              Time, trim(tracnam(i))//'_gamma_soil',              &
-                              'unitless')
-         ENDIF
-         IF ( do_GAMMA_AQ ) THEN
-            id_G_AQ(i)      = register_diag_field(module_name,                    &
-                              trim(tracnam(i))//'_gamma_AQI', axes(1:2),          &
-                              Time, trim(tracnam(i))//'_gamma_AQI',               &
-                              'unitless')
-         ENDIF
-         IF ( do_GAMMA_CO2 ) THEN
-            id_G_CO2(i)     = register_diag_field(module_name,                    &
-                              trim(tracnam(i))//'_gamma_high_temp', axes(1:2),    &
-                              Time, trim(tracnam(i))//'_gamma_high_temp',         &
-                              'unitless')
-         ENDIF
-         IF ( do_GAMMA_BDLAI) THEN
-            id_G_BDLAI(i)     = register_diag_field(module_name,                  &
-                                trim(tracnam(i))//'_gamma_BDLAI', axes(1:2),      &
-                                Time, trim(tracnam(i))//'_gamma_BDLAI',           &
-                                'unitless')
-         ENDIF
+!      IF ( do_GAMMA_HT ) THEN
+         id_G_HT(xknt)      = register_diag_field(module_name,                    &
+              trim(xactive_trname(xknt))//'_gamma_high_temp', axes(1:2),    &
+              Time, trim(xactive_trname(xknt))//'_gamma_high_temp',         &
+              'unitless')
+!      ENDIF
+!      IF ( do_GAMMA_LT ) THEN
+         id_G_LT(xknt)      = register_diag_field(module_name,                    &
+              trim(xactive_trname(xknt))//'_gamma_low_temp', axes(1:2),     &
+              Time, trim(xactive_trname(xknt))//'_gamma_low_temp',          &
+              'unitless')
+!      ENDIF
+!      IF ( do_GAMMA_HW ) THEN
+         id_G_HW(xknt)      = register_diag_field(module_name,                    &
+              trim(xactive_trname(xknt))//'_gamma_high_wind', axes(1:2),    &
+              Time, trim(xactive_trname(xknt))//'_gamma_high_wind',         &
+              'unitless')
+!      ENDIF
+!      IF ( do_GAMMA_SM ) THEN
+         id_G_SM(xknt)      = register_diag_field(module_name,                    &
+              trim(xactive_trname(xknt))//'_gamma_soil', axes(1:2),         &
+              Time, trim(xactive_trname(xknt))//'_gamma_soil',              &
+              'unitless')
+!      ENDIF
+!      IF ( do_GAMMA_AQ ) THEN
+         id_G_AQ(xknt)      = register_diag_field(module_name,                    &
+              trim(xactive_trname(xknt))//'_gamma_AQI', axes(1:2),          &
+              Time, trim(xactive_trname(xknt))//'_gamma_AQI',               &
+              'unitless')
+!      ENDIF
+!      IF ( do_GAMMA_CO2 ) THEN
+         id_G_CO2(xknt)     = register_diag_field(module_name,                    &
+              trim(xactive_trname(xknt))//'_gamma_high_temp', axes(1:2),    &
+              Time, trim(xactive_trname(xknt))//'_gamma_high_temp',         &
+              'unitless')
+!      ENDIF
+!      IF ( do_GAMMA_BDLAI) THEN
+         id_G_BDLAI(xknt)     = register_diag_field(module_name,                  &
+              trim(xactive_trname(xknt))//'_gamma_BDLAI', axes(1:2),      &
+              Time, trim(xactive_trname(xknt))//'_gamma_BDLAI',           &
+              'unitless')
+!      ENDIF
 
 !--------------------------------------------------------------------------------------
 !  ... Read in the MEGAN model paramters and emission capacities
@@ -1044,7 +1040,7 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
 !  ... NOTE: terpenes only vs. monoterpenes + sequisterpenes
 !  ... >>>>>>> parsed vs. lumped terpenes
 !--------------------------------------------------------------------------------------
-         IF ( trim(tracnam(i))=='ISOP' .AND. do_AM3_ISOP ) THEN
+         IF ( trim(xactive_trname(xknt))=='isop' .AND. do_AM3_ISOP ) THEN
             ecfile = 'INPUT/megan.ISOP.nc'
             if (open_file(ecfile_obj,ecfile,"read")) then
                call read_data (ecfile_obj, 'lon', inlon)
@@ -1069,7 +1065,7 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                   call error_mesg ('xactive_bvoc_init',  &
                      ' AM3 isoprene emission capacity file does not exist', FATAL)
             ENDIF
-         ELSE IF ( trim(tracnam(i))=='C10H16') THEN
+         ELSE IF ( trim(xactive_trname(xknt))=='c10h16') THEN
               IF ( xactive_algorithm == 'MEGAN2' ) THEN
                  IF ( do_PARSED_TERP ) THEN
 ! Both mono- and sesq- terpenes are included in this file,
@@ -1086,7 +1082,7 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                         call close_file(ecfile_obj)
                        else
                         call error_mesg ('xactive_bvoc_init',  &
-                        'MEGAN file (megan2.xactive.parsed_terpenes.nc) for '//trim(tracnam(i))//' does not exist', FATAL)
+                        'MEGAN file (megan2.xactive.parsed_terpenes.nc) for '//trim(xactive_trname(xknt))//' does not exist', FATAL)
                        endif
                  ELSE
                     IF ( do_SESQTERP ) THEN
@@ -1102,7 +1098,7 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                      call close_file(ecfile_obj)
                     else
                      call error_mesg ('xactive_bvoc_init',  &
-                        'MEGAN file '//trim(ecfile)//'for '//trim(tracnam(i))//' does not exist', FATAL)
+                        'MEGAN file '//trim(ecfile)//'for '//trim(xactive_trname(xknt))//' does not exist', FATAL)
                     endif
                  ENDIF
               ELSE IF ( xactive_algorithm == 'MEGAN3' ) THEN
@@ -1127,7 +1123,7 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                      call close_file(ecfile_obj)
                     else
                      call error_mesg ('xactive_bvoc_init',  &
-                        'MEGAN file '//trim(ecfile)//'for '//trim(tracnam(i))//' does not exist', FATAL)
+                        'MEGAN file '//trim(ecfile)//'for '//trim(xactive_trname(xknt))//' does not exist', FATAL)
                     endif
                  ELSE
                     IF ( do_SESQTERP ) THEN
@@ -1146,19 +1142,19 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                      call close_file(ecfile_obj)
                     else
                      call error_mesg ('xactive_bvoc_init',  &
-                        'MEGAN file '//trim(ecfile)//'for '//trim(tracnam(i))//' does not exist', FATAL)
+                        'MEGAN file '//trim(ecfile)//'for '//trim(xactive_trname(xknt))//' does not exist', FATAL)
                     endif
                  ENDIF
               ENDIF
          ELSE
             IF ( xactive_algorithm == 'MEGAN2') THEN
-               ecfile = 'INPUT/megan2.xactive.'//trim(tracnam(i))//'.nc'
+               ecfile = 'INPUT/megan2.xactive.'//trim(xactive_trname(xknt))//'.nc'
                if (open_file(ecfile_obj,ecfile,"read")) then
                   IF (mpp_pe() == mpp_root_pe()) call error_mesg ( 'xactive_bvoc_init', &
                       'Reading EF from file ' //ecfile, NOTE)
                   DO j = 1, nPFT
                      call read_data(ecfile_obj,pftnames(j),toss)
-                     IF ( trim(tracnam(i)) == 'ISOP' ) THEN
+                     IF ( trim(xactive_trname(xknt)) == 'isop' ) THEN
                         toss = megan2_isop_sf * toss
                      ENDIF
                      ECBVOC(:,:,j,xknt) = toss
@@ -1166,10 +1162,10 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                   call close_file(ecfile_obj)
                ELSE
                   call error_mesg ('xactive_bvoc_init',  &
-                     'MEGAN file for '//trim(tracnam(i))//' does not exist', FATAL)
+                     'MEGAN file for '//trim(xactive_trname(xknt))//' does not exist', FATAL)
                ENDIF
             ELSE IF ( xactive_algorithm == 'MEGAN3') THEN
-               ecfile = 'INPUT/megan3.xactive.'//trim(tracnam(i))//'.nc'
+               ecfile = 'INPUT/megan3.xactive.'//trim(xactive_trname(xknt))//'.nc'
                IF (open_file(ecfile_obj,ecfile,"read")) then
                   IF (mpp_pe() == mpp_root_pe()) call error_mesg ( 'xactive_bvoc_init', &
                       'Reading EF from file ' //ecfile, NOTE)
@@ -1215,16 +1211,16 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
 ! DT_LT: delta threshold for low temperature stress   (units = Celsius)
 ! mw: Molecular weigth (units = g/mole)
 !------------------------------------------------------------------------
-         IF ( trim(tracnam(i))=='ISOP' .and. do_AM3_ISOP ) THEN
+         IF ( trim(xactive_trname(xknt))=='isop' .and. do_AM3_ISOP ) THEN
             IF ( mpp_pe() == mpp_root_pe()) call error_mesg ('xactive_bvoc_init', &
                  'MEGAN Parameters for AM3 ISOP hardcoded in subroutine, skipping',NOTE)
          ELSE
             IF (.not. open_file(ecfile_obj,ecfile,"read")) then
                call error_mesg ('xactive_bvoc_init',  &
-                        'File '//trim(ecfile)//'for '//trim(tracnam(i))//' does not exist', FATAL)
+                        'File '//trim(ecfile)//'for '//trim(xactive_trname(xknt))//' does not exist', FATAL)
             ENDIF
             DO j = 1, nPARAMS
-               IF ( trim(tracnam(i))=='C10H16') THEN
+               IF ( trim(xactive_trname(xknt))=='c10h16') THEN
                   IF ( do_PARSED_TERP ) THEN
                      DO k = 1, nTERP
                         IF ( xactive_algorithm == 'MEGAN2' ) THEN
@@ -1258,8 +1254,7 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
             ENDDO ! j/ nparams
             call close_file(ecfile_obj)
          ENDIF !/if do_AM3_ISOP
-      ENDIF ! has_xactive
-   ENDDO ! i/ species
+      ENDDO ! i/ species
 
 !----------------------------------------------------------------------------
 !  ... Set up the data for Temperature, Downward Shortwave Radiation,
@@ -1885,7 +1880,7 @@ subroutine calc_xactive_bvoc_megan2 ( Time, Time_next, is, js, lon, lat, land,  
          ENDIF
 
 ! CO2 (only for isoprene)
-         IF ( do_GAMMA_CO2 .AND. trim(species) == 'ISOP' ) THEN
+         IF ( do_GAMMA_CO2 .AND. trim(species) == 'isop' ) THEN
             GAMMA_CO2 = fGAMMA_CO2(CO2_STORE(i+is-1,j+js-1))
          ELSE
             GAMMA_CO2 = 1.
@@ -2214,7 +2209,7 @@ subroutine calc_xactive_bvoc_megan3 ( Time, Time_next, is, js, lon, lat, land,  
          ENDIF
 
 ! CO2 (only for isoprene)
-         IF ( do_GAMMA_CO2 .AND. trim(species) == 'ISOP' ) THEN
+         IF ( do_GAMMA_CO2 .AND. trim(species) == 'isop' ) THEN
             GAMMA_CO2 = fGAMMA_CO2(CO2_STORE(i+is-1,j+js-1))
          ELSE
             GAMMA_CO2 = 1.0
@@ -3528,6 +3523,19 @@ subroutine xactive_bvoc_end
    IF ( ALLOCATED(diag_gamma_age_megan3) )   DEALLOCATE(diag_gamma_age_megan3)
    IF ( ALLOCATED(diag_gamma_lai_megan3) )   DEALLOCATE(diag_gamma_lai_megan3)
    IF ( ALLOCATED(diag_gamma_bdlai_megan3) ) DEALLOCATE(diag_gamma_bdlai_megan3)
+
+
+   IF ( ALLOCATED(id_EMIS))   DEALLOCATE(id_EMIS)
+   IF ( ALLOCATED(id_G_TEMP)) DEALLOCATE(id_G_TEMP)
+   IF ( ALLOCATED(id_G_PAR)) DEALLOCATE(id_G_PAR)
+   IF ( ALLOCATED(id_G_AGE)) DEALLOCATE(id_G_AGE)
+   IF ( ALLOCATED(id_G_LAI)) DEALLOCATE(id_G_LAI)
+   IF ( ALLOCATED(id_G_PAR)) DEALLOCATE(id_G_PAR)
+   IF ( ALLOCATED(id_G_CO2)) DEALLOCATE(id_G_CO2)
+   IF ( ALLOCATED(id_G_AQ)) DEALLOCATE(id_G_AQ)
+   IF ( ALLOCATED(id_G_SM)) DEALLOCATE(id_G_SM)
+   IF ( ALLOCATED(id_G_HT)) DEALLOCATE(id_G_HT)
+   IF ( ALLOCATED(id_G_HW)) DEALLOCATE(id_G_HW)   
 
    IF (mpp_pe() == mpp_root_pe()) THEN
        write(*,*) 'Finished deallocating xactive arrays'

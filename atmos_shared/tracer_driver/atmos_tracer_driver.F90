@@ -355,6 +355,7 @@ type(interpolate_type), allocatable :: drydep_data(:)
 
 integer, allocatable :: local_indices(:)
 integer, allocatable :: xactive_ndx(:)   ! Loc of xactive tracers in rdt, will have dim=nxactive
+character(len=64), allocatable    :: xactive_trname(:) 
 
 ! This is the array of indices for the local model.
 ! local_indices(1) = 5 implies that the first local tracer is the fifth
@@ -1489,18 +1490,20 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
       call xactive_bvoc(lon, lat, land, is, ie, js, je, Time,              &
                         Time_next, coszen, pwt(:,:,kd), t(:,:,kd),         &
                         PPFD, w10m_land, tracer(:,:,kd,nco2),              &
-                        tracer(:,:,kd,no3), rtnd_xactive,                  &
-                        xbvoc4soa)
+                        tracer(:,:,kd,no3), xactive_trname,                &
+                        rtnd_xactive, xbvoc4soa)
 ! Update the tendencies based on the returned indices
       do ixact = 1, nxactive
-         rdt(:,:,kd,xactive_ndx(ixact)) = rdt(:,:,kd,xactive_ndx(ixact))   &
-                                          + rtnd_xactive(:,:,ixact)
-         if (xactive_ndx(ixact)==nISOP .and. id_emiisop_biogenic>0) then
-           used  = send_data (id_emiisop_biogenic, &
-                 xbvoc4soa(:,:,ind_xbvoc_ISOP)*1.0e04*0.068/AVOGNO,        &
-                 Time_next, is_in=is, js_in=js)
-         endif
+         if (xactive_ndx(ixact)>0) then
+            rdt(:,:,kd,xactive_ndx(ixact)) = rdt(:,:,kd,xactive_ndx(ixact))   &
+                 + rtnd_xactive(:,:,ixact)
+         end if
       enddo
+      if (id_emiisop_biogenic>0) then
+         used  = send_data (id_emiisop_biogenic, &
+              xbvoc4soa(:,:,ind_xbvoc_ISOP)*1.0e04*0.068/AVOGNO,        &
+              Time_next, is_in=is, js_in=js)
+      endif      
       if (id_emibvoc>0) then
         used  = send_data (id_emibvoc, &
               (xbvoc4soa(:,:,ind_xbvoc_ISOP)*0.060 + &
@@ -1776,6 +1779,7 @@ type(time_type), intent(in)                                :: Time
         '==>Note from ' // trim(mod_name) // '(' // trim(sub_name) // '):'
 !>
 
+      logical :: do_interactive_bvoc_emis
 !-----------------------------------------------------------------------
 !
 !  When initializing additional tracers, the user needs to make changes
@@ -1953,7 +1957,7 @@ type(time_type), intent(in)                                :: Time
       endif
 !SOA
       if ( nSOA > 0 ) then
-        call atmos_SOA_init ( lonb, latb, nbr_layers, axes, Time, mask)
+        do_interactive_bvoc_emis = atmos_SOA_init ( lonb, latb, nbr_layers, axes, Time, mask)
         SOA_clock = mpp_clock_id( 'Tracer: SOA', &
                     grain=CLOCK_MODULE )
       endif
@@ -1987,24 +1991,40 @@ type(time_type), intent(in)                                :: Time
 !--------------------------------------------------------------------------------------
 ! xactive bvocs (jls)
       nxactive = 0
+      allocate(xactive_trname(ntp))
       do n = 1, ntp
          call get_tracer_names (MODEL_ATMOS, n, name = tracer_name,  &
               units = tracer_units)
          ix   = get_tracer_index( MODEL_ATMOS, tracer_name )
          has_xactive = query_method('xactive_emissions', MODEL_ATMOS, ix, name2, control)
-
          if ( has_xactive ) then
-            nxactive = nxactive + 1
+            nxactive = nxactive + 1 
+            xactive_trname(nxactive) = tracer_name           
          endif
       enddo
+      if (do_interactive_bvoc_emis .and. nxactive .eq. 0) then
+         !for simple chem with interactive bvoc emis, force nxactive to be 2
+         nxactive = 2
+         xactive_trname(1) = 'ISOP'
+         xactive_trname(2) = 'C10H16'
+         IF (mpp_pe() == mpp_root_pe()) THEN
+            write(*,*) 'Force BVOC calculation w/o isoprene and terpene tracers'
+         ENDIF         
+      end if
       if ( nxactive > 0 ) then
          IF (mpp_pe() == mpp_root_pe()) THEN
             write(*,*) 'Allocating xactive_ndx, number of xactive tracers = ', nxactive
          ENDIF
          ALLOCATE( xactive_ndx (nxactive) )
-         call xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx )
+         call xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_trname, xactive_ndx )
          xbvoc_clock = mpp_clock_id( 'xactive_bvocs', &
-                       grain=CLOCK_MODULE )
+              grain=CLOCK_MODULE )
+         IF (mpp_pe() == mpp_root_pe()) THEN
+            do n=1,nxactive
+               write(*,*) 'xactive_trname/xactive_ndx',xactive_trname(n),xactive_ndx(n)
+            end do
+         ENDIF         
+         
       endif
 
 !---------------------------------------------------------------------------------------
