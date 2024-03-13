@@ -4,11 +4,11 @@ before_script:
 
 .ncrc_build: &ncrc_build
   script:
-    - source /opt/cray/pe/modules/default/init/bash
-    - module rm cray-netcdf cray-hdf5 PrgEnv-intel PrgEnv-pgi PrgEnv-gnu PrgEnv-cray
+    - source /usr/share/lmod/lmod/init/bash
+    - module unload cray-netcdf cray-hdf5 PrgEnv-aocc PrgEnv-cray PrgEnv-gnu PrgEnv-intel PrgEnv-nvhpc PrgEnv-nvidia
     - module load PrgEnv-${COMPILER_FAMILY}
     - module swap ${COMPILER_NAME} ${COMPILER_NAME}/${COMPILER_VERSION}
-    - module load cray-hdf5 cray-netcdf
+    - module load cray-hdf5 cray-netcdf/4.9.0.7
     - mkdir local
     - git clone https://github.com/NOAA-GFDL/FMS.git FMS
     - cd FMS
@@ -22,10 +22,15 @@ before_script:
     - make
 
 
-build:ncrc:intel19:debug:
+build:ncrc:intel23-classic:debug:
   stage: build
   tags:
     - am5phys
+  rules:
+    - if: "$CI_COMMIT_BRANCH"
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+      when: always
   variables:
     CC: cc
     COMPILER_FAMILY: intel
