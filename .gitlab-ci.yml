@@ -25,12 +25,12 @@ before_script:
 build:ncrc:intel19:debug:
   stage: build
   tags:
-    - ncrc
+    - am5phys
   variables:
     CC: cc
     COMPILER_FAMILY: intel
-    COMPILER_NAME: intel
-    COMPILER_VERSION: 19.0.5.281
+    COMPILER_NAME: intel-classic
+    COMPILER_VERSION: 2023.1.0
     FC: ftn
     F77: ftn
     FCFLAGS: "-I${CI_BUILDS_DIR}/local/include -O0"
