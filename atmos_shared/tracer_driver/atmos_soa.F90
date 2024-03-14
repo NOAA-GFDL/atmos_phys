@@ -197,7 +197,7 @@ logical                                             :: Linteractive_BVOC
       if ( file_exists('input.nml')) then
         read (input_nml_file, nml=secondary_organics_nml, iostat=io)
         ierr = check_nml_error(io,'secondary_organics_nml')
-     endif
+      endif
      
      Linteractive_BVOC = use_interactive_BVOC_emis
 
