@@ -2008,13 +2008,13 @@ type(time_type), intent(in)                                :: Time
       enddo
       if (do_interactive_bvoc_emis) then
          ! for simple chem with interactive bvoc emis, force ISOP and C10H16 
-         if (.not. ANY(trim(xactive_trname(:)) == 'ISOP')) then
+         if (.not. ANY(trim(xactive_trname(:)) == 'isop')) then
             nxactive = nxactive + 1
-            xactive_trname(nxactive) = 'ISOP'
+            xactive_trname(nxactive) = 'isop'
          endif
-         if (.not. ANY(trim(xactive_trname(:)) == 'C10H16')) then
+         if (.not. ANY(trim(xactive_trname(:)) == 'c10h16')) then
             nxactive = nxactive + 1
-            xactive_trname(nxactive) = 'C10H16'
+            xactive_trname(nxactive) = 'c10h16'
          endif
          if (mpp_pe() == mpp_root_pe()) &
             write(outunit,*) 'Force BVOC calculation of isoprene and terpene emis for SOA'
