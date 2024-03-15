@@ -173,10 +173,8 @@ use       diag_manager_mod, only  : send_data,             &
                                     register_static_field, &
                                     get_base_time
 
-use tracer_manager_mod,     only  : get_tracer_index
 !use something_in_the_land_mod, only : get_LAI,            &
 !                                      get_SOIL_PARAM
-
 
 
 implicit none
@@ -382,7 +380,7 @@ contains
 !   </DESCRIPTION>
 !   <TEMPLATE>
 !      call xactive_bvoc(lon, lat, land, is, ie, js je, Time, Time_next, coszen, &
-!                        pwt, T1, P1, WS1, CO2, O3, rtnd_xactive)
+!                        pwtsfc, T1, P1, WS1, CO2, O3, xactive_trname, rtnd_xactive, xbvoc4soa)
 !   </TEMPLATE>
 !   <IN NAME="lon" TYPE="real" DIM="(:,:)">
 !     Longitude of the center of the model gridcells
@@ -402,7 +400,7 @@ contains
 !   <IN NAME="coszen" TYPE="real" DIM="(:,:)">
 !     Cosine of the solar zenith angle
 !   </IN>
-!   <IN NAME="pwt" TYPE="real" DIM="(:,:)">
+!   <IN NAME="pwtsfc" TYPE="real" DIM="(:,:)">
 !     Air mass in the bottom model layer
 !   </IN>
 !   <IN NAME="T1" TYPE="real" DIM="(:,:)">
@@ -420,12 +418,18 @@ contains
 !   <IN NAME="O3" TYPE="real" DIM="(:,:)">
 !     Surface ozone concentration
 !   </IN>
+!   <IN NAME="xactive_trname" TYPE="character" DIM="(:)">
+!     species names for interactive emission
+!   </IN>
 !   <OUT NAME="rtnd_xactive" TYPE="real" DIM="(:,:,:)">
 !     xactive tracer tendencies
 !   </OUT>
+!   <OUT NAME="xbvoc4soa" TYPE="real" DIM="(:,:,:)">
+!     biogenic emissions (for SOA) [molec/cm2/s]
+!   </OUT>
 !
 subroutine xactive_bvoc( lon, lat, land, is, ie, js, je, Time, Time_next, coszen, &
-                         pwtsfc, T1, P1, WS1, CO2, O3, xactive_trname, rtnd_xactive, xbvoc4soa   )
+                         pwtsfc, T1, P1, WS1, CO2, O3, xactive_trname, rtnd_xactive, xbvoc4soa )
 
    real, intent(in), dimension(:,:)            :: lon, lat        ! Longitude, latitude []
    real, intent(in), dimension(:,:)            :: land            ! Land fraction []
@@ -438,7 +442,7 @@ subroutine xactive_bvoc( lon, lat, land, is, ie, js, je, Time, Time_next, coszen
    real, intent(in), dimension(:,:)            :: WS1             ! 10m wind speed [m/s]
    real, intent(in), dimension(:,:)            :: CO2             ! surface CO2 conc. [VMR]
    real, intent(in), dimension(:,:)            :: O3              ! surface O3 conc.  [VMR]
-   character(len=64), intent(in), dimension(:) :: xactive_trname
+   character(len=64), intent(in), dimension(:) :: xactive_trname  ! species names for xactive emis
    real, intent(out), dimension(:,:,:)         :: rtnd_xactive    ! xactive tracer tendencies [VMR/s]
    real, intent(out), dimension(:,:,:)         :: xbvoc4soa       ! biogenic emissions (for SOA) [molec/cm2/s]
 
@@ -763,10 +767,12 @@ end subroutine xactive_bvoc
 !   <IN NAME="axes" TYPE="integer" DIM="(4)">
 !     The axes relating to the tracer array
 !   </IN>
-!   <OUT NAME="xactive_ndx" TYPE="integer" DIM="(:)">
-!     Index/Location of each xactive species in
-!     the tracer array
-!   </OUT>
+!   <IN NAME="xactive_trname" TYPE="character" DIM="(:)">
+!     Name of each xactive species
+!   </IN>
+!   <IN NAME="xactive_ndx" TYPE="integer" DIM="(:)">
+!     Index/Location of each xactive species in the tracer array
+!   </IN>
 
 subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_trname, xactive_ndx)
 
@@ -774,8 +780,8 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_trname, xac
    real, intent(in), dimension(:,:)    :: lonb, latb     ! Lat/Lon corners
    type(time_type), intent(in)         :: Time           ! Model time
    integer, intent(in)                 :: axes(4)        ! Diagnostics axes
-   character(len=64), intent(in), dimension(:) :: xactive_trname
-   integer, intent(out), dimension(:)  :: xactive_ndx    ! index into tracer array
+   character(len=64), intent(in), dimension(:) :: xactive_trname ! xactive species names
+   integer, intent(in), dimension(:)   :: xactive_ndx    ! index into tracer array
 
 !----------------Local Variables---------------------------------------------------------
 
@@ -954,7 +960,6 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_trname, xac
    allocate(id_G_LT(nxactive))   
    
    DO xknt = 1,nxactive
-      xactive_ndx(xknt) = get_tracer_index(MODEL_ATMOS,trim(xactive_trname(xknt)))      
 
       IF ( trim(xactive_trname(xknt))=='dms' ) THEN
          IF ( mpp_pe()==mpp_root_pe()) call error_mesg('xactive_bvoc_init',       &

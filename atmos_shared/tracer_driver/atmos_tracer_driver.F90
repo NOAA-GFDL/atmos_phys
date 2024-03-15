@@ -1788,6 +1788,8 @@ type(time_type), intent(in)                                :: Time
 
       if (module_is_initialized) return
 
+      outunit = stdout()
+
 !------------------------------------------------------------------------
 !   read namelist.
 !------------------------------------------------------------------------
@@ -1990,8 +1992,10 @@ type(time_type), intent(in)                                :: Time
 
 !--------------------------------------------------------------------------------------
 ! xactive bvocs (jls)
+!--------------------------------------------------------------------------------------
       nxactive = 0
       allocate(xactive_trname(ntp))
+      xactive_trname(:) = ''
       do n = 1, ntp
          call get_tracer_names (MODEL_ATMOS, n, name = tracer_name,  &
               units = tracer_units)
@@ -2002,29 +2006,36 @@ type(time_type), intent(in)                                :: Time
             xactive_trname(nxactive) = tracer_name           
          endif
       enddo
-      if (do_interactive_bvoc_emis .and. nxactive .eq. 0) then
-         !for simple chem with interactive bvoc emis, force nxactive to be 2
-         nxactive = 2
-         xactive_trname(1) = 'ISOP'
-         xactive_trname(2) = 'C10H16'
-         IF (mpp_pe() == mpp_root_pe()) THEN
-            write(*,*) 'Force BVOC calculation w/o isoprene and terpene tracers'
-         ENDIF         
+      if (do_interactive_bvoc_emis) then
+         ! for simple chem with interactive bvoc emis, force ISOP and C10H16 
+         if (.not. ANY(trim(xactive_trname(:)) == 'ISOP')) then
+            nxactive = nxactive + 1
+            xactive_trname(nxactive) = 'ISOP'
+         endif
+         if (.not. ANY(trim(xactive_trname(:)) == 'C10H16')) then
+            nxactive = nxactive + 1
+            xactive_trname(nxactive) = 'C10H16'
+         endif
+         if (mpp_pe() == mpp_root_pe()) &
+            write(outunit,*) 'Force BVOC calculation of isoprene and terpene emis for SOA'
       end if
+
       if ( nxactive > 0 ) then
-         IF (mpp_pe() == mpp_root_pe()) THEN
-            write(*,*) 'Allocating xactive_ndx, number of xactive tracers = ', nxactive
-         ENDIF
+         if (mpp_pe() == mpp_root_pe()) &
+            write(outunit,*) 'Allocating xactive_ndx, number of xactive tracers = ', nxactive
          ALLOCATE( xactive_ndx (nxactive) )
+         do n=1,nxactive
+            xactive_ndx(n) = get_tracer_index(MODEL_ATMOS,trim(xactive_trname(n)))
+            if (xactive_ndx(n) /= NO_TRACER) then
+               has_xactive = query_method('xactive_emissions', MODEL_ATMOS, xative_ndx(n), name2, control)
+! If xactive_emis not specified, do not added xactive emis to tracer tendency
+               if (.not. has_xactive) xactive_ndx(n) = NO_TRACER
+            endif
+            if (mpp_pe() == mpp_root_pe()) &
+               write(outunit,*) 'xactive_trname/xactive_ndx',xactive_trname(n),xactive_ndx(n)
+         end do
          call xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_trname, xactive_ndx )
-         xbvoc_clock = mpp_clock_id( 'xactive_bvocs', &
-              grain=CLOCK_MODULE )
-         IF (mpp_pe() == mpp_root_pe()) THEN
-            do n=1,nxactive
-               write(*,*) 'xactive_trname/xactive_ndx',xactive_trname(n),xactive_ndx(n)
-            end do
-         ENDIF         
-         
+         xbvoc_clock = mpp_clock_id( 'xactive_bvocs', grain=CLOCK_MODULE )
       endif
 
 !---------------------------------------------------------------------------------------
@@ -2343,8 +2354,6 @@ type(time_type), intent(in)                                :: Time
                        Time, 'Tropospheric Ozone Column', 'm', &
                        standard_name='equivalent_thickness_at_stp_of_atmosphere_ozone_content')
 
-      outunit = stdout()
-
       do n = 1,nt
          call get_tracer_names (MODEL_ATMOS, n, name = tracer_name,  &
               units = tracer_units)
@@ -2550,7 +2559,7 @@ subroutine atmos_nitrogen_flux_init
 
       nNH3 = get_tracer_index(MODEL_ATMOS,'nh3')
       if (do_nh3_atm_ocean_exchange .and. nNH3.gt.0) then
-         if (mpp_root_pe().eq.mpp_pe()) write(*,*) 'setting up nh3_flux (atmos)'
+         if (mpp_root_pe().eq.mpp_pe()) write(outunit,*) 'setting up nh3_flux (atmos)'
          ind_nh3_flux = aof_set_coupler_flux('nh3_flux',                       &
               flux_type = 'air_sea_gas_flux_generic', implementation = 'johnson',       &
               atm_tr_index = nNH3,                                          &
