@@ -2005,8 +2005,8 @@ type(time_type), intent(in)                                :: Time
       if (do_interactive_bvoc_emis .and. nxactive .eq. 0) then
          !for simple chem with interactive bvoc emis, force nxactive to be 2
          nxactive = 2
-         xactive_trname(1) = 'ISOP'
-         xactive_trname(2) = 'C10H16'
+         xactive_trname(1) = 'isop'
+         xactive_trname(2) = 'c10h16'
          IF (mpp_pe() == mpp_root_pe()) THEN
             write(*,*) 'Force BVOC calculation w/o isoprene and terpene tracers'
          ENDIF         
