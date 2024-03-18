@@ -2025,11 +2025,16 @@ type(time_type), intent(in)                                :: Time
             write(outunit,*) 'Allocating xactive_ndx, number of xactive tracers = ', nxactive
          ALLOCATE( xactive_ndx (nxactive) )
          do n=1,nxactive
+!here we are trying to handle the unlikely case in which isoprene or terpenes are defined as tracers, soa from dynamic bvocs emissions is requested but isoprene/terpene emisions are not calculated by xactive
             xactive_ndx(n) = get_tracer_index(MODEL_ATMOS,trim(xactive_trname(n)))
             if (xactive_ndx(n) /= NO_TRACER) then
                has_xactive = query_method('xactive_emissions', MODEL_ATMOS, xative_ndx(n), name2, control)
-! If xactive_emis not specified, do not added xactive emis to tracer tendency
-               if (.not. has_xactive) xactive_ndx(n) = NO_TRACER
+! If xactive_emis not specified, do not add xactive emis to tracer tendency
+!               if (.not. has_xactive) xactive_ndx(n) = NO_TRACER
+!crash the model. this requires some further checking               
+               if (.not. has_xactive .and. do_interactive_bvoc_emis)       call error_mesg ('amos_tracer_driver',   &
+                    'inconsistency between soa and xactive bvoc request', FATAL)
+
             endif
             if (mpp_pe() == mpp_root_pe()) &
                write(outunit,*) 'xactive_trname/xactive_ndx',xactive_trname(n),xactive_ndx(n)
