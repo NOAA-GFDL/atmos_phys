@@ -2003,16 +2003,16 @@ type(time_type), intent(in)                                :: Time
          has_xactive = query_method('xactive_emissions', MODEL_ATMOS, ix, name2, control)
          if ( has_xactive ) then
             nxactive = nxactive + 1 
-            xactive_trname(nxactive) = tracer_name           
+            xactive_trname(nxactive) = trim(tracer_name)
          endif
       enddo
       if (do_interactive_bvoc_emis) then
          ! for simple chem with interactive bvoc emis, force ISOP and C10H16 
-         if (.not. ANY(trim(xactive_trname(:)) == 'isop')) then
+         if (.not. ANY(xactive_trname(:) == 'isop')) then
             nxactive = nxactive + 1
             xactive_trname(nxactive) = 'isop'
          endif
-         if (.not. ANY(trim(xactive_trname(:)) == 'c10h16')) then
+         if (.not. ANY(xactive_trname(:) == 'c10h16')) then
             nxactive = nxactive + 1
             xactive_trname(nxactive) = 'c10h16'
          endif
@@ -2028,7 +2028,7 @@ type(time_type), intent(in)                                :: Time
 !here we are trying to handle the unlikely case in which isoprene or terpenes are defined as tracers, soa from dynamic bvocs emissions is requested but isoprene/terpene emisions are not calculated by xactive
             xactive_ndx(n) = get_tracer_index(MODEL_ATMOS,trim(xactive_trname(n)))
             if (xactive_ndx(n) /= NO_TRACER) then
-               has_xactive = query_method('xactive_emissions', MODEL_ATMOS, xative_ndx(n), name2, control)
+               has_xactive = query_method('xactive_emissions', MODEL_ATMOS, xactive_ndx(n), name2, control)
 ! If xactive_emis not specified, do not add xactive emis to tracer tendency
 !               if (.not. has_xactive) xactive_ndx(n) = NO_TRACER
 !crash the model. this requires some further checking               
