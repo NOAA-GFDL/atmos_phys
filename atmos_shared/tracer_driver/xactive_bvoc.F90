@@ -604,6 +604,8 @@ subroutine xactive_bvoc( lon, lat, land, is, ie, js, je, Time, Time_next, coszen
 !....................................................................
    rtnd_xactive(:,:,:) = 0.
    xbvoc4soa(:,:,:) = 0.
+
+   
    DO xactive_knt = 1, nxactive
 
       EMIS(:,:) = 0.
@@ -964,6 +966,21 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_trname, xac
       IF ( trim(xactive_trname(xknt))=='dms' ) THEN
          IF ( mpp_pe()==mpp_root_pe()) call error_mesg('xactive_bvoc_init',       &
               'skipping set up for non-BVOC tracer '//trim(xactive_trname(xknt)),NOTE)
+
+
+         id_EMIS(xknt)    = -1
+         id_G_TEMP(xknt)  = -1
+         id_G_PAR(xknt)   = -1
+         id_G_AGE(xknt)   = -1         
+         id_G_LAI(xknt)   = -1
+         id_G_BDLAI(xknt) = -1
+         id_G_CO2(xknt)   = -1
+         id_G_AQ(xknt)    = -1
+         id_G_SM(xknt)    = -1
+         id_G_HT(xknt)    = -1
+         id_G_HW(xknt)    = -1
+         id_G_LT(xknt)    = -1
+         
          cycle
       ENDIF
 

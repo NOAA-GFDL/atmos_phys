@@ -1487,6 +1487,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
    if ( nxactive > 0 ) then
 ! PAR [umoles/m2/s]
       PPFD = 4.766 * (flux_sw_down_vis_dir + flux_sw_down_vis_dif)
+
       call xactive_bvoc(lon, lat, land, is, ie, js, je, Time,              &
                         Time_next, coszen, pwt(:,:,kd), t(:,:,kd),         &
                         PPFD, w10m_land, tracer(:,:,kd,nco2),              &
@@ -1779,7 +1780,7 @@ type(time_type), intent(in)                                :: Time
         '==>Note from ' // trim(mod_name) // '(' // trim(sub_name) // '):'
 !>
 
-      logical :: do_interactive_bvoc_emis
+      logical :: do_interactive_bvoc_emis_for_soa
 !-----------------------------------------------------------------------
 !
 !  When initializing additional tracers, the user needs to make changes
@@ -1959,7 +1960,7 @@ type(time_type), intent(in)                                :: Time
       endif
 !SOA
       if ( nSOA > 0 ) then
-        do_interactive_bvoc_emis = atmos_SOA_init ( lonb, latb, nbr_layers, axes, Time, mask)
+        do_interactive_bvoc_emis_for_soa = atmos_SOA_init ( lonb, latb, nbr_layers, axes, Time, mask)
         SOA_clock = mpp_clock_id( 'Tracer: SOA', &
                     grain=CLOCK_MODULE )
       endif
@@ -2006,7 +2007,7 @@ type(time_type), intent(in)                                :: Time
             xactive_trname(nxactive) = trim(tracer_name)
          endif
       enddo
-      if (do_interactive_bvoc_emis) then
+      if (do_interactive_bvoc_emis_for_soa) then
          ! for simple chem with interactive bvoc emis, force ISOP and C10H16 
          if (.not. ANY(xactive_trname(:) == 'isop')) then
             nxactive = nxactive + 1
@@ -2032,7 +2033,7 @@ type(time_type), intent(in)                                :: Time
 ! If xactive_emis not specified, do not add xactive emis to tracer tendency
 !               if (.not. has_xactive) xactive_ndx(n) = NO_TRACER
 !crash the model. this requires some further checking               
-               if (.not. has_xactive .and. do_interactive_bvoc_emis)       call error_mesg ('amos_tracer_driver',   &
+               if (.not. has_xactive .and. do_interactive_bvoc_emis_for_soa)       call error_mesg ('amos_tracer_driver',   &
                     'inconsistency between soa and xactive bvoc request', FATAL)
 
             endif
