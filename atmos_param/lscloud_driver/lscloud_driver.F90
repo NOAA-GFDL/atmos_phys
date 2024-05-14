@@ -89,6 +89,7 @@ use atmos_cmip_diag_mod,   only: register_cmip_diag_field_2d, &
                                  cmip_diag_id_type, &
                                  query_cmip_diag_id
 use diag_data_mod,         only: CMOR_MISSING_VALUE
+use matrix_gfdl,           only: query_matrix_info
 implicit none
 private
 
@@ -1451,7 +1452,7 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
 
 !----------------------------------------------------------------------
 !   local variables:
-
+      integer :: npop, NSPCS
       integer :: i,j,k
       real, dimension(idim,jdim,kdim) :: airdens_aerosol, T_aerosol
 
@@ -1459,8 +1460,21 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
 !    allocate and initialize the components of the particles_type
 !    variable Particles.
 !-----------------------------------------------------------------------
+      call query_matrix_info(npop, NSPCS) !XL
       allocate (Particles%concen_dust_sub   (idim, jdim, kdim) )
       allocate (Particles%drop1             (idim, jdim, kdim) )
+      allocate (Particles%drop1_diag        (idim, jdim, kdim) ) !XL
+      if (npop > 0) then
+        allocate (Particles%drop1_pop         (idim, jdim, kdim, npop) ) !XL
+        allocate (Particles%drop1_pop_diag    (idim, jdim, kdim,  npop) ) !XL
+        allocate (Particles%drop1_pop_mass    (idim, jdim, kdim, npop) ) !XL
+        allocate (Particles%drop1_pop_mass_diag    (idim, jdim, kdim, npop) ) !XL
+      else
+        allocate (Particles%drop1_pop         (idim, jdim, kdim, 1) ) !XL
+        allocate (Particles%drop1_pop_diag    (idim, jdim, kdim,  1) ) !XL
+        allocate (Particles%drop1_pop_mass    (idim, jdim, kdim, 1) ) !XL
+        allocate (Particles%drop1_pop_mass_diag    (idim, jdim, kdim, 1) ) !XL
+      endif
       allocate (Particles%drop2             (idim, jdim, kdim) )
       allocate (Particles%crystal1          (idim, jdim, kdim) )
       allocate (Particles%rbar_dust         (idim, jdim, kdim) )
@@ -1469,11 +1483,18 @@ type(cloud_state_type),     intent(inout) :: Cloud_state
       allocate (Particles%N3D               (idim, jdim, kdim) )
       allocate (Particles%N3Di              (idim, jdim, kdim) )
       allocate (Particles%totalmass1        (idim, jdim, kdim, n_totmass) )
+      !allocate (Particles%totalmass1_diag   (idim, jdim, kdim, n_totmass) ) !XL
       allocate (Particles%imass1            (idim, jdim, kdim, n_imass) )
 
       Particles%concen_dust_sub   = 0.
       Particles%drop1    = 0.
       Particles%drop2    = 0.
+      !Particles%totalmass1_diag = 0. !XL
+      Particles%drop1_diag = 0. !XL
+      Particles%drop1_pop = 0. !XL
+      Particles%drop1_pop_diag = 0. !XL
+      Particles%drop1_pop_mass = 0.
+      Particles%drop1_pop_mass_diag = 0. !XL
       Particles%crystal1    = 0.
       Particles%rbar_dust   = 0.
       Particles%ndust   = 0.
@@ -3022,7 +3043,9 @@ type(precip_state_type), intent(inout) :: Precip_state
                                    C2ls_mp%wet_data(:,:,:,n), Time,   &
                                                        is_in=is,js_in=js )
         end if
-      end do
+     end do
+
+     
 
 !-----------------------------------------------------------------------
 !    correct so2 and so4 tendency. so2 is converted to so4.
@@ -3260,6 +3283,11 @@ type(cloud_processes_type), intent(inout) :: Cloud_processes
 !-----------------------------------------------------------------------
       deallocate (Particles%concen_dust_sub )
       deallocate (Particles%drop1           )
+      deallocate (Particles%drop1_diag      )!XL
+      deallocate (Particles%drop1_pop       )!XL
+      deallocate (Particles%drop1_pop_diag  )!XL
+      deallocate (Particles%drop1_pop_mass  )!XL
+      deallocate (Particles%drop1_pop_mass_diag)!XL
       deallocate (Particles%drop2           )
       deallocate (Particles%crystal1        )
       deallocate (Particles%rbar_dust       )

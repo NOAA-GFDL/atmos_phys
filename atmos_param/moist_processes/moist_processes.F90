@@ -87,7 +87,7 @@ use atmos_cmip_diag_mod,   only: register_cmip_diag_field_2d, &
                                  cmip_diag_id_type, &
                                  query_cmip_diag_id
 
-
+use  constants_mod, only     : AVOGNO
 implicit none
 private
 
@@ -2302,7 +2302,24 @@ integer                     :: id_wetdep_cmip
 
           conv_wetdep(n) = 1d3/WTMAIR
           conv_wetdep_kg_m2_s(n) = tracer_mw*1e-3  ! std units are mol/m2/s
-
+        
+        !XL, note: conv_wetdep all the point is to convert air mass into Kg in the denominator
+        elseif ( tracer_units.eq. "#/kg" ) then
+                id_wetdep(n) = register_diag_field ( mod_name, &
+                        TRIM(tracer_name)//'_wet_depo',  &
+                        axes(1:2), Time, trim(diaglname), &
+                        'mole/m2/s',  missing_value=missing_value)
+                id_wetdep_uw(n) = &
+                        register_diag_field ( mod_name, &
+                        TRIM(tracer_name)//'_wet_depo_uw',  &
+                        axes(1:2), Time, trim(diaglname_uw), &
+                        'mole/m2/s', missing_value=missing_value)
+                conv_wetdep(n) = 1/AVOGNO
+                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                !           IMPORTANT NOTICE
+                !!! important Note: there is no way to define kg_m2_s for matrix number tracers 
+                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                conv_wetdep_kg_m2_s(n) = 0.
 
         elseif ( tracer_units.eq. "mmr" ) then
           id_wetdep(n) = &

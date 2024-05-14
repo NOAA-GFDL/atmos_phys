@@ -254,11 +254,151 @@ real, dimension(:,:,:,size(Output_mp%rdt,4)+1:),     &
 !   tiedtke_macro_diagnostics to save relevant diagnostics.
 !--------------------------------------------------------------------------
         call mpp_clock_begin (active_clock)
+       ! if (mpp_root_pe().eq.mpp_pe()) then 
+       !         !if (present(Aerosol)) then 
+       !         if (ASSOCIATED(Aerosol%aerosol)) then
+       !                 !               if (allocated(Aerosol%aerosol)) then
+       !                 write(*,*) "Aerosol%aerosol targeted+allocated, with shape = ", shape(Aerosol%aerosol)
+       !                 !               else 
+       !                 !                       write(*,*) "pointer Aerosol%aerosol targeted, but not allocated"
+       !                 !               endif
+       !         else
+       !                 write(*,*) "pointer Aerosol%aerosol not allocated"
+       !         endif
+
+       !         if (ASSOCIATED(Aerosol%matrix_N)) then
+       !                 !               if (allocated(Aerosol%matrix_N)) then
+       !                 write(*,*) "Aerosol%matrix_N targeted+allocated, with shape = ", shape(Aerosol%matrix_N)
+       !                 !               else
+       !                 !                       write(*,*) "pointer Aerosol%matrix_N targeted, but not allocated"
+       !                 !               endif
+       !         else
+       !                 write(*,*) "pointer Aerosol%matrix_N not allocated"
+       !         endif
+
+       !         if (ASSOCIATED(Aerosol%matrix_Dg_dry)) then
+       !                 !              if (allocated(Aerosol%matrix_Dg_dry)) then
+       !                 write(*,*) "Aerosol%matrix_Dg_dry targeted+allocated, with shape = ", shape(Aerosol%matrix_Dg_dry)
+       !                 !              else
+       !                 !                      write(*,*) "pointer Aerosol%matrix_Dg_dry targeted, but not allocated"
+       !                 !              endif
+       !         else
+       !                 write(*,*) "pointer Aerosol%matrix_Dg_dry not allocated"
+       !         endif
+
+       !         if (ASSOCIATED(Aerosol%matrix_MSPCS)) then
+       !                 !             if (allocated(Aerosol%matrix_MSPCS)) then
+       !                 write(*,*) "Aerosol%matrix_MSPCS targeted+allocated, with shape = ", shape(Aerosol%matrix_MSPCS)
+       !                 !             else
+       !                 !                     write(*,*) "pointer Aerosol%matrix_MSPCS targeted, but not allocated"
+       !                 !             endif
+       !         else
+       !                 write(*,*) "pointer Aerosol%matrix_MSPCS not allocated"
+       !         endif
+
+       !         if (ASSOCIATED(Aerosol%matrix_sigma)) then
+       !                 !             if (allocated(Aerosol%matrix_sigma)) then
+       !                 write(*,*) "Aerosol%matrix_sigma targeted+allocated, with shape = ", shape(Aerosol%matrix_sigma)
+       !                 !             else
+       !                 !                     write(*,*) "pointer Aerosol%matrix_sigma targeted, but not allocated"
+       !                 !             endif
+       !         else
+       !                 write(*,*) "pointer Aerosol%matrix_sigma not allocated"
+       !         endif
+       !         ! else
+       !         !         write (*,*) "ls_cloud_macrophysics => Aerosol not exist"
+       !         ! endif
+       !         !if (present(Particles)) then
+       !         if (ASSOCIATED(Particles%drop1)) then
+       !                 !         if (allocated(Particles%drop1)) then
+       !                 write(*,*) "Particles%drop1 targeted+allocated, with shape = ", shape(Particles%drop1)
+       !                 !         else
+       !                 !                 write(*,*) "pointer Particles%drop1 targeted, but not allocated"
+       !                 !         endif
+       !         else
+       !                 write(*,*) "pointer Particles%drop1 not allocated"
+       !         endif
+
+       !         if (ASSOCIATED(Particles%drop1_diag)) then
+       !                 !          if (allocated(Particles%drop1_diag)) then
+       !                 write(*,*) "Particles%drop1_diag targeted+allocated, with shape = ", shape(Particles%drop1_diag)
+       !                 !          else
+       !                 !                  write(*,*) "pointer Particles%drop1_diag targeted, but not allocated"
+       !                 !          endif
+       !         else
+       !                 write(*,*) "pointer Particles%drop1_diag not allocated"
+       !         endif
+
+       !         if (ASSOCIATED(Particles%totalmass1)) then
+       !                 !           if (allocated(Particles%totalmass1)) then
+       !                 write(*,*) "Particles%totalmass1 targeted+allocated, with shape = ", shape(Particles%totalmass1)
+       !                 !           else
+       !                 !                   write(*,*) "pointer Particles%totalmass1 targeted, but not allocated"
+       !                 !           endif
+       !         else
+       !                 write(*,*) "pointer Particles%totalmass1 not allocated"
+       !         endif
+
+       !         !                  if (ASSOCIATED(Particles%totalmass1_diag)) then
+       !         !              !            if (allocated(Particles%totalmass1_diag)) then
+       !         !                                  write(*,*) "Particles%totalmass1_diag targeted+allocated, with shape = ", shape(Particles%totalmass1_diag)
+       !         !              !            else
+       !         !              !                    write(*,*) "pointer Particles%totalmass1_diag targeted, but not allocated"
+       !         !              !            endif
+       !         !                  else
+       !         !                          write(*,*) "pointer Particles%totalmass1_diag not allocated"
+       !         !                 endif
+
+       !         if (ASSOCIATED(Particles%drop1_pop)) then
+       !                 !            if (allocated(Particles%drop1_pop)) then
+       !                 write(*,*) "Particles%drop1_pop targeted+allocated, with shape = ", shape(Particles%drop1_pop)
+       !                 !            else
+       !                 !                    write(*,*) "pointer Particles%drop1_pop targeted, but not allocated"
+       !                 !            endif
+       !         else
+       !                 write(*,*) "pointer Particles%drop1_pop not allocated"
+       !         endif
+
+       !         if (ASSOCIATED(Particles%drop1_pop_diag)) then
+       !                 !            if (allocated(Particles%drop1_pop_diag)) then
+       !                 write(*,*) "Particles%drop1_pop_diag targeted+allocated, with shape = ", shape(Particles%drop1_pop_diag)
+       !                 !            else
+       !                 !                   write(*,*) "pointer Particles%drop1_pop_diag targeted, but not allocated"
+       !                 !            endif
+       !         else
+       !                 write(*,*) "pointer Particles%drop1_pop_diag not allocated"
+       !         endif
+
+       !         if (ASSOCIATED(Particles%drop1_pop_mass)) then
+       !                 !             if (allocated(Particles%drop1_pop_mass)) then
+       !                 write(*,*) "Particles%drop1_pop_mass targeted+allocated, with shape = ", shape(Particles%drop1_pop_mass)
+       !                 !              else
+       !                 !                      write(*,*) "pointer Particles%drop1_pop_mass targeted, but not allocated"
+       !                 !              endif
+       !         else
+       !                 write(*,*) "pointer Particles%drop1_pop_mass not allocated"
+       !         endif
+
+
+       !         if (ASSOCIATED(Particles%drop1_pop_mass_diag)) then
+       !                 !               if (allocated(Particles%drop1_pop_mass_diag)) then
+       !                 write(*,*) "Particles%drop1_pop_mass_diag targeted+allocated, with shape = ", shape(Particles%drop1_pop_mass_diag)
+       !                 !               else
+       !                 !                       write(*,*) "pointer Particles%drop1_pop_mass_diag targeted, but not allocated"
+       !                 !               endif
+       !         else
+       !                 write(*,*) "pointer Particles%drop1_pop_mass_diag not allocated"
+       !         endif
+       !         !          !else
+       !         !          !        write (*,*) "ls_cloud_macrophysics => Particles not exist"
+       !         !          !endif
+       ! endif
         call determine_activated_aerosol (   &
              idim, jdim, kdim, Lsdiag_mp_control%n_diag_4d, C2ls_mp,   &
              Input_mp, Atmos_state, Particles, Cloud_state%qa_upd,   &
              Lsdiag_mp%diag_4d, Lsdiag_mp_control%diag_id,    &
-                                                 Lsdiag_mp_control%diag_pt )
+             Lsdiag_mp_control%diag_pt, Aerosol ) !XL
+       !here pass Aerosol type to routine (drop_matrix)
         call mpp_clock_end (active_clock)
 
         call mpp_clock_begin (main_clock)

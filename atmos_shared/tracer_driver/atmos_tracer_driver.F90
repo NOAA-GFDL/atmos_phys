@@ -258,9 +258,8 @@ logical :: prevent_flux_through_ice = .false.  , step_update_tracer = .false.
 logical  :: do_esm_nitrogen_flux = .false. !If set to .true. nitrogen fluxes will be prepared for exchange with Ocean
 logical  :: do_nh3_atm_ocean_exchange = .false.
 logical  :: do_cmip6_bug_diag         = .true.
-logical  :: matrix_step_update_tracer = .true.
 namelist /atmos_tracer_driver_nml / prevent_flux_through_ice, step_update_tracer, do_esm_nitrogen_flux,do_nh3_atm_ocean_exchange, &
-                                    do_cmip6_bug_diag, matrix_step_update_tracer
+                                    do_cmip6_bug_diag
 
 !-----------------------------------------------------------------------
 !
@@ -278,6 +277,7 @@ integer :: convect_clock = 0
 integer :: age_tracer_clock = 0
 integer :: stratozone_clock = 0
 integer :: tropchem_clock = 0
+integer :: matrix_clock = 0
 integer :: carbon_clock = 0
 integer :: dust_clock = 0
 integer :: seasalt_clock = 0
@@ -354,7 +354,7 @@ logical :: use_tau=.false.
 
 character(len=6), parameter :: module_name = 'tracer'
 character(len=7), parameter :: mod_name = 'tracers'
-
+character(len=6), parameter :: matrix_mod_name = 'matrix' !XL
 logical :: module_is_initialized = .FALSE.
 
 type(interpolate_type), allocatable :: drydep_data(:)
@@ -812,6 +812,28 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
 
          end if
       enddo
+      !----------------------------------------------------------------
+      !!XL: send matrix data
+      !nh2so4 = get_tracer_index(MODEL_ATMOS,'simpleH2SO4')
+      !do nid = 1, size(r,4)
+      !  if ((matrix_all_tracer(nid)%type .eq. 'mass') .and. (matrix_all_tracer(nid)%id_ddep > 0)) then
+      !         used  = send_data(matrix_all_tracer(nid)%id_ddep, &
+      !                 pwt(:,:,kd)*dsinku(:,:,nid),  &
+      !                 Time_next, is_in=is, js_in=js)
+      !  
+      !  elseif ((matrix_all_tracer(nid)%type .eq. 'number') .and. (matrix_all_tracer(nid)%id_ddep > 0)) then !number unit #/m2/s
+      !         used  = send_data(matrix_all_tracer(nid)%id_ddep, &
+      !                 pwt(:,:,kd)*dsinku(:,:,nid),  &
+      !                 Time_next, is_in=is, js_in=js)
+      !  endif
+      !  if (nid .eq. nh2so4) then
+      !          used  = send_data(id_h2so4_ddep, &
+      !                  0.098*1.e3*pwt(:,:,kd)*dsinku(:,:,nSO2)/WTMAIR, &
+      !                  Time_next, is_in=is, js_in=js)
+      !  endif
+      !enddo
+      !!XL: end sending data
+      !-----------------------------------------------------------------
 
       if (id_om_ddep > 0 .and. nomphilic > 0 .and. nomphobic > 0) then
         used  = send_data (id_om_ddep,  &
@@ -1557,21 +1579,21 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
       call mpp_clock_end (sulfur_clock)
    endif
 
-! bug! FP & XL
-!   if (matrix_step_update_tracer) then
-!      !update using chemical tendencies
-!      do isulf=1,nsulfate
-!         if (do_tracer_sulfate(isulf)) then
-!            tracer(:,:,:,tr_nbr_sulfate(isulf)) = tracer(:,:,:,tr_nbr_sulfate(isulf)) + rt_sulfate(:,:,:,tr_nbr_sulfate(isulf))*dt
-!         end if         
-!      end do
-!
-!      !update using emission tendencies
-!      tracer(:,:,:,nso4)  = tracer(:,:,:,nso4)  + rtndso4(:,:,:)*dt
-!      tracer(:,:,:,nso2)  = tracer(:,:,:,nso2)  + rtndso2(:,:,:)*dt
-!      tracer(:,:,kd,ndms) = tracer(:,:,kd,ndms) + rtnddms(:,:,kd)*dt      
-!   end if
-!     
+!  FP & XL
+   if (step_update_tracer) then
+       !update using chemical tendencies
+      do isulf=1,nsulfate
+         if (do_tracer_sulfate(isulf)) then
+            tracer(:,:,:,tr_nbr_sulfate(isulf)) = tracer(:,:,:,tr_nbr_sulfate(isulf)) + rt_sulfate(:,:,:,isulf)*dt
+         end if         
+      end do
+
+      !update using emission tendencies
+      tracer(:,:,:,nso4)  = tracer(:,:,:,nso4)  + rtndso4(:,:,:)*dt
+      tracer(:,:,:,nso2)  = tracer(:,:,:,nso2)  + rtndso2(:,:,:)*dt
+      tracer(:,:,kd,ndms) = tracer(:,:,kd,ndms) + rtnddms(:,:,kd)*dt      
+   end if
+     
    
 
 !------------------------------------------------------------------------
@@ -1599,9 +1621,13 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
 ! Matrix
 !------------------------------------------------------------------------   
    !IMPORTNT note: rdt_matrix has the same dimension with tracer, instead of r
+   !XL TEST
+   call mpp_clock_begin(matrix_clock)
    call matrix_run(tracer, pfull, rh, t, dt, pwt, z_half, rdt_matrix, Time,is,ie,js,je)
    !rdt has the same dimension as r
    rdt = rdt + rdt_matrix(:,:,:,1:size(r,4))
+   !XL TEST
+   call mpp_clock_end(matrix_clock)
    
 !------------------------------------------------------------------------
 ! Sulfur hexafluoride (SF6)
@@ -1836,7 +1862,8 @@ type(time_type), intent(in)                                :: Time
       ! -- initialize matrix -- (MOVE DOWN LATER)
       call matrix_init(r, axes, time)
       !call matrix_init(r, axes, time, pfull, rh, t, pwt, zhalf)
-
+      !XL TEST
+      matrix_clock = mpp_clock_id( 'Tracer: Matrix', grain=CLOCK_MODULE )
       
 !----- set initial value of radon ------------
 
@@ -2091,7 +2118,33 @@ type(time_type), intent(in)                                :: Time
             'vegnlai_atm', axes(1:2), Time,               &
             'vegetation leaf area index',                                &
             'fraction', missing_value=-999.     )
-
+    !-----------------------------------------------------------------------
+    !!XL: register matrix data
+    !nh2so4 = get_tracer_index(MODEL_ATMOS,'simpleH2SO4')
+    !do nid = 1, size(r,4)
+    !    if (matrix_all_tracer(nid)%is_active) then
+    !            if (matrix_all_tracer(nid)%type .eq. 'mass') then
+    !                    matrix_all_tracer(nid)%id_ddep = register_diag_field (matrix_mod_name, &
+    !                            trim(matrix_all_pop(n)%name)//'_ddep', axes(1:2), Time, &
+    !                            trim(matrix_all_pop(n)%name)//'_ddep', 'kg/m2/s')
+    !            elseif (matrix_all_tracer(nid)%type .eq. 'number') then
+    !                    matrix_all_tracer(nid)%id_ddep = register_diag_field (matrix_mod_name, &
+    !                            trim(matrix_all_pop(n)%name)//'_ddep', axes(1:2), Time, &
+    !                            trim(matrix_all_pop(n)%name)//'_ddep', '#/m2/s')
+    !            endif
+    !    endif
+    !    if (nid .eq. nh2so4) then
+    !            id_h2so4_ddep = register_diag_field (matrix_mod_name, &
+    !                    'simple_h2so4_ddep', axes(1:2), Time, &
+    !                    'simple_h2so4_ddep', 'kg/m2/s')
+    !    endif       
+    !enddo
+    !XL: end registering matrix data
+    !----------------------------------------------------------------------------
+    
+    
+    
+    
       id_om_ddep = register_diag_field (mod_name, &
           'om_ddep', axes(1:2), Time, &
           'total dry deposition of om', 'kg/m2/s')
@@ -2382,6 +2435,10 @@ type(time_type), intent(in)                                :: Time
             id_tracer_diag(n)  = register_diag_field (mod_name, &
                  tracer_name, axes(1:3), Time, &
                  tracer_name, 'kg/m3')
+         elseif ( tracer_units .eq. "#/kg" ) then !XL
+             id_tracer_diag(n)  = register_diag_field (mod_name, &
+                     tracer_name, axes(1:3), Time, &
+                     tracer_name, '#/kg')
          end if
 
          do hh=1,24

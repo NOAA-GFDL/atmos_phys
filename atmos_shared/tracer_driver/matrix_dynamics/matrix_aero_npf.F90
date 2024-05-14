@@ -111,9 +111,9 @@ MODULE AERO_NPF
 CONTAINS
 
     !------------------------------------------------------------------------------ 
-    
-    SUBROUTINE NPFRATE(PRS,RH,TEMP,XH2SO4,SO4RATE,DNDT,DMDT_SO4)!XL
-    !SUBROUTINE NPFRATE(PRS,RH,TEMP,FLAND,XH2SO4,SO4RATE,XNH3,KC,DNDT,DMDT_SO4,ICALL)
+    !CALL NPFRATE(PRS,RH,TEMP,FLAND,XH2SO4_SS_WNPF,SO4RATE,XNH3,KC,DNDT,DMDT_SO4,ICALLNPFRATE)
+    !SUBROUTINE NPFRATE(PRS,RH,TEMP,XH2SO4,SO4RATE,KC,DNDT,DMDT_SO4,ICALL)!XL
+    SUBROUTINE NPFRATE(PRS,RH,TEMP,FLAND,XH2SO4,SO4RATE,XNH3,KC,DNDT,DMDT_SO4,ICALL)
         !-------------------------------------------------------------------------------------------------------------------
         !     DLW 2006.           
         !     Routine to calculate the rate of production of new particles and the 
@@ -128,15 +128,15 @@ CONTAINS
          REAL, INTENT(IN)   :: TEMP      ! ambient temperature [K]
          REAL, INTENT(IN)   :: XH2SO4    ! sulfuric acid (as SO4) concentration [ugSO4/m^3]
          REAL, INTENT(IN)   :: SO4RATE   ! gas-phase H2SO4 (as SO4) production rate [ugSO4/m^3 s]
-!         REAL, INTENT(IN)   :: XNH3      ! ammonia mixing ratio [ppmV]
-!         REAL, INTENT(IN)   :: KC        ! condensational sink [1/s]
-!         REAL, INTENT(IN)   :: FLAND     ! land fraction
-!         INTEGER, INTENT(IN)   :: ICALL     ! flag signalling type of call
+         REAL, INTENT(IN)   :: XNH3      ! ammonia mixing ratio [ppmV]
+         REAL, INTENT(IN)   :: KC        ! condensational sink [1/s]
+         REAL, INTENT(IN)   :: FLAND     ! land fraction
+         INTEGER, INTENT(IN)   :: ICALL     ! flag signalling type of call
 
         ! Output arguments.
 
         REAL, INTENT(OUT)  :: DNDT      ! particle number production rate [m^-3 s^-1]
-        REAL, INTENT(OUT)  :: DMDT_SO4  ! SO4 mass production rate        [ugSO4/m^3 s]
+        REAL, INTENT(OUT)  :: DMDT_SO4  ! SO4 mass production rate        [ugH2SO4/m^3 s]
 
         ! Scratch local variables.
 
@@ -221,7 +221,7 @@ CONTAINS
         !   (3) sulfuric acid      --> second index set to 0 -->  NPFMASS_REGIME = 0
         !-------------------------------------------------------------------------------------------------------------
 !        SO4MASS = NPFMASS( NINT( 100.0D+00*RH ), NPFMASS_REGIME )   ! [ugSO4]
-        SO4MASS = PI6*(DNPF_NM*1E-9)**3*1770*1E9 !XL: [ugSO4]
+        SO4MASS = (PI6*(DNPF_NM*1E-9)**3*1770*1E9)*98.0/96.0 !XL: [ugSO4], scale MSO4 -> MH2SO4
         DMDT_SO4 = SO4MASS * DNDT                                   ! [ugSO4/m^3/s]
 !        IF( ICALL .GT. 0 ) RETURN                                   ! do not impose mass limitation for this call
         IF ( DMDT_SO4 .GT. SO4RATE ) THEN                           ! [ugSO4/m^3/s]
@@ -1538,73 +1538,73 @@ CONTAINS
 !        RETURN
 !    END SUBROUTINE EFFECTIVE_MW
 !
-!
-!    SUBROUTINE STEADY_STATE_H2SO4(PRS,RH,TEMP,FLAND,XH2SO4_SS,SO4RATE,XNH3,KC,DT,XH2SO4_SS_WNPF)
-!        !------------------------------------------------------------------------------------------------------------------
-!        !     101706, DLW: Routine to estimate the steady-state concentration of sulfuric acid
-!        !                  including the consumption of H2SO4 by new particle formation during the current time step.
-!        !------------------------------------------------------------------------------------------------------------------
-!        IMPLICIT NONE
-!
-!        ! Input arguments.
-!
-!        REAL, INTENT(IN)   :: PRS              ! pressure [Pa]
-!        REAL, INTENT(IN)   :: RH               ! fractional relative humidity [1]
-!        REAL, INTENT(IN)   :: TEMP             ! ambient temperature [K]
-!        REAL, INTENT(IN)   :: XH2SO4_SS        ! initial steady-state [H2SO4] (as SO4) 
-!        !   neglecting new particle formation [ugSO4/m^3]
-!        REAL, INTENT(IN)   :: SO4RATE          ! gas-phase H2SO4 (as SO4) production rate [ugSO4/m^3 s]
-!        REAL, INTENT(IN)   :: XNH3             ! ammonia mixing ratio [ppmV]
-!        REAL, INTENT(IN)   :: KC               ! condensational sink due to pre-existing aerosol [1/s]
-!        REAL, INTENT(IN)   :: DT               ! model physics time step [s]
-!        REAL, INTENT(IN)   :: FLAND
-!
-!        ! Output arguments.
-!
-!        REAL, INTENT(OUT)  :: XH2SO4_SS_WNPF   ! steady-state [H2SO4] including new particle formation [ugSO4/m^3]
-!
-!        ! Scratch local variables.
-!
-!        INTEGER :: I                              ! loop counter
-!        REAL :: DNDT                           ! new particle formation rate [particles/m^3/s]
-!        REAL :: DMDT_SO4                       ! npf mass production rates [ugSO4/m^3/s]
-!        REAL :: FX                             ! steady-state equation is FX = 0. [ugSO4/m^3/s]
-!        INTEGER, PARAMETER :: ITMAX = 100         ! loop limit for development code
-!        INTEGER, PARAMETER :: ICALLNPFRATE = 1    ! =0 impose mass limitation, >0 do not impose mass limitation
-!        REAL, PARAMETER :: XH2SO4_THRES_NCM3 = 1.001D+04  ! If [H2SO4] is below this NPF can be neglected.[#/cm^3] 
-!        REAL, PARAMETER :: XH2SO4_THRES = XH2SO4_THRES_NCM3 * MW_SO4 * 1.0D+12 / AVO   ! converted to [ugSO4/m^3] 
-!        REAL, PARAMETER :: EPS_XH2SO4_NCM3   = 1.00D+00                                ! tiny [H2SO4] [#/cm^3] 
-!        REAL, PARAMETER :: EPS_XH2SO4 = EPS_XH2SO4_NCM3 * MW_SO4 * 1.0D+12 / AVO       ! convert to [ugSO4/m^3] 
-!        REAL, PARAMETER :: REDUCTION_FACTOR = 1.2D+00   ! factor by which [H2SO4]ss is reduced each iteration [1] 
-!        LOGICAL, PARAMETER :: EARLY_RETURN = .FALSE.       ! flag for no-operation early exit 
-!
-!        IF( XH2SO4_SS.LT.XH2SO4_THRES .OR. INUC.NE.3 .OR. EARLY_RETURN ) THEN     ! INUC=3 is the Napari et al. 
-!            XH2SO4_SS_WNPF = XH2SO4_SS                                              ! [ugSO4/m^3]
-!            RETURN
-!        ENDIF
-!        XH2SO4_SS_WNPF = XH2SO4_SS + EPS_XH2SO4                                   ! [ugSO4/m^3]
-!        CALL NPFRATE(PRS,RH,TEMP,FLAND,XH2SO4_SS_WNPF,SO4RATE,XNH3,KC,DNDT,DMDT_SO4,ICALLNPFRATE) 
-!        FX = SO4RATE - KC*XH2SO4_SS_WNPF - DMDT_SO4                               ! evaluate function [ugSO4/m^3/s]
-!        IF( FX .GT. 0.0D+00 ) THEN
-!            ! WRITE(34,*)'FX(XMAX) .GT. 0.0D+00 in STEADY_STATE_H2SO4: FX = ', FX
-!            RETURN
-!        ENDIF
+!STEADY_STATE_H2SO4(pfull(i,j,k),rh(i,j,k),t(i,j,k),FLAND,XH2SO4_SS(i,j,k),SO4RATE(i,j,k),XNH3(i,j,k),KC(i,j,k),TSTEP,XH2SO4_SS_WNPF(i,j,k))
+    SUBROUTINE STEADY_STATE_H2SO4(PRS,RH,TEMP,FLAND,XH2SO4_SS,SO4RATE,XNH3,KC,DT,XH2SO4_SS_WNPF)
+        !------------------------------------------------------------------------------------------------------------------
+        !     101706, DLW: Routine to estimate the steady-state concentration of sulfuric acid
+        !                  including the consumption of H2SO4 by new particle formation during the current time step.
+        !------------------------------------------------------------------------------------------------------------------
+        IMPLICIT NONE
+
+        ! Input arguments.
+
+        REAL, INTENT(IN)   :: PRS              ! pressure [Pa]
+        REAL, INTENT(IN)   :: RH               ! fractional relative humidity [1]
+        REAL, INTENT(IN)   :: TEMP             ! ambient temperature [K]
+        REAL, INTENT(IN)   :: XH2SO4_SS        ! initial steady-state [H2SO4] (as SO4) 
+        !   neglecting new particle formation [ugSO4/m^3]
+        REAL, INTENT(IN)   :: SO4RATE          ! gas-phase H2SO4 (as SO4) production rate [ugSO4/m^3 s]
+        REAL, INTENT(IN)   :: XNH3             ! ammonia mixing ratio [ppmV]
+        REAL, INTENT(IN)   :: KC               ! condensational sink due to pre-existing aerosol [1/s]
+        REAL, INTENT(IN)   :: DT               ! model physics time step [s]
+        REAL, INTENT(IN)   :: FLAND
+
+        ! Output arguments.
+
+        REAL, INTENT(OUT)  :: XH2SO4_SS_WNPF   ! steady-state [H2SO4] including new particle formation [ugSO4/m^3]
+
+        ! Scratch local variables.
+        REAL, PARAMETER :: MW_SO4 = 96, MW_H2SO4 = 98.0
+        INTEGER :: I                              ! loop counter
+        REAL :: DNDT                           ! new particle formation rate [particles/m^3/s]
+        REAL :: DMDT_H2SO4                       ! npf mass production rates [ugSO4/m^3/s]
+        REAL :: FX                             ! steady-state equation is FX = 0. [ugSO4/m^3/s]
+        INTEGER, PARAMETER :: ITMAX = 100         ! loop limit for development code
+        INTEGER, PARAMETER :: ICALLNPFRATE = 1    ! =0 impose mass limitation, >0 do not impose mass limitation
+        REAL, PARAMETER :: XH2SO4_THRES_NCM3 = 1.001D+04  ! If [H2SO4] is below this NPF can be neglected.[#/cm^3] 
+        REAL, PARAMETER :: XH2SO4_THRES = XH2SO4_THRES_NCM3 * MW_H2SO4 * 1.0D+12 / AVOGNO   ! converted to [ugH2SO4/m^3] 
+        REAL, PARAMETER :: EPS_XH2SO4_NCM3   = 1.00D+00                                ! tiny [H2SO4] [#/cm^3] 
+        REAL, PARAMETER :: EPS_XH2SO4 = EPS_XH2SO4_NCM3 * MW_H2SO4 * 1.0D+12 / AVOGNO       ! convert to [ugSO4/m^3] 
+        REAL, PARAMETER :: REDUCTION_FACTOR = 1.2D+00   ! factor by which [H2SO4]ss is reduced each iteration [1] 
+        LOGICAL, PARAMETER :: EARLY_RETURN = .FALSE.       ! flag for no-operation early exit 
+
+        IF( XH2SO4_SS.LT.XH2SO4_THRES .OR. INUC.NE.3 .OR. EARLY_RETURN ) THEN     ! INUC=3 is the Napari et al. 
+            XH2SO4_SS_WNPF = XH2SO4_SS                                              ! [ugSO4/m^3]
+            RETURN
+        ENDIF
+        XH2SO4_SS_WNPF = XH2SO4_SS + EPS_XH2SO4                                   ! [ugSO4/m^3]
+        CALL NPFRATE(PRS,RH,TEMP,FLAND,XH2SO4_SS_WNPF,SO4RATE,XNH3,KC,DNDT,DMDT_H2SO4,ICALLNPFRATE) 
+        FX = SO4RATE - KC*XH2SO4_SS_WNPF - DMDT_H2SO4                               ! evaluate function [ugSO4/m^3/s]
+        IF( FX .GT. 0.0D+00 ) THEN
+            ! WRITE(34,*)'FX(XMAX) .GT. 0.0D+00 in STEADY_STATE_H2SO4: FX = ', FX
+            RETURN
+        ENDIF
 !        ! WRITE(34,'(A,I5,5D13.4)')'I,X_SS,X_SS_WNPF,P,DMDT_SO4,FX=',0,XH2SO4_SS,XH2SO4_SS_WNPF,SO4RATE,DMDT_SO4,FX
 !        !------------------------------------------------------------------------------------------------------------------
 !        !     Reduce the steady-state H2SO4 until FX changes sign from negative to positive. 
 !        !     Then the current value of XH2SO4_SS_WNPF is within a factor of REDUCTION_FACTOR 
 !        !     of the actual steady-state value. 
 !        !------------------------------------------------------------------------------------------------------------------
-!        DO I=1, ITMAX
-!        XH2SO4_SS_WNPF = XH2SO4_SS_WNPF / REDUCTION_FACTOR                      ! [ugSO4/m^3]
-!        CALL NPFRATE(PRS,RH,TEMP,FLAND,XH2SO4_SS_WNPF,SO4RATE,XNH3,KC,DNDT,DMDT_SO4,ICALLNPFRATE) 
-!        FX = SO4RATE - KC*XH2SO4_SS_WNPF - DMDT_SO4                             ! evaluate function [ugSO4/m^3/s]
-!        ! WRITE(34,'(A,I5,5D13.4)')'I,X_SS,X_SS_WNPF,P,DMDT_SO4,FX=',I,XH2SO4_SS,XH2SO4_SS_WNPF,SO4RATE,DMDT_SO4,FX
-!        IF( FX .GE. 0.0D+00 ) EXIT
-!        IF( XH2SO4_SS_WNPF .LT. EPS_XH2SO4 ) RETURN                             ! [ugSO4/m^3]
-!        ENDDO
-!        RETURN
-!    END SUBROUTINE STEADY_STATE_H2SO4
+        DO I=1, ITMAX
+        XH2SO4_SS_WNPF = XH2SO4_SS_WNPF / REDUCTION_FACTOR                      ! [ugSO4/m^3]
+        CALL NPFRATE(PRS,RH,TEMP,FLAND,XH2SO4_SS_WNPF,SO4RATE,XNH3,KC,DNDT,DMDT_H2SO4,ICALLNPFRATE) 
+        FX = SO4RATE - KC*XH2SO4_SS_WNPF - DMDT_H2SO4                             ! evaluate function [ugSO4/m^3/s]
+        ! WRITE(34,'(A,I5,5D13.4)')'I,X_SS,X_SS_WNPF,P,DMDT_SO4,FX=',I,XH2SO4_SS,XH2SO4_SS_WNPF,SO4RATE,DMDT_SO4,FX
+        IF( FX .GE. 0.0D+00 ) EXIT
+        IF( XH2SO4_SS_WNPF .LT. EPS_XH2SO4 ) RETURN                             ! [ugSO4/m^3]
+        ENDDO
+        RETURN
+    END SUBROUTINE STEADY_STATE_H2SO4
 !    !------------------------------------------------------------------------------
 !
 !    SUBROUTINE YUJTIMN1(X0,Y0,Z0,U0,V0,W0,XJBH,XJBIM,XJTH,XJTIM,

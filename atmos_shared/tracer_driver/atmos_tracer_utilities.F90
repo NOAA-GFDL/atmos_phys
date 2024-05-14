@@ -77,7 +77,7 @@ module atmos_tracer_utilities_mod
        CONSTANT, & !f1p
        INTERP_WEIGHTED_P !f1p
   use      astronomy_mod, only : universal_time
-
+ use  constants_mod, only     : AVOGNO
   implicit none
   private
   !-----------------------------------------------------------------------
@@ -290,7 +290,7 @@ contains
        case ('mmr')
           units = 'kg/m2/s'
        case ('#/kg') !XL
-          units = '#/m2/s'!XL
+          units = 'mol/m2/s'!XL
        case ('kg/kg')
           units = 'kg/m2/s'
        case ('vmr')
@@ -1031,6 +1031,8 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
        diag_scale = mw_air
     case ('mole/mole')
        diag_scale = mw_air
+    case ('#/kg')
+       diag_scale = AVOGNO !#/kg -> mol/m2/s
     case default
        diag_scale = 1 !XL: this should works for (1) #/kg -> #/m2/s and (2) mmr -> kg/m2/s.
     end select
@@ -1720,7 +1722,7 @@ subroutine wet_deposition( n, T, pfull, phalf, zfull, zhalf, &
  elseif(trim(units) .eq. 'vmr') then
     diag_scale = mw_air ! kg/mole
  elseif (trim(units) .eq. '#/kg') then !XL
-    diag_scale = 1 !XL
+    diag_scale = AVOGNO !XL
  else
     write(*,*) ' Tracer number =',n,' tracer_name=',tracer_name
     write(*,*) ' scheme=',text_in_scheme

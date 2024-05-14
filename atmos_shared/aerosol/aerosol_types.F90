@@ -21,6 +21,16 @@ type aerosol_type
      real,       dimension(:,:,:,:), pointer :: aerosol=>NULL()
      logical,    dimension(:,:),     pointer :: family_members=>NULL()
      character(len=64), dimension(:), pointer :: aerosol_names=>NULL()
+     !XL flag
+     !add matrix value (drop_matrix)
+     !matrix_N (x,y,z,npop)
+     real,       dimension(:,:,:,:), pointer :: matrix_N=>NULL() !number concentration for each mode
+     !matrix_Dg_dry(x,y,z,npop)
+     real,       dimension(:,:,:,:), pointer :: matrix_Dg_dry=>NULL() !dry geometric diameter for each population
+     !matrix_MSPCS (x,y,z,npop,NSPCS), NSPCS=5: sulf, bcar, ocar, dust, seas
+     real,       dimension(:,:,:,:,:), pointer :: matrix_MSPCS=>NULL()!mass concentration of each of the 5 species for each mode
+     !matrix_sigma(npop)
+     real,       dimension(:), pointer :: matrix_sigma=>NULL()!geometric standard deviation of size distribution
 end type aerosol_type
 
 !--------------------------------------------------------------------

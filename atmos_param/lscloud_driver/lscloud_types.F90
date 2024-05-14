@@ -78,6 +78,20 @@ TYPE diag_id_type
 !  cloud droplet variables
 
   integer :: droplets_col250, gb_droplets_col, potential_droplets, &
+             potential_droplets_diag, & !XL, double call diag
+             potential_droplets_pop1, potential_droplets_pop1_diag, & !XL, for matrix pop, matrix will at most has 13 populations
+             potential_droplets_pop2, potential_droplets_pop2_diag, &
+             potential_droplets_pop3, potential_droplets_pop3_diag, &
+             potential_droplets_pop4, potential_droplets_pop4_diag, &
+             potential_droplets_pop5, potential_droplets_pop5_diag, &
+             potential_droplets_pop6, potential_droplets_pop6_diag, &
+             potential_droplets_pop7, potential_droplets_pop7_diag, &
+             potential_droplets_pop8, potential_droplets_pop8_diag, &
+             potential_droplets_pop9, potential_droplets_pop9_diag, &
+             potential_droplets_pop10,potential_droplets_pop10_diag,&
+             potential_droplets_pop11,potential_droplets_pop11_diag,&
+             potential_droplets_pop12,potential_droplets_pop12_diag,&
+             potential_droplets_pop13,potential_droplets_pop13_diag,& !XL, for matrix and double call activation
              droplets, droplets_wtd, ql_wt, droplets_col, rvolume
   integer :: SN3d, qndt_cond , qndt_evap, qndt_fill, qndt_tiny, qndt_berg,  qndt_rime, &  !h1g, 2014-07-24
              qndt_destr, qndt_super, qndt_freez, qndt_sacws, qndt_sacws_o, &
@@ -379,7 +393,7 @@ end type atmos_state_type
 
 !##########################################################################
 
-type  particles_type
+type  particles_type !XL
 
 ! drop1           number conc                     [1/cm^3]
 ! drop2           mass concentration              [1/kg]
@@ -387,7 +401,9 @@ type  particles_type
   real, dimension(:,:,:), pointer ::  &
                                         concen_dust_sub=>NULL(), &
                                         drop1          =>NULL(), &
-                                        drop2          =>NULL(), &
+                                        drop1_diag     =>NULL(), & !XL
+                                        drop2          =>NULL(), & 
+
                                         crystal1       =>NULL(), &
                                         N3D            =>NULL(), &
                                         N3Di           =>NULL(), &
@@ -396,7 +412,12 @@ type  particles_type
                                         hom            =>NULL()
   real, dimension(:,:,:,:), pointer ::  &
                                         imass1         => NULL(), &
-                                        totalmass1     => NULL()
+                                        totalmass1     => NULL(), &
+                                        !totalmass1_diag => NULL(), & !XL
+                                        drop1_pop      =>NULL(), & !XL
+                                        drop1_pop_diag =>NULL(), & !XL
+                                        drop1_pop_mass =>NULL(), & !XL
+                                        drop1_pop_mass_diag =>NULL()  !XL
 
 end type particles_type
 
