@@ -2,7 +2,7 @@ MODULE CONV_UTILITIES_k_MOD
 #include <fms_platform.h>
 
   use Sat_Vapor_Pres_k_Mod, ONLY: compute_qs_k
-
+  use matrix_gfdl,       only: query_matrix_info
 !---------------------------------------------------------------------
   implicit none
   private
@@ -46,9 +46,13 @@ MODULE CONV_UTILITIES_k_MOD
     real, _ALLOCATABLE :: dudp  (:)_NULL, dvdp (:)_NULL, thvbot(:)_NULL
     real, _ALLOCATABLE :: thvtop(:)_NULL, qn   (:)_NULL, qs    (:)_NULL
     real, _ALLOCATABLE :: am1   (:)_NULL, am2  (:)_NULL, am3   (:)_NULL
-    real, _ALLOCATABLE :: am4   (:)_NULL, dthvdp(:)_NULL
+    real, _ALLOCATABLE :: am4   (:)_NULL, dthvdp(:)_NULL !x5lnote: sd%am1-am4 unit: g/cm3
     real, _ALLOCATABLE :: amx1  (:)_NULL, amx2 (:)_NULL, amx3  (:)_NULL
-    real, _ALLOCATABLE :: amx4  (:)_NULL
+    real, _ALLOCATABLE :: amx4  (:)_NULL !x5lnote: sd%amx1-amx4 unit: kg/kg
+    real, _ALLOCATABLE :: matrix_N(:,:)_NULL !XL unit:
+    real, _ALLOCATABLE :: matrix_Dg_dry(:,:)_NULL !XL unit:
+    real, _ALLOCATABLE :: matrix_MSPCS(:,:,:)_NULL !XL unit:
+    real, _ALLOCATABLE :: matrix_sigma(:) !XL unit:
     real, _ALLOCATABLE :: tdt_rad(:)_NULL
     real, _ALLOCATABLE :: tdt_dyn(:)_NULL,qvdt_dyn(:)_NULL,qidt_dyn(:)_NULL
     real, _ALLOCATABLE :: tdt_dif(:)_NULL,qvdt_dif(:)_NULL,qidt_dif(:)_NULL
@@ -151,6 +155,9 @@ contains
   subroutine sd_init_k(kd, num_tracers, sd)
     integer, intent(in) :: kd, num_tracers
     type(sounding), intent(inout) :: sd
+    integer :: npop, NSPCS
+    call query_matrix_info(npop, NSPCS)
+    npop = max(npop,1)
 
     sd%use_capecin_avg = .false.
     sd%use_hlqtsrc_avg = .false.
@@ -229,6 +236,10 @@ contains
     allocate ( sd%am2   (1:kd)); sd%am2   =0.;
     allocate ( sd%am3   (1:kd)); sd%am3   =0.;
     allocate ( sd%am4   (1:kd)); sd%am4   =0.;
+    allocate ( sd%matrix_N(1:kd,npop));              sd%matrix_N =0.;!XL matrix
+    allocate ( sd%matrix_Dg_dry(1:kd,npop));         sd%matrix_Dg_dry =0.; !XL matrix
+    allocate ( sd%matrix_MSPCS(1:kd,npop,NSPCS));    sd%matrix_MSPCS =0.; !XL matrix
+    allocate ( sd%matrix_sigma(npop));               sd%matrix_sigma =0.;!XL matrix
     allocate ( sd%amx1  (1:kd)); sd%amx1  =0.;
     allocate ( sd%amx2  (1:kd)); sd%amx2  =0.;
     allocate ( sd%amx3  (1:kd)); sd%amx3  =0.;
@@ -302,7 +313,10 @@ contains
     sd1% cape_avg  = sd % cape_avg
     sd1% cin_avg   = sd % cin_avg
     sd1% omg_avg   = sd % omg_avg
-
+    sd1%matrix_N = sd%matrix_N;!XL matrix
+    sd1%matrix_Dg_dry = sd%matrix_Dg_dry; !XL matrix
+    sd1%matrix_MSPCS = sd%matrix_MSPCS; !XL matrix
+    sd1%matrix_sigma = sd%matrix_sigma;!XL matrix
     sd1% do_gust_qt= sd % do_gust_qt
     sd1% cgust= sd % cgust
     sd1% cgust0= sd % cgust0
@@ -336,6 +350,7 @@ contains
          sd%exner, sd%ps, sd%exners, sd%zs, sd%ssthc, sd%ssqct, sd%dudp,      &
          sd%dvdp, sd%thvbot, sd%thvtop, sd%qn, sd%am1, sd%am2, sd%am3, sd%am4,&
          sd%amx1, sd%amx2, sd%amx3, sd%amx4,                                  &
+         sd%matrix_N, sd%matrix_Dg_dry, sd%matrix_MSPCS, sd%matrix_sigma, & !XL, matrix variable
          sd%qs, sd%hl, sd%hm, sd%hf0, sd%hms, sd%sshl, sd%tr, sd%sstr,        &
          sd%omg, sd%qtflx_up, sd%qtflx_dn, sd%omega_up, sd%omega_dn,          &
          sd%hdt_vadv, sd%hdt_forc )
@@ -407,6 +422,8 @@ contains
   subroutine pack_sd_k (land, coldT, delt, pmid, pint, zmid, zint,      &
               u, v, omg, t, qv, ql, qi, qa, qn, am1, am2, am3, am4,     &
               amx1, amx2, amx3, amx4,                                   &
+              matrix_N,   matrix_Dg_dry,                                & !matrix input
+              matrix_MSPCS, matrix_sigma,                            & !matrix input
               tracers, src_choice, tdt_rad, tdt_dyn, qvdt_dyn, qidt_dyn,&
               dgz_dyn, ddp_dyn, tdt_dif, dgz_phy, qvdt_dif, qidt_dif, sd, Uw_p)
 
@@ -414,6 +431,9 @@ contains
     logical, intent(in)              :: coldT
     real,    intent(in)              :: delt
     integer, intent(in)              :: src_choice
+    real, intent(in), dimension(:,:) :: matrix_N, matrix_Dg_dry !matrix info: matrix_N(i,j,:,:), matrix_Dg_dry(i,j,:,:)
+    real, intent(in), dimension(:)   :: matrix_sigma !this only has relation with pop, matrix_sigma(:)
+    real, intent(in), dimension(:,:,:) :: matrix_MSPCS !matrix info: matrix_MSPCS(i,j, :,:,:) [k, npop, nspcs]
     real, intent(in), dimension(:)   :: pmid, zmid !pressure&height@mid level
     real, intent(in), dimension(:)   :: pint, zint !pressure&height@ interface level
     real, intent(in), dimension(:)   :: u, v, omg  !wind profile (m/s)
@@ -431,6 +451,13 @@ contains
     integer :: k, nk, m
     real, parameter :: ptopconv = 3000.
 
+    !query matrix variables and reverse the order
+    !XL QUESTIONS: HOW TO QUERY FROM MATRIX
+    !query_pop_number(is, ie, js, je, i_order, i_abs_pop, pop_number)
+    !query_pop_Dg_dry(is, ie, js, je, i_order, i_abs_pop, pop_Dg_dry)
+    !query_pop_MSPCS(is, ie, js, je, nspcs,  i_order, i_abs_pop, pop_MSPCS)
+    !query_pop_sigma(i_order, i_abs_pop, pop_sigma)
+
     !Pack environmental sounding; layers are numbered from bottom up!=
     sd % kmax   = size(t)
     sd % src_choice = src_choice
@@ -440,7 +467,7 @@ contains
     sd % ps(0)  = pint(sd%kmax+1);
     sd % zs(0)  = zint(sd%kmax+1);
     sd % ktopconv = 1
-
+    sd % matrix_sigma = matrix_sigma; !matrix info, dimension (npop)
     do k=1, sd%kmax
        nk=sd%kmax-k+1
        sd % p     (k) = pmid(nk)
@@ -466,6 +493,10 @@ contains
        sd % amx2 (k) = amx2(nk)
        sd % amx3 (k) = amx3(nk)
        sd % amx4 (k) = amx4(nk)
+       !XL's matrxi info
+       sd % matrix_N(k,:) = matrix_N(nk,:) !matrix
+       sd % matrix_Dg_dry(k,:) = matrix_Dg_dry(nk,:) !matrix
+       sd % matrix_MSPCS(k,:,:) = matrix_MSPCS(nk, :,:) !matrix
        sd % tdt_rad (k) = tdt_rad(nk)
        sd % tdt_dyn (k) = tdt_dyn(nk)
        sd % qvdt_dyn(k) = qvdt_dyn(nk)
