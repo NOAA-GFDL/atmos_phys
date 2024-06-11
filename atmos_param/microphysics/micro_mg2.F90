@@ -2635,10 +2635,10 @@ if ( do_implicit_fall ) then
       qctend(i,k)  = qctend(i,k)   + (dum_1D(k) - dumc(i,k))/deltat
     enddo
     if ( precip .ge. 0.0_r8 ) then  !h1g, 2019-11-26, ensure numerical stability
-      prect(i) = prect(i)+precip/g/deltat/1000._r8 
-    else 
+      prect(i) = prect(i)+precip/g/deltat/1000._r8
+    else
       qvlat(i,nlev) = qvlat(i,nlev) + precip/deltat/pdel(i,nlev)
-      tlat(i,nlev)  = tlat(i,nlev) - precip/deltat/pdel(i,nlev) * xxlv 
+      tlat(i,nlev)  = tlat(i,nlev) - precip/deltat/pdel(i,nlev) * xxlv
     endif
   enddo
 
@@ -2666,7 +2666,7 @@ if ( do_implicit_fall ) then
     if ( precip .ge. 0.0_r8 ) then !h1g, 2019-11-26, ensure numerical stability
       prect(i) = prect(i) + precip/g/deltat/1000._r8
       preci(i) = preci(i) + precip/g/deltat/1000._r8
-    else 
+    else
       qvlat(i,nlev) = qvlat(i,nlev) + precip/deltat/pdel(i,nlev)
       tlat(i,nlev)  = tlat(i,nlev) - precip/deltat/pdel(i,nlev) * xxls
     endif
@@ -2695,9 +2695,9 @@ if ( do_implicit_fall ) then
      enddo
      if ( precip .ge. 0.0_r8 ) then !h1g, 2019-11-26, ensure numerical stability
        prect(i) = prect(i)+precip/g/deltat/1000._r8
-     else 
+     else
       qvlat(i,nlev) = qvlat(i,nlev) + precip/deltat/pdel(i,nlev)
-      tlat(i,nlev)  = tlat(i,nlev) - precip/deltat/pdel(i,nlev) * xxlv 
+      tlat(i,nlev)  = tlat(i,nlev) - precip/deltat/pdel(i,nlev) * xxlv
      endif
   enddo
 
@@ -2726,7 +2726,7 @@ if ( do_implicit_fall ) then
     if ( precip .ge. 0.0_r8 ) then !h1g, 2019-11-26, ensure numerical stability
       prect(i) = prect(i)+precip/g/deltat/1000._r8
       preci(i) = preci(i)+precip/g/deltat/1000._r8
-    else 
+    else
       qvlat(i,nlev) = qvlat(i,nlev) + precip/deltat/pdel(i,nlev)
       tlat(i,nlev)  = tlat(i,nlev) - precip/deltat/pdel(i,nlev) * xxls
     endif
@@ -3131,7 +3131,7 @@ endif
         q(i,k)           = q(i,k)      + qs(i,k)
         tlat1(i,k)       = tlat1(i,k)  - qs(i,k)/deltat*xxls
         t(i,k)           = t(i,k)      - qs(i,k)*xxls/cpp
-        qs(i,k)          = 0.0  
+        qs(i,k)          = 0.0
       endif
     enddo
   enddo
@@ -3159,7 +3159,7 @@ endif
         q(i,k)           = q(i,k)      + qc(i,k)
         tlat1(i,k)       = tlat1(i,k)  - qc(i,k)/deltat*xxlv
         t(i,k)           = t(i,k)      - qc(i,k)*xxlv/cpp
-        qc(i,k)          = 0.0  
+        qc(i,k)          = 0.0
       endif
     enddo
   enddo
@@ -3230,7 +3230,7 @@ endif
 end do substepping ! iter loop, sub-step
   deltat = deltatin
 
-prect  = prect1/real(iter) 
+prect  = prect1/real(iter)
 preci  = preci1/real(iter)
 
 lflx   = lflx /real(iter)
@@ -4105,7 +4105,7 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
           if ( ABS(qldt_sum) > 0.0            ) then
 ! ---> h1g, 2014-07-18, add option of including contact freeze in bergeron
                if (include_homogeneous_for_wetdep) then
-           
+
                   if( include_contact_freeze_in_berg ) then
                     f_snow_berg(i,k) = (sum_berg(i,k) + sum_cond(i,k) +   &
                                   sum_ice_adj(i,k) +    &
@@ -4120,7 +4120,7 @@ diag_4l(:,j,:,diag_pt%snow_num_sedi) = diag_4l(:,j,:,diag_pt%snow_num_sedi)/real
                   endif
                else
                    f_snow_berg(i,k) = (sum_berg(i,k) + MAX( sum_bergs(i,k), 0.0))/qldt_sum  ! h1g 2024-01-31
-                 
+
                endif
 ! <--- h1g, 2014-07-18
           else
