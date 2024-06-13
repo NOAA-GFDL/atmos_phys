@@ -126,6 +126,7 @@ use atmos_cmip_diag_mod,   only : register_cmip_diag_field_3d, &
                                   query_cmip_diag_id
 
 use atmos_dust_mod, only: n_dust_tracers, dust_tracers
+use atmos_fire_plumerise_mod, only: atmos_fire_emis_diurnal_logical_shared
 
 implicit none
 
@@ -161,6 +162,8 @@ character(len=64)  :: file_sulfate = 'sulfate.nc',    & ! NetCDF file for sulfat
                       file_emis_2 = '.nc',            & ! NetCDF file name (end) for emissions
                       file_emis3d_1 = 'emissions3d.', & ! NetCDF file name (beginning) for 3-D emissions
                       file_emis3d_2 = '.nc',          & ! NetCDF file name (end) for 3-D emissions
+                      file_emis2dbb_1 = 'emissions2dbb.', & ! NetCDF file name (beginning) for 2-D biomass burning emissions
+                      file_emis2dbb_2 = '.nc',          & ! NetCDF file name (end) for 2-D biomass burning emissions
                       file_ub = 'ub_vals.nc'            ! NetCDF file for chemical upper boundary conditions
 character(len=64)  :: file_aircraft = 'aircraft.nc',  & ! NetCDF file for aircraft emissions
                       file_jval_lut = 'jvals.v5',     & ! ascii file for photolysis rate lookup table
@@ -255,8 +258,7 @@ real               :: scale_emis_field_values(max_scale_emis_fields)
 character(len=64)  :: scale_emis_field_names(max_scale_emis_fields)
 
 logical            :: do_terpene_emis_bug   = .false. !error double counting biogenic terpene emissions
-
-
+logical            :: do_bb_emis_diurnal = .false. !armanp
 type(tropchem_diag),  save :: trop_diag
 type(tropchem_opt),   save :: trop_option
 type (domain2D), pointer :: tropchem_domain !< Atmosphere domain
@@ -277,6 +279,8 @@ namelist /tropchem_driver_nml/    &
                                file_emis_2, &
                                file_emis3d_1, &
                                file_emis3d_2, &
+                               file_emis2dbb_1, &
+                               file_emis2dbb_2, & 
                                file_ub, &
                                inv_list, &
                                file_aircraft,&
@@ -348,17 +352,21 @@ real, parameter :: mw_so4     = 96e-3 !kg/mol
 real, parameter :: emis_cons = WTMAIR * g_to_kg * m2_to_cm2 / AVOGNO
 logical, dimension(pcnstm1) :: has_emis = .false., &      ! does tracer have surface emissions?
                                has_emis3d = .false., &    ! does tracer have 3-D emissions?
+                               has_emis2dbb = .false., &    ! does tracer have 2-D biomass burning emissions?
                                land_does_emission = .false., &    ! surface emission in land
                                has_xactive_emis = .false., & ! does tracer have interactive emissions?
                                diurnal_emis = .false., &   ! diurnally varying emissions?
-                               diurnal_emis3d = .false.    ! diurnally varying 3-D emissions?
+                               diurnal_emis3d = .false., &    ! diurnally varying 3-D emissions?
+                               diurnal_emis2dbb = .false.    ! diurnally varying 2-D biomass burning emissions?
 
 type(interpolate_type),dimension(pcnstm1), save :: inter_emis, &
                                                    inter_emis3d, &
+                                                   inter_emis2dbb, &
                                                    inter_aircraft_emis
 type(interpolate_type), save :: airc_default
 type(field_init_type),dimension(pcnstm1) :: emis_field_names, &
-                                            emis3d_field_names
+                                            emis3d_field_names, &
+                                            emis2dbb_field_names
 logical, dimension(pcnstm1) :: has_ubc = .false., &
      has_lbc    = .false., &
      has_lbc_2d = .false., &
@@ -404,7 +412,7 @@ type(cmip_diag_id_type) :: ID_pso4_aq_kg_m2_s, ID_pso4_gas_kg_m2_s, &
 integer :: jno2_ndx, jo1d_ndx
 
 integer, dimension(pcnstm1) :: indices, id_prod, id_loss, id_chem_tend, &
-                               id_emis, id_emis3d, id_xactive_emis, &
+                               id_emis, id_emis3d, id_emis2dbb, id_xactive_emis, &
                                id_ub, id_lb, id_airc
 !new diagnostics (f1p)
 integer, parameter :: max_dust = 5
@@ -566,6 +574,7 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
                             Time, phalf, pfull, t, is, ie, js, je, dt,         &
                             z_half, z_full, q, tsurf, albedo, coszen, rrsun,   &
                             area, w10m, half_day,                              &
+                            fbbs,                                              &   !!! armanp
                             Time_next, rdiag, do_nh3_atm_ocean_exchange, kbot )
 
 !-----------------------------------------------------------------------
@@ -592,13 +601,16 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
    real, intent(inout), dimension(:,:,:,:)        :: rdiag   ! diagnostic tracer concentrations
    logical, intent(in)                            :: do_nh3_atm_ocean_exchange
    integer, intent(in),  dimension(:,:), optional :: kbot
+   real, intent(in),  dimension(:,:,:) :: fbbs !!!armanp
 !-----------------------------------------------------------------------
    real, dimension(size(r,1),size(r,2),size(r,3)) :: sulfate_data
 !  real, dimension(size(r,1),size(r,2),size(r,3)) :: ub_temp,rno
    real, dimension(size(r,1),size(r,2),size(r,3),maxinv) :: inv_data
    real, dimension(size(r,1),size(r,2)) :: emis, r_lb_2d
+   real, dimension(size(r,1),size(r,2)) ::  emis2dbb
    real, dimension(size(r,1),size(r,2), pcnstm1) :: emisz
    real, dimension(size(r,1),size(r,2),size(r,3)) :: emis3d, xactive_emis
+   real, dimension(size(r,1),size(r,2),size(r,3)) :: emis3dbb
    real, dimension(size(r,1),size(r,2),size(r,3)) :: age, cly0, cly, cly_ratio, &
                                                      bry, dclydt, dbrydt, noy, &
                                                      extinct, strat_aerosol
@@ -682,6 +694,11 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
                  emis_field_names(n)%field_names, &
                  diurnal_emis(n), coszen, half_day, lon, &
                  is, js, has_xactive_emis(n),emis_field_names(n)%scale_emis,'ocean')
+         else if (tracnam(n) == 'SO2') then !! if so2 skip bb emissions here, will do it in emis2dbb
+            call read_2D_emis_data( inter_emis(n), emis, Time, Time_next, &
+                 emis_field_names(n)%field_names, &
+                 diurnal_emis(n), coszen, half_day, lon, &
+                 is, js, has_xactive_emis(n),emis_field_names(n)%scale_emis,'bb')
          else
             call read_2D_emis_data( inter_emis(n), emis, Time, Time_next, &
                  emis_field_names(n)%field_names, &
@@ -743,7 +760,24 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
            emisz(:,:,n) = emisz(:,:,n) + emis3d(:,:,k)
          end do
       end if
-
+!-----------------------------------------------------------------------
+!     ... read in the 2-D biomass burning emissions, using interpolator
+!-----------------------------------------------------------------------
+      if (has_emis2dbb(n)) then
+              call read_2D_emis_data( inter_emis2dbb(n), emis2dbb, Time, Time_next, &
+                 emis2dbb_field_names(n)%field_names, &
+                 diurnal_emis2dbb(n), coszen, half_day, lon, &
+                 is, js, has_xactive_emis(n),emis2dbb_field_names(n)%scale_emis)
+ 
+         do k=1, size(emis3dbb,3)
+           emis3dbb(:,:,k) = emis2dbb(:,:) * fbbs(:,:,k)
+         end do
+         emis_source(:,:,:,n) = emis_source(:,:,:,n) &
+                              + emis3dbb(:,:,:)/pwt(:,:,:) * emis_cons
+         do k=1, size(emis3dbb,3)
+           emisz(:,:,n) = emisz(:,:,n) + emis3dbb(:,:,k)
+         end do
+      end if
 !-----------------------------------------------------------------------
 !     ... calculate interactive (DMS only) emissions
 !-----------------------------------------------------------------------
@@ -1700,6 +1734,7 @@ function tropchem_driver_init( domain, r, mask, axes, Time, &
    type(interpolate_type) :: init_conc
    character(len=64),dimension(pcnstm1) :: emis_files = '', &
                                            emis3d_files = '', &
+                                           emis2dbb_files = '', &
                                            conc_files = '', &
                                            ub_files = '', &
                                            lb_files = '', &
@@ -2060,6 +2095,16 @@ end if
                            lonb_mod, latb_mod, emis3d_field_names(i), &
                            has_emis3d(i), diurnal_emis3d(i), axes, Time )
       if( has_emis3d(i) ) emis3d_files(i) = trim(nc_file)
+
+!-----------------------------------------------------------------------
+!     ... 2d biomass burning emissions
+!-----------------------------------------------------------------------
+      nc_file = trim(file_emis2dbb_1)//lowercase(trim(tracnam(i)))//trim(file_emis2dbb_2)
+      call init_emis_data( inter_emis2dbb(i), MODEL_ATMOS, 'emissions2dbb', indices(i), nc_file, &
+                           lonb_mod, latb_mod, emis2dbb_field_names(i), &
+                           has_emis2dbb(i), diurnal_emis2dbb(i), axes, Time )
+      if( has_emis2dbb(i) ) emis2dbb_files(i) = trim(nc_file)
+
 
 !-----------------------------------------------------------------------
 !     ... Interactive emissions
@@ -2765,9 +2810,10 @@ subroutine tropchem_driver_time_vary (Time)
 
       type(time_type), intent(in) :: Time
       type(time_type) :: lbc_time
+      type(time_type) :: emis2dbb_time
 
-      integer :: yr, mo,day, hr,min, sec, mo_yr, dum, dayspmn
-      integer :: n
+      integer :: yr, mo, day, hr, min, sec, mo_yr, dum, dayspmn
+      integer :: n, dy, mn, sc
 
 
 !-----------------------------------------------------------------------
@@ -2787,6 +2833,21 @@ subroutine tropchem_driver_time_vary (Time)
       do n=1, size(inter_emis3d,1)
         if (has_emis3d(n)) then
           call obtain_interpolator_time_slices (inter_emis3d(n), Time)
+        endif
+      end do
+      
+      do n=1, size(inter_emis2dbb,1)
+        if (has_emis2dbb(n)) then
+
+                call atmos_fire_emis_diurnal_logical_shared(do_bb_emis_diurnal)
+
+                if (do_bb_emis_diurnal) then
+                        call get_date (Time, mo_yr, mo, dy, hr, mn, sc)
+                        emis2dbb_time = set_date(mo_yr, mo, dy, 0, 0, 0)
+                else
+                        emis2dbb_time = Time
+                endif
+          call obtain_interpolator_time_slices (inter_emis2dbb(n), emis2dbb_time)
         endif
       end do
 
@@ -2856,6 +2917,12 @@ subroutine tropchem_driver_endts
       do n=1, size(inter_emis3d,1)
         if (has_emis3d(n)) then
          call unset_interpolator_time_flag(inter_emis3d(n))
+        endif
+      end do
+
+      do n=1, size(inter_emis2dbb,1)
+        if (has_emis2dbb(n)) then
+         call unset_interpolator_time_flag(inter_emis2dbb(n))
         endif
       end do
 
@@ -3169,6 +3236,8 @@ subroutine init_emis_data( emis_type, model, method_type, pos, file_name, &
             select case (trim(method_type))
                case ('emissions3d')
                   file_name  = trim(file_emis3d_1)//trim(emis_name)//trim(file_emis3d_2)
+               case ('emissions2dbb')
+                  file_name  = trim(file_emis2dbb_1)//trim(emis_name)//trim(file_emis2dbb_2)
                case default
                   file_name  = trim(file_emis_1)//trim(emis_name)//trim(file_emis_2)
             end select

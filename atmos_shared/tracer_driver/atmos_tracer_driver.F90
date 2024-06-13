@@ -124,7 +124,7 @@ use tracer_manager_mod,    only : get_tracer_index,   &
                                   adjust_positive_def, &
                                   query_method, &
                                   NO_TRACER
-use field_manager_mod,     only : MODEL_ATMOS
+use field_manager_mod,     only : MODEL_ATMOS, fm_field_name_len
 use atmos_tracer_utilities_mod, only :                      &
                                   dry_deposition,           &
                                   dry_deposition_init,      &
@@ -226,6 +226,11 @@ use xactive_bvoc_mod,      only : xactive_bvoc,          &
 
 use interpolator_mod,      only : interpolate_type
 use atmos_ocean_fluxes_mod,only : aof_set_coupler_flux
+use atmos_fire_plumerise_mod,only : atmos_fire_plumerise_time_vary,    &
+                                    atmos_fire_plumerise_end, &
+                                    atmos_fire_plumerise_endts, &
+                                    atmos_fire_plumerise_init, &
+                                    atmos_fire_plumerise_driver
 implicit none
 private
 !-----------------------------------------------------------------------
@@ -254,6 +259,7 @@ logical :: prevent_flux_through_ice = .false.  , step_update_tracer = .false.
 logical  :: do_esm_nitrogen_flux = .false. !If set to .true. nitrogen fluxes will be prepared for exchange with Ocean
 logical  :: do_nh3_atm_ocean_exchange = .false.
 logical  :: do_cmip6_bug_diag         = .true.
+logical  :: do_bb_plumerise           = .true. !!!armanp
 namelist /atmos_tracer_driver_nml / prevent_flux_through_ice, step_update_tracer, do_esm_nitrogen_flux,do_nh3_atm_ocean_exchange, do_cmip6_bug_diag
 
 !-----------------------------------------------------------------------
@@ -548,6 +554,12 @@ real, intent(in), dimension(:,:),    optional :: con_atm
 !-----------------------------------------------------------------------
 ! Local variables
 !-----------------------------------------------------------------------
+!!!armanp start
+real,    dimension(size(r,1),size(r,2),size(r,3))         :: fire_emis   !!! dsward_cpl
+character(fm_field_name_len),    dimension(10)        :: fire_tr_name  !!! dsward_cpl
+real,    dimension(size(r,1),size(r,2))           :: fire_intensity   !!! dsward_cpl
+real,    dimension(size(r,1),size(r,2),size(r,3))         :: fbb
+!!!armanp end
 real, dimension(size(r,1),size(r,2),size(r,3)) :: rtnd, pwt, ozone, o3_prod, &
                                                   aerosol, rho
 real, dimension(size(r,1),size(r,2),size(r,3),5) :: rt_sulfate, tr_sulfate
@@ -595,10 +607,12 @@ character(len=32) :: tracer_units, tracer_name
 real    :: gmt,local_angle
 integer :: hh
 real :: local_hour_3d(size(r,1),size(r,2),size(r,3)),local_hour
+real :: local_hour_2d(size(r,1),size(r,2))
 logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
 
 !-----------------------------------------------------------------------
-
+    !!! armanp
+    fbb(:,:,:) = 0.0
 !   <ERROR MSG="tracer_driver_init must be called first." STATUS="FATAL">
 !     Tracer_driver_init needs to be called before tracer_driver.
 !   </ERROR>
@@ -1335,6 +1349,35 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
      ocn_flx_fraction = 1. - land
    endif
 
+
+!------------------------------------------------------------------------
+!   local hour calculations
+!------------------------------------------------------------------------
+!calculate local time
+   gmt = universal_time(Time) !time of day midnight = 0
+   do j=1,jd
+      do i=1,id
+         local_angle = gmt + lon(i,j)
+         if (local_angle >= 2.*PI) local_angle = local_angle - 2*pi
+         local_hour        = local_angle *12./PI
+         local_hour_3d(i,j,:) = local_hour
+         local_hour_2d(i,j) = local_hour
+      end do
+   end do
+
+
+
+!------------------------------------------------------------------------
+!   biomass burning plume rise
+!------------------------------------------------------------------------
+!!! armanp
+   if (do_bb_plumerise) then
+      call atmos_fire_plumerise_driver(fbb,pfull,T, &
+                      z_half,z_pbl,z_full, &
+                      tracer(:,:,:,nomphobic), Time_next, &
+                      is, ie, js, je, local_hour_2d)
+   endif
+
 !------------------------------------------------------------------------
 ! Tropospheric chemistry
 !------------------------------------------------------------------------
@@ -1359,6 +1402,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
                             Time, phalf, pfull, t, is, ie, js, je, dt, &
                             z_half, z_full, q, t_surf_rad, albedo, coszen, rrsun, &
                             area, w10m_ocean, half_day, &
+                            fbb,                  &   !!! armanp
                             Time_next, tracer(:,:,:,MIN(ntp+1,nt):nt), &
                             do_nh3_atm_ocean_exchange, kbot )
       rdt(:,:,:,:) = rdt(:,:,:,:) + chem_tend(:,:,:,:)
@@ -1416,7 +1460,6 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
    endif
    call mpp_clock_end (seasalt_clock)
 
-   
 !------------------------------------------------------------------------
 !   carbonaceous aerosols
 !------------------------------------------------------------------------
@@ -1435,6 +1478,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
                                       tracer(:,:,:,nomphilic), rtndomphil, &
                                       tracer(:,:,:,nOH),    &
                                       moa_emis,             &
+                                      fbb,                  &   !!! armanp
                                       Time_next,is,ie,js,je)
       rdt(:,:,:,nbcphobic)=rdt(:,:,:,nbcphobic)+rtndbcphob(:,:,:)
       rdt(:,:,:,nbcphilic)=rdt(:,:,:,nbcphilic)+rtndbcphil(:,:,:)
@@ -1530,6 +1574,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
       endif
       call atmos_SOx_emission(lon, lat, area, land, &
                z_pbl, z_half, phalf, pwt, rtndso2, rtndso4, &
+               fbb,  &  !!! armanp
                Time, Time_next, is,ie,js,je,kbot)
       rdt(:,:,:,nSO4) = rdt(:,:,:,nSO4) + rtndso4(:,:,:)
       rdt(:,:,:,nSO2) = rdt(:,:,:,nSO2) + rtndso2(:,:,:)
@@ -1643,15 +1688,15 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
 !save tracer diagnostics
 
 !calculate local time
-   gmt = universal_time(Time) !time of day midnight = 0
-   do j=1,jd
-      do i=1,id
-         local_angle = gmt + lon(i,j)
-         if (local_angle >= 2.*PI) local_angle = local_angle - 2*pi
-         local_hour        = local_angle *12./PI
-         local_hour_3d(i,j,:) = local_hour
-      end do
-   end do
+!   gmt = universal_time(Time) !time of day midnight = 0
+!   do j=1,jd
+!      do i=1,id
+!         local_angle = gmt + lon(i,j)
+!         if (local_angle >= 2.*PI) local_angle = local_angle - 2*pi
+!         local_hour        = local_angle *12./PI
+!         local_hour_3d(i,j,:) = local_hour
+!      end do
+!   end do
 
 
    do hh=1,24
@@ -1923,6 +1968,10 @@ type(time_type), intent(in)                                :: Time
 
 ! Number of vertical layers
       nbr_layers=size(r,3)
+
+
+!!! armanp
+      call atmos_fire_plumerise_init(lonb, latb, axes, Time)
 
 ! initialize the tracers
 !carbonaceous aerosols
@@ -2552,6 +2601,9 @@ end subroutine atmos_nitrogen_flux_init
 subroutine atmos_tracer_driver_time_vary (Time)
 
 type(time_type), intent(in) :: Time
+      
+!!! armanp
+      call atmos_fire_plumerise_time_vary (Time)
 
       if (nbcphobic > 0 .and. nbcphilic > 0 .and. &
           nomphobic > 0 .and. nomphilic > 0) then
@@ -2600,6 +2652,10 @@ end subroutine atmos_tracer_driver_time_vary
 
 subroutine atmos_tracer_driver_endts
 
+        !!!armanp
+      if (do_bb_plumerise) then
+        call atmos_fire_plumerise_endts
+      endif
       if (do_tropchem) then
         call tropchem_driver_endts
       endif
@@ -2666,7 +2722,8 @@ integer :: logunit
 
       logunit=stdlog()
       write (logunit,'(/,(a))') 'Exiting tracer_driver, have a nice day ...'
-
+      
+      call atmos_fire_plumerise_end   !!!armanp
       call atmos_radon_end
       call atmos_sulfur_hex_end
       call atmos_convection_tracer_end

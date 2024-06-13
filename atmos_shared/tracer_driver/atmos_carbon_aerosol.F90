@@ -30,6 +30,8 @@ use interpolator_mod,           only:  interpolate_type, interpolator_init, &
                                        interpolator, interpolator_end, &
                                        CONSTANT, INTERP_WEIGHTED_P
 use constants_mod,              only : PI, GRAV, RDGAS, WTMAIR
+use atmos_fire_plumerise_mod,   only: atmos_fire_emis_diurnal_logical_shared
+
 implicit none
 private
 !-----------------------------------------------------------------------
@@ -59,8 +61,8 @@ integer :: id_om_emis_col, id_bc_emis_col
 integer :: id_om_emis_colv2, id_bc_emis_colv2
 integer :: id_bcphob_sink, id_omphob_sink
 integer :: id_emisbb, id_omemisbb_col
-integer :: id_bcemisbf, id_bcemisbb, id_bcemissh, id_bcemisff, id_bcemisav
-integer :: id_omemisbf, id_omemisbb, id_omemissh, id_omemisff, id_omemisbg, id_omemisoc
+integer :: id_bcemisbf, id_bcemisob, id_bcemissh, id_bcemisff, id_bcemisav
+integer :: id_omemisbf, id_omemisob, id_omemissh, id_omemisff, id_omemisbg, id_omemisoc
 integer :: id_bc_tau
 integer :: id_emibc, id_emipoa, id_emiapoa, id_emibb ! cmip
 
@@ -207,6 +209,7 @@ integer, dimension(6) :: omff_dataset_entry  = (/ 1, 1, 1, 0, 0, 0 /)
 !                   'bond_2004' 
 !                   'GEIA level 1 and 2'
 !                   'AEROCOM level 1 to 6'
+!                   'BBEMIS2D: GFED, QFED, else'
 character(len=80)     :: bcbb_source = ' '
 character(len=80)     :: bcbb_time_dependency_type = 'constant'
 integer, dimension(6) :: bcbb_dataset_entry  = (/ 1, 1, 1, 0, 0, 0 /)
@@ -215,6 +218,7 @@ integer, dimension(6) :: bcbb_dataset_entry  = (/ 1, 1, 1, 0, 0, 0 /)
 !                     'bond_2004' 
 !                     'GEIA level 1 and 2'
 !                     'AEROCOM level 1 to 6'
+!                     'BBEMIS2D: GFED, QFED, else'
 character(len=80)     :: ombb_source = ' '
 character(len=80)     :: ombb_time_dependency_type = 'constant'
 integer, dimension(6) :: ombb_dataset_entry  = (/ 1, 1, 1, 0, 0, 0 /)
@@ -281,6 +285,9 @@ real                  :: frac_bcbb_philic = 0.2
 real                  :: frac_om_phobic = 0.5
 real                  :: frac_om_philic = 0.5
 real                  :: frac_om_philic_ocean = -1.
+
+logical            :: do_bb_emis_diurnal    = .false. !armanp diurnal biomass burning emissions
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!
 namelist /carbon_aerosol_nml/ &
  bcff_source, bcff_input_name, bcff_filename, &
@@ -351,6 +358,7 @@ subroutine atmos_carbon_aerosol_driver(lon, lat, ocn_flx_fraction,  &
                                omphil, omphil_dt, &
                                oh_conc,&
                                moa_emis, &
+                               fbbs, &   !!! armanp
                                diag_time, is, ie, js, je )
 
 !-----------------------------------------------------------------------
@@ -364,6 +372,7 @@ subroutine atmos_carbon_aerosol_driver(lon, lat, ocn_flx_fraction,  &
    real, intent(in),  dimension(:,:,:) :: omphob,omphil
    real, intent(in),  dimension(:,:,:) :: oh_conc
    real, intent(in),  dimension(:,:)   :: moa_emis
+   real, intent(in),  dimension(:,:,:) :: fbbs   !!! armanp
    real, intent(out), dimension(:,:,:) :: bcphob_dt,bcphil_dt
    real, intent(out), dimension(:,:,:) :: omphob_dt,omphil_dt
 type(time_type), intent(in)            :: diag_time
@@ -372,7 +381,6 @@ integer, intent(in)                    :: is, ie, js, je
 
 real  dtr,bltop,z1,z2,del
 real, dimension(size(bcphob,1),size(bcphob,2),size(bcphob,3)) :: fa1, fa2
-real, dimension(size(bcphob,3)) :: fbb
 integer :: lf, nlevel_fire
 real, dimension(6) :: alt_fire_min, alt_fire_max
 ! Lower altitude of injection from wild fires 
@@ -505,6 +513,13 @@ real, parameter                            :: yield_soa = 0.1
           call interpolator(bcbb_aerosol_interp, bcbb_time, bcemisbb(:,:,lf), &
                         trim(bcbb_emission_name(lf)), is, js)
         enddo
+      case ('BBEMIS2D')
+! Wildfire emissions at surface could be GFED, QFED, and other inventories.              
+        nlevel_fire = 1 
+        do lf=1, nlevel_fire 
+          call interpolator(bcbb_aerosol_interp, bcbb_time, bcemisbb(:,:,lf), &
+                        trim(bcbb_emission_name(lf)), is, js)
+        enddo        
     end select
    endif
    if ( trim(bcbf_source).ne. ' ') then
@@ -564,6 +579,13 @@ real, parameter                            :: yield_soa = 0.1
         do lf=1, nlevel_fire
           call interpolator(ombb_aerosol_interp, ombb_time, omemisbb(:,:,lf), &
                         trim(ombb_emission_name(lf)), is, js)
+        enddo
+      case ('BBEMIS2D')
+! Wildfire emissions at surface could be GFED, QFED, and other inventories.
+        nlevel_fire = 1
+        do lf=1, nlevel_fire
+          call interpolator(ombb_aerosol_interp, ombb_time, omemisbb(:,:,lf), &
+                        trim(ombb_emission_name(lf)), is, js)        
         enddo
     end select
    endif
@@ -672,79 +694,21 @@ real, parameter                            :: yield_soa = 0.1
 !
     if (nlevel_fire .gt. 1) then
       do lf=1,nlevel_fire
-        del=alt_fire_max(lf)-alt_fire_min(lf)
         do j = 1, jd
           do i = 1, id
-            fbb(:)=0.
-            if (.not.no_biobur_if_no_pbl .and. do_biobur_pbl_bug) fbb(kd)=1.
-            do l = kd,2,-1
-              Z1 = z_half(i,j,l+1)-z_half(i,j,kd+1)
-              Z2 = z_half(i,j,l)-z_half(i,j,kd+1)
-              if (del.gt.0. .and. &
-                  Z1.lt.alt_fire_max(lf).and.Z2.gt.alt_fire_min(lf) ) then
-                if (Z1.ge.alt_fire_min(lf)) then
-                  if (Z2 .lt. alt_fire_max(lf)) then
-                    fbb(l)=(Z2-Z1)/del
-                  else
-                    fbb(l)=(alt_fire_max(lf)-z1)/del
-                  endif
-                else
-                  if (Z2.le.alt_fire_max(lf)) then
-                    fbb(l) = (Z2-alt_fire_min(lf))/del
-                  else
-                    fbb(l)=1.
-                  endif
-                endif
-              endif
-            enddo
 ! Open biomass burning fires emission
-            do l = 1, kd
-              bcemisob(i,j,l) = bcemisob(i,j,l) + fbb(l)*bcemisbb(i,j,lf)
-              omemisob(i,j,l) = omemisob(i,j,l) + fbb(l)*omemisbb(i,j,lf)
-            end do
+              bcemisob(i,j,:) = bcemisob(i,j,:) + fbbs(i,j,:)*bcemisbb(i,j,lf)
+              omemisob(i,j,:) = omemisob(i,j,:) + fbbs(i,j,:)*omemisbb(i,j,lf)
           end do
         end do
       end do
-    else
-      if (do_biobur_pbl_bug) then
-        do j = 1, jd
-          do i = 1, id
-            fbb(:)=0.
-            if (.not. no_biobur_if_no_pbl) fbb(kd)=1.
-            bltop = z_pbl(i,j)
-            do l = kd,1,-1
-              z1=z_half(i,j,l+1)-z_half(i,j,kd+1)
-              z2=z_half(i,j,l)-z_half(i,j,kd+1)
-              if (bltop.lt.z1) exit
-              if (bltop.ge.z2) fbb(l)=(z2-z1)/bltop
-              if (bltop.gt.z1.and.bltop.lt.z2) fbb(l) = (bltop-z1)/bltop
-              bcemisob(i,j,l) = bcemisob(i,j,l) + fbb(l)*bcemisbb(i,j,1)
-              omemisob(i,j,l) = omemisob(i,j,l) + fbb(l)*omemisbb(i,j,1)
-              !do lf = 2, nlevel_fire
-              !  bcemisob(i,j,l) = bcemisob(i,j,l) + bcemisbb(i,j,lf)
-              !  omemisob(i,j,l) = omemisob(i,j,l) + omemisbb(i,j,lf)
-              !end do
-            end do
-          end do
-        end do
       else
         do j = 1, jd
           do i = 1, id
-            fbb(:)=0.
-            if (.not. no_biobur_if_no_pbl) fbb(kd)=1.
-            bltop = z_pbl(i,j)
-            do l = kd,1,-1
-              z1=z_half(i,j,l+1)-z_half(i,j,kd+1)
-              z2=z_half(i,j,l)-z_half(i,j,kd+1)
-              if (bltop.lt.z1) exit
-              if (bltop.ge.z2) fbb(l)=(z2-z1)/bltop
-              if (bltop.gt.z1.and.bltop.lt.z2) fbb(l) = (bltop-z1)/bltop
-              bcemisob(i,j,l) = bcemisob(i,j,l) + fbb(l)*bcemisbb(i,j,1)
-              omemisob(i,j,l) = omemisob(i,j,l) + fbb(l)*omemisbb(i,j,1)
-            end do
+              bcemisob(i,j,:) = bcemisob(i,j,:) + fbbs(i,j,:)*bcemisbb(i,j,1)
+              omemisob(i,j,:) = omemisob(i,j,:) + fbbs(i,j,:)*omemisbb(i,j,1)
           end do
         end do
-      endif
     endif
 
 ! Fossil fuel emission
@@ -1018,8 +982,8 @@ real, parameter                            :: yield_soa = 0.1
         used = send_data ( id_omemisbb_col, omemisob_2d, diag_time, &
               is_in=is,js_in=js)
       endif
-      if (id_bcemisbb > 0) then
-        used = send_data ( id_bcemisbb, bcemisob, diag_time, &
+      if (id_bcemisob > 0) then
+        used = send_data ( id_bcemisob, bcemisob, diag_time, &
               is_in=is,js_in=js,ks_in=1)
       endif
       if (id_bcemissh > 0) then
@@ -1038,8 +1002,8 @@ real, parameter                            :: yield_soa = 0.1
         used = send_data ( id_omemisbf, omemisbf, diag_time, &
               is_in=is,js_in=js)
       endif
-      if (id_omemisbb > 0) then
-        used = send_data ( id_omemisbb, omemisob, diag_time, &
+      if (id_omemisob > 0) then
+        used = send_data ( id_omemisob, omemisob, diag_time, &
               is_in=is,js_in=js,ks_in=1)
       endif
       if (id_omemissh > 0) then
@@ -1343,8 +1307,8 @@ integer ::  ierr, io, logunit
                     'omemisbb_col', axes(1:2),Time,                 &
                     'column OM open biomass burning emission', 'kg/m2/sec' )
 
-     id_bcemisbb    = register_diag_field ( mod_name,           &
-                    'bcemisbb', axes(1:3),Time,                 &
+     id_bcemisob    = register_diag_field ( mod_name,           &
+                    'bcemisob', axes(1:3),Time,                 &
                     'BC open biomass burning emission', 'kg/m2/sec' )
 
      id_bcemissh    = register_diag_field ( mod_name,           &
@@ -1363,7 +1327,7 @@ integer ::  ierr, io, logunit
                     'omemisbf', axes(1:2),Time,                 &
                     'OM biofuel emission', 'kg/m2/sec' )
 
-     id_omemisbb    = register_diag_field ( mod_name,           &
+     id_omemisob    = register_diag_field ( mod_name,           &
                     'omemisbb', axes(1:3),Time,                 &
                     'OM open biomass burning emission', 'kg/m2/sec' )
 
@@ -1697,6 +1661,15 @@ integer ::  ierr, io, logunit
          call interpolator_init (bcbb_aerosol_interp,           &
            trim(bcbb_filename), lonb, latb, data_out_of_bounds=(/CONSTANT/), &
            data_names=bcbb_emission_name(1:6),vert_interp=(/INTERP_WEIGHTED_P/))
+       case ('BBEMIS2D')
+         if (trim(bcbb_input_name(1)) .eq. ' ') then   
+           bcbb_emission_name(1)='biomass'
+         else
+           bcbb_emission_name(1)(:)=trim(bcbb_input_name(1)(:))
+         endif
+         call interpolator_init (bcbb_aerosol_interp,           &
+           trim(bcbb_filename), lonb, latb, data_out_of_bounds=(/CONSTANT/), &
+           data_names=bcbb_emission_name(1:1),vert_interp=(/INTERP_WEIGHTED_P/))   
      end select
    endif
    if ( trim(bcsh_source) .ne. ' ') then
@@ -2174,6 +2147,15 @@ integer ::  ierr, io, logunit
          call interpolator_init (ombb_aerosol_interp,           &
            trim(ombb_filename), lonb, latb, data_out_of_bounds=(/CONSTANT/), &
            data_names=ombb_emission_name(1:6),vert_interp=(/INTERP_WEIGHTED_P/))
+       case ('BBEMIS2D')
+         if (trim(ombb_input_name(1)) .eq. ' ') then
+           ombb_emission_name(1)='biomass'
+         else
+           ombb_emission_name(1)=trim(ombb_input_name(1))
+         endif
+         call interpolator_init (ombb_aerosol_interp,           &
+           trim(ombb_filename), lonb, latb, data_out_of_bounds=(/CONSTANT/), &
+           data_names=ombb_emission_name(1:1),vert_interp=(/INTERP_WEIGHTED_P/))   
      end select
    endif
    if ( trim(ombf_source) .ne. ' ') then
@@ -2657,6 +2639,13 @@ type(time_type), intent(in) :: model_time
          bcbb_time = model_time
        endif
      endif
+    call atmos_fire_emis_diurnal_logical_shared(do_bb_emis_diurnal) 
+     if (do_bb_emis_diurnal) then
+             call get_date (model_time, mo_yr, mo, dy, hr, mn, sc)
+             bcbb_time = set_date(mo_yr, mo, dy, 0, 0, 1)
+     else
+             bcbb_time = bcbb_time
+     endif
      call obtain_interpolator_time_slices   &
                        (bcbb_aerosol_interp, bcbb_time)
    endif
@@ -2821,6 +2810,12 @@ type(time_type), intent(in) :: model_time
        else
          ombb_time = model_time
        endif
+     endif
+     if (do_bb_emis_diurnal) then
+             call get_date (model_time, mo_yr, mo, dy, hr, mn, sc)
+             ombb_time = set_date(mo_yr, mo, dy, 0, 0, 1)
+     else
+             ombb_time = ombb_time
      endif
      call obtain_interpolator_time_slices   &
                   (ombb_aerosol_interp, ombb_time)
