@@ -61,7 +61,7 @@ module atmos_fire_plumerise_mod
        atmos_fire_plumerise_endts, &
        atmos_fire_plumerise_init, &
        atmos_fire_plumerise_driver, &
-       atmos_fire_emis_diurnal_logical_shared
+       atmos_fire_do_bb_emis_diurnal
   
 integer :: id_injhgt,id_FRP,id_bvf2, id_fbb
 integer :: id_pfull_pt, id_temp_pt, id_z_half_pt, id_z_pbl_pt, id_z_full_pt
@@ -89,8 +89,9 @@ integer, dimension(6) :: frp_dataset_entry  = (/ 1, 1, 1, 0, 0, 0 /)
 logical               :: do_LM4_fire_emis = .false.
 integer               :: num_percentiles = 6
 logical               :: do_inj_FRP_dist = .false. !!! BB emission injection based on distribution of FRP in each grid
-logical               :: do_frp_diurnal = .False.
-logical               :: do_bb_emis_diurnal = .False.
+logical               :: do_frp_diurnal = .false.
+logical               :: do_bb_emis_diurnal = .false.
+logical               :: do_bb_plumerise = .false.
 integer               :: nlevel_fire = 6
 integer               :: nselect_perc = 6
 type(time_type) :: model_init_time     
@@ -101,7 +102,7 @@ namelist /fire_plumerise_nml/ &
  do_LM4_fire_emis, fire_injhgt_scheme, num_percentiles, nselect_perc, &
  do_inj_FRP_dist, fbb_source, fbb_filename, frp_source, frp_input_name, frp_filename, &
  perc_share, frp_time_dependency_type, frp_dataset_entry, &
- do_frp_diurnal, do_bb_emis_diurnal
+ do_frp_diurnal, do_bb_emis_diurnal, do_bb_plumerise
 
 !---- version number -----             
 character(len=128) :: version = '$Id$' 
@@ -112,14 +113,15 @@ type(time_type)                        :: frp_time, fbb_time
 
 contains
 
-subroutine atmos_fire_plumerise_init(lonb, latb, axes, Time)
+subroutine atmos_fire_plumerise_init(lonb, latb, axes, Time, do_bb_plumerise)
 
     ! Routine to initialize.
     ! This registers the diag fields
     real, dimension(:,:),  intent(in) :: lonb, latb
     type(time_type),       intent(in) :: Time
 
-    integer        , intent(in)                        :: axes(4)
+    integer        , intent(in)       :: axes(4)
+    logical        , intent(out)      :: do_bb_plumerise
 
     integer :: ntrace
     character(len=20) :: units =''
@@ -1043,12 +1045,12 @@ subroutine atmos_fire_emis_diurnal(emisbb_scale_factor, tr, local_hour_2d, id, j
 
 end subroutine atmos_fire_emis_diurnal
 ! ===========================================================================
-subroutine atmos_fire_emis_diurnal_logical_shared(shared_logic)
+function atmos_fire_do_bb_emis_diurnal() result(shared_logic)
                         
-   logical, intent(inout)    :: shared_logic
+   logical :: shared_logic
 
    shared_logic = do_bb_emis_diurnal   
-end subroutine atmos_fire_emis_diurnal_logical_shared
+end function atmos_fire_do_bb_emis_diurnal
 ! ===========================================================================
 
 subroutine atmos_fire_frp_diurnal(fire_arr, fire_diurnal, tr, local_hour_2d, id, jd, Time)

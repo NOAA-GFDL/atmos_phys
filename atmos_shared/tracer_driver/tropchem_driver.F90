@@ -126,7 +126,7 @@ use atmos_cmip_diag_mod,   only : register_cmip_diag_field_3d, &
                                   query_cmip_diag_id
 
 use atmos_dust_mod, only: n_dust_tracers, dust_tracers
-use atmos_fire_plumerise_mod, only: atmos_fire_emis_diurnal_logical_shared
+use atmos_fire_plumerise_mod, only: atmos_fire_do_bb_emis_diurnal
 
 implicit none
 
@@ -258,7 +258,6 @@ real               :: scale_emis_field_values(max_scale_emis_fields)
 character(len=64)  :: scale_emis_field_names(max_scale_emis_fields)
 
 logical            :: do_terpene_emis_bug   = .false. !error double counting biogenic terpene emissions
-logical            :: do_bb_emis_diurnal = .false. !armanp
 type(tropchem_diag),  save :: trop_diag
 type(tropchem_opt),   save :: trop_option
 type (domain2D), pointer :: tropchem_domain !< Atmosphere domain
@@ -694,7 +693,8 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
                  emis_field_names(n)%field_names, &
                  diurnal_emis(n), coszen, half_day, lon, &
                  is, js, has_xactive_emis(n),emis_field_names(n)%scale_emis,'ocean')
-         else if (tracnam(n) == 'SO2') then !! if so2 skip bb emissions here, will do it in emis2dbb
+! *** LWH: CHECK LINE BELOW WITH ARMAN ***
+         else if (tracnam(n) == 'SO2' .and. has_emis2dbb(n)) then !! if so2 skip bb emissions here, will do it in emis2dbb
             call read_2D_emis_data( inter_emis(n), emis, Time, Time_next, &
                  emis_field_names(n)%field_names, &
                  diurnal_emis(n), coszen, half_day, lon, &
@@ -764,17 +764,15 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
 !     ... read in the 2-D biomass burning emissions, using interpolator
 !-----------------------------------------------------------------------
       if (has_emis2dbb(n)) then
-              call read_2D_emis_data( inter_emis2dbb(n), emis2dbb, Time, Time_next, &
+         call read_2D_emis_data( inter_emis2dbb(n), emis2dbb, Time, Time_next, &
                  emis2dbb_field_names(n)%field_names, &
                  diurnal_emis2dbb(n), coszen, half_day, lon, &
                  is, js, has_xactive_emis(n),emis2dbb_field_names(n)%scale_emis)
  
          do k=1, size(emis3dbb,3)
            emis3dbb(:,:,k) = emis2dbb(:,:) * fbbs(:,:,k)
-         end do
-         emis_source(:,:,:,n) = emis_source(:,:,:,n) &
-                              + emis3dbb(:,:,:)/pwt(:,:,:) * emis_cons
-         do k=1, size(emis3dbb,3)
+           emis_source(:,:,k,n) = emis_source(:,:,k,n) &
+                                + emis3dbb(:,:,k)/pwt(:,:,k) * emis_cons
            emisz(:,:,n) = emisz(:,:,n) + emis3dbb(:,:,k)
          end do
       end if
@@ -2839,9 +2837,7 @@ subroutine tropchem_driver_time_vary (Time)
       do n=1, size(inter_emis2dbb,1)
         if (has_emis2dbb(n)) then
 
-                call atmos_fire_emis_diurnal_logical_shared(do_bb_emis_diurnal)
-
-                if (do_bb_emis_diurnal) then
+                if (atmos_fire_do_bb_emis_diurnal()) then
                         call get_date (Time, mo_yr, mo, dy, hr, mn, sc)
                         emis2dbb_time = set_date(mo_yr, mo, dy, 0, 0, 0)
                 else

@@ -30,7 +30,7 @@ use interpolator_mod,           only:  interpolate_type, interpolator_init, &
                                        interpolator, interpolator_end, &
                                        CONSTANT, INTERP_WEIGHTED_P
 use constants_mod,              only : PI, GRAV, RDGAS, WTMAIR
-use atmos_fire_plumerise_mod,   only: atmos_fire_emis_diurnal_logical_shared
+use atmos_fire_plumerise_mod,   only: atmos_fire_do_bb_emis_diurnal
 
 implicit none
 private
@@ -286,7 +286,8 @@ real                  :: frac_om_phobic = 0.5
 real                  :: frac_om_philic = 0.5
 real                  :: frac_om_philic_ocean = -1.
 
-logical            :: do_bb_emis_diurnal    = .false. !armanp diurnal biomass burning emissions
+logical               :: use_bb_plumerise    = .false. !armanp use interactive vert distribution of bb emissions
+logical               :: do_bb_emis_diurnal  = .false. !armanp diurnal biomass burning emissions
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!
 namelist /carbon_aerosol_nml/ &
@@ -318,7 +319,8 @@ namelist /carbon_aerosol_nml/ &
  frac_bcbb_philic, frac_bcbb_phobic,&
  soa_source, gas_conc_name,soa_filename, &
  soa_time_dependency_type, soa_dataset_entry, &
- no_biobur_if_no_pbl, do_biobur_pbl_bug, Dp_crit, frac_om_philic_ocean, gantt_param,gantt_param_wind
+ no_biobur_if_no_pbl, do_biobur_pbl_bug, use_bb_plumerise, &
+ Dp_crit, frac_om_philic_ocean, gantt_param,gantt_param_wind
 
 character(len=6), parameter :: module_name = 'tracer'
 
@@ -381,6 +383,7 @@ integer, intent(in)                    :: is, ie, js, je
 
 real  dtr,bltop,z1,z2,del
 real, dimension(size(bcphob,1),size(bcphob,2),size(bcphob,3)) :: fa1, fa2
+real, dimension(size(bcphob,3)) :: fbb
 integer :: lf, nlevel_fire
 real, dimension(6) :: alt_fire_min, alt_fire_max
 ! Lower altitude of injection from wild fires 
@@ -692,23 +695,102 @@ real, parameter                            :: yield_soa = 0.1
 !
 ! In case of multiple levels, which are fixed
 !
-    if (nlevel_fire .gt. 1) then
-      do lf=1,nlevel_fire
-        do j = 1, jd
+    if (use_bb_plumerise) then
+
+      if (nlevel_fire .gt. 1) then
+        do lf=1,nlevel_fire
+          do j = 1, jd
           do i = 1, id
 ! Open biomass burning fires emission
               bcemisob(i,j,:) = bcemisob(i,j,:) + fbbs(i,j,:)*bcemisbb(i,j,lf)
               omemisob(i,j,:) = omemisob(i,j,:) + fbbs(i,j,:)*omemisbb(i,j,lf)
           end do
-        end do
-      end do
-      else
-        do j = 1, jd
-          do i = 1, id
-              bcemisob(i,j,:) = bcemisob(i,j,:) + fbbs(i,j,:)*bcemisbb(i,j,1)
-              omemisob(i,j,:) = omemisob(i,j,:) + fbbs(i,j,:)*omemisbb(i,j,1)
           end do
         end do
+      else
+        do j = 1, jd
+        do i = 1, id
+              bcemisob(i,j,:) = bcemisob(i,j,:) + fbbs(i,j,:)*bcemisbb(i,j,1)
+              omemisob(i,j,:) = omemisob(i,j,:) + fbbs(i,j,:)*omemisbb(i,j,1)
+        end do
+        end do
+      endif
+
+    else
+
+      if (nlevel_fire .gt. 1) then
+        do lf=1,nlevel_fire
+          del=alt_fire_max(lf)-alt_fire_min(lf)
+          do j = 1, jd
+          do i = 1, id
+            fbb(:)=0.
+            if (.not.no_biobur_if_no_pbl .and. do_biobur_pbl_bug) fbb(kd)=1.
+            do l = kd,2,-1
+              Z1 = z_half(i,j,l+1)-z_half(i,j,kd+1)
+              Z2 = z_half(i,j,l)-z_half(i,j,kd+1)
+              if (del.gt.0. .and. &
+                  Z1.lt.alt_fire_max(lf).and.Z2.gt.alt_fire_min(lf) ) then
+                if (Z1.ge.alt_fire_min(lf)) then
+                  if (Z2 .lt. alt_fire_max(lf)) then
+                    fbb(l)=(Z2-Z1)/del
+                  else
+                    fbb(l)=(alt_fire_max(lf)-z1)/del
+                  endif
+                else
+                  if (Z2.le.alt_fire_max(lf)) then
+                    fbb(l) = (Z2-alt_fire_min(lf))/del
+                  else
+                    fbb(l)=1.
+                  endif
+                endif
+              endif
+            enddo
+! Open biomass burning fires emission
+            do l = 1, kd
+              bcemisob(i,j,l) = bcemisob(i,j,l) + fbb(l)*bcemisbb(i,j,lf)
+              omemisob(i,j,l) = omemisob(i,j,l) + fbb(l)*omemisbb(i,j,lf)
+            end do
+          end do
+          end do
+        end do
+      else
+        if (do_biobur_pbl_bug) then
+          do j = 1, jd
+          do i = 1, id
+            fbb(:)=0.
+            if (.not. no_biobur_if_no_pbl) fbb(kd)=1.
+            bltop = z_pbl(i,j)
+            do l = kd,1,-1
+              z1=z_half(i,j,l+1)-z_half(i,j,kd+1)
+              z2=z_half(i,j,l)-z_half(i,j,kd+1)
+              if (bltop.lt.z1) exit
+              if (bltop.ge.z2) fbb(l)=(z2-z1)/bltop
+              if (bltop.gt.z1.and.bltop.lt.z2) fbb(l) = (bltop-z1)/bltop
+              bcemisob(i,j,l) = bcemisob(i,j,l) + fbb(l)*bcemisbb(i,j,1)
+              omemisob(i,j,l) = omemisob(i,j,l) + fbb(l)*omemisbb(i,j,1)
+            end do
+          end do
+          end do
+        else
+          do j = 1, jd
+          do i = 1, id
+            fbb(:)=0.
+            if (.not. no_biobur_if_no_pbl) fbb(kd)=1.
+            bltop = z_pbl(i,j)
+            do l = kd,1,-1
+              z1=z_half(i,j,l+1)-z_half(i,j,kd+1)
+              z2=z_half(i,j,l)-z_half(i,j,kd+1)
+              if (bltop.lt.z1) exit
+              if (bltop.ge.z2) fbb(l)=(z2-z1)/bltop
+              if (bltop.gt.z1.and.bltop.lt.z2) fbb(l) = (bltop-z1)/bltop
+              bcemisob(i,j,l) = bcemisob(i,j,l) + fbb(l)*bcemisbb(i,j,1)
+              omemisob(i,j,l) = omemisob(i,j,l) + fbb(l)*omemisbb(i,j,1)
+            end do
+          end do
+          end do
+        endif
+      endif
+
     endif
 
 ! Fossil fuel emission
@@ -2639,7 +2721,7 @@ type(time_type), intent(in) :: model_time
          bcbb_time = model_time
        endif
      endif
-    call atmos_fire_emis_diurnal_logical_shared(do_bb_emis_diurnal) 
+     do_bb_emis_diurnal = atmos_fire_do_bb_emis_diurnal() 
      if (do_bb_emis_diurnal) then
              call get_date (model_time, mo_yr, mo, dy, hr, mn, sc)
              bcbb_time = set_date(mo_yr, mo, dy, 0, 0, 1)
@@ -3076,3 +3158,4 @@ end subroutine atmos_carbon_aerosol_endts
 !</SUBROUTINE>
 !#######################################################################
 end module atmos_carbon_aerosol_mod
+:q

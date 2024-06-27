@@ -58,7 +58,7 @@ use              constants_mod, only : PI, GRAV, RDGAS, WTMAIR, PSTD_MKS
 !f1p
 use cloud_chem, only : cloud_so2_chem, CLOUD_CHEM_LEGACY, CLOUD_CHEM_F1P, &
                        CLOUD_CHEM_F1P_BUG, CLOUD_CHEM_F1P_BUG2    ! h1g, 2016-09-07
-use atmos_fire_plumerise_mod,   only: atmos_fire_emis_diurnal_logical_shared
+use atmos_fire_plumerise_mod,   only: atmos_fire_do_bb_emis_diurnal
 
 implicit none
 
@@ -258,7 +258,7 @@ real               :: pH_cloud = -999. !f1p
 real               :: H_cloud
 
 logical            :: no_biobur_if_no_pbl = .true.
-logical            :: do_bb_emis_diurnal    = .false. !armanp diurnal biomass burning emissions
+logical            :: use_bb_plumerise    = .false. !armanp use interactive vert distribution of bb emissions
 
 namelist /simple_sulfate_nml/  &
        critical_sea_fraction,     &
@@ -275,7 +275,8 @@ namelist /simple_sulfate_nml/  &
         ship_time_dependency_type, ship_dataset_entry, &
       aircraft_source, aircraft_emission_name, aircraft_filename, &
         aircraft_time_dependency_type, aircraft_dataset_entry, so2_aircraft_EI,&
-      cont_volc_source, expl_volc_source, cloud_chem_solver, pH_cloud, no_biobur_if_no_pbl
+      cont_volc_source, expl_volc_source, cloud_chem_solver, pH_cloud, no_biobur_if_no_pbl, &
+      use_bb_plumerise
 
 type(time_type) :: anthro_time, biobur_time, ship_time, aircraft_time
 type(time_type)        :: gas_conc_time
@@ -901,7 +902,7 @@ character(len=80) :: simpleSO2_biobur_emis_name, description
                    'simpleSO2_aircraft_emis',axes(1:3),Time,                 &
                    'simpleSO2 emission by aircraft',                         &
                    'kgS/m2/s')
-   id_so2_biobur  = register_diag_field ( mod_name,                          &
+   id_SO2_biobur  = register_diag_field ( mod_name,                          &
                    'simpleSO2_biobur_emis',axes(1:3),Time,                   &
                    'simpleSO2 emission from biomass burning',                &
                    'kgS/m2/s')
@@ -1105,11 +1106,9 @@ type(time_type), intent(in) :: model_time
             endif
           endif
           call atmos_fire_emis_diurnal_logical_shared(do_bb_emis_diurnal)
-          if (do_bb_emis_diurnal) then
+          if (atmos_fire_do_bb_emis_diurnal()) then
                   call get_date (model_time, mo_yr, mo, dy, hr, mn, sc)
                   biobur_time = set_date(mo_yr, mo, dy, 0, 0, 1)
-          else
-                  biobur_time = biobur_time
           endif
           call obtain_interpolator_time_slices &
                             (biobur_emission_interp, biobur_time)
@@ -1485,7 +1484,7 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
       real, intent(in),    dimension(:,:,:)         :: zhalf, phalf
       real, intent(in),    dimension(:,:,:)         :: pwt
       real, intent(out),   dimension(:,:,:)         :: SO2_dt, SO4_dt
-      real, intent(in),  dimension(:,:,:) :: fbbs   !!!armanp
+      real, intent(in),    dimension(:,:,:)         :: fbbs   !!!armanp
       type(time_type), intent(in)                   :: model_time, diag_time
       integer, intent(in)                           :: is, ie, js, je
       integer, intent(in), dimension(:,:), optional :: kbot
@@ -1751,6 +1750,15 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
 
       do j = 1, jd
       do i = 1, id
+
+! --- Assuming biomass burning emission within the PBL -------
+        do l = kd,1,-1
+          z1=zhalf(i,j,l+1)-zhalf(i,j,kd+1)
+          z2=zhalf(i,j,l)-zhalf(i,j,kd+1)
+          if (z_pbl(i,j).lt.z1) exit
+          if (z_pbl(i,j).ge.z2) fbb(i,j,l)=(z2-z1)/z_pbl(i,j)
+          if (z_pbl(i,j).gt.z1.and.z_pbl(i,j).lt.z2) fbb(i,j,l) = (z_pbl(i,j)-z1)/z_pbl(i,j)
+        enddo
 ! --- For fossil fuel emissions, calculate the fraction of emission for
 ! --- each vertical levels
         do l = kd,2,-1
@@ -1796,14 +1804,51 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
 !     emitted between Ze1 and Ze2.
         select case (trim(runtype))
           case ('aerocom')
-            do lf=1,nlevel_fire
+            if (use_bb_plumerise) then
+
+              do lf=1,nlevel_fire
                 do j = 1, jd
                   do i = 1, id
                     so2_emis_biobur(i,j,:) = so2_emis_biobur(i,j,:) + &
                                              fbbs(i,j,:)*SO2_biobur(i,j,lf)
                   end do   ! end i loop
                 end do   ! end j loop
-            end do
+              end do
+
+            else
+
+              do lf=1,nlevel_fire
+                del=alt_fire_max(lf)-alt_fire_min(lf)
+                do l = kd,2,-1
+                  do j = 1, jd
+                  do i = 1, id
+                    Z1 = zhalf(i,j,l+1)-zhalf(i,j,kd+1)
+                    Z2 = zhalf(i,j,l)-zhalf(i,j,kd+1)
+                    ff = 0.
+                    if (del.gt.0. .and. &
+                        Z1.lt.alt_fire_max(lf).and.Z2.gt.alt_fire_min(lf) ) then
+                      if (Z1.ge.alt_fire_min(lf)) then
+                        if (Z2 .lt. alt_fire_max(lf)) then
+                          ff=(Z2-Z1)/del
+                        else
+                          ff=(alt_fire_max(lf)-z1)/del
+                        endif
+                      else
+                        if (Z2.le.alt_fire_max(lf)) then
+                          ff = (Z2-alt_fire_min(lf))/del
+                        else
+                          ff=1.
+                        endif
+                      endif
+                    endif
+                    so2_emis_biobur(i,j,l) = so2_emis_biobur(i,j,l) + &
+                                             ff*SO2_biobur(i,j,lf)
+                  end do   ! end i loop
+                  end do   ! end j loop
+                end do
+              end do
+
+            endif
 
             do l = 1, kd
               do j = 1, jd
@@ -1835,11 +1880,28 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
 !    Assuming:   Europe:      5.0% SOx emission is SO4;
 !                US + Canada: 1.4% SOx emission is SO4;
 !                The rest:    2.5% SOx emission is SO4.
+
+            if (use_bb_plumerise) then
+              do l = 1, kd
+                do j = 1, jd
+                do i = 1, id
+                  so2_emis_biobur(i,j,l) = fbbs(i,j,l) * SO2_biobur(i,j,1)
+                end do   ! end i loop
+                end do   ! end j loop
+              end do   ! end l loop
+            else
+              do l = 1, kd
+                do j = 1, jd
+                do i = 1, id
+                  so2_emis_biobur(i,j,l) = fbb(i,j,l) * SO2_biobur(i,j,1)
+                end do   ! end i loop
+                end do   ! end j loop
+              end do   ! end l loop
+            endif
             do l = 1, kd
               do j = 1, jd
                 do i = 1, id
                   so2_emis_ff(i,j,l)=fa1(i,j,l) * SO2_ff1(i,j) + fa2(i,j,l) * SO2_ff2(i,j)
-                  so2_emis_biobur(i,j,l) = fbbs(i,j,l) * SO2_biobur(i,j,1)
                   SO2_emis(i,j,l) = SO2_emis(i,j,l) &
                      + so2_emis_biobur(i,j,l)       &
                      + so2_emis_ff(i,j,l)
@@ -1849,11 +1911,27 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
               end do   ! end j loop
             end do   ! end l loop
           case default
+            if (use_bb_plumerise) then
+              do l = 1, kd
+                do j = 1, jd
+                do i = 1, id
+                  so2_emis_biobur(i,j,l) = fbbs(i,j,l) * SO2_biobur(i,j,1)
+                end do   ! end i loop
+                end do   ! end j loop
+              end do   ! end l loop
+            else
+              do l = 1, kd
+                do j = 1, jd
+                do i = 1, id
+                  so2_emis_biobur(i,j,l) = fbb(i,j,l) * SO2_biobur(i,j,1)
+                end do   ! end i loop
+                end do   ! end j loop
+              end do   ! end l loop
+            endif
             do l = 1, kd
               do j = 1, jd
                 do i = 1, id
                   so2_emis_ff(i,j,l)=fa1(i,j,l) * SO2_ff1(i,j) + fa2(i,j,l) * SO2_ff2(i,j)
-                  so2_emis_biobur(i,j,l) = fbbs(i,j,l) * SO2_biobur(i,j,1)
                   so2_emis_ship(i,j,l)     = fa1(i,j,l) * SO2_ship(i,j)
                   SO2_emis(i,j,l) = SO2_emis(i,j,l) &
                      + so2_emis_biobur(i,j,l)       &

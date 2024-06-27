@@ -259,7 +259,6 @@ logical :: prevent_flux_through_ice = .false.  , step_update_tracer = .false.
 logical  :: do_esm_nitrogen_flux = .false. !If set to .true. nitrogen fluxes will be prepared for exchange with Ocean
 logical  :: do_nh3_atm_ocean_exchange = .false.
 logical  :: do_cmip6_bug_diag         = .true.
-logical  :: do_bb_plumerise           = .true. !!!armanp
 namelist /atmos_tracer_driver_nml / prevent_flux_through_ice, step_update_tracer, do_esm_nitrogen_flux,do_nh3_atm_ocean_exchange, do_cmip6_bug_diag
 
 !-----------------------------------------------------------------------
@@ -336,6 +335,7 @@ integer :: nISOP     =0
 
 integer, dimension(5) :: tr_nbr_sulfate=0
 logical, dimension(5) :: do_tracer_sulfate=.false.
+logical :: do_bb_plumerise = .false. !!!armanp
 
 real    :: ozon(11,48),cosp(14),cosphc(48),photo(132,14,11,48),   &
            solardata(1801),chlb(90,15),ozb(144,90,12),tropc(151,9),  &
@@ -555,10 +555,10 @@ real, intent(in), dimension(:,:),    optional :: con_atm
 ! Local variables
 !-----------------------------------------------------------------------
 !!!armanp start
-real,    dimension(size(r,1),size(r,2),size(r,3))         :: fire_emis   !!! dsward_cpl
+real,    dimension(size(r,1),size(r,2),size(r,3))     :: fire_emis   !!! dsward_cpl
 character(fm_field_name_len),    dimension(10)        :: fire_tr_name  !!! dsward_cpl
-real,    dimension(size(r,1),size(r,2))           :: fire_intensity   !!! dsward_cpl
-real,    dimension(size(r,1),size(r,2),size(r,3))         :: fbb
+real,    dimension(size(r,1),size(r,2))               :: fire_intensity   !!! dsward_cpl
+real,    dimension(size(r,1),size(r,2),size(r,3))     :: fbb
 !!!armanp end
 real, dimension(size(r,1),size(r,2),size(r,3)) :: rtnd, pwt, ozone, o3_prod, &
                                                   aerosol, rho
@@ -1971,7 +1971,7 @@ type(time_type), intent(in)                                :: Time
 
 
 !!! armanp
-      call atmos_fire_plumerise_init(lonb, latb, axes, Time)
+      call atmos_fire_plumerise_init(lonb, latb, axes, Time, do_bb_plumerise)
 
 ! initialize the tracers
 !carbonaceous aerosols
@@ -2603,7 +2603,9 @@ subroutine atmos_tracer_driver_time_vary (Time)
 type(time_type), intent(in) :: Time
       
 !!! armanp
-      call atmos_fire_plumerise_time_vary (Time)
+      if (do_bb_plumerise) then
+        call atmos_fire_plumerise_time_vary (Time)
+      endif
 
       if (nbcphobic > 0 .and. nbcphilic > 0 .and. &
           nomphobic > 0 .and. nomphilic > 0) then
