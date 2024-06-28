@@ -1105,7 +1105,6 @@ type(time_type), intent(in) :: model_time
               biobur_time = model_time
             endif
           endif
-          call atmos_fire_emis_diurnal_logical_shared(do_bb_emis_diurnal)
           if (atmos_fire_do_bb_emis_diurnal()) then
                   call get_date (model_time, mo_yr, mo, dy, hr, mn, sc)
                   biobur_time = set_date(mo_yr, mo, dy, 0, 0, 1)
