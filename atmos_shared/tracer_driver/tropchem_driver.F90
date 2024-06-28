@@ -692,13 +692,12 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
             call read_2D_emis_data( inter_emis(n), emis, Time, Time_next, &
                  emis_field_names(n)%field_names, &
                  diurnal_emis(n), coszen, half_day, lon, &
-                 is, js, has_xactive_emis(n),emis_field_names(n)%scale_emis,'ocean')
-! *** LWH: CHECK LINE BELOW WITH ARMAN ***
+                 is, js, has_xactive_emis(n),emis_field_names(n)%scale_emis,skip_field='ocean')
          else if (tracnam(n) == 'SO2' .and. has_emis2dbb(n)) then !! if so2 skip bb emissions here, will do it in emis2dbb
             call read_2D_emis_data( inter_emis(n), emis, Time, Time_next, &
                  emis_field_names(n)%field_names, &
                  diurnal_emis(n), coszen, half_day, lon, &
-                 is, js, has_xactive_emis(n),emis_field_names(n)%scale_emis,'bb')
+                 is, js, has_xactive_emis(n),emis_field_names(n)%scale_emis,skip_field='bb')
          else
             call read_2D_emis_data( inter_emis(n), emis, Time, Time_next, &
                  emis_field_names(n)%field_names, &
@@ -2836,13 +2835,12 @@ subroutine tropchem_driver_time_vary (Time)
       
       do n=1, size(inter_emis2dbb,1)
         if (has_emis2dbb(n)) then
-
-                if (atmos_fire_do_bb_emis_diurnal()) then
-                        call get_date (Time, mo_yr, mo, dy, hr, mn, sc)
-                        emis2dbb_time = set_date(mo_yr, mo, dy, 0, 0, 0)
-                else
-                        emis2dbb_time = Time
-                endif
+          if (atmos_fire_do_bb_emis_diurnal()) then
+            call get_date (Time, mo_yr, mo, dy, hr, mn, sc)
+            emis2dbb_time = set_date(mo_yr, mo, dy, 0, 0, 0)
+          else
+            emis2dbb_time = Time
+          endif
           call obtain_interpolator_time_slices (inter_emis2dbb(n), emis2dbb_time)
         endif
       end do
