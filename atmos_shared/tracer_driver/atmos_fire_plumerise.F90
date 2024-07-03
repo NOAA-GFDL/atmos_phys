@@ -237,9 +237,9 @@ subroutine atmos_fire_plumerise_init(lonb, latb, axes, Time, do_bb_plumerise)
           print *, 'fbb correspond to year :', &
                    '2008'
         endif
-       do n = 1,25
-        write(fbb_value_name(n), '("perc_inj_", I2.2)') n
-       end do        
+        do n = 1,25
+          write(fbb_value_name(n), '("perc_inj_", I2.2)') n
+        end do        
 
         call interpolator_init (fbb_value_interp,             &
                              trim(fbb_filename),           &
@@ -257,9 +257,9 @@ subroutine atmos_fire_plumerise_init(lonb, latb, axes, Time, do_bb_plumerise)
           print *, 'fbb correspond to year :', &
                    '2000'
         endif
-       do n = 1,7
-        write(fbb_value_name(n), '("perc_inj_", I2.2)') n
-       end do
+        do n = 1,7
+          write(fbb_value_name(n), '("perc_inj_", I2.2)') n
+        end do
 
         call interpolator_init (fbb_value_interp,             &
                              trim(fbb_filename),           &
@@ -343,7 +343,7 @@ subroutine atmos_fire_plumerise_init(lonb, latb, axes, Time, do_bb_plumerise)
         endif
      endif
      select case (trim(frp_source))
-     case ('MODIS') 
+       case ('MODIS') 
          if (trim(frp_input_name(1)) .eq. ' ') then
            frp_value_name(1)='per10'
            frp_value_name(2)='per25'
@@ -389,22 +389,21 @@ subroutine atmos_fire_plumerise_time_vary (model_time)
 !  read climatology for bb injection (Val Martin 2018)
    if ( trim(fbb_source) .ne. ' ') then
      select case (trim(fbb_source))
-     case ('MISR_clim')
+       case ('MISR_clim')
          call get_date (fbb_entry, yr, dum,dum,dum,dum,dum)
          call get_date (model_time, mo_yr, mo, dy, hr, mn, sc)
          fbb_time = set_date (yr, mo, 1, 0, 0, 0)
-     if (mo == 12 .and. dy == 31) then
-         fbb_time = set_date(yr,1,1,0,0,0)
-     endif
-     call obtain_interpolator_time_slices   &
-                       (fbb_value_interp, fbb_time)
-     case ('AEROCOM_clim')
+         if (mo == 12 .and. dy == 31) then
+           fbb_time = set_date(yr,1,1,0,0,0)
+         endif
+         call obtain_interpolator_time_slices (fbb_value_interp, fbb_time)
+       case ('AEROCOM_clim')
          call get_date (fbb_entry, yr, dum,dum,dum,dum,dum)
          call get_date (model_time, mo_yr, mo, dy, hr, mn, sc)
          fbb_time = set_date (yr, 1, 1, 0, 0, 0)
-     call obtain_interpolator_time_slices   &
+         call obtain_interpolator_time_slices   &
                        (fbb_value_interp, fbb_time)
-    end select
+     end select
    endif
 !---------------------------------------------------------------------
  
@@ -545,9 +544,9 @@ subroutine fire_fbb(fbbl,z_plume,bvf2,f_scheme,kd,id,jd,pfull_pt,temp_pt, &
 
 ! 
 ! INTENT INOUT
-!<INOUT NAME="fbbl" TYPE="real" DIM="(:)">
-!  Fraction of emissions injected into each layer, second dimension is fixed
-!  height scheme layers
+!<INOUT NAME="fbbl" TYPE="real" DIM="(:,:,:)">
+!  Fraction of emissions injected into each layer,
+!  second dimension is fixed height scheme layers
 !</INOUT>
 !<INOUT NAME="z_plume" TYPE="real" DIM="()">
 !  Height of plume top calculated by the Sofiev scheme
@@ -606,13 +605,13 @@ subroutine fire_fbb(fbbl,z_plume,bvf2,f_scheme,kd,id,jd,pfull_pt,temp_pt, &
    do j = 1, jd
    do i = 1, id
 
-   if (f_scheme.eq."SOFIEV".or.f_scheme.eq."SOFIEV-2STEP".or.f_scheme.eq."SOFIEV-SFRP") FRPi = FRP(i,j) * 1.e6  !!! MW to W
+     if (f_scheme.eq."SOFIEV".or.f_scheme.eq."SOFIEV-2STEP".or.f_scheme.eq."SOFIEV-SFRP") FRPi = FRP(i,j) * 1.e6  !!! MW to W
 
-   z_plume(i,j) = 0.0
-   bvf2(i,j) = 0.0
+     z_plume(i,j) = 0.0
+     bvf2(i,j) = 0.0
 !!! First compute plume height for SOFIEV scheme before distributing emissions
 !   if (f_scheme.eq."SOFIEV".and.FRPi.gt.0.) then
-   if (f_scheme.eq."SOFIEV".or.f_scheme.eq."SOFIEV-CF".and.FRPi.gt.0.) then
+     if (f_scheme.eq."SOFIEV".or.f_scheme.eq."SOFIEV-CF".and.FRPi.gt.0.) then
 
        !! Step 0: Compute BVfreq for twice the height of the PBL
        do l = kd,2,-1
@@ -630,9 +629,9 @@ subroutine fire_fbb(fbbl,z_plume,bvf2,f_scheme,kd,id,jd,pfull_pt,temp_pt, &
        z_plume(i,j) = (sof_a_0*z_pbl_pt(i,j))+(sof_b_0*((FRPi/sof_P0)**sof_c_0))* &
                   exp(-sof_d_0*bvf2(i,j)/sof_N0)
 
-   endif
+     endif
 
-      if (f_scheme.eq."SOFIEV-2STEP".and.FRPi.gt.0.) then
+     if (f_scheme.eq."SOFIEV-2STEP".and.FRPi.gt.0.) then
 
        !! Step 0: Compute BVfreq for twice the height of the PBL
        do l = kd,2,-1
@@ -660,9 +659,9 @@ subroutine fire_fbb(fbbl,z_plume,bvf2,f_scheme,kd,id,jd,pfull_pt,temp_pt, &
                       exp(-sof_d_2*bvf2(i,j)/sof_N0)
        endif
 
-   endif
+     endif
      
-   if (f_scheme.eq."SOFIEV-SFRP".and.FRPi.gt.0.) then
+     if (f_scheme.eq."SOFIEV-SFRP".and.FRPi.gt.0.) then
 
        !! Step 1: Compute BVfreq for twice the height of the PBL
        do l = kd,2,-1
@@ -686,23 +685,23 @@ subroutine fire_fbb(fbbl,z_plume,bvf2,f_scheme,kd,id,jd,pfull_pt,temp_pt, &
                       exp(-sof_d_1*bvf2(i,j)/sof_N0)
        endif
 
-   endif
+     endif
 
 
-   do l = kd,1,-1
-      Z0 = z_half_pt(i,j,kd+1)
-      Z1 = z_half_pt(i,j,l+1)
-      Z2 = z_half_pt(i,j,l)
+     do l = kd,1,-1
+       Z0 = z_half_pt(i,j,kd+1)
+       Z1 = z_half_pt(i,j,l+1)
+       Z2 = z_half_pt(i,j,l)
       
-      if (f_scheme.eq."EVEN_PBL".or.FRPi.eq.0.) then
+       if (f_scheme.eq."EVEN_PBL".or.FRPi.eq.0.) then
           if (z_pbl_pt(i,j).le.Z0) fbbl(i,j,l) = 1.
           if (z_pbl_pt(i,j).le.Z1.or.z_pbl_pt(i,j).eq.0.) exit
           if (z_pbl_pt(i,j).ge.Z2) fbbl(i,j,l) = (Z2-Z1)/z_pbl_pt(i,j)
           if (z_pbl_pt(i,j).gt.Z1.and.z_pbl_pt(i,j).lt.Z2) fbbl(i,j,l) = (z_pbl_pt(i,j)-Z1)/z_pbl_pt(i,j)
 
-      else if (f_scheme.eq."VALMARTIN") then
+       else if (f_scheme.eq."VALMARTIN") then
 
-        do lf = 1, 25
+          do lf = 1, 25
             if (Z1 < alt_fire_max(lf) .and. Z2 > alt_fire_min(lf)) then
                 if (Z1 >= alt_fire_min(lf)) then
                     if (Z2 < alt_fire_max(lf)) then
@@ -718,12 +717,12 @@ subroutine fire_fbb(fbbl,z_plume,bvf2,f_scheme,kd,id,jd,pfull_pt,temp_pt, &
                     end if
                 end if
             end if
-        end do
+          end do
 
-      else if (f_scheme.eq."SURFACE") then
+       else if (f_scheme.eq."SURFACE") then
           fbbl(i,j,kd)=1.
 
-      else if (f_scheme.eq."AEROCOM") then
+       else if (f_scheme.eq."AEROCOM") then
 
           do lf=1,7
             if (Z1 < alt_fire_max(lf) .and. Z2 > alt_fire_min(lf)) then
@@ -741,26 +740,26 @@ subroutine fire_fbb(fbbl,z_plume,bvf2,f_scheme,kd,id,jd,pfull_pt,temp_pt, &
                     end if
                 end if
             end if
-        end do
+          end do
             
-      else if (f_scheme.eq."SOFIEV".or.f_scheme.eq."SOFIEV-CF".or.f_scheme.eq."SOFIEV-2STEP".or.f_scheme.eq."SOFIEV-SFRP".and.FRPi.gt.0) then
+       else if (f_scheme.eq."SOFIEV".or.f_scheme.eq."SOFIEV-CF".or.f_scheme.eq."SOFIEV-2STEP".or.f_scheme.eq."SOFIEV-SFRP".and.FRPi.gt.0) then
           if (z_plume(i,j).le.Z0) fbbl(i,j,l) = 1.
           if (z_plume(i,j).le.Z1.or.z_plume(i,j).eq.0.) exit
           if (z_plume(i,j).ge.Z2) fbbl(i,j,l) = (Z2-Z1)/z_plume(i,j)
           if (z_plume(i,j).gt.Z1.and.z_plume(i,j).lt.Z2) fbbl(i,j,l) = (z_plume(i,j)-Z1)/z_plume(i,j)
-      else
+       else
           call ERROR_MESG('fire_emiss', 'Fire_injhgt_scheme option in namelist is not available.', FATAL )
-      endif
+       endif
 
-   enddo
+     enddo
 
 !!!! conservation of mass of fbbl
-   fbb_tot = sum(fbbl(i,j,:))
-   if (fbb_tot.gt.0 .or. fbb_tot.lt.0) then
-       fbbl(i,j,:) = fbbl(i,j,:)/fbb_tot
-   else
-       fbbl(i,j,kd) = 1.
-   endif 
+     fbb_tot = sum(fbbl(i,j,:))
+     if (fbb_tot.gt.0 .or. fbb_tot.lt.0) then
+         fbbl(i,j,:) = fbbl(i,j,:)/fbb_tot
+     else
+         fbbl(i,j,kd) = 1.
+     endif 
 
    enddo   !end of i loop
    enddo   !end of j loop
@@ -806,7 +805,7 @@ subroutine atmos_fire_plumerise_driver(fbb,pfull_pt,temp_pt, &
    real, intent(in),  dimension(:,:,:) :: tr
    type(time_type), intent(in)            :: diag_time
    real, intent(in), dimension(:,:)    :: local_hour_2d   
-   real, dimension(size(tr,1),size(tr,2),size(tr,3)) :: fbb_norm
+!  real, dimension(size(tr,1),size(tr,2),size(tr,3)) :: fbb_norm
    character(len=80)     :: f_scheme
    integer :: lf, n, np, j, i, k, id, jd, kd, npercentiles
    real, dimension(num_percentiles,size(tr,1),size(tr,2)) :: fire_intensity_perc
@@ -822,9 +821,9 @@ subroutine atmos_fire_plumerise_driver(fbb,pfull_pt,temp_pt, &
    integer :: nlevel_fire
 
    id=size(tr,1); jd=size(tr,2); kd=size(tr,3)
-!   fbb(:,:,:) = 0.0
-   z_plume(:,:)          = 0.0
-   bvf2(:,:)             = 0.0
+   fbb(:,:,:) = 0.0
+   z_plume(:,:) = 0.0
+   bvf2(:,:) = 0.0
    fbb_perc(:,:,:,:) = 0.0  
    fire_intensity_perc(:,:,:) = 0.0
    fbb_clim_misr(:,:,:) = 0.0 
@@ -836,13 +835,13 @@ subroutine atmos_fire_plumerise_driver(fbb,pfull_pt,temp_pt, &
 
 
    if (f_scheme.eq.'SOFIEV'.or.f_scheme.eq.'SOFIEV-2STEP'.or.f_scheme.eq.'SOFIEV-SFRP'.and.trim(frp_source).ne.' ') then
-    select case (trim(frp_source))
-      case ('MODIS')
-              do lf=1, npercentiles
-                 call interpolator(frp_value_interp, frp_time, fire_intensity_perc(lf,:,:), &
-                         trim(frp_value_name(lf)), is, js)
-              end do
-      end select
+     select case (trim(frp_source))
+       case ('MODIS')
+         do lf=1, npercentiles
+           call interpolator(frp_value_interp, frp_time, fire_intensity_perc(lf,:,:), &
+                             trim(frp_value_name(lf)), is, js)
+         end do
+     end select
    !!! percentiles
 
    do np = 1, npercentiles !!! default 6 sections /0-10/10-25/25-50/50-75/75-90/90-99 
@@ -921,27 +920,27 @@ subroutine atmos_fire_plumerise_driver(fbb,pfull_pt,temp_pt, &
      
 
 !!! fire_emis_diunal
-  fbb_norm = fbb
-  if (do_bb_emis_diurnal) then
+! fbb_norm = fbb
+   if (do_bb_emis_diurnal) then
      call atmos_fire_emis_diurnal(diurnal_scale_factor, tr,  &
                         local_hour_2d, id, jd, diag_time)
      do k = 1, kd
           fbb(:,:,k) = fbb(:,:,k) * diurnal_scale_factor(:,:)
      enddo
-  endif 
+   endif 
 
 
-      if (do_bb_emis_diurnal) then
-        if (id_fbb > 0) then
-              used = send_data(id_fbb,fbb_norm, diag_time, &
-              is_in=is,js_in=js,ks_in=1)
-        endif
-      else
+!     if (do_bb_emis_diurnal) then
+!       if (id_fbb > 0) then
+!             used = send_data(id_fbb,fbb_norm, diag_time, &
+!             is_in=is,js_in=js,ks_in=1)
+!       endif
+!     else
         if (id_fbb > 0) then
               used = send_data(id_fbb,fbb, diag_time, &
               is_in=is,js_in=js,ks_in=1)
         endif              
-      endif
+!     endif
       do n = 1,npercentiles
          if (id_fbb_perc(n) > 0) then
             used = send_data ( id_fbb_perc(n), fbb_perc(:,:,:,n), diag_time, &
@@ -992,9 +991,11 @@ subroutine atmos_fire_plumerise_driver(fbb,pfull_pt,temp_pt, &
                fbb_NFT(i,j) = 0.0
                do k = 1, kd
                   if (z_half_pt(i,j,k) < z_pbl_pt(i,j)) then
-                     fbb_FT(i,j) = fbb_FT(i,j) + fbb_norm(i,j,k)
+!                    fbb_FT(i,j) = fbb_FT(i,j) + fbb_norm(i,j,k)
+                     fbb_FT(i,j) = fbb_FT(i,j) + fbb(i,j,k)
                   else
-                     fbb_NFT(i,j) = fbb_NFT(i,j) + fbb_norm(i,j,k)
+!                    fbb_NFT(i,j) = fbb_NFT(i,j) + fbb_norm(i,j,k)
+                     fbb_NFT(i,j) = fbb_NFT(i,j) + fbb(i,j,k)
                   endif
                enddo
             enddo
@@ -1075,8 +1076,8 @@ subroutine atmos_fire_frp_diurnal(fire_arr, fire_diurnal, tr, local_hour_2d, id,
 
    if (do_frp_diurnal_land_cats) then
 
-   do j=1,jd
-      do i=1,id
+     do j=1,jd
+     do i=1,id
         if (land_cat(i,j) .eq. 0) then !!! land_cat = 0 : Water
            ru_base = 0
            ru_peak = 0
@@ -1114,24 +1115,24 @@ subroutine atmos_fire_frp_diurnal(fire_arr, fire_diurnal, tr, local_hour_2d, id,
            sigma = 4.331292604527208 
         endif
 
-         frp_normalized(i,j) = ru_base + (ru_peak - ru_base) * exp(-(local_hour_2d(i,j) - h_peak)**2 / (2*sigma**2))
-         fire_diurnal(i,j) = fire_arr(i,j) * (frp_normalized(i,j))
-      end do
-   end do
+        frp_normalized(i,j) = ru_base + (ru_peak - ru_base) * exp(-(local_hour_2d(i,j) - h_peak)**2 / (2*sigma**2))
+        fire_diurnal(i,j) = fire_arr(i,j) * (frp_normalized(i,j))
+     end do
+     end do
    
    else   !!! general: averaged for all land categories
 
-        ru_base = 0.46709831123362405
-        ru_peak = 1.0008447676795196
-        h_peak = 15.474796621482293
-        sigma = 3.98145297649462
+     ru_base = 0.46709831123362405
+     ru_peak = 1.0008447676795196
+     h_peak = 15.474796621482293
+     sigma = 3.98145297649462
 
-   do j=1,jd
-      do i=1,id
+     do j=1,jd
+     do i=1,id
          frp_normalized(i,j) = ru_base + (ru_peak - ru_base) * exp(-(local_hour_2d(i,j) - h_peak)**2 / (2*sigma**2))
          fire_diurnal(i,j) = fire_arr(i,j) * (frp_normalized(i,j))
-      end do
-   end do      
+     end do
+     end do      
 
    endif
 
