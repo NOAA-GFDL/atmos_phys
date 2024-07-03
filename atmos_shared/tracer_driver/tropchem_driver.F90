@@ -407,11 +407,11 @@ logical :: use_lsc_in_fastjx
 !cmip6 diagnostics
 type(cmip_diag_id_type) :: ID_pso4_aq_kg_m2_s, ID_pso4_gas_kg_m2_s, &
                            ID_jno2, ID_jo1d, &
-			   ID_lossch4, ID_lossco, ID_lossn2o, ID_o3loss, ID_o3prod
+                           ID_lossch4, ID_lossco, ID_lossn2o, ID_o3loss, ID_o3prod
 integer :: jno2_ndx, jo1d_ndx
 
 integer, dimension(pcnstm1) :: indices, id_prod, id_loss, id_chem_tend, &
-                               id_emis, id_emis3d, id_emis2dbb, id_xactive_emis, &
+                               id_emis, id_emis3d, id_emis2dbb, id_emis3dbb, id_xactive_emis, &
                                id_ub, id_lb, id_airc
 !new diagnostics (f1p)
 integer, parameter :: max_dust = 5
@@ -774,6 +774,12 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
                                 + emis3dbb(:,:,k)/pwt(:,:,k) * emis_cons
            emisz(:,:,n) = emisz(:,:,n) + emis3dbb(:,:,k)
          end do
+         if (id_emis2dbb(n) > 0) then
+            used = send_data(id_emis2dbb(n),emis2dbb,Time_next,is_in=is,js_in=js)
+         end if
+         if (id_emis3dbb(n) > 0) then
+            used = send_data(id_emis3dbb(n),emis3dbb,Time_next,is_in=is,js_in=js)
+         end if
       end if
 !-----------------------------------------------------------------------
 !     ... calculate interactive (DMS only) emissions
@@ -2371,6 +2377,9 @@ end if
          if(has_emis3d(i)) then
             write(logunit,*)'3-D Emissions from file: ',trim(emis3d_files(i))
          end if
+         if(has_emis2dbb(i)) then
+            write(logunit,*)'2-D Biomass Burning Emissions from file: ',trim(emis2dbb_files(i))
+         end if
          if(has_ubc(i)) then
             write(logunit,*)'Upper BC from file: ',trim(ub_files(i)), &
                              ', with the name of ',trim(ub_names(i))
@@ -2649,6 +2658,15 @@ end if
                                              Time, trim(tracnam(i))//'_emis3d', 'molec/cm2/s')
       else
          id_emis3d(i) = 0
+      end if
+      if( has_emis2dbb(i) ) then
+         id_emis2dbb(i) = register_diag_field( module_name, trim(tracnam(i))//'_emis2dbb', axes(1:2), &
+                                             Time, trim(tracnam(i))//'_emis2dbb', 'molec/cm2/s')
+         id_emis3dbb(i) = register_diag_field( module_name, trim(tracnam(i))//'_emis3dbb', axes(1:3), &
+                                             Time, trim(tracnam(i))//'_emis3dbb', 'molec/cm2/s')
+      else
+         id_emis2dbb(i) = 0
+         id_emis3dbb(i) = 0
       end if
 
       if( has_ubc(i) ) then
