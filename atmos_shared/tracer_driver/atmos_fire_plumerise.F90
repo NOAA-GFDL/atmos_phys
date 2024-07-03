@@ -113,7 +113,7 @@ type(time_type)                        :: frp_time, fbb_time
 
 contains
 
-subroutine atmos_fire_plumerise_init(lonb, latb, axes, Time, do_bb_plumerise)
+subroutine atmos_fire_plumerise_init(lonb, latb, axes, Time, do_bb_plumerise_out)
 
     ! Routine to initialize.
     ! This registers the diag fields
@@ -121,7 +121,7 @@ subroutine atmos_fire_plumerise_init(lonb, latb, axes, Time, do_bb_plumerise)
     type(time_type),       intent(in) :: Time
 
     integer        , intent(in)       :: axes(4)
-    logical        , intent(out)      :: do_bb_plumerise
+    logical        , intent(out)      :: do_bb_plumerise_out
 
     integer :: ntrace
     character(len=20) :: units =''
@@ -224,9 +224,9 @@ subroutine atmos_fire_plumerise_init(lonb, latb, axes, Time, do_bb_plumerise)
 
    if ( trim(fbb_source) .ne. ' ') then
 
-   select case (trim(fbb_source))
+     select case (trim(fbb_source))
 
-     case ('MISR_clim')
+       case ('MISR_clim')
 !  read climatology for bb injection (Val Martin 2018)
         fbb_entry  = set_date (2008, &
                                   1,1,0,0,0)
@@ -247,7 +247,7 @@ subroutine atmos_fire_plumerise_init(lonb, latb, axes, Time, do_bb_plumerise)
                              data_out_of_bounds=  (/CONSTANT/), &
                              data_names = fbb_value_name(1:25),        &
                              vert_interp=(/INTERP_WEIGHTED_P/)  )
-     case ('AEROCOM_clim')
+       case ('AEROCOM_clim')
         fbb_entry  = set_date (2000, &
                                   1,1,0,0,0)
         call error_mesg ('atmos_fire_plumerise', &
@@ -268,7 +268,7 @@ subroutine atmos_fire_plumerise_init(lonb, latb, axes, Time, do_bb_plumerise)
                              data_names = fbb_value_name(1:7),        &
                              vert_interp=(/INTERP_WEIGHTED_P/)  )
 
-   end select
+     end select
    endif
 !---------------------------------------------------------------------
 
@@ -371,7 +371,7 @@ subroutine atmos_fire_plumerise_init(lonb, latb, axes, Time, do_bb_plumerise)
                              vert_interp=(/INTERP_WEIGHTED_P/)  )
    endif
 
-
+   do_bb_plumerise_out = do_bb_plumerise
 
  module_is_initialized = .TRUE.
 
