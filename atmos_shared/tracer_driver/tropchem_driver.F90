@@ -1741,7 +1741,7 @@ function tropchem_driver_init( domain, r, mask, axes, Time, &
                                            conc_files = '', &
                                            ub_files = '', &
                                            lb_files = '', &
-                                           dry_files, &
+!                                          dry_files, &
                                            wet_ind, &
                                            conc_names, &
                                            dry_names, &
@@ -2397,10 +2397,10 @@ end if
             write(logunit,*)'Concentration from file: ',trim(conc_files(i)), &
                              ', with the name of ',trim(conc_names(i))
          end if
-         if(dry_files(i) /= '') then
-            write(logunit,*)'Dry deposition velocity from file: ',trim(dry_files(i)), &
-                             ' with the name of '//trim(dry_names(i))
-         end if
+!        if(dry_files(i) /= '') then
+!           write(logunit,*)'Dry deposition velocity from file: ',trim(dry_files(i)), &
+!                            ' with the name of '//trim(dry_names(i))
+!        end if
          if(wet_ind(i) /= '') then
             write(logunit,*) wet_ind(i)
          end if

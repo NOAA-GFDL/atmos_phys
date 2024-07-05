@@ -562,8 +562,8 @@ subroutine dry_deposition_init( n, &
           dry_name  = trim(lowercase(tracer_names(n)))
        end if
 
-       write(logunit,*)'Dry deposition velocity from file: ',trim(dry_file), &
-            ' with the name of '//trim(dry_name)
+       write(logunit,*)'Dry deposition velocity for ',trim(tracer_names(n)), &
+            'from file: ',trim(dry_file), ' with the name of '//trim(dry_name)
 
     end if
 
