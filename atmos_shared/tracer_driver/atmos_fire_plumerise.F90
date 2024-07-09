@@ -206,10 +206,10 @@ subroutine atmos_fire_plumerise_init(lonb, latb, axes, Time, do_bb_plumerise_out
                     'tmp', 'tmp' )
      id_fbb_FT = register_diag_field ( mod_name,           &
                     'fbb_FT', axes(1:2), Time,          &
-                    'tmp', 'tmp' )
+                    'Free tropospheric share of injection of fire emissions', 'Unitless' )
      id_fbb_NFT = register_diag_field ( mod_name,           &
                     'fbb_NFT', axes(1:2), Time,          &
-                    'tmp', 'tmp' )
+                    'PBL share of injection of fire emissions', 'Unitless' )
 !----------------------------------------------------------------------
 !    initialize namelist entries
 !----------------------------------------------------------------------
@@ -990,7 +990,7 @@ subroutine atmos_fire_plumerise_driver(fbb,pfull_pt,temp_pt, &
                fbb_FT(i,j) = 0.0
                fbb_NFT(i,j) = 0.0
                do k = 1, kd
-                  if (z_half_pt(i,j,k) < z_pbl_pt(i,j)) then
+                  if (z_half_pt(i,j,k) > z_pbl_pt(i,j)) then
 !                    fbb_FT(i,j) = fbb_FT(i,j) + fbb_norm(i,j,k)
                      fbb_FT(i,j) = fbb_FT(i,j) + fbb(i,j,k)
                   else
