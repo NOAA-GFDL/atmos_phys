@@ -1339,7 +1339,7 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                     call horiz_interp_init
                     call horiz_interp_new ( Interp, inlone, inlate, lonb, latb )
                     DO j = 1, nVEG
-                      call read_data(ecfile,vegnames(j),EP_DATAIN, no_domain=.true.)
+                      call read_data(ecfile_obj,vegnames(j),EP_DATAIN)
                       call horiz_interp(Interp,EP_DATAIN,ECTERP_AM3(:,:,j),verbose=verbose)
                     ENDDO
 
@@ -1475,9 +1475,9 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                     ELSE
                        call horiz_interp_init
                        call horiz_interp_new (Interp, m3inlone, m3inlate, lonb, latb )
-                       call read_data (ecfile,'EF',MEGAN3_DATAIN, no_domain=.true.)
+                       call read_data (ecfile_obj,'EF',MEGAN3_DATAIN)
                        call horiz_interp (Interp, MEGAN3_DATAIN,ECBVOC_MEGAN3(:,:,xknt))
-                       call read_data (ecfile,'LDF',MEGAN3_DATAIN, no_domain=.true.)
+                       call read_data (ecfile_obj,'LDF',MEGAN3_DATAIN)
                        call horiz_interp (Interp, MEGAN3_DATAIN, LDFg(:,:,xknt ))
                     ENDIF
                     call horiz_interp_del( Interp )
@@ -1559,6 +1559,10 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
             IF ( mpp_pe() == mpp_root_pe()) call error_mesg ('xactive_bvoc_init', &
                 'MEGAN Parameters for AM3 TERP hardcoded in subroutine, skipping',NOTE)
          ELSE
+            IF (.not. open_file(ecfile_obj,ecfile,"read")) then
+               call error_mesg ('xactive_bvoc_init',  &
+                        'File '//trim(ecfile)//'for '//trim(tracnam(i))//' does not exist', FATAL)
+            ENDIF
             DO j = 1, nPARAMS
                IF ( trim(tracnam(i))=='C10H16') THEN
                   IF ( do_PARSED_TERP ) THEN
@@ -3884,7 +3888,7 @@ end function fGAMMA_PAR_AM4
    nlon = size(lonb,1) - 1
    nlat = size(latb,2) - 1
 
-   IF ( file_exists(file_TEMP) ) THEN
+   IF (open_file(tasfile_obj,file_TEMP,"read")) then
       IF (mpp_pe() == mpp_root_pe()) call error_mesg ('temp_init_AM3', &
          'Reading NetCDF formatted input file: '//file_TEMP, NOTE)
 
@@ -3902,8 +3906,8 @@ end function fGAMMA_PAR_AM4
       ALLOCATE( metlone(metlonin+1) )
       ALLOCATE( metlate(metlatin+1) )
 
-      call read_data (file_TEMP, 'lon', metlon, no_domain=.true.)
-      call read_data (file_TEMP, 'lat', metlat, no_domain=.true.)
+      call read_data (tasfile_obj, 'lon', metlon)
+      call read_data (tasfile_obj, 'lat', metlat)
 
       dlon = 0.5*(metlon(1)-metlon(2))
       dlat = 0.5*(metlat(2)-metlat(1))
@@ -3926,8 +3930,8 @@ end function fGAMMA_PAR_AM4
       call horiz_interp_new ( Interp, metlone, metlate, lonb, latb )
 
       ALLOCATE( tas(metlonin,metlatin,12) )
-      call read_data (file_TEMP, 'time', mos, no_domain=.true.)
-      call read_data (file_TEMP,'tas_clim', tas(:,:,:), no_domain=.true.)
+      call read_data (tasfile_obj, 'time', mos)
+      call read_data (tasfile_obj,'tas_clim', tas(:,:,:))
 
       DO m = 1, 12
          call horiz_interp (Interp, tas(:,:,m), Tmo(:,:,m), verbose=verbose)
@@ -3940,6 +3944,8 @@ end function fGAMMA_PAR_AM4
          ENDIF
       ENDDO
 
+      call horiz_interp_del( Interp )
+      call close_file(tasfile_obj)
       DEALLOCATE( tas )
       DEALLOCATE( metlon )
       DEALLOCATE( metlat )
@@ -3983,7 +3989,11 @@ subroutine ppfd_init_AM3 (lonb, latb, axes)
    integer, dimension(12)                  :: mos
    logical                                 :: used
    real                                    :: dlat, dlon
-   real, parameter                         :: const0 = 4.766
+!       ppfd: srad - short wave from sun (W/m2)
+!       assuming 4.5 (umol m-2 s-1) per (W m-2)
+!       assume 1/2 of srad is in 400-700nm band (PAR)
+   !real, parameter                         :: const0 = 4.766
+   real, parameter                         :: const0 = 4.5 
    type(FmsNetcdfFile_t)                   :: dswfile_obj !< Fms2io fileobj
    type (horiz_interp_type)                :: Interp
 
@@ -3992,11 +4002,11 @@ subroutine ppfd_init_AM3 (lonb, latb, axes)
 
 !  --- check existence of input file containing climatological (1980-2000)
 !  monthly surface down SW radiation --------
-  IF (open_file(dswfile_obj,dswfile,"read")) then
+  IF (open_file(dswfile_obj,file_PPFD,"read")) then
 
 !set up for input grid
      IF (mpp_pe() == mpp_root_pe()) call error_mesg ('ppfd_init_AM3',  &
-          'Reading NetCDF formatted input file: dswrf_monthly_clim_1980-2000.nc', NOTE)
+          'Reading NetCDF formatted input file: '//file_PPFD, NOTE)
 
 !read in lat & lon from input file, get boundaries and convert to radians
      IF ( file_PPFD == 'INPUT/dswrf_monthly_clim_1980-2000.nc' ) then
@@ -4012,8 +4022,8 @@ subroutine ppfd_init_AM3 (lonb, latb, axes)
      ALLOCATE( metlone(metlonin+1) )
      ALLOCATE( metlate(metlatin+1) )
 
-     call read_data (file_PPFD, 'lon', metlon, no_domain=.true.)
-     call read_data (file_PPFD, 'lat', metlat, no_domain=.true.)
+     call read_data (dswfile_obj, 'lon', metlon)
+     call read_data (dswfile_obj, 'lat', metlat)
 
      dlon = 0.5*(metlon(1)-metlon(2))
      dlat = 0.5*(metlat(2)-metlat(1))
@@ -4116,7 +4126,6 @@ subroutine pft_init_AM3( lonb, latb, axes )
                                           'pft17'/)
 
    integer                                  :: id_pft(nPFT)
-   real, dimension(nlonin,nlatin,nPFT)      :: datapft
    type(FmsNetcdfFile_t)                    :: file_PFT_obj !< Fms2io fileobj
    type (horiz_interp_type)                 :: Interp
 
@@ -4185,7 +4194,6 @@ subroutine pft_init_AM3( lonb, latb, axes )
 ! MYL: Allocate and Read pct_pft field
       allocate( datapft(nlonin,nlatin,nPFT) )
       call read_data (file_PFT_obj, 'PCT_PFT', datapft)
-
 ! Loop over pftnames
       DO i = 1, nPFT
 ! Register diagnostic field
@@ -4251,7 +4259,6 @@ subroutine lai_init_AM3( lonb,latb, axes )
    integer                                   :: id_lai(nPFT)
    integer, dimension(nMOS)                  :: mos
    logical                                   :: used
-   real, dimension(nlonin,nlatin,nPFT,nMOS)  :: datalai
    type(FmsNetcdfFile_t)                     :: file_LAI_obj !< Fms2io fileobj
    character(len=5)  :: lainames(nPFT) =  (/'lai01','lai02','lai03','lai04', &
                                             'lai05','lai06','lai07','lai08', &
@@ -4259,7 +4266,6 @@ subroutine lai_init_AM3( lonb,latb, axes )
                                             'lai13','lai14','lai15','lai16', &
                                             'lai17'/)
    type (horiz_interp_type)                  :: Interp
-
    nlon = size(lonb,1) - 1
    nlat = size(latb,1) - 1
 
@@ -4402,7 +4408,6 @@ subroutine lai_init_megan3( lonb,latb, axes )
    real                                      :: dlat, dlon
    integer                                   :: id_lai
    logical                                   :: used
-   real, dimension(nlonin,nlatin,nMOS)       :: datalai
    type(FmsNetcdfFile_t)                     :: file_LAIv_obj !< Fms2io fileobj
    type (horiz_interp_type)                  :: Interp
 
@@ -4455,7 +4460,7 @@ subroutine lai_init_megan3( lonb,latb, axes )
          ENDIF
       ENDDO
       call horiz_interp_del( Interp )
-      call close_file(file_LAI_obj)
+      call close_file(file_LAIv_obj)
 ! MYL: Release memory
       DEALLOCATE(datalai)
       DEALLOCATE(inlon)
