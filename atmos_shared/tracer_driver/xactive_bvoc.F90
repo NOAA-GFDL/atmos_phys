@@ -13,13 +13,14 @@ module xactive_bvoc_mod
 !
 ! This code calculates interactive biogenic emisisons
 ! (VOCs + NO + CO) due to variations in environmental conditions
-! such as temperature and light. There are currently 2 options
+! such as temperature and light. There are currently four options
 ! to choose how these are calculated. Their descriptions and
 ! the required input datasets are listed below.
 !
-!   *** All default input datasets for AM3 isoprene, MEGANv2 and
+!   *** All default input datasets for AM3 isoprene, EPMAP MEGANv2 and
 !       MEGANv3 are in the tarball:
-!       /lustre/f1/unswept/Jordan.Schnell/input/xactive_emissions/megan.xactive.bvoc.tar
+!       /lustre/f2/unswept/Meiyun.Lin/input/xactive_emissions/megan.xactive.bvoc.tar
+!       /archive/Meiyun.Lin/fms/input/megan/megan.xactive.bvoc.tar
 !
 !
 !   (0) All version are backward compatiable such that they can reproduce
@@ -27,12 +28,17 @@ module xactive_bvoc_mod
 !       variable: "do_AM3_ISOP". Version specific functions/subroutines have
 !       the format *_AM3
 !
+!       Notes by Meiyun Lin: This approach follows Emmons et al. (2010) using
+!       gridded emission potentials for ntr/btr/crop/shrub/grass (megan2.epmap_vegn.ISOP.0.5x0.5.nc). 
+!       The dataset is out of date as it has unrealistic high isoprene EPs 
+!       over California's Central Valley, the US Midwest, and North China Plain,
+!       
 !   (1) xactive_algorithm = 'MEGAN2'
 !
 !        a) All species (see below) emisions are calculated following the
 !           MEGAN PECEEA algorithm of Guenther et al., 2006
-!        b) Emission factor files must be included.
-!        c) Version specific functions/subroutines have the format '***_megan2'
+!        b) Version specific functions/subroutines have the format '***_megan2'
+!        c) Notes by Meiyun Lin: A single EP value is assigned for each PFT. 
 !
 !
 !        REQUIRED DATASETS
@@ -87,11 +93,21 @@ module xactive_bvoc_mod
 !               (d) IF do_SESQTERP==FALSE && do_PARSED_TERP==TRUE
 !                   Emission factors are summed over only MONOterpene species
 !                   and the MEGAN parameters all follow alpha/beta pinene
-
 !
-!---------------------------------------------------------------------------------------------
 !
-!   (2) xactive_algorithm  = 'MEGAN3'
+!--------------------------------------------------------------------------------------
+!   (2) xactive_algorithm = 'MEGAN2' and do_MEGAN2_EPMAP_ISOP and do_MEGAN2_EPMAP_TERP
+!       (This function is added by Meiyun Lin)
+!       Recommended for isoprene and terpenes
+!
+!        REQUIRED DATASETS (not pft specific)
+!        --------------------
+!        High-resolution LAIv file (LAI divided by fractional vegetation cover) 
+!        Gridded ISOP EM capacity = megan2.epmap.ISOP.0.1x0.1.nc
+!        Gridded TERP EM capacity = megan2.epmap.parsed_terpenes.0.1x0.1.nc
+!        The EM capacity files should also contain species-specific megan parameters
+!
+!   (3) xactive_algorithm  = 'MEGAN3'
 !
 !       All species follow MEGAN v3.0 from Guenther et al., 2018
 !       The code is in large part a duplication of the MEGAN3
@@ -123,9 +139,9 @@ module xactive_bvoc_mod
 !           (6) Bi-directional LAI (only ethanol and acetylaldehyde)
 !           (7) Soil mositure (not yet included)
 !
-!-----------------------------------------------------------------------------------------------
+!--------------------------------------------------------------------------------------
 !
-!   (3) xactive_algorithm = 'BEIS3'
+!   (4) xactive_algorithm = 'BEIS3'
 !
 !       NOT YET IMPLEMENTED
 !
@@ -199,6 +215,7 @@ public xactive_bvoc, xactive_bvoc_init, xactive_bvoc_end, &
 
 character(len=64)   :: xactive_algorithm = 'MEGAN2',                           & ! Algorithm used to calculate emisisons
                        file_LAI    = 'INPUT/mksrf_lai.060929.nc',              & ! filename: leaf area index (LAI)
+                       file_LAIv   = 'INPUT/mksrf_lai.060929.combined_pft.nc', & ! filename: total leaf area index (LAI) / fractional vegn cover
                        file_PFT    = 'INPUT/mksrf_pft.060929.nc',              & ! filename: plant functional types (PFT)
                        file_PPFD   = 'INPUT/dswrf_monthly_clim_1980-2000.nc',  & ! filename: monthly avg sw down
                        file_TEMP   = 'INPUT/tas_monthly_clim_1980-2000.nc',    & ! filename: monthly avg surface T
@@ -209,10 +226,15 @@ character(len=64)   :: xactive_algorithm = 'MEGAN2',                           &
                        file_CO2    = 'co2_conc.nc'                               ! filename: CO2 conc.
 
 logical             :: do_AM3_ISOP    = .false., &             ! flag: Reproduce AM3 isoprene emissions?
+                       do_AM3_TERP    = .false., &             ! flag: Reproduce AM3 terpene emissions?
+                       do_AM3_EPMAP   = .true.,  &             ! flag: Using the AM3 algorithms with gridded EM potentials
+                       do_MEGAN2_EPMAP_ISOP = .false., &       ! flag: Using  gridded EM potentials for isoprene?
+                       do_MEGAN2_EPMAP_TERP = .false., &       ! flag: Using  gridded EM potentials for terpenes?
                        do_SESQTERP    = .false., &             ! flag: compute sequisterpenes?
                        do_PARSED_TERP = .false., &             ! flag: parse terpenes (i.e., each species individually)?
                        do_GAMMA_BDLAI = .false., &             ! flag: Gamma for Bi-directional LAI?
                        do_GAMMA_CO2   = .false., &             ! flag: Gamma for CO2 effect?
+                       do_gCO2_LPOSSELL  = .true., &           ! flag: stronger gamma CO2 following LPOSSELL
                        do_GAMMA_AQ    = .false., &             ! flag: Gamma for Air Quality effects (i.e. ozone)?
                        do_GAMMA_SM    = .false., &             ! flag: Gamma for soil moisture?
                        do_GAMMA_HT    = .false., &             ! flag: Gamma for high temperature?
@@ -238,21 +260,28 @@ real                :: scale_terpene_emissions = 1.            ! Global scale fo
 real                :: min_land_frac = 0.01                    ! Fraction of land required to calculate emissions
 integer             :: verbose = 3                             ! level of diagnostic output
 
+integer             :: nTERP                                   ! Number of Terpene species, initialize in xactive_bvoc_init
 integer, parameter  :: nPFT = 17, nVEG = 5                     ! Number of plant funct types, vegetation types (MEGAN2)
 integer, parameter  :: nMOS = 12, nHOUR = 24                   ! Number of months,hours for STORE Arrays
 real, parameter     :: twopi = 2.*PI
 character(len=7), parameter :: module_name = 'tracers'
 real                :: RHO_CANOPY = 1.                         ! Emisions lost in the canopy = (1 - RHO)
+real                :: LAIMAX = 6.0                            ! Maximum LAI when using gridcell mean LAI/FCOVER
 
 integer, parameter  :: ind_xbvoc_ISOP = 1, &                   ! Index for isoprene emissions in xbvoc4soa
                        ind_xbvoc_TERP = 2                      ! Index for terpene emissions in xbvoc4soa
 
 namelist /xactive_bvoc_nml/                     &
                              xactive_algorithm, &
+                             do_MEGAN2_EPMAP_ISOP,   &
+                             do_MEGAN2_EPMAP_TERP,   &
                              do_AM3_ISOP,       &
+                             do_AM3_TERP,       &
+                             do_AM3_EPMAP,      &
                              do_SESQTERP,       &
                              do_PARSED_TERP,    &
                              file_LAI,          &
+                             file_LAIv,         &
                              file_PFT,          &
                              file_FCOVER,       &
                              file_PPFD,         &
@@ -263,6 +292,7 @@ namelist /xactive_bvoc_nml/                     &
                              file_WS,           &
                              do_GAMMA_BDLAI,    &
                              do_GAMMA_CO2,      &
+                             do_gCO2_LPOSSELL,  &
                              do_GAMMA_AQ,       &
                              do_GAMMA_SM,       &
                              do_GAMMA_HT,       &
@@ -283,6 +313,7 @@ namelist /xactive_bvoc_nml/                     &
                              scale_terpene_emissions,  &
                              use_isop_shrub_crop_bug,  &
                              fix_megan2_isop,   &
+                             LAIMAX, &
                              verbose
 
 logical                     :: Ldebug = .false.
@@ -304,16 +335,20 @@ integer, dimension(pcnstm1) :: indices,     &
                                id_G_HW
 
 
-real, allocatable, dimension(:,:)         :: MEGAN_PARAM      ! MEGAN MODEL PARAMETERS
+real, allocatable, dimension(:,:)         :: MEGAN_PARAM      ! MEGAN MODEL PARAMETERS (nPARAMS, nxactive)
 real, allocatable, dimension(:,:)         :: TERP_PARAM       ! Parameters for parsed terpenes
 
-real, allocatable, dimension(:,:,:)       :: ECISOP_AM3       ! Emisison capapcites for AM3 isoprene (MEGAN2)
+real, allocatable, dimension(:,:,:)       :: ECISOP_AM3       ! Isop Emis capapcites for each of the MEGAN2 five vegn types), ug/m2/h
+real, allocatable, dimension(:,:,:)       :: ECTERP_AM3       ! Terp Emis capapcites for each of the MEGAN2 five vegn types), ug/m2/h
+real, allocatable, dimension(:,:)         :: ECISOP_M2MAP     ! Isop Emis capapcites for landscape avg (combined for vegn types), ug/m2/h
 
 real, allocatable, dimension(:,:,:,:)     :: ECBVOC           ! Emisison capacities (lat x lon x PFT/VEG x SPEC) MEGAN2
 real, allocatable, dimension(:,:,:)       :: ECBVOC_MEGAN3    ! " " for MEGAN3 (combined for vegetation types)
 
-real, allocatable, dimension(:,:,:,:)     :: ECTERP           ! Emissions capacities for parsed terpenes
-real, allocatable, dimension(:,:,:)       :: ECTERP_MEGAN3    ! "" MEGAN3
+real, allocatable, dimension(:,:,:,:)     :: ECTERP            ! Emissions capacities for parsed terpenes (vegn-specific)
+real, allocatable, dimension(:,:,:)       :: ECTERP_M2MAP      ! Emissions capacities for parsed terpenes (non vegn-specific) 
+real, allocatable, dimension(:,:)         :: ECTERP_LUMP_M2MAP ! Emissions capacities for lumped monoterpenes (non vegn-specific) 
+real, allocatable, dimension(:,:,:)       :: ECTERP_MEGAN3     ! "" MEGAN3
 
 real, allocatable, dimension(:,:,:)       :: LDFg             ! Gridded light dependent fractions (MEGAN3)
 real, allocatable, dimension(:,:,:)       :: LDFg_TERP        ! same but for parsed terpenes (MEGAN3)
@@ -355,10 +390,15 @@ real, allocatable, dimension(:,:)         :: diag_gamma_temp, &
                                              diag_gamma_sm
 real, allocatable, dimension(:,:,:)       :: diag_gamma_age,  &
                                              diag_gamma_lai
-
+                                         !++myl: non-PFT specific
+real, allocatable, dimension(:,:)         :: diag_gamma_age_epmap,  &
+                                             diag_gamma_lai_epmap
 real, allocatable, dimension(:,:)         :: diag_gamma_age_megan3, &
                                              diag_gamma_lai_megan3, &
                                              diag_gamma_bdlai_megan3
+
+
+type (horiz_interp_type), save :: Interp
 
 !---- version number ---------------------------------------------------
 character(len=128), parameter :: version     = '$Id$'
@@ -443,19 +483,20 @@ subroutine xactive_bvoc( lon, lat, land, is, ie, js, je, Time, Time_next, coszen
    real, intent(out), dimension(:,:,:)         :: rtnd_xactive    ! xactive tracer tendencies [VMR/s]
    real, intent(out), dimension(:,:,:)         :: xbvoc4soa       ! biogenic emissions (for SOA) [molec/cm2/s]
 
-!-------------------------------------------------------------------------------------------------
-!-------------------------------------  Local Variables  -----------------------------------------
+!--------------------------------------------------------------------------------------
+!-------------------------------  Local Variables  ------------------------------------
 
    real, dimension(size(T1,1),size(T1,2))      :: T24, P24, TMAX, TMIN
    real, dimension(size(T1,1),size(T1,2))      :: WSMAX, AQI
    real, dimension(size(T1,1),size(T1,2))      :: EMIS, EMIS_TERP
    real, dimension(size(T1,1),size(T1,2),nPFT) :: LAIp, LAIc   ! Used in MEGAN2
-   real, dimension(size(T1,1),size(T1,2))      :: LAIp3, LAIc3      ! Used in MEGAN3
+   real, dimension(size(T1,1),size(T1,2))      :: LAIp3, LAIc3 ! Used in MEGAN3 / EPMAP
    integer, dimension(size(T1,1),size(T1,2))   :: DAY_BEGIN
-   integer                                     :: yr, month, day, hr, minute, sec, month_p
+   integer                                     :: yr,month,day,hr,minute,sec,month_p
    integer                                     :: nlon, nlat, i, j
-   integer                                     :: xactive_knt, nTERP
+   integer                                     :: xactive_knt !, nTERP
    logical                                     :: used
+   !real, parameter :: LAIMAX = 6.0  !m2/m2, now control through namelist
 
    IF ( .NOT. module_is_initialized )    &
       call error_mesg ('xactive_bvoc',   &
@@ -534,7 +575,7 @@ subroutine xactive_bvoc( lon, lat, land, is, ie, js, je, Time, Time_next, coszen
             TMAX(i,j)  = MAXVAL(T24_STORE(i+is-1,j+js-1,:))
          ENDIF
          IF ( do_GAMMA_LT ) THEN
-             TMIN(i,j)  = MINVAL(T24_STORE(i+is-1,j+js-1,:))
+            TMIN(i,j)  = MINVAL(T24_STORE(i+is-1,j+js-1,:))
          ENDIF
       ELSE
          T24(i,j) = T1(i,j)
@@ -562,6 +603,10 @@ subroutine xactive_bvoc( lon, lat, land, is, ie, js, je, Time, Time_next, coszen
    ENDDO ! lon/i
    ENDDO ! lat/j
 
+   IF ( do_ONLINE_PFT ) THEN
+      ! call send_PFT ( PCTPFT )
+   ENDIF
+
 ! Update the LAI data, using either online or from read in data
 ! .............................................................
    IF ( do_ONLINE_LAI ) THEN
@@ -569,28 +614,41 @@ subroutine xactive_bvoc( lon, lat, land, is, ie, js, je, Time, Time_next, coszen
    ! Then either format for MEGAN2 LAI = (lon x lat x pft(17))
    ! Or for MEGAN3, LAIv = LAI/FCOVER = (lon x lat)
    ELSE
-      IF ( xactive_algorithm == 'MEGAN2' .or. do_AM3_ISOP ) THEN
+      IF ( xactive_algorithm == 'MEGAN2' .OR. do_AM3_ISOP .OR. do_AM3_TERP ) THEN
          LAIc = MLAI(is:ie,js:je,:,month)
          LAIp = MLAI(is:ie,js:je,:,month_p)
       ENDIF
-      IF (xactive_algorithm == 'MEGAN3' ) THEN
-         LAIc3 = MLAI_MEGAN3(is:ie,js:je,month)
-         LAIp3 = MLAI_MEGAN3(is:ie,js:je,month_p)
+      IF (xactive_algorithm == 'MEGAN3' .OR. do_MEGAN2_EPMAP_ISOP .OR. do_MEGAN2_EPMAP_TERP) THEN
+         !M.Lin: Divide by total PFT coverage to obtain LAI of vegetated area
+         LAIc3 = MIN(MLAI_MEGAN3(is:ie,js:je,month)/SUM(PCTPFT(is:ie,js:je,2:17),DIM=3), LAIMAX)
+         LAIp3 = MIN(MLAI_MEGAN3(is:ie,js:je,month_p)/SUM(PCTPFT(is:ie,js:je,2:17),DIM=3), LAIMAX)
       ENDIF
    ENDIF
 
-   IF ( do_ONLINE_PFT ) THEN
-      ! call send_PFT ( PCTPFT )
-   ENDIF
 
 ! Intialized the xactive counter
 ! ..............................
    xactive_knt = 0
-! Initialize terpene emissions (in the case that they are parsed)
+
 ! ................................................................
-   IF ( ALLOCATED(ECTERP) ) THEN
-      nTERP = size(ECTERP,4)
-   ENDIF
+! Initialize the terpene species counter (in the case that they are parsed)
+! ................................................................
+! Comments by Meiyun.Lin: 
+! -> Need to initialize for each algorithm, othervise model crashed with 
+!    "longjmp causes uninitialized stack frame"
+! -> To avoid confusion, set nTERP as a global var & initialize in xactive_bvoc_init
+! ................................................................
+!   IF ( ALLOCATED(ECTERP) ) THEN
+!      nTERP = size(ECTERP,4)
+!   ENDIF
+   !++myl
+!   IF ( ALLOCATED(ECTERP_M2MAP) ) THEN
+!      nTERP = size(ECTERP_M2MAP,3)
+!   ENDIF
+   !++myl
+!   IF ( ALLOCATED(ECTERP_MEGAN3) ) THEN
+!      nTERP = size(ECTERP_MEGAN3,3)
+!   ENDIF
 
 !--------------------------------------------------------------------
 !  MAIN LOOP
@@ -617,17 +675,81 @@ subroutine xactive_bvoc( lon, lat, land, is, ie, js, je, Time, Time_next, coszen
                                          P1, T1, LAIp, LAIc,              &
                                          Pmo(is:ie,js:je,:),              &
                                          Tmo(is:ie,js:je,:),              &
-                                         ECISOP_AM3(is:ie,js:je,:), month, EMIS, &
+                                         ECISOP_AM3(is:ie,js:je,:),       &
+                                         month, tracnam(i), EMIS,         &
                                          id_GAMMA_TEMP=id_G_TEMP(i),      &
                                          id_GAMMA_PAR=id_G_PAR(i),        &
                                          id_GAMMA_LAI=id_G_LAI(i),        &
-                                         id_GAMMA_AGE=id_G_AGE(i))
+                                         id_GAMMA_AGE=id_G_AGE(i),        &
+                                         id_GAMMA_CO2=id_G_CO2(i)         )
+         ELSEIF ( do_MEGAN2_EPMAP_ISOP .AND. trim(tracnam(i))=='ISOP' ) THEN
+! Using the detailed EP Maps that combine info on species composition
+             IF ( do_AM3_EPMAP ) THEN
+                  call calc_xactive_bvoc_AM3_epmap ( Time, Time_next, is, js,   &
+                                         lon, lat, land, coszen,                &
+                                         P1, T1, LAIp3, LAIc3,             &
+                                         Pmo(is:ie,js:je,:),              &
+                                         Tmo(is:ie,js:je,:),              &
+                                         MEGAN_PARAM(:,xactive_knt),      &
+                                         ECISOP_M2MAP(is:ie,js:je),       &
+                                         month, tracnam(i), EMIS,         &
+                                         id_GAMMA_TEMP=id_G_TEMP(i),      &
+                                         id_GAMMA_PAR=id_G_PAR(i),        &
+                                         id_GAMMA_LAI=id_G_LAI(i),        &
+                                         id_GAMMA_AGE=id_G_AGE(i),        &
+                                         id_GAMMA_CO2=id_G_CO2(i)         )
+! Using the detailed EP Maps that combine info on species composition
+             ELSE
+                 call calc_xactive_bvoc_megan2_epmap ( Time, Time_next, is, js,  &
+                                         lon, lat, land, coszen,            &
+                                         P1, P24, T1, T24, LAIp3, LAIc3,    &
+                                         Pmo(is:ie,js:je,:),                &
+                                         Tmo(is:ie,js:je,:),                &
+                                         MEGAN_PARAM(:,xactive_knt),        &
+                                         ECISOP_M2MAP(is:ie,js:je),         &
+                                         month, tracnam(i), EMIS,           &
+                                         id_GAMMA_TEMP=id_G_TEMP(i),        &
+                                         id_GAMMA_PAR=id_G_PAR(i),          &
+                                         id_GAMMA_LAI=id_G_LAI(i),          &
+                                         id_GAMMA_AGE=id_G_AGE(i),          &
+                                         id_GAMMA_CO2=id_G_CO2(i),          &
+                                         id_GAMMA_SM=id_G_SM(i))
+             ENDIF
          ELSEIF ( do_PARSED_TERP .AND. trim(tracnam(i))=='C10H16' ) THEN
 ! Calculates the emissions of each terpene separately
             DO j = 1, nTERP
                EMIS_TERP(:,:) = 0.
                IF ( xactive_algorithm == 'MEGAN2' ) THEN
-                  call calc_xactive_bvoc_megan2 ( Time, Time_next, is, js,      &
+                  IF ( do_MEGAN2_EPMAP_TERP ) then
+!                     call calc_xactive_bvoc_megan2_epmap ( Time, Time_next, is, js, &
+!                                                  lon, lat, land, coszen,           &
+!                                                  P1, P24, T1, T24, LAIp3, LAIc3,   &
+!                                                  Tmo(is:ie,js:je,:),           &
+!                                                  TERP_PARAM(:,j),              &
+!                                                  ECTERP_M2MAP(is:ie,js:je,j),      &
+!                                                  month, tracnam(i), EMIS_TERP, &
+!                                                  id_GAMMA_TEMP=id_G_TEMP(i),   &
+!                                                  id_GAMMA_PAR=id_G_PAR(i),     &
+!                                                  id_GAMMA_LAI=id_G_LAI(i),     &
+!                                                  id_GAMMA_AGE=id_G_AGE(i),     &
+!                                                  id_GAMMA_CO2=id_G_CO2(i),     &
+!                                                  id_GAMMA_SM=id_G_SM(i))
+                      call calc_xactive_bvoc_AM3_epmap( Time, Time_next, is, js,   &
+                                         lon, lat, land, coszen,           &
+                                         P1, T1, LAIp3, LAIc3,             &
+                                         Pmo(is:ie,js:je,:),               &
+                                         Tmo(is:ie,js:je,:),               &
+                                         TERP_PARAM(:,xactive_knt),        &
+                                         ECTERP_M2MAP(is:ie,js:je,j),      &
+                                         month, tracnam(i), EMIS_TERP,     &
+                                         id_GAMMA_TEMP=id_G_TEMP(i),       &
+                                         id_GAMMA_PAR=id_G_PAR(i),         &
+                                         id_GAMMA_LAI=id_G_LAI(i),         &
+                                         id_GAMMA_AGE=id_G_AGE(i),         &
+                                         id_GAMMA_CO2=id_G_CO2(i)         )
+
+                  ELSE 
+                     call calc_xactive_bvoc_megan2 ( Time, Time_next, is, js,   &
                                                   lon, lat, land, coszen,       &
                                                   P1, P24, T1, T24, LAIp, LAIc, &
                                                   Tmo(is:ie,js:je,:),           &
@@ -639,7 +761,8 @@ subroutine xactive_bvoc( lon, lat, land, is, ie, js, je, Time, Time_next, coszen
                                                   id_GAMMA_LAI=id_G_LAI(i),     &
                                                   id_GAMMA_AGE=id_G_AGE(i),     &
                                                   id_GAMMA_CO2=id_G_CO2(i),     &
-                                                  id_GAMMA_SM=id_G_SM(i))
+                                                  id_GAMMA_SM=id_G_SM(i) )
+                  ENDIF
                ELSEIF ( xactive_algorithm == 'MEGAN3' ) THEN
                   call calc_xactive_bvoc_megan3 ( Time, Time_next, is, js,      &
                                                   lon, lat, land, coszen,       &
@@ -662,12 +785,41 @@ subroutine xactive_bvoc( lon, lat, land, is, ie, js, je, Time, Time_next, coszen
                                                   id_GAMMA_HT=id_G_HT(i),       &
                                                   id_GAMMA_LT=id_G_LT(i),       &
                                                   id_GAMMA_HW=id_G_HW(i))
-                ENDIF ! /megan version
-                EMIS(:,:) = EMIS(:,:) + EMIS_TERP(:,:)
-             ENDDO !/nTERP
+               ENDIF ! /megan version
+               EMIS(:,:) = EMIS(:,:) + EMIS_TERP(:,:)
+            ENDDO !/nTERP
          ELSE
             IF ( xactive_algorithm == 'MEGAN2' ) THEN
-            call calc_xactive_bvoc_megan2 ( Time, Time_next, is, js,         &
+                 IF ( do_MEGAN2_EPMAP_TERP .AND. trim(tracnam(i))=='C10H16' ) THEN
+                    call calc_xactive_bvoc_AM3_epmap ( Time, Time_next, is, js,   &
+                                         lon, lat, land, coszen,          &
+                                         P1, T1, LAIp3, LAIc3,            &
+                                         Pmo(is:ie,js:je,:),              &
+                                         Tmo(is:ie,js:je,:),              &
+                                         MEGAN_PARAM(:,xactive_knt),      &
+                                         ECTERP_LUMP_M2MAP(is:ie,js:je),  &
+                                         month, tracnam(i), EMIS,         &
+                                         id_GAMMA_TEMP=id_G_TEMP(i),      &
+                                         id_GAMMA_PAR=id_G_PAR(i),        &
+                                         id_GAMMA_LAI=id_G_LAI(i),        &
+                                         id_GAMMA_AGE=id_G_AGE(i),        &
+                                         id_GAMMA_CO2=id_G_CO2(i))
+                ELSE IF ( do_AM3_TERP .AND. trim(tracnam(i))=='C10H16' ) THEN
+                    call calc_xactive_bvoc_AM3 ( Time, Time_next, is, js,         &
+                                         lon, lat, land, coszen,          &
+                                         P1, T1, LAIp, LAIc,              &
+                                         Pmo(is:ie,js:je,:),              &
+                                         Tmo(is:ie,js:je,:),              &
+                                         ECTERP_AM3(is:ie,js:je,:),       &
+                                         month, tracnam(i), EMIS,         &
+                                         id_GAMMA_TEMP=id_G_TEMP(i),      &
+                                         id_GAMMA_PAR=id_G_PAR(i),        &
+                                         id_GAMMA_LAI=id_G_LAI(i),        &
+                                         id_GAMMA_AGE=id_G_AGE(i),        &
+                                         id_GAMMA_CO2=id_G_CO2(i)         )
+
+                ELSE
+                   call calc_xactive_bvoc_megan2 ( Time, Time_next, is, js,         &
                                             lon, lat, land, coszen,          &
                                             P1, P24, T1, T24, LAIp, LAIc,    &
                                             Tmo(is:ie,js:je,:),              &
@@ -680,8 +832,9 @@ subroutine xactive_bvoc( lon, lat, land, is, ie, js, je, Time, Time_next, coszen
                                             id_GAMMA_AGE=id_G_AGE(i),        &
                                             id_GAMMA_CO2=id_G_CO2(i),        &
                                             id_GAMMA_SM=id_G_SM(i))
+                ENDIF
             ELSEIF ( xactive_algorithm == 'MEGAN3' ) THEN
-            call calc_xactive_bvoc_megan3 ( Time, Time_next, is, js,         &
+                call calc_xactive_bvoc_megan3 ( Time, Time_next, is, js,         &
                                             lon, lat, land, coszen,          &
                                             P1, P24, T1, T24,                &
                                             LAIp3, LAIc3,                    &
@@ -704,7 +857,7 @@ subroutine xactive_bvoc( lon, lat, land, is, ie, js, je, Time, Time_next, coszen
                                             id_GAMMA_HW=id_G_HW(i))
             ENDIF !/megan version
          ENDIF !/species
-         ! Send emissions diagnostics
+! Send emissions diagnostics
          if ( trim(tracnam(i))=='ISOP' ) then
             if (abs(scale_isoprene_emissions - 1.).gt.epsln) then
                EMIS = EMIS*scale_isoprene_emissions
@@ -735,7 +888,6 @@ subroutine xactive_bvoc( lon, lat, land, is, ie, js, je, Time, Time_next, coszen
 
 end subroutine xactive_bvoc
 !</SUBROUTINE>
-
 
 !########################################################################################
 
@@ -775,6 +927,7 @@ end subroutine xactive_bvoc
 
 subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
 
+
    type(domain2D),target,intent(in)    :: domain !< Atmosphere domain
    real, intent(in), dimension(:,:)    :: lonb, latb     ! Lat/Lon corners
    type(time_type), intent(in)         :: Time           ! Model time
@@ -783,39 +936,52 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
 
 !----------------Local Variables---------------------------------------------------------
 
-   character(len=5) :: pftnames(nPFT)         =  (/ 'pft01','pft02','pft03','pft04',             &
-                                                    'pft05','pft06','pft07','pft08',             &
-                                                    'pft09','pft10','pft11','pft12',             &
-                                                     'pft13','pft14','pft15','pft16', 'pft17'/)
-!  character(len=3) :: vegnames(nVEG)         =  (/ 'ntr', 'btr', 'crp', 'grs', 'shr' /)
-   character(len=3) :: vegnames(nVEG)         =  (/ 'ntr', 'btr', 'shr', 'grs', 'crp' /)
+   character(len=5) :: pftnames(nPFT)  =  (/ 'pft01','pft02','pft03','pft04',        &
+                                             'pft05','pft06','pft07','pft08',        &
+                                             'pft09','pft10','pft11','pft12',        &
+                                             'pft13','pft14','pft15','pft16', 'pft17'/)
+   !++myl bug fix, should match order in pft_li and pft_lu hardcoded in calc_xactive_bvoc_AM3
+!  character(len=3) :: vegnames(nVEG)      =  (/ 'ntr', 'btr', 'crp', 'grs', 'shr' /)
+   character(len=3) :: vegnames(nVEG)      =  (/ 'ntr', 'btr', 'shr', 'grs', 'crp' /)
 
-   character(len=7) :: terpnames_megan3(8)    =  (/'MT_PINE', 'MT_ACYC', 'MT_CAMP',         &
-                                                   'MT_SABI', 'MT_AROM', 'MT_OXY ',         &
-                                                   'SQT_HR ', 'SQT_LR '/)
+   character(len=7) :: terpnames_megan3(8) =  (/'MT_PINE', 'MT_ACYC', 'MT_CAMP',  &
+                                                'MT_SABI', 'MT_AROM', 'MT_OXY ',  &
+                                                'SQT_HR ', 'SQT_LR '/)
 
-   character(len=4) :: terpnames_megan2(11)   =  (/'MYRC','SABI','LIMO','CARE','OCIM', &
-                                                    'BPIN','APIN','OMTP','FARN','CARY','OSQT'/)
+   !Notes by Meiyun.Lin: First 8 are monoterpenes (OMTP = other monoterpenes),
+   !                     Last 3 are sequisterpenes
+   character(len=4) :: terpnames_megan2(11)  = (/'MYRC','SABI','LIMO','CARE','OCIM', &
+                                                 'BPIN','APIN','OMTP',               &
+                                                 'FARN','CARY','OSQT'/)
 
 
    character(len=5) :: paramnames_megan3(20)  =  (/ 'BETA ', 'C_t1 ', 'C_eo ', 'A_new',        &
-                                                    'A_gro', 'A_mat', 'A_old', 'C_AQ ',     &
+                                                    'A_gro', 'A_mat', 'A_old', 'C_AQ ',        &
                                                     'C_HW ', 'C_HT ', 'C_LT ', 'T_AQ ',        &
-                                                    'T_HW ', 'T_HT ', 'T_LT ', 'DT_AQ',       &
-                                                    'DT_HW', 'DT_HT', 'DT_LT', 'mw   '  /)
+                                                    'T_HW ', 'T_HT ', 'T_LT ', 'DT_AQ',        &
+                                                    'DT_HW', 'DT_HT', 'DT_LT', 'mw   '        /)
    character(len=5) :: paramnames_megan2(9)   =   (/'BETA ', 'LDF  ', 'C_t1 ', 'C_eo ',        &
-                                                    'A_new', 'A_gro', 'A_mat', 'A_old',    &
+                                                    'A_new', 'A_gro', 'A_mat', 'A_old',        &
                                                     'mw   '/)
 
-   integer          :: nlon, nlat, i, j, k, n, xknt, nTERP, nxactive
+   integer          :: nlon, nlat, i, j, k, n, xknt, nxactive !, nTERP, 
    integer          :: ierr, io, logunit, nPARAMS
 
-   integer, parameter             :: nlonin = 720, nlatin = 360
-   real, dimension(nlonin)        :: inlon
-   real, dimension(nlatin)        :: inlat
-   real, dimension(nlonin+1)      :: inlone
-   real, dimension(nlatin+1)      :: inlate
-   real, dimension(nlonin,nlatin) :: AM3_ISOP_DATAIN
+   !Meiyun.Lin: changed to allocatable arrays to handle hi-res datasets
+   !integer, parameter             :: nlonin = 720, nlatin = 360
+   !real, dimension(nlonin)        :: inlon
+   !real, dimension(nlatin)        :: inlat
+   !real, dimension(nlonin+1)      :: inlone
+   !real, dimension(nlatin+1)      :: inlate
+   !real, dimension(nlonin,nlatin) :: AM3_ISOP_DATAIN
+   integer                              :: nlonin, nlatin
+   real, dimension(:),   allocatable    :: inlon
+   real, dimension(:),   allocatable    :: inlat
+   real, dimension(:),   allocatable    :: inlone
+   real, dimension(:),   allocatable    :: inlate
+   real, dimension(:,:), allocatable    :: EP_DATAIN
+   !real, dimension(:,:), allocatable    :: EPMAP_ISOP_DATAIN
+   !real, dimension(:,:), allocatable    :: EPMAP_TERP_DATAIN
 
 ! Higher resolution input data can be created upon request (jschnell)
    integer, parameter                 :: m3nlonin = 720, m3nlatin = 360
@@ -914,6 +1080,12 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
    IF ( do_AM3_ISOP ) THEN
       ALLOCATE( ECISOP_AM3(nlon,nlat,nVEG) )
    ENDIF
+   IF ( do_AM3_TERP ) THEN
+      ALLOCATE( ECTERP_AM3(nlon,nlat,nVEG) )
+   ENDIF
+   IF ( do_MEGAN2_EPMAP_ISOP ) THEN
+      ALLOCATE( ECISOP_M2MAP(nlon,nlat) )
+   ENDIF
 !----------------------------------------------------------------------
 !     ... Set up the required arrays if parsing terpenes
 !---------------------------------------------------------------------
@@ -926,17 +1098,27 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
          ENDIF
       ELSE
          IF ( xactive_algorithm == 'MEGAN2' ) THEN
-            nTERP = 8
+            nTERP = 7  ! M.Lin (8/2022): remove other monoterpenes (not in Sindelarova et al, but in Geos-Chem)
+            !nTERP = 8
          ELSE
             nTERP = 6
          ENDIF
       ENDIF
       ALLOCATE( TERP_PARAM(nPARAMS,nTERP) )
       IF ( xactive_algorithm == 'MEGAN2' ) THEN
-         ALLOCATE( ECTERP(nlon,nlat,nPFT,nTERP) )
+          IF ( do_MEGAN2_EPMAP_TERP ) then
+            ALLOCATE( ECTERP_M2MAP(nlon,nlat,nTERP) )
+          ELSE
+            ALLOCATE( ECTERP(nlon,nlat,nPFT,nTERP) )
+          ENDIF
       ELSE IF ( xactive_algorithm == 'MEGAN3' ) THEN
          ALLOCATE( ECTERP_MEGAN3(nlon,nlat,nTERP) )
          ALLOCATE( LDFg_TERP (nlon,nlat,nTERP) )
+      ENDIF
+   ELSE
+      nTERP = 1
+      IF ( do_MEGAN2_EPMAP_TERP ) then
+         ALLOCATE( ECTERP_LUMP_M2MAP(nlon,nlat) )
       ENDIF
    ENDIF
 
@@ -983,8 +1165,8 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                               axes(1:2), Time, trim(tracnam(i))//'_gamma_temp',   &
                               'unitless')
          id_G_PAR(i)        = register_diag_field(module_name,                    &
-                              trim(tracnam(i))//'_gamma_light',                   &
-                              axes(1:2), Time, trim(tracnam(i))//'_gamma_light',  &
+                              trim(tracnam(i))//'_gamma_par',                     &
+                              axes(1:2), Time, trim(tracnam(i))//'_gamma_par',    &
                               'unitless')
          id_G_LAI(i)        = register_diag_field(module_name,                    &
                               trim(tracnam(i))//'_gamma_lai',                     &
@@ -1015,8 +1197,8 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
          ENDIF
          IF ( do_GAMMA_SM ) THEN
             id_G_SM(i)      = register_diag_field(module_name,                    &
-                              trim(tracnam(i))//'_gamma_soil', axes(1:2),         &
-                              Time, trim(tracnam(i))//'_gamma_soil',              &
+                              trim(tracnam(i))//'_gamma_soilm', axes(1:2),        &
+                              Time, trim(tracnam(i))//'_gamma_soilm',             &
                               'unitless')
          ENDIF
          IF ( do_GAMMA_AQ ) THEN
@@ -1027,8 +1209,8 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
          ENDIF
          IF ( do_GAMMA_CO2 ) THEN
             id_G_CO2(i)     = register_diag_field(module_name,                    &
-                              trim(tracnam(i))//'_gamma_high_temp', axes(1:2),    &
-                              Time, trim(tracnam(i))//'_gamma_high_temp',         &
+                              trim(tracnam(i))//'_gamma_co2', axes(1:2),    &
+                              Time, trim(tracnam(i))//'_gamma_co2',         &
                               'unitless')
          ENDIF
          IF ( do_GAMMA_BDLAI) THEN
@@ -1045,8 +1227,17 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
 !  ... >>>>>>> parsed vs. lumped terpenes
 !--------------------------------------------------------------------------------------
          IF ( trim(tracnam(i))=='ISOP' .AND. do_AM3_ISOP ) THEN
-            ecfile = 'INPUT/megan.ISOP.nc'
+            ecfile = 'INPUT/megan2.epmap_Xveg.ISOP.0.5x0.5.nc'
             if (open_file(ecfile_obj,ecfile,"read")) then
+!set up data dimension, ideally read in from input file 
+               nlonin = 720
+               nlatin = 360 
+               ALLOCATE( inlon(nlonin) )
+               ALLOCATE( inlat(nlatin) )
+               ALLOCATE( inlone(nlonin+1) )
+               ALLOCATE( inlate(nlatin+1) )
+               ALLOCATE( EP_DATAIN(nlonin,nlatin) )
+
                call read_data (ecfile_obj, 'lon', inlon)
                call read_data (ecfile_obj, 'lat', inlat)
                inlon = inlon*DEG_TO_RAD
@@ -1060,97 +1251,236 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                call horiz_interp_init
                call horiz_interp_new ( Interp, inlone, inlate, lonb, latb )
                DO j = 1, nVEG
-                  call read_data (ecfile_obj,vegnames(j),AM3_ISOP_DATAIN)
-                  call horiz_interp (Interp,AM3_ISOP_DATAIN,ECISOP_AM3(:,:,j), verbose=verbose)
+                  call read_data (ecfile_obj,vegnames(j),EP_DATAIN)
+                  call horiz_interp (Interp,EP_DATAIN,ECISOP_AM3(:,:,j), verbose=verbose)
                ENDDO
                call horiz_interp_del( Interp )
                call close_file(ecfile_obj)
+               !release memory
+               deallocate( inlon  )
+               deallocate( inlat  )
+               deallocate( inlone )
+               deallocate( inlate )
+               deallocate( EP_DATAIN )
+
             ELSE
                   call error_mesg ('xactive_bvoc_init',  &
-                     ' AM3 isoprene emission capacity file does not exist', FATAL)
+                     ' AM3 isoprene emission capacity file does not exist: '//ecfile, FATAL)
             ENDIF
-         ELSE IF ( trim(tracnam(i))=='C10H16') THEN
-              IF ( xactive_algorithm == 'MEGAN2' ) THEN
+        ELSE IF ( trim(tracnam(i))=='ISOP' .AND. do_MEGAN2_EPMAP_ISOP ) THEN !M.Lin (Jan 2022)
+            ecfile = 'INPUT/megan2.epmap.ISOP.0.1x0.1.nc'
+            IF ( file_exist(ecfile) ) THEN
+!set up data dimension, ideally read in from input file 
+               IF ( mpp_pe()==mpp_root_pe()) call error_mesg('xactive_bvoc_init',  &
+                  'MYL: Using '//trim(ecfile),NOTE)
+               nlonin = 3600
+               nlatin = 1800 
+               ALLOCATE( inlon(nlonin) )
+               ALLOCATE( inlat(nlatin) )
+               ALLOCATE( inlone(nlonin+1) )
+               ALLOCATE( inlate(nlatin+1) )
+               ALLOCATE( EP_DATAIN(nlonin,nlatin) )
+               call read_data (ecfile, 'lon', inlon, no_domain=.true.)
+               call read_data (ecfile, 'lat', inlat, no_domain=.true.)
+               inlon = inlon*DEG_TO_RAD
+               inlat = inlat*DEG_TO_RAD
+               dlat = inlat(2)-inlat(1)
+               dlon = inlon(2)-inlon(1)
+               inlone(1:nlonin) = inlon-(dlon/2.)
+               inlone(nlonin+1) = inlon(nlonin)+(dlon/2.)
+               inlate(1:nlatin) = inlat-(dlat/2.)
+               inlate(nlatin+1) = inlat(nlatin)+(dlat/2.)
+               call horiz_interp_init
+               call horiz_interp_new ( Interp, inlone, inlate, lonb, latb )
+               call read_data (ecfile,'ISOP_EF',EP_DATAIN, no_domain=.true.)
+               call horiz_interp (Interp,EP_DATAIN,ECISOP_M2MAP, verbose=verbose)
+               !++myl++: check var range 
+               !IF ( Ldebug .and. mpp_pe()==mpp_root_pe()) THEN 
+               IF ( Ldebug ) THEN 
+                    write(*,*) 'xactive_bvoc_init, min/max ECISOP = ', MINVAL(ECISOP_M2MAP), MAXVAL(ECISOP_M2MAP), 'MPP_PE=', mpp_pe()
+                    write(*,*) 'xactive_bvoc_init, ECISOP minloc = ', MINLOC(ECISOP_M2MAP)
+                    write(*,*) 'xactive_bvoc_init, ECISOP maxloc = ', MAXLOC(ECISOP_M2MAP)
+               ENDIF
+
+               !release memory
+               DEALLOCATE( inlon  )
+               DEALLOCATE( inlat  )
+               DEALLOCATE( inlone )
+               DEALLOCATE( inlate )
+               DEALLOCATE( EP_DATAIN )
+
+            ELSE
+                  call error_mesg ('xactive_bvoc_init',  &
+                     ' Detailed isoprene emission capacity file does not exist: '//ecfile, FATAL)
+            ENDIF
+         ELSE IF ( trim(tracnam(i))=='C10H16' ) THEN
+            IF ( xactive_algorithm == 'MEGAN2' ) THEN
+               IF ( do_AM3_TERP ) THEN        !M.Lin (Aug2022)
+                   ecfile = 'INPUT/megan2.epmap_Xveg.C10H16.0.5x0.5.nc' !For each vegn type (ntr/btr/shr/crp/grs)
+                  IF ( file_exist(ecfile) ) THEN
+!set up data dimension, ideally read in from input file 
+                    nlonin = 720
+                    nlatin = 360 
+                    ALLOCATE( inlon(nlonin) )
+                    ALLOCATE( inlat(nlatin) )
+                    ALLOCATE( inlone(nlonin+1) )
+                    ALLOCATE( inlate(nlatin+1) )
+                    ALLOCATE( EP_DATAIN(nlonin,nlatin) )
+                    call read_data (ecfile, 'lon', inlon, no_domain=.true.)
+                    call read_data (ecfile, 'lat', inlat, no_domain=.true.)
+                    inlon = inlon*DEG_TO_RAD
+                    inlat = inlat*DEG_TO_RAD
+                    dlat = inlat(2)-inlat(1)
+                    dlon = inlon(2)-inlon(1)
+                    inlone(1:nlonin) = inlon-(dlon/2.)
+                    inlone(nlonin+1) = inlon(nlonin)+(dlon/2.)
+                    inlate(1:nlatin) = inlat-(dlat/2.)
+                    inlate(nlatin+1) = inlat(nlatin)+(dlat/2.)
+                    call horiz_interp_init
+                    call horiz_interp_new ( Interp, inlone, inlate, lonb, latb )
+                    DO j = 1, nVEG
+                      call read_data(ecfile,vegnames(j),EP_DATAIN, no_domain=.true.)
+                      call horiz_interp(Interp,EP_DATAIN,ECTERP_AM3(:,:,j),verbose=verbose)
+                    ENDDO
+
+                    !release memory
+                    DEALLOCATE( inlon  )
+                    DEALLOCATE( inlat  )
+                    DEALLOCATE( inlone )
+                    DEALLOCATE( inlate )
+                    DEALLOCATE( EP_DATAIN )
+
+                  ELSE
+                    call error_mesg ('xactive_bvoc_init',  &
+                     ' AM3 terpene emission capacity file does not exist: '//ecfile, FATAL)
+                  ENDIF
+
+               ELSE IF ( do_MEGAN2_EPMAP_TERP ) THEN !M.Lin (Jan 2022)
+                 IF ( do_PARSED_TERP ) THEN
+                    ecfile = 'INPUT/megan2.epmap.parsed_terpenes.0.1x0.1.nc'
+                 ELSE
+                    ecfile = 'INPUT/megan2.epmap.C10H16.0.1x0.1.nc'
+                 ENDIF
+                 IF ( file_exist(ecfile) ) THEN
+                    IF ( mpp_pe()==mpp_root_pe()) call error_mesg('xactive_bvoc_init',&
+                      'Using '//trim(ecfile),NOTE)
+                    nlonin = 3600
+                    nlatin = 1800 
+                    ALLOCATE( inlon(nlonin) )
+                    ALLOCATE( inlat(nlatin) )
+                    ALLOCATE( inlone(nlonin+1) )
+                    ALLOCATE( inlate(nlatin+1) )
+                    ALLOCATE( EP_DATAIN(nlonin,nlatin) )
+                    call read_data (ecfile, 'lon', inlon, no_domain=.true.)
+                    call read_data (ecfile, 'lat', inlat, no_domain=.true.)
+                    inlon = inlon*DEG_TO_RAD
+                    inlat = inlat*DEG_TO_RAD
+                    dlat = inlat(2)-inlat(1)
+                    dlon = inlon(2)-inlon(1)
+                    inlone(1:nlonin) = inlon-(dlon/2.)
+                    inlone(nlonin+1) = inlon(nlonin)+(dlon/2.)
+                    inlate(1:nlatin) = inlat-(dlat/2.)
+                    inlate(nlatin+1) = inlat(nlatin)+(dlat/2.)
+                    call horiz_interp_init
+                    call horiz_interp_new ( Interp, inlone, inlate, lonb, latb )
+                    IF ( do_PARSED_TERP ) THEN
+                      DO k = 1, nTERP
+                          call read_data (ecfile,trim(terpnames_megan2(k))//'_EF', &
+                                          EP_DATAIN, no_domain=.true.)
+                          call horiz_interp (Interp,EP_DATAIN,             &
+                                             ECTERP_M2MAP(:,:,k), verbose=verbose)
+                      ENDDO!nterp
+                    ELSE
+                          call read_data (ecfile,'C10H16_EF', &
+                                          EP_DATAIN, no_domain=.true.)
+                          call horiz_interp (Interp,EP_DATAIN,             &
+                                             ECTERP_LUMP_M2MAP(:,:), verbose=verbose)
+                    ENDIF
+
+                    ! release memory
+                    DEALLOCATE( inlon  )
+                    DEALLOCATE( inlat  )
+                    DEALLOCATE( inlone )
+                    DEALLOCATE( inlate )
+                    DEALLOCATE( EP_DATAIN )
+
+                 ELSE
+                    call error_mesg ('xactive_bvoc_init',  &
+                        'MEGAN2 detailed epmap file for '//trim(tracnam(i))//' does not exist: '//ecfile, FATAL)
+                 ENDIF
+
+               ELSE ! Using EP calculated from PFT distribution (J. Schnell)
                  IF ( do_PARSED_TERP ) THEN
 ! Both mono- and sesq- terpenes are included in this file,
 ! but sesq may not be used (i.e., if do_SESQTERP = .false.')
                        ecfile = 'INPUT/megan2.xactive.parsed_terpenes.nc'
-                       if (open_file(ecfile_obj,ecfile,"read")) then
-                        DO k = 1, nTERP
-                           DO j = 1, nPFT
-                              call read_data(ecfile_obj,terpnames_megan2(k)//'_'//pftnames(j), &
-                                             toss)
-                              ECTERP(:,:,j,k) = toss
-                           ENDDO
-                        ENDDO
-                        call close_file(ecfile_obj)
-                       else
-                        call error_mesg ('xactive_bvoc_init',  &
-                        'MEGAN file (megan2.xactive.parsed_terpenes.nc) for '//trim(tracnam(i))//' does not exist', FATAL)
-                       endif
                  ELSE
                     IF ( do_SESQTERP ) THEN
                        ecfile = 'INPUT/megan2.xactive.lumped_terpenes_sesq.nc'
                     ELSE
                        ecfile = 'INPUT/megan2.xactive.lumped_terpenes_mono.nc'
                     ENDIF
-                    if (open_file(ecfile_obj,ecfile,"read")) then
-                     DO j = 1, nPFT
-                        call read_data(ecfile_obj,pftnames(j),toss)
-                        ECBVOC(:,:,j,xknt) = toss
-                     ENDDO
-                     call close_file(ecfile_obj)
-                    else
-                     call error_mesg ('xactive_bvoc_init',  &
-                        'MEGAN file '//trim(ecfile)//'for '//trim(tracnam(i))//' does not exist', FATAL)
-                    endif
                  ENDIF
-              ELSE IF ( xactive_algorithm == 'MEGAN3' ) THEN
+                 IF ( file_exist(ecfile) ) THEN
+                    IF ( do_PARSED_TERP) THEN
+                       DO k = 1, nTERP
+                          DO j = 1, nPFT
+                             call read_data(ecfile,terpnames_megan2(k)//'_'//pftnames(j), &
+                                            toss, no_domain=.true.)
+                             ECTERP(:,:,j,k) = toss
+                          ENDDO
+                       ENDDO
+                    ELSE
+                       DO j = 1, nPFT
+                          call read_data(ecfile,pftnames(j),toss, no_domain=.true.)
+                          ECBVOC(:,:,j,xknt) = toss
+                       ENDDO
+                    ENDIF
+                 ELSE
+                    call error_mesg ('xactive_bvoc_init',  &
+                        'MEGAN EF file for '//trim(tracnam(i))//' does not exist', FATAL)
+                 ENDIF
+               ENDIF !myl: using AM3 terp, epmap, other
+            ELSE IF ( xactive_algorithm == 'MEGAN3' ) THEN
                  IF ( do_PARSED_TERP ) THEN
 ! Both mono- and sesq- terpenes are included in this file,
 ! but sesq may not be used (i.e., if do_SESQTERP = .false.')
                     ecfile = 'INPUT/megan3.xactive.parsed_terpenes.nc'
-                    if (open_file(ecfile_obj,ecfile,"read")) then
-                     call horiz_interp_init
-                     call horiz_interp_new ( Interp, m3inlone, m3inlate, lonb, latb )
-                     DO k = 1, nTERP
-                        call read_data (ecfile_obj,trim(terpnames_megan3(k))//'_EF',        &
-                                        MEGAN3_DATAIN)
-                        call horiz_interp (Interp,MEGAN3_DATAIN,                  &
-                                           ECTERP_MEGAN3(:,:,k), verbose=verbose)
-                        call read_data (ecfile_obj,trim(terpnames_megan3(k))//'_LDF',       &
-                                        MEGAN3_DATAIN)
-                        call horiz_interp (Interp,MEGAN3_DATAIN,                  &
-                                           LDFg_TERP(:,:,k), verbose=verbose)
-                     ENDDO!nterp
-                     call horiz_interp_del( Interp )
-                     call close_file(ecfile_obj)
-                    else
-                     call error_mesg ('xactive_bvoc_init',  &
-                        'MEGAN file '//trim(ecfile)//'for '//trim(tracnam(i))//' does not exist', FATAL)
-                    endif
                  ELSE
                     IF ( do_SESQTERP ) THEN
                        ecfile = 'INPUT/megan3.xactive.lumped_terpenes_sesq.nc'
                     ELSE
                        ecfile = 'INPUT/megan3.xactive.lumped_terpenes_mono.nc'
                     ENDIF
-                    if (open_file(ecfile_obj,ecfile,"read")) then
-                     call horiz_interp_init
-                     call horiz_interp_new ( Interp, m3inlone, m3inlate, lonb, latb )
-                     call read_data (ecfile_obj,'EF',MEGAN3_DATAIN)
-                     call horiz_interp (Interp, MEGAN3_DATAIN,ECBVOC_MEGAN3(:,:,xknt))
-                     call read_data (ecfile_obj,'LDF',MEGAN3_DATAIN)
-                     call horiz_interp (Interp, MEGAN3_DATAIN, LDFg(:,:,xknt ))
-                     call horiz_interp_del( Interp )
-                     call close_file(ecfile_obj)
-                    else
-                     call error_mesg ('xactive_bvoc_init',  &
-                        'MEGAN file '//trim(ecfile)//'for '//trim(tracnam(i))//' does not exist', FATAL)
-                    endif
+                 ENDIF
+                 IF ( file_exist(ecfile) ) THEN
+                    IF ( do_PARSED_TERP) THEN
+                       call horiz_interp_init
+                       call horiz_interp_new ( Interp, m3inlone, m3inlate, lonb, latb )
+                       DO k = 1, nTERP
+                          call read_data (ecfile,trim(terpnames_megan3(k))//'_EF',        &
+                                          MEGAN3_DATAIN, no_domain=.true.)
+                          call horiz_interp (Interp,MEGAN3_DATAIN,                  &
+                                             ECTERP_MEGAN3(:,:,k), verbose=verbose)
+                          call read_data (ecfile,trim(terpnames_megan3(k))//'_LDF',       &
+                                          MEGAN3_DATAIN,no_domain=.true.)
+                          call horiz_interp (Interp,MEGAN3_DATAIN,                  &
+                                             LDFg_TERP(:,:,k), verbose=verbose)
+                       ENDDO!nterp
+                    ELSE
+                       call horiz_interp_init
+                       call horiz_interp_new (Interp, m3inlone, m3inlate, lonb, latb )
+                       call read_data (ecfile,'EF',MEGAN3_DATAIN, no_domain=.true.)
+                       call horiz_interp (Interp, MEGAN3_DATAIN,ECBVOC_MEGAN3(:,:,xknt))
+                       call read_data (ecfile,'LDF',MEGAN3_DATAIN, no_domain=.true.)
+                       call horiz_interp (Interp, MEGAN3_DATAIN, LDFg(:,:,xknt ))
+                    ENDIF
+                 ELSE
+                    call error_mesg ('xactive_bvoc_init',  &
+                        'MEGAN file for '//trim(tracnam(i))//' does not exist', FATAL)
                  ENDIF
               ENDIF
-         ELSE
+         ELSE ! used for species other than isop and terpenes
             IF ( xactive_algorithm == 'MEGAN2') THEN
                ecfile = 'INPUT/megan2.xactive.'//trim(tracnam(i))//'.nc'
                if (open_file(ecfile_obj,ecfile,"read")) then
@@ -1217,12 +1547,11 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
 !------------------------------------------------------------------------
          IF ( trim(tracnam(i))=='ISOP' .and. do_AM3_ISOP ) THEN
             IF ( mpp_pe() == mpp_root_pe()) call error_mesg ('xactive_bvoc_init', &
-                 'MEGAN Parameters for AM3 ISOP hardcoded in subroutine, skipping',NOTE)
+                'MEGAN Parameters for AM3 ISOP hardcoded in subroutine, skipping',NOTE)
+         ELSE IF ( trim(tracnam(i))=='C10H16' .and. do_AM3_TERP ) THEN
+            IF ( mpp_pe() == mpp_root_pe()) call error_mesg ('xactive_bvoc_init', &
+                'MEGAN Parameters for AM3 TERP hardcoded in subroutine, skipping',NOTE)
          ELSE
-            IF (.not. open_file(ecfile_obj,ecfile,"read")) then
-               call error_mesg ('xactive_bvoc_init',  &
-                        'File '//trim(ecfile)//'for '//trim(tracnam(i))//' does not exist', FATAL)
-            ENDIF
             DO j = 1, nPARAMS
                IF ( trim(tracnam(i))=='C10H16') THEN
                   IF ( do_PARSED_TERP ) THEN
@@ -1304,9 +1633,8 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
    IF ( do_ONLINE_PPFD ) THEN
       ALLOCATE( P24_STORE(nlon,nlat,24) )
       P24_STORE(:,:,:) = 0.
-      IF ( do_AM3_ISOP ) THEN
-         call ppfd_init_AM3( lonb, latb, axes )
-      ENDIF
+!myl: observed PAR climotology is required for fGAMMA_PAR_PCEEA
+      call ppfd_init_AM3( lonb, latb, axes )
    ELSE
       call ppfd_init_AM3(lonb, latb, axes)
    ENDIF
@@ -1322,53 +1650,64 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
       ALLOCATE(diag_gamma_age_megan3(nlon,nlat) )
       diag_gamma_age_megan3(:,:) = 0.
    ENDIF
+   IF ( do_MEGAN2_EPMAP_ISOP .OR. do_MEGAN2_EPMAP_TERP) THEN
+      ALLOCATE( diag_gamma_age_epmap(nlon,nlat) )
+      diag_gamma_age_epmap(:,:) = 0. !grid-cell average, not PFT-specific
+   ENDIF
    IF ( do_ONLINE_PFT ) THEN
-      IF ( xactive_algorithm == 'MEGAN2' ) THEN
-         ALLOCATE( PCTPFT(nlon,nlat,nPFT) )
-      ENDIF
-      IF ( do_AM3_ISOP ) THEN
-         call pft_init_AM3( lonb, latb, axes )
-      ENDIF
+!Meiyun Lin: comment out for now
+!      IF ( xactive_algorithm == 'MEGAN2' ) THEN
+!         ALLOCATE( PCTPFT(nlon,nlat,nPFT) )
+!      ENDIF
+!      IF ( do_AM3_ISOP ) THEN
+!         call pft_init_AM3( lonb, latb, axes )
+!      ENDIF
    ELSE
-      IF ( xactive_algorithm == 'MEGAN2' .OR. do_AM3_ISOP ) THEN
-         ALLOCATE( PCTPFT(nlon,nlat,nPFT) )
-         call pft_init_AM3 (lonb, latb, axes)
-      ELSE IF ( xactive_algorithm == 'MEGAN3' ) THEN
-         ! MEGAN3 does not require pctpft data
-      ENDIF
+      !++Meiyun Lin: 
+      !While do_MEGAN2_EPMAP_ISOP or do_MEGAN2_EPMAP_TERP or MEGAN3 do not require pctpft data to calculate emission compacities, pctpft is still used to normalize gridcell mean LAI to obtain LAI of vegetated area
+      ALLOCATE( PCTPFT(nlon,nlat,nPFT) )
+      call pft_init_AM3 (lonb, latb, axes)
    ENDIF
 
 !---------------------
 !  ... LAI setup
 !---------------------
-   IF ( xactive_algorithm == 'MEGAN2' .OR. do_AM3_ISOP ) THEN
+   IF ( xactive_algorithm == 'MEGAN2' .OR. do_AM3_ISOP .OR. do_AM3_TERP ) THEN
       ALLOCATE( diag_gamma_lai(nlon,nlat,nPFT) )
       diag_gamma_lai(:,:,:) = 0.
    ENDIF
    IF ( xactive_algorithm == 'MEGAN3' ) THEN
       ALLOCATE( diag_gamma_lai_megan3(nlon,nlat) )
-      diag_gamma_lai_megan3(:,:) = 0.
+      diag_gamma_lai_megan3(:,:) = 0. !grid-cell average, not PFT-specific
+   ENDIF
+   IF ( do_MEGAN2_EPMAP_ISOP .OR. do_MEGAN2_EPMAP_TERP) THEN
+      ALLOCATE( diag_gamma_lai_epmap(nlon,nlat) )
+      diag_gamma_lai_epmap(:,:) = 0. !grid-cell average, not PFT-specific
    ENDIF
 
    IF ( do_ONLINE_LAI ) THEN
-      IF ( xactive_algorithm == 'MEGAN3' ) THEN
-         ALLOCATE( MLAI_MEGAN3(nlon,nlat,2) )
-         ALLOCATE( FCOVER(nlon,nlat,2) )
-         call fcover_init_megan3 (lonb,latb,axes)
-      ELSE IF ( xactive_algorithm == 'MEGAN2' ) THEN
-         ALLOCATE( MLAI(nlon,nlat,nPFT,2) )
-      ENDIF
-      IF ( do_AM3_ISOP ) THEN
-         call lai_init_AM3 (lonb, latb, axes)
-      ENDIF
+!Meiyun Lin: comment out for now
+!      IF ( xactive_algorithm == 'MEGAN3' ) THEN
+!         ALLOCATE( MLAI_MEGAN3(nlon,nlat,2) )
+!         ALLOCATE( FCOVER(nlon,nlat,2) )
+!         call fcover_init_megan3 (lonb,latb,axes)
+!      ELSE IF ( xactive_algorithm == 'MEGAN2' ) THEN
+!         ALLOCATE( MLAI(nlon,nlat,nPFT,2) )
+!      ENDIF
+!      IF ( do_AM3_ISOP ) THEN
+!         call lai_init_AM3 (lonb, latb, axes)
+!      ENDIF
    ELSE
-      IF ( xactive_algorithm == 'MEGAN2' .OR. do_AM3_ISOP ) THEN
-         ALLOCATE( MLAI(nlon,nlat,nPFT,nMOS) )
+      IF ( xactive_algorithm == 'MEGAN2' .OR. do_AM3_ISOP .OR. do_AM3_TERP ) THEN
+         ALLOCATE( MLAI(nlon,nlat,nPFT,nMOS))
          call lai_init_AM3( lonb, latb, axes)
       ENDIF
-      IF ( xactive_algorithm == 'MEGAN3' ) THEN
+      IF ( xactive_algorithm == 'MEGAN3' .OR. do_MEGAN2_EPMAP_ISOP .OR. do_MEGAN2_EPMAP_TERP ) THEN
          ALLOCATE ( MLAI_MEGAN3(nlon,nlat,nMOS) )
          MLAI_MEGAN3(:,:,:) = 0.
+
+         !ALLOCATE( FCOVER(nlon,nlat,nMOS) )
+         !FCOVER(:,:,:) = 0.
          call lai_init_megan3 (lonb, latb, axes )
       ENDIF
    ENDIF
@@ -1475,7 +1814,10 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
       ELSE IF ( xactive_algorithm == 'MEGAN3') THEN
          write(*,*) 'Using the algorithms and emission capacities from Megan v3.0'
       ENDIF
-      IF ( do_AM3_ISOP ) write(*,*) 'Reproducing AM3 legacy isoprene emissions'
+      IF ( do_AM3_ISOP ) write(*,*) 'Using gridded isoprene EPs for ntr/btr/shr/grs/crp'
+      IF ( do_AM3_TERP ) write(*,*) 'Using gridded monoterpene EPs for ntr/btr/shr/grs/crp'
+      IF ( do_MEGAN2_EPMAP_ISOP ) write(*,*) 'Using precomputed, gridcell mean EPs for isoprene'
+      IF ( do_MEGAN2_EPMAP_TERP ) write(*,*) 'Using precomptuted, gridcell mean EPs for terpenes'
    ENDIF
 
 end subroutine xactive_bvoc_init
@@ -1488,8 +1830,11 @@ end subroutine xactive_bvoc_init
 !
 !<SUBROUTINE NAME="calc_xactive_bvoc_AM3">
 !  <OVERVIEW>
-!    Calculates interactive biogenic isoprene emissions following the algorithms used in AM3
-!    as implemented by Arlene M. Fiore and Vaishali A. Naik.
+!    Calculates interactive biogenic isoprene and monoterpene emissions following 
+!    the algorithms in AM3 and MOZART-4 (Emmons et al., 2010). 
+!    History: Initial codes by A. Fiore and V. Naik (2012/01)
+!             Add monoterpene calculations by Meiyun Lin (2022/08)
+!             Add GAMMA_CO2 by Meiyun Lin (2022/08)
 !  </OVERVIEW
 !  <DESCRIPTION>
 !     Calculates interactive BVOC emissions using algorithms from
@@ -1499,9 +1844,9 @@ end subroutine xactive_bvoc_init
 !  <TEMPLATE>
 !    call calc_xactive_bvoc_AM3 ( Time, Time_next, is, js, lon, lat, land, coszen,  &
 !                                 PPFD1, T1, LAIp, LAIc, Pclim, Tclim,              &
-!                                 ECBVOC_S, month, EMIS,                            &
+!                                 ECBVOC_S, month, species, EMIS,                   &
 !                                 id_GAMMA_TEMP, id_GAMMA_PAR, id_GAMMA_LAI,        &
-!                                 id_GAMMA_AGE )
+!                                 id_GAMMA_AGE, id_GAMMA_CO2 )
 !  </TEMPLATE>
 !  <IN NAME="Time, Time_next" TYPE="type(time_type)">
 !    Model time
@@ -1554,9 +1899,9 @@ end subroutine xactive_bvoc_init
 !
 subroutine calc_xactive_bvoc_AM3( Time, Time_next, is, js, lon, lat, land, coszen,    &
                                   PPFD1, T1, LAIp, LAIc, Pclim, Tclim,                &
-                                  ECBVOC_S, month, EMIS,       &
+                                  ECBVOC_S, month, species, EMIS,                     &
                                   id_GAMMA_TEMP, id_GAMMA_PAR, id_GAMMA_LAI,          &
-                                  id_GAMMA_AGE )
+                                  id_GAMMA_AGE, id_GAMMA_CO2 )
 
    type(time_type), intent(in)            :: Time, Time_next
    integer, intent(in)                    :: is, js
@@ -1567,18 +1912,18 @@ subroutine calc_xactive_bvoc_AM3( Time, Time_next, is, js, lon, lat, land, cosze
    real, intent(in), dimension(:,:)       :: T1
    real, intent(in), dimension(:,:,:)     :: LAIp, LAIc
    real, intent(in), dimension(:,:,:)     :: Pclim, Tclim
-   real, intent(in), dimension(:,:,:)     :: ECBVOC_S
+   real, intent(in), dimension(:,:,:)     :: ECBVOC_S    !ug/m2/h
    integer, intent(in)                    :: month
-
-   real, intent(out), dimension(:,:)      :: EMIS
+   character(len=*), intent(in)           :: species     !species name
+   real, intent(out), dimension(:,:)      :: EMIS        !molecules/cm2/s
 
    integer, intent(in), optional          :: id_GAMMA_TEMP, id_GAMMA_PAR
-   integer, intent(in), optional          :: id_GAMMA_LAI, id_GAMMA_AGE
+   integer, intent(in), optional          :: id_GAMMA_LAI, id_GAMMA_AGE, id_GAMMA_CO2
 
-!------------ Local Variables ------------------------------------------------------------
+!------------ Local Variables --------------------------------------------------------
    type(time_type) :: Year_t
    real     :: BETA, LDF, C_t1, C_eo, A_new, A_gro, A_mat, A_old, MW_sp
-   real     :: GAMMA_TLD, GAMMA_PAR,  calday
+   real     :: GAMMA_TLD, GAMMA_TLI, GAMMA_TMP, GAMMA_PAR, GAMMA_CO2, calday
    real     :: GAMMA_AGE(nPFT), GAMMA_LAI(nPFT), GAMMA_LAIAGE(nPFT)
    logical  :: age_work(nPFT)
    logical  :: do_age(nPFT)
@@ -1595,22 +1940,42 @@ subroutine calc_xactive_bvoc_AM3( Time, Time_next, is, js, lon, lat, land, cosze
    nlon = size(lon,1)
    nlat = size(lon,2)
 
-   BETA  = 1.                 ! See Table 4, Guenther et al., 2012
-   LDF   = 1.                 ! ------------------------
-   C_t1  = 80.                ! for description of parameters
-   C_eo  = 1.75
-   A_new = 0.05
-   A_gro = 0.6
-   A_mat = 1.125
-   A_old = 1.0
-   MW_sp = 68.           !Molecular weight for conversion from ug to molecules
+   ! See Table 4, Guenther et al., 2012
+   ! for description of parameters 
+   IF ( trim(species) == 'ISOP' ) THEN
+     BETA  = 1.               !myl: 0.13 in Table 4 but not used for isop with LDF = 1
+     LDF   = 1.               
+     C_t1  = 80.              !myl: 95. in Table 4 
+     C_eo  = 1.75             !myl: 2.0 in Table 4
+     A_new = 0.05
+     A_gro = 0.6
+     A_mat = 1.125            !myl: 1.0 in Table 4
+     A_old = 1.0              !myl: 0.9 in Table 4
+     MW_sp = 68.              !Molecular weight for conversion from ug to molecules
+   ELSE IF (trim(species) == 'C10H16') THEN  !Lumped monoterpenes, use a-Pinene params
+     BETA  = 0.1      
+     LDF   = 0.6      
+     C_t1  = 80.     
+     C_eo  = 1.83    
+     A_new = 2.0
+     A_gro = 1.8
+     A_mat = 1.0   
+     A_old = 1.05     
+     MW_sp = 12.0*10+16.0  !C10H16
+   ENDIF 
 
    do_age(:) = .TRUE.               !Calculate gamma age for this PFTs?
-   do_age((/2,3,5,6,10/)) = .FALSE. !gamma LAI = 1 for evergreen PFTs
+   do_age((/2,3,5,6,10/)) = .FALSE. !gamma AGE = 1 for evergreen PFTs
 
-   pft_li(:) = (/ 2,5,10,13,16 /)
-   pft_lu(1:nVEG-1) = (/ 4,9,12,15 /)
-   pft_lu(nVEG) = nPFT
+   !++myl: beginning and end idx of the pfts fall within this veg
+   ! must match the order in vegnames: ntr,btr,shr,grs,crp (Table 8 in Emmons2010)
+   ! pfts 2-4   needleleaf
+   ! pfts 5-9   broadleaf
+   ! pfts 10-12 shrubs
+   ! pfts 13-15 grass
+   ! pfts 16-17 crops
+   pft_li(:)       = (/2,5,10,13,16/)
+   pft_lu(1:nVEG)  = (/4,9,12,15,17/)
 
    call get_date(Time,yr,mo,day,hr,minute,sec)  !model GMT
    !Get Julian date (fraction) = calday
@@ -1628,14 +1993,23 @@ subroutine calc_xactive_bvoc_AM3( Time, Time_next, is, js, lon, lat, land, cosze
         IF ( coszen(i,j) <= 0. ) THEN
            GAMMA_PAR  = 0.
         ELSE
-           GAMMA_PAR = fGAMMA_PAR_AM3(PPFD1(i,j), coszen(i,j), Pclim(i,j,month), calday)
+           GAMMA_PAR = fGAMMA_PAR_PCEEA(PPFD1(i,j), coszen(i,j), Pclim(i,j,month), calday)
         ENDIF
+! Apply light dependent factor for terpenes (LDF=1 for ISOP)
+!        GAMMA_PAR = LDF*GAMMA_PAR + (1. - LDF)
+! Prevent negative values
         GAMMA_PAR = max(GAMMA_PAR, 0.)
 !------------------------------------------------------------------------------------
 !                     ... GAMMA TEMP CALCULATION
 !------------------------------------------------------------------------------------
         GAMMA_TLD = fGAMMA_TLD_AM3(T1(i,j), Tclim(i,j,month), C_t1, C_eo)
+        GAMMA_TLI = exp(BETA * (T1(i,j) - T_s))
+        GAMMA_TMP = LDF*GAMMA_TLD + (1. - LDF)*GAMMA_TLI
+
+! Prevent negative values
         GAMMA_TLD = max(GAMMA_TLD, 0.)
+        GAMMA_TLI = max(GAMMA_TLI, 0.)
+        GAMMA_TMP = max(GAMMA_TMP, 0.)
 !------------------------------------------------------------------------------------
 !                     ... GAMMA AGE CALCULATION
 !------------------------------------------------------------------------------------
@@ -1652,6 +2026,14 @@ subroutine calc_xactive_bvoc_AM3( Time, Time_next, is, js, lon, lat, land, cosze
         GAMMA_LAIAGE(:) = GAMMA_LAI * GAMMA_AGE
 
 !------------------------------------------------------------------------------------
+! CO2 inhibision (only for isoprene)
+!------------------------------------------------------------------------------------
+        IF ( do_GAMMA_CO2 .AND. trim(species) == 'ISOP' ) THEN
+            GAMMA_CO2 = fGAMMA_CO2(CO2_STORE(i+is-1,j+js-1))
+        ELSE
+            GAMMA_CO2 = 1.
+        ENDIF
+!------------------------------------------------------------------------------------
 !                     ... Sum over the PFTs part of each VEG
 !------------------------------------------------------------------------------------
         DO n = 1, nVEG
@@ -1661,23 +2043,34 @@ subroutine calc_xactive_bvoc_AM3( Time, Time_next, is, js, lon, lat, land, cosze
                           * ECBVOC_S(i,j,n)
         ENDDO
 
-           EMIS(i,j) = sum(work_emis) * GAMMA_TLD * GAMMA_PAR
+        !Apply the light dependent factor following MEGAN2.1
+        EMIS(i,j) = sum(work_emis) * GAMMA_CO2 * &
+                     (LDF*GAMMA_TLD + (1. - LDF)*GAMMA_TLI) * &
+                     (LDF*GAMMA_PAR + (1. - LDF))
+
+        !Apply the light dependent factor following GEOS-Chem
+        !EMIS(i,j) = sum(work_emis) * GAMMA_CO2 * &
+        !            ((1.0 - LDF) * GAMMA_TLI + (LDF * GAMMA_PAR * GAMMA_TLD))
+
 ! Update diagnostics
-           diag_gamma_temp(i+is-1,j+js-1)  = GAMMA_TLD
-           diag_gamma_par(i+is-1,j+js-1)   = GAMMA_PAR
-           diag_gamma_lai(i+is-1,j+js-1,:) = GAMMA_LAI(:)
-           diag_gamma_age(i+is-1,j+js-1,:) = GAMMA_AGE(:)
+        diag_gamma_temp(i+is-1,j+js-1)  = GAMMA_TMP
+        diag_gamma_par(i+is-1,j+js-1)   = GAMMA_PAR
+        diag_gamma_lai(i+is-1,j+js-1,:) = GAMMA_LAI(:)
+        diag_gamma_age(i+is-1,j+js-1,:) = GAMMA_AGE(:)
+        IF (present(id_GAMMA_CO2) .AND. id_GAMMA_CO2 > 0) THEN
+            diag_gamma_co2(i+is-1,j+js-1) = GAMMA_CO2
+        ENDIF
 
       ENDIF!land
    ENDDO
    ENDDO
 
-! Apply the canopy loss factor and convert from ug/m2/hr to molecules/m2/s
+! Apply the canopy loss factor and convert from micrograms/m2/hr to molecules/cm2/s
      EMIS(:,:) = EMIS(:,:) * RHO_CANOPY  *  (1.67e10 / MW_sp)
 
-!---------------------------------------------------------------------------------------
+!-------------------------------------------------------------------------------------
 !              ... Send diagnostics
-!---------------------------------------------------------------------------------------
+!-------------------------------------------------------------------------------------
 
 ! Gamma temperature
       IF (present(id_GAMMA_TEMP) .AND. id_GAMMA_TEMP > 0) THEN
@@ -1699,8 +2092,297 @@ subroutine calc_xactive_bvoc_AM3( Time, Time_next, is, js, lon, lat, land, cosze
          used = send_data( id_GAMMA_AGE, diag_gamma_age(is:ie,js:je,:), &
                            Time_next, is_in=is, js_in=js )
       ENDIF
+! Gamma CO2
+      IF (present(id_GAMMA_CO2) .AND. id_GAMMA_CO2 > 0) THEN
+         used = send_data(id_GAMMA_CO2, diag_gamma_co2(is:ie,js:je), &
+                          Time_next, is_in=is, js_in=js)
+      ENDIF
 
 end subroutine calc_xactive_bvoc_AM3
+!</SUBROUTINE>
+
+!########################################################################################
+!
+!<SUBROUTINE NAME="calc_xactive_bvoc_AM3_epmap">
+!  <OVERVIEW>
+!    Calculates interactive biogenic isoprene emissions following the algorithms used in AM3
+!    but using precomputed EP maps, implemented by Meiyun Lin
+!  </OVERVIEW
+!  <DESCRIPTION>
+!     Calculates interactive BVOC emissions using algorithms from
+!     PCEEA MEGAN model in Guenther, ACP, 2006.
+!     Note - gamma soil moisture is assumed constant (at one)
+!  </DESCRIPTION>
+!  <TEMPLATE>
+!    call calc_xactive_bvoc_AM3_epmap( Time,Time_next, is,js, lon,lat, land,coszen, &
+!                                 PPFD1, T1, LAIp, LAIc, Pclim, Tclim,              &
+!                                 MEGAN_PARAM,                                      &
+!                                 ECBVOC_S, month, species, EMIS,                   &
+!                                 id_GAMMA_TEMP, id_GAMMA_PAR, id_GAMMA_LAI,        &
+!                                 id_GAMMA_AGE, id_GAMMA_CO2 )
+!  </TEMPLATE>
+!  <IN NAME="Time, Time_next" TYPE="type(time_type)">
+!    Model time
+!  </IN>
+!  <IN NAME="is, js" TYPE="integer">
+!    Local domain start indices
+!  </IN>
+!  <IN NAME="lon,lat" TYPE="real" DIM="(:,:)">
+!    Longitude/Latitude centers of the local domain
+!  </IN>
+!  <IN NAME="land" TYPE="real" DIM="(:,:)">
+!    Land fraction
+!  </IN>
+!  <IN NAME="coszen" TYPE="real" DIM="(:,:)">
+!    Cosine of the solar zenith angle
+!  </IN>
+!  <IN NAME="PPFD1" TYPE="real" DIM="(:,:)">
+!    Current photosynthetic photon flux density
+!  </IN>
+!  <IN NAME="T1" TYPE="real" DIM="(:,:)">
+!    Current temperature
+!  </IN>
+!  <IN NAME="LAIp" TYPE="real" DIM="(:,:)">
+!    Previous month's LAI
+!  </IN>
+!  <IN NAME="LAIc" TYPE="real" DIM="(:,:)">
+!    Current month's LAI
+!  </IN>
+!  <IN NAME="FVCc" TYPE="real" DIM="(:,:)">
+!    Current month's FVC
+!  </IN>
+!  <IN NAME="Tclim" TYPE="real" DIM="(:,:)">
+!    Climatological temperature
+!  </IN>
+!  <IN NAME="Pclim" TYPE="real" DIM="(:,:)">
+!    Climatological PPFD
+!  </IN>
+!  <IN NAME="MEGAN_PARAM_S" TYPE="real" DIM="(:)">
+!    MEGAN model parameters for this species (Table 4 in Guenther et al., 2012)
+!  </IN>
+!  <IN NAME="ECBVOC_S" TYPE="real" DIM="(:,:)">
+!    Isoprene Emission capacities per grid cell
+!  </IN>
+!  <IN NAME="month" TYPE="integer">
+!    Current month
+!  </IN>
+!  <IN NAME="species" TYPE="character">
+!    Species name
+!  </IN>
+!  <OUT NAME="EMIS" TYPE="real" DIM="(:,:)">
+!    Output emissions for this timestep
+!  </OUT>
+!  <IN NAME="id_*" TYPE="integer, optional">
+!    IDs for diagnotiscs (gammas and emissions)
+!  </IN>
+!
+subroutine calc_xactive_bvoc_AM3_epmap(Time,Time_next, is,js, lon,lat, land,coszen,   &
+                                  PPFD1, T1, LAIp, LAIc, Pclim, Tclim,                &
+                                  MEGAN_PARAM_S,                                      &
+                                  ECBVOC_S, month, species, EMIS,                     &
+                                  id_GAMMA_TEMP, id_GAMMA_PAR, id_GAMMA_LAI,          &
+                                  id_GAMMA_AGE, id_GAMMA_CO2 )
+
+   type(time_type), intent(in)            :: Time, Time_next
+   integer, intent(in)                    :: is, js
+   real, intent(in), dimension(:,:)       :: lon, lat
+   real, intent(in), dimension(:,:)       :: land
+   real, intent(in), dimension(:,:)       :: coszen
+   real, intent(in), dimension(:,:)       :: PPFD1
+   !real, intent(in), dimension(:,:)       :: PPFD24          ! PPFD, daily avg.    [umoles/m2/s]
+   real, intent(in), dimension(:,:)       :: T1
+   !real, intent(in), dimension(:,:,:)     :: LAIp, LAIc
+   real, intent(in), dimension(:,:)       :: LAIp, LAIc
+   real, intent(in), dimension(:,:,:)     :: Pclim, Tclim
+   !real, intent(in), dimension(:,:,:)     :: ECBVOC_S
+   real, intent(in), dimension(:)         :: MEGAN_PARAM_S !Table 4 of Guenther (2012)
+   real, intent(in), dimension(:,:)       :: ECBVOC_S        !ug/m2/h
+   integer, intent(in)                    :: month
+   character(len=*), intent(in)           :: species         ! species name
+
+   real, intent(out), dimension(:,:)      :: EMIS            !molecules/cm2/s
+
+   integer, intent(in), optional          :: id_GAMMA_TEMP, id_GAMMA_PAR
+   integer, intent(in), optional          :: id_GAMMA_LAI, id_GAMMA_AGE, id_GAMMA_CO2
+
+!------------ Local Variables ------------------------------------------------------------
+   type(time_type) :: Year_t
+   real     :: BETA, LDF, C_t1, C_eo, A_new, A_gro, A_mat, A_old, MW_sp
+   real     :: GAMMA_TLD, GAMMA_TLI, GAMMA_TMP, GAMMA_PAR,  calday
+   !real     :: GAMMA_AGE(nPFT), GAMMA_LAI(nPFT), GAMMA_LAIAGE(nPFT)
+   real     :: GAMMA_AGE, GAMMA_LAI, GAMMA_LAIAGE, GAMMA_CO2
+   !logical  :: age_work(nPFT)
+   !logical  :: do_age(nPFT)
+   logical  :: used
+   !real     :: work_emis(nVEG)
+   !integer  :: pft_li(nVEG)
+   !integer  :: pft_lu(nVEG)
+   integer  :: i, j, n, nlat, nlon, nl, nu, ie, je
+   integer  :: yr, mo, day, hr, minute, sec
+   real     :: xxx
+
+   ie = is + size(lon,1) -1
+   je = js + size(lon,2) -1
+
+   nlon = size(lon,1)
+   nlat = size(lon,2)
+
+   BETA  = MEGAN_PARAM_S(1)      ! See Table 4, Guenther et al., 2012
+   LDF   = MEGAN_PARAM_S(2)      ! ------------------------
+   C_t1  = MEGAN_PARAM_S(3)      ! for description of parameters
+   C_eo  = MEGAN_PARAM_S(4)
+   A_new = MEGAN_PARAM_S(5)
+   A_gro = MEGAN_PARAM_S(6)
+   A_mat = MEGAN_PARAM_S(7)
+   A_old = MEGAN_PARAM_S(8)
+   MW_sp = MEGAN_PARAM_S(9)      !Molecular weight for conversion from ug to molecules
+
+   !do_age(:) = .TRUE.               !Calculate gamma age for this PFTs?
+   !do_age((/2,3,5,6,10/)) = .FALSE. !gamma LAI = 1 for evergreen PFTs
+
+   !pft_li(:) = (/ 2,5,10,13,16 /)
+   !pft_lu(1:nVEG-1) = (/ 4,9,12,15 /)
+   !pft_lu(nVEG) = nPFT
+
+   call get_date(Time,yr,mo,day,hr,minute,sec)  !model GMT
+   !Get Julian date (fraction) = calday
+   Year_t = set_date(yr,1,1,0,0,0)
+   calday = time_type_to_real( Time-Year_t) / SECONDS_PER_DAY
+
+   EMIS(:,:) = 0.
+   DO j = 1, nlat
+   DO i = 1, nlon
+      IF ( land(i,j) > min_land_frac ) THEN
+
+!------------------------------------------------------------------------------------
+!                     ... GAMMA LIGHT CALCULATION
+!------------------------------------------------------------------------------------
+        IF ( coszen(i,j) <= 0. ) THEN
+           GAMMA_PAR  = 0.
+        ELSE
+           GAMMA_PAR = fGAMMA_PAR_PCEEA(PPFD1(i,j),coszen(i,j),Pclim(i,j,month),calday)
+        ENDIF
+! Apply light dependent factor for terpenes (LDF=1 for ISOP)
+!        GAMMA_PAR = LDF*GAMMA_PAR + (1. - LDF)
+! Prevent negative values
+        GAMMA_PAR = max(GAMMA_PAR, 0.)
+!------------------------------------------------------------------------------------
+!                     ... GAMMA TEMP CALCULATION
+!------------------------------------------------------------------------------------
+        GAMMA_TLD = fGAMMA_TLD_AM3(T1(i,j), Tclim(i,j,month), C_t1, C_eo)
+        GAMMA_TLD = max(GAMMA_TLD, 0.)
+        GAMMA_TLI = exp(BETA * (T1(i,j) - T_s))
+        GAMMA_TMP = LDF*GAMMA_TLD + (1. - LDF)*GAMMA_TLI
+        GAMMA_TMP = max(GAMMA_TMP, 0.)
+!------------------------------------------------------------------------------------
+!                     ... GAMMA AGE CALCULATION
+!------------------------------------------------------------------------------------
+        !GAMMA_AGE(:) = fGAMMA_AGE_MEGAN2(LAIp(i,j,:), LAIc(i,j,:), Tclim(i,j,month), &
+        !                             month, A_new, A_gro, A_mat, A_old, do_age)
+        GAMMA_AGE = fGAMMA_AGE_MEGAN3(LAIp(i,j), LAIc(i,j), Tclim(i,j,month), &
+                                     month, A_new, A_gro, A_mat, A_old)
+!------------------------------------------------------------------------------------
+!                     ... GAMMA LAI CALCULATION
+!------------------------------------------------------------------------------------
+        !GAMMA_LAI(:) = 0.49 * LAIc(i,j,:) /  &
+        !               sqrt( 1. + 0.2 * LAIc(i,j,:)*LAIc(i,j,:))
+        GAMMA_LAI = 0.49 * LAIc(i,j) /  &
+                       sqrt( 1. + 0.2 * LAIc(i,j)*LAIc(i,j))
+!------------------------------------------------------------------------------------
+!                     ... Combine LAI and AGE
+!------------------------------------------------------------------------------------
+        !GAMMA_LAIAGE(:) = GAMMA_LAI * GAMMA_AGE
+        GAMMA_LAIAGE = GAMMA_LAI * GAMMA_AGE
+
+!------------------------------------------------------------------------------------
+! CO2 inhibision (only for isoprene)
+!------------------------------------------------------------------------------------
+        IF ( do_GAMMA_CO2 .AND. trim(species) == 'ISOP' ) THEN
+            GAMMA_CO2 = fGAMMA_CO2(CO2_STORE(i+is-1,j+js-1))
+        ELSE
+            GAMMA_CO2 = 1.
+        ENDIF
+
+!------------------------------------------------------------------------------------
+!                     ... Sum over the PFTs part of each VEG
+!------------------------------------------------------------------------------------
+!       DO n = 1, nVEG
+!           nl = pft_li(n)
+!           nu = pft_lu(n)
+!           work_emis(n) = dot_product( GAMMA_LAIAGE(nl:nu), PCTPFT(i+is-1,j+js-1,nl:nu)) &
+!                          * ECBVOC_S(i,j,n)
+!       ENDDO
+
+!       EMIS(i,j) = sum(work_emis) * GAMMA_TLD * GAMMA_PAR
+
+!++Meiyun Lin
+!Only vegetated area emits BVOCs, and current equation using LAIv estimates emission per unit vegetation area. Therefore, to get the emission per unit area of grid cell, one needs to multiply the result by the fraction of vegetated area in the grid cell. 
+! In AM3 using PFT-specific EPs, this is accounted for by multiplying PCTPFT. 
+! Here with the precomputed EPs for each grid cell, the fraction of vegetation area is already used to calculate ECBVOC_S(i,j). So no need to multiply FVC.
+!       EMIS(i,j) = ECBVOC_S(i,j) * GAMMA_LAIAGE * GAMMA_TMP * GAMMA_PAR * GAMMA_CO2* FVC(i,j)
+!++Meiyun Lin
+
+        !Apply the light dependent factor following GEOS-Chem
+        !EMIS(i,j) = ECBVOC_S(i,j) * GAMMA_LAIAGE * ((1-LDF)*GAMMA_TLI+LDF*GAMMA_TLD * GAMMA_PAR)*GAMMA_CO2
+
+        !Apply the light dependent factor following MEGAN2.1
+        EMIS(i,j) = ECBVOC_S(i,j) * GAMMA_LAIAGE * GAMMA_TMP * (LDF*GAMMA_PAR + (1. - LDF)) * GAMMA_CO2
+
+! Update diagnostics
+        diag_gamma_temp(i+is-1,j+js-1)  = GAMMA_TMP
+        diag_gamma_par(i+is-1,j+js-1)   = GAMMA_PAR
+        !diag_gamma_lai(i+is-1,j+js-1,:) = GAMMA_LAI(:)
+        !diag_gamma_age(i+is-1,j+js-1,:) = GAMMA_AGE(:)
+        diag_gamma_lai_epmap(i+is-1,j+js-1) = GAMMA_LAI
+        diag_gamma_age_epmap(i+is-1,j+js-1) = GAMMA_AGE
+
+        IF (present(id_GAMMA_CO2) .AND. id_GAMMA_CO2 > 0) THEN
+            diag_gamma_co2(i+is-1,j+js-1) = GAMMA_CO2
+        ENDIF
+
+      ENDIF!land
+   ENDDO
+   ENDDO
+
+! Apply the canopy loss factor and convert from micrograms/m2/hr to molecules/cm2/s
+   EMIS(:,:) = EMIS(:,:) * RHO_CANOPY  *  (1.67e10 / MW_sp)
+   !++myl debug
+   IF ( Ldebug ) THEN
+       write(*,*) 'calc_xactive_bvoc_AM3_epmap: BEMIS min/max [molecules/cm2/s] = ', MINVAL(EMIS), MAXVAL(EMIS), 'MPP_PE=', mpp_pe()
+       write(*,*) 'calc_xactive_bvoc_AM3_epmap: BEMIS maxloc = ', MAXLOC(EMIS), mpp_pe()
+   ENDIF
+
+!---------------------------------------------------------------------------------------
+!              ... Send diagnostics
+!---------------------------------------------------------------------------------------
+
+! Gamma temperature
+   IF (present(id_GAMMA_TEMP) .AND. id_GAMMA_TEMP > 0) THEN
+         used = send_data( id_GAMMA_TEMP, diag_gamma_temp(is:ie,js:je), &
+                           Time_next, is_in=is, js_in=js )
+   ENDIF
+! Gamma light
+   IF (present(id_GAMMA_PAR) .AND. id_GAMMA_PAR > 0) THEN
+         used = send_data( id_GAMMA_PAR, diag_gamma_par(is:ie,js:je), &
+                           Time_next, is_in=is, js_in=js )
+   ENDIF
+! Gamma LAI
+   IF (present(id_GAMMA_LAI) .AND. id_GAMMA_LAI > 0) THEN
+         used = send_data( id_GAMMA_LAI, diag_gamma_lai_epmap(is:ie,js:je), &
+                           Time_next, is_in=is, js_in=js )
+   ENDIF
+! Gamma Age
+   IF (present(id_GAMMA_AGE) .AND. id_GAMMA_AGE > 0) THEN
+         used = send_data( id_GAMMA_AGE, diag_gamma_age_epmap(is:ie,js:je), &
+                           Time_next, is_in=is, js_in=js )
+   ENDIF
+! Gamma co2
+   IF (present(id_GAMMA_CO2) .AND. id_GAMMA_CO2 > 0) THEN
+         used = send_data(id_GAMMA_CO2, diag_gamma_co2(is:ie,js:je), &
+                          Time_next, is_in=is, js_in=js)
+   ENDIF
+
+end subroutine calc_xactive_bvoc_AM3_epmap
 !</SUBROUTINE>
 
 
@@ -1721,7 +2403,7 @@ end subroutine calc_xactive_bvoc_AM3
 !    call calc_xactive_bvoc_megan2 ( Time, Time_next, is, js, ,lon, lat, land,  &
 !                                 coszen,  PPFD1, PPFD24, T1, T24, LAIp, LAIc,  &
 !                                 Tclim,                                        &
-!                                 MEGAN_PARAM, ECBVOC_S, month, species, EMIS,  &
+!                                 MEGAN_PARAM_S, ECBVOC_S, month, species, EMIS,  &
 !                                 id_GAMMA_TEMP, id_GAMMA_PAR, id_GAMMA_LAI,    &
 !                                 id_GAMMA_AGE, id_GAMMA_CO2,  id_GAMMA_SM )
 !  </TEMPLATE>
@@ -1761,7 +2443,7 @@ end subroutine calc_xactive_bvoc_AM3
 !  <IN NAME="Tclim" TYPE="real" DIM="(:,:)">
 !    Climatological temperature
 !  </IN>
-!  <IN NAME="MEGAN_PARAM" TYPE="real" DIM="(:,:)">
+!  <IN NAME="MEGAN_PARAM_S" TYPE="real" DIM="(:,:)">
 !    Megan model parameters for this species
 !  </IN>
 !  <IN NAME="ECBVOC_S" TYPE="real" DIM="(:,:)">
@@ -1783,7 +2465,7 @@ end subroutine calc_xactive_bvoc_AM3
 subroutine calc_xactive_bvoc_megan2 ( Time, Time_next, is, js, lon, lat, land,     &
                                       coszen,  PPFD1, PPFD24, T1, T24, LAIp, LAIc, &
                                       Tclim,                                       &
-                                      MEGAN_PARAM, ECBVOC_S, month, species, EMIS, &
+                                      MEGAN_PARAM_S, ECBVOC_S, month, species, EMIS, &
                                       id_GAMMA_TEMP, id_GAMMA_PAR, id_GAMMA_LAI,   &
                                       id_GAMMA_AGE, id_GAMMA_CO2, id_GAMMA_SM )
 
@@ -1799,7 +2481,7 @@ subroutine calc_xactive_bvoc_megan2 ( Time, Time_next, is, js, lon, lat, land,  
       real, intent(in), dimension(:,:)   :: T24             ! Surf T (daily avg.)    [K]
       real, intent(in), dimension(:,:,:) :: LAIp, LAIc      ! Previous & current LAI [m2/m2]
       real, intent(in), dimension(:,:,:) :: Tclim           ! Climatological temperature [K]
-      real, intent(in), dimension(:)     :: MEGAN_PARAM     ! MEGAN model parameters
+      real, intent(in), dimension(:)     :: MEGAN_PARAM_S   ! MEGAN model parameters
       real, intent(in), dimension(:,:,:) :: ECBVOC_S        ! Emission capacities  [ug/m2/h]
       integer, intent(in)                :: month           ! Current month index
       character(len=*), intent(in)       :: species         ! species name
@@ -1834,15 +2516,15 @@ subroutine calc_xactive_bvoc_megan2 ( Time, Time_next, is, js, lon, lat, land,  
       ie = is + size(lon,1) -1
       je = js + size(lon,2) -1
 
-      BETA  = MEGAN_PARAM(1)
-      LDF   = MEGAN_PARAM(2)
-      C_t1  = MEGAN_PARAM(3)
-      C_eo  = MEGAN_PARAM(4)
-      A_new = MEGAN_PARAM(5)
-      A_gro = MEGAN_PARAM(6)
-      A_mat = MEGAN_PARAM(7)
-      A_old = MEGAN_PARAM(8)
-      MW_sp = MEGAN_PARAM(9)
+      BETA  = MEGAN_PARAM_S(1)
+      LDF   = MEGAN_PARAM_S(2)
+      C_t1  = MEGAN_PARAM_S(3)
+      C_eo  = MEGAN_PARAM_S(4)
+      A_new = MEGAN_PARAM_S(5)
+      A_gro = MEGAN_PARAM_S(6)
+      A_mat = MEGAN_PARAM_S(7)
+      A_old = MEGAN_PARAM_S(8)
+      MW_sp = MEGAN_PARAM_S(9)
 
       do_age(:) = .TRUE.               !Calculate gamma age for this PFTs?
       do_age((/2,3,5,6,10/)) = .FALSE. !gamma LAI = 1 for evergreen PFTs
@@ -1921,7 +2603,7 @@ subroutine calc_xactive_bvoc_megan2 ( Time, Time_next, is, js, lon, lat, land,  
       ENDDO !lon
       ENDDO !lat
 
-! Apply the canopy loss factor and convert from ug/m2/hr to molecules/m2/s
+! Apply the canopy loss factor and convert from ug/m2/hr to molecules/cm2/s
       EMIS(:,:) = EMIS(:,:) * RHO_CANOPY  *  (1.67e10 / MW_sp)
 !---------------------------------------------------------------------------------------
 !              ... Accumulate diagnostics
@@ -1961,6 +2643,290 @@ subroutine calc_xactive_bvoc_megan2 ( Time, Time_next, is, js, lon, lat, land,  
 end subroutine calc_xactive_bvoc_megan2
 !</SUBROUTINE
 
+!########################################################################################
+!<SUBROUTINE NAME="calc_xactive_bvoc_megan2_epmap">
+!  <OVERVIEW>
+!    Calculates interactive biogenic emissions using detailed emission compacity maps 
+!    that accounts for species variations
+!  </OVERVIEW
+!  <DESCRIPTION>
+!    Calculates interactive BVOC (and CO) using algorithms from MEGAN v2
+!     documented in Guenther et al. (2012).  Each gamma has a
+!     seperate function and only called if the gamma is required (e.g., PAR) or
+!    - if it is an optional gamma - the namelist value is set, otherwise the gamma
+!    is set =1. The gammas are applied to the emissions factors for each PFT/VEG type.
+!    Diagnostics are accumulated and sent.
+!    6/6/2022, Modified by Meiyun Lin to use detailed EP maps
+!  </DESCRIPTION>
+!  <TEMPLATE>
+!    call calc_xactive_bvoc_megan2_epmap ( Time, Time_next, is, js, ,lon, lat, land,  &
+!                                 coszen,  PPFD1, PPFD24, T1, T24, LAIp, LAIc,  &
+!                                 Pclim,Tclim,                                        &
+!                                 MEGAN_PARAM_S, ECBVOC_S, month, species, EMIS,  &
+!                                 id_GAMMA_TEMP, id_GAMMA_PAR, id_GAMMA_LAI,    &
+!                                 id_GAMMA_AGE, id_GAMMA_CO2,  id_GAMMA_SM )
+!  </TEMPLATE>
+!  <IN NAME="Time, Time_next" TYPE="type(time_type)">
+!    Model time
+!  </IN>
+!  <IN NAME="is, js" TYPE="integer">
+!    Local domain start indices
+!  </IN>
+!  <IN NAME="lon,lat" TYPE="real" DIM="(:,:)">
+!    Longitude/Latitude centers of the local domain
+!  </IN>
+!  <IN NAME="land" TYPE="real" DIM="(:,:)">
+!    Land fraction
+!  </IN>
+!  <IN NAME="coszen" TYPE="real" DIM="(:,:)">
+!    Cosine of the solar zenith angle
+!  </IN>
+!  <IN NAME="PPFD1" TYPE="real" DIM="(:,:)">
+!    Instantaneous photosynthetic photon flux density
+!  </IN>
+!  <IN NAME="PPFD24" TYPE="real" DIM="(:,:)">
+!    Previous 24h average PPFD
+!  </IN>
+!  <IN NAME="T1" TYPE="real" DIM="(:,:)">
+!    Current temperature
+!  </IN>
+!  <IN NAME="T24" TYPE="real" DIM="(:,:)">
+!    Previous 24h avg temperature
+!  </IN>
+!  <IN NAME="LAIp" TYPE="real" DIM="(:,:)">
+!    Previous month's LAI
+!  </IN>
+!  <IN NAME="LAIc" TYPE="real" DIM="(:,:)">
+!    Current month's LAI
+!  </IN>
+!  <IN NAME="Tclim" TYPE="real" DIM="(:,:)">
+!    Climatological temperature
+!  </IN>
+!  <IN NAME="MEGAN_PARAM_S" TYPE="real" DIM="(:)">
+!    Megan model parameters for this species
+!  </IN>
+!  <IN NAME="ECBVOC_S" TYPE="real" DIM="(:,:)">
+!    Landscape-average emission capacities for this species
+!  </IN>
+!  <IN NAME="month" TYPE="integer">
+!    Current month
+!  </IN>
+!  <IN NAME="species" TYPE="character">
+!    Species name
+!  </IN>
+!  <OUT NAME="EMIS" TYPE="real" DIM="(:,:)">
+!    Output emissions for this timestep
+!  </OUT>
+!  <IN NAME="id_*" TYPE="integer, optional">
+!    IDs for diagnotiscs (gammas and emissions)
+!  </IN>
+!
+subroutine calc_xactive_bvoc_megan2_epmap( Time, Time_next, is, js, lon, lat, land,  &
+                                      coszen,  PPFD1, PPFD24, T1, T24, LAIp, LAIc,   &
+                                      Pclim, Tclim,                                  &
+                                      MEGAN_PARAM_S, ECBVOC_S, month, species, EMIS, &
+                                      id_GAMMA_TEMP, id_GAMMA_PAR, id_GAMMA_LAI,     &
+                                      id_GAMMA_AGE, id_GAMMA_CO2, id_GAMMA_SM )
+
+      type(time_type), intent(in)        :: Time, Time_next
+      integer, intent(in)                :: is, js          ! Local domain start indices
+      real, intent(in), dimension(:,:)   :: lon, lat        ! Lat/lon centers
+      real, intent(in), dimension(:,:)   :: land            ! Land Fraction
+      real, intent(in), dimension(:,:)   :: coszen          ! cosine zenith angle
+      real, intent(in), dimension(:,:)   :: PPFD1           ! PPPFD, this timestep [umoles/m2/s]
+      real, intent(in), dimension(:,:)   :: PPFD24          ! PPFD, daily avg.    [umoles/m2/s]
+      real, intent(in), dimension(:,:)   :: T1              ! Surf T, this timestep, [K]
+      real, intent(in), dimension(:,:)   :: T24             ! Surf T (daily avg.)    [K]
+      real, intent(in), dimension(:,:)   :: LAIp, LAIc      ! Previous & current LAI [m2/m2], PFT-combined
+      real, intent(in), dimension(:,:,:) :: Pclim, Tclim    ! Climatological PAR [umoles/m2/s] & temperature [K]
+      real, intent(in), dimension(:)     :: MEGAN_PARAM_S   ! MEGAN model parameters
+      real, intent(in), dimension(:,:)   :: ECBVOC_S        ! Emission capacities  [ug/m2/h], PFT-combined
+      integer, intent(in)                :: month           ! Current month index
+      character(len=*), intent(in)       :: species         ! species name
+
+      real, intent(out), dimension(:,:)  :: EMIS            ! Emissions for this timestep [molec/m2/s]
+
+! Optional diagnostic IDs for emissions and gammas
+      integer, intent(in), optional      :: id_GAMMA_PAR, id_GAMMA_TEMP
+      integer, intent(in), optional      :: id_GAMMA_LAI, id_GAMMA_AGE
+      integer, intent(in), optional      :: id_GAMMA_SM, id_GAMMA_CO2
+!------------------------------------------------------------------------------------
+!                 ... local variables
+!------------------------------------------------------------------------------------
+
+      real     :: BETA, LDF, C_t1, C_eo           ! temperature emission factors
+      real     :: A_new, A_gro, A_mat, A_old      ! Leaf age factors
+      real     :: MW_sp                           ! molecular weight
+      real     :: GAMMA_TLD, GAMMA_TLI, GAMMA_TMP
+      real     :: GAMMA_PAR
+
+      !++myl: needed for fGAMMA_PAR_PCEEA
+      real     :: calday 
+      type(time_type) :: Year_t
+      integer  :: yr, mo, day, hr, minute, sec
+
+      !MYL: not PFT dependent 
+      !real     :: GAMMA_LAI(nPFT), GAMMA_AGE(nPFT)
+      !logical  :: do_age(nPFT)                    ! flag: calc gamma age
+      real     :: GAMMA_LAI, GAMMA_AGE
+      !logical  :: do_age                    ! flag: calc gamma age
+
+      real     :: GAMMA_SM, GAMMA_CO2
+      real     :: dummy
+      logical  :: used
+      integer  :: i, j, n, nlat, nlon, ie, je
+
+      dummy = 1.
+
+      nlon = size(lon,1)
+      nlat = size(lon,2)
+
+      ie = is + size(lon,1) -1
+      je = js + size(lon,2) -1
+
+      BETA  = MEGAN_PARAM_S(1)
+      LDF   = MEGAN_PARAM_S(2)
+      C_t1  = MEGAN_PARAM_S(3)
+      C_eo  = MEGAN_PARAM_S(4)
+      A_new = MEGAN_PARAM_S(5)
+      A_gro = MEGAN_PARAM_S(6)
+      A_mat = MEGAN_PARAM_S(7)
+      A_old = MEGAN_PARAM_S(8)
+      MW_sp = MEGAN_PARAM_S(9)
+
+   !myl: get calday needed for fGAMMA_PAR_PCEEA
+   call get_date(Time,yr,mo,day,hr,minute,sec)  !model GMT
+   !Get Julian date (fraction) = calday
+   Year_t = set_date(yr,1,1,0,0,0)
+   calday = time_type_to_real( Time-Year_t) / SECONDS_PER_DAY
+
+      !myl: need to change this
+      !do_age(:) = .TRUE.               !Calculate gamma age for this PFTs?
+      !do_age((/2,3,5,6,10/)) = .FALSE. !gamma LAI = 1 for evergreen PFTs
+
+      EMIS(:,:) = 0.
+      DO i = 1,nlon
+      DO j = 1,nlat
+! only do land
+      IF ( land(i,j) > min_land_frac ) THEN
+!------------------------------------------------------------------------------------
+!                     ... GAMMA LIGHT CALCULATION
+!------------------------------------------------------------------------------------
+         IF ( coszen(i,j) <= 0. ) THEN
+            GAMMA_PAR  = 0.
+         ELSE
+!++myl test++
+            GAMMA_PAR = fGAMMA_PAR_AM4(PPFD1(i,j), PPFD24(i,j))
+!           GAMMA_PAR = fGAMMA_PAR_PCEEA(PPFD1(i,j), coszen(i,j), Pclim(i,j,month), calday)
+         ENDIF
+! Apply light dependent factor
+        GAMMA_PAR = LDF*GAMMA_PAR + (1. - LDF)
+! Prevent negative values
+        GAMMA_PAR = max(GAMMA_PAR,0.)
+!------------------------------------------------------------------------------------
+!                     ...  GAMMA TEMPERATURE CALCULATION
+!------------------------------------------------------------------------------------
+! Light dependent
+         GAMMA_TLD = fGAMMA_TLD_AM4(T1(i,j), T24(i,j), C_t1, C_eo)
+! Light independent
+         GAMMA_TLI = exp(BETA * (T1(i,j) - T_s))
+! Combined
+         GAMMA_TMP = LDF*GAMMA_TLD + (1. - LDF)*GAMMA_TLI
+! Prevent negative
+         GAMMA_TMP = max(GAMMA_TMP,0.)
+
+! Soil moisture (According to Alex Guenther via Collete Heald, thoughts are
+! mixed on whether soil moisture gamma should be used,)
+         IF ( do_GAMMA_SM ) THEN
+            GAMMA_SM = fGAMMA_SM(dummy)
+         ELSE
+            GAMMA_SM = 1.
+         ENDIF
+
+! CO2 (only for isoprene)
+         IF ( do_GAMMA_CO2 .AND. trim(species) == 'ISOP' ) THEN
+            GAMMA_CO2 = fGAMMA_CO2(CO2_STORE(i+is-1,j+js-1))
+         ELSE
+            GAMMA_CO2 = 1.
+         ENDIF
+
+! Gamma age
+!         GAMMA_AGE(:) = fGAMMA_AGE_MEGAN2(LAIp(i,j,:), LAIc(i,j,:), Tclim(i,j,month), &
+!                                     month, A_new, A_gro, A_mat, A_old, do_age)
+         GAMMA_AGE = fGAMMA_AGE_MEGAN3(LAIp(i,j), LAIc(i,j), Tclim(i,j,month), &
+                                     month, A_new, A_gro, A_mat, A_old)
+! Gamma LAI
+!         GAMMA_LAI(:) = 0.49 * LAIc(i,j,:) / &
+!                          sqrt(1. + 0.2 * LAIc(i,j,:)*LAIc(i,j,:))
+         GAMMA_LAI = 0.49 * LAIc(i,j) / &
+                          sqrt(1. + 0.2 * LAIc(i,j)*LAIc(i,j))
+!         write(*,*) GAMMA_AGE
+!         write(*,*) GAMMA_LAI
+! APPLY THE GAMMAS !
+!         DO n = 1, nPFT
+!            EMIS(i,j) = EMIS(i,j)      + (ECBVOC_S(i,j,n)  * PCTPFT(i+is-1,j+js-1,n) *   &
+!                        GAMMA_TMP      * GAMMA_PAR         * GAMMA_AGE(n)  *   &
+!                        GAMMA_LAI(n)   * GAMMA_SM          * GAMMA_CO2        )
+!         ENDDO !PFTs
+            EMIS(i,j) = ECBVOC_S(i,j) * GAMMA_TMP * GAMMA_PAR * GAMMA_AGE  *   &
+                        GAMMA_LAI  * GAMMA_SM  * GAMMA_CO2        
+!--------------------------------------------------------------------------------------------
+
+! Update diagnostics
+         diag_gamma_temp(i+is-1,j+js-1)  = GAMMA_TMP
+         diag_gamma_par(i+is-1,j+js-1)   = GAMMA_PAR
+         diag_gamma_lai_epmap(i+is-1,j+js-1) = GAMMA_LAI
+         diag_gamma_age_epmap(i+is-1,j+js-1) = GAMMA_AGE
+! Update (optional) diagnostics
+         IF (present(id_GAMMA_SM) .AND. id_GAMMA_SM > 0) THEN
+            diag_gamma_sm(i+is-1,j+js-1) = GAMMA_SM
+         ENDIF
+         IF (present(id_GAMMA_CO2) .AND. id_GAMMA_CO2 > 0) THEN
+            diag_gamma_co2(i+is-1,j+js-1) = GAMMA_CO2
+         ENDIF
+      ENDIF !land
+      ENDDO !lon
+      ENDDO !lat
+
+! Apply the canopy loss factor and convert from ug/m2/hr to molecules/cm2/s
+      EMIS(:,:) = EMIS(:,:) * RHO_CANOPY  *  (1.67e10 / MW_sp)
+!---------------------------------------------------------------------------------------
+!              ... Accumulate diagnostics
+!---------------------------------------------------------------------------------------
+
+! Gamma temperature
+      IF (present(id_GAMMA_TEMP) .AND. id_GAMMA_TEMP > 0) THEN
+         used = send_data( id_GAMMA_TEMP, diag_gamma_temp(is:ie,js:je), &
+                           Time_next, is_in=is, js_in=js )
+      ENDIF
+! Gamma light
+      IF (present(id_GAMMA_PAR) .AND. id_GAMMA_PAR > 0) THEN
+         used = send_data( id_GAMMA_PAR, diag_gamma_par(is:ie,js:je), &
+                           Time_next, is_in=is, js_in=js )
+      ENDIF
+! Gamma LAI
+      IF (present(id_GAMMA_LAI) .AND. id_GAMMA_LAI > 0) THEN
+         used = send_data( id_GAMMA_LAI, diag_gamma_lai_epmap(is:ie,js:je), &
+                           Time_next, is_in=is, js_in=js )
+      ENDIF
+! Gamma Age
+      IF (present(id_GAMMA_AGE) .AND. id_GAMMA_AGE > 0) THEN
+         used = send_data( id_GAMMA_AGE, diag_gamma_age_epmap(is:ie,js:je), &
+                           Time_next, is_in=is, js_in=js )
+      ENDIF
+! Gamma soil
+      IF (present(id_GAMMA_SM) .AND. id_GAMMA_SM > 0) THEN
+         used = send_data( id_GAMMA_SM, diag_gamma_sm(is:ie,js:je), &
+                           Time_next, is_in=is, js_in=js)
+      ENDIF
+! Gamma co2
+      IF (present(id_GAMMA_CO2) .AND. id_GAMMA_CO2 > 0) THEN
+         used = send_data(id_GAMMA_CO2, diag_gamma_co2(is:ie,js:je), &
+                          Time_next, is_in=is, js_in=js)
+      ENDIF
+
+end subroutine calc_xactive_bvoc_megan2_epmap
+!</SUBROUTINE
 
 
 !########################################################################################
@@ -2279,7 +3245,7 @@ subroutine calc_xactive_bvoc_megan3 ( Time, Time_next, is, js, lon, lat, land,  
       ENDDO !lon
       ENDDO !lat
 
-! Apply the canopy loss factor and convert from ug/m2/hr to molecules/m2/s
+! Apply the canopy loss factor and convert from ug/m2/hr to molecules/cm2/s
       EMIS(:,:) = EMIS(:,:) * RHO_CANOPY  *  (1.67e10 / MW_sp)
 
 !---------------------------------------------------------------------------------------
@@ -2421,7 +3387,7 @@ end function fGAMMA_TLD_AM4
 !        FUNCTION GAMMA_PAR
 !                       ...  GAMMA LIGHT CALCULATION (AM3)
 
-function fGAMMA_PAR_AM3(PPFD, coszen, P_wrk, calday)
+function fGAMMA_PAR_PCEEA(PPFD, coszen, P_wrk, calday)
 
    implicit none
 
@@ -2429,16 +3395,15 @@ function fGAMMA_PAR_AM3(PPFD, coszen, P_wrk, calday)
    real               :: P_toa, PHI
    real               :: calc_GAMMA_LHT
 
-   real               :: fGAMMA_PAR_AM3
+   real               :: fGAMMA_PAR_PCEEA
 
    P_toa              = 3000. + 99. * cos( twopi * (calday - 10.) / 365. ) !G06, Eq. 13
    PHI                = MIN(PPFD / (coszen * P_toa), 1.)                   !G06, Eq. 12
 
-   fGAMMA_PAR_AM3     = coszen * (2.46 * (1. + 0.0005 * (P_wrk - 400.))      &
+   fGAMMA_PAR_PCEEA     = coszen * (2.46 * (1. + 0.0005 * (P_wrk - 400.))      &
                         *  PHI - 0.9*PHI*PHI)
 
-end function fGAMMA_PAR_AM3
-!------------------------------------------------------------------------
+end function fGAMMA_PAR_PCEEA
 !------------------------------------------------------------------------
 
 
@@ -2803,30 +3768,70 @@ end function fGAMMA_PAR_AM4
 !--------------------------------------------------------------------
 
 
-
-!##########################################################################
+!#############################################################################
 !   FUNCTION fGAMMA_CO2
-!                       ... Response to CO2
+!            Compute effects of CO2 inhibition on isoprene emissions
+!            Meiyun.Lin
+!  ============================================================================
+!  References:
+!  ============================================================================
+!  (1 ) Heald, C. L., Wilkinson, M. J., Monson, R. K., Alo, C. A.,
+!       Wang, G. L., and Guenther, A.: Response of isoprene emission
+!       to ambient co(2) changes and implications for global budgets,
+!       Global Change Biology, 15, 1127-1140, 2009.
+!  (2 ) Wilkinson, M. J., Monson, R. K., Trahan, N., Lee, S., Brown, E.,
+!       Jackson, R. B., Polley, H. W., Fay, P. A., and Fall, R.: Leaf
+!       isoprene emission rate as a function of atmospheric CO2
+!       concentration, Global Change Biology, 15, 1189-1200, 2009.
+!  (3 ) Possell, M., and Hewitt, C. N.: Isoprene emissions from plants
+!       are mediated by atmospheric co2 concentrations, Global Change
+!       Biology, 17, 1595-1610, 2011.
+!  (4 ) Tai, Amos P. K., Loretta J. Mickley, Colette L. Heald, and Shiliang
+!       Wu. “ Effect of CO[subscript 2] Inhibition on Biogenic Isoprene
+!       Emission: Implications for Air Quality Under 2000 to 2050 Changes
+!       in Climate, Vegetation, and Land Use .” Geophys. Res. Lett. 40, no.
+!       13 (July 9, 2013): 3479–3483. ©2013 American Geophysical Union. 
 !##########################################################################
+
    function fGAMMA_CO2(CO2)
 
    implicit none
 
-   real, intent(in)  :: CO2     !CO2 concentration
+   real, intent(in)  :: CO2     ! Atmospheric CO2 concentration [MMR, kg/kg]
 
    real, parameter   :: ISmax = 1.344
    real, parameter   :: hCO2  = 1.4614
    real, parameter   :: Cstar = 585.
-
-   real              :: Ci
+   real              :: Ci       ! Intercellular CO2 conc [ppmv]
+   real              :: CO2a     ! Atmos CO2 conc [ppmv]
 
    real              :: fGAMMA_CO2
 
-   Ci = 0.7 * CO2
+    !----------------------------------------------------------
+    ! Choose between two alternative CO2 inhibition schemes
+    !----------------------------------------------------------
 
-   fGAMMA_CO2 = ISmax - ((ISmax*Ci**hCO2) / (Cstar**hCO2 + Ci**hCO2))
+    ! Empirical relationship of Possell & Hewitt (2011) based on nine
+    ! experimental studies including Wilkinson et al. (2009). This is
+    ! especially recommended for sub-ambient CO2 concentrations:
+    !logical :: do_gCO2_LPOSSELL  = .TRUE.   ! Default option in GEOS-Chem, now control through namelist
+
+   !!! Meiyun Lin: convert atm CO2 conc from mmr (kg/kg) to ppmv !!! 
+   CO2a = CO2 * 28.9644 / 44.0095 * 1.0e6
+
+   IF ( do_gCO2_LPOSSELL ) THEN
+     !Use empirical relationship of Possell & Hewitt (2011):
+     !For CO2a=500ppmv, fGAMMA_CO2 = 0.762
+     fGAMMA_CO2 = 8.9406 / ( 1.0 + 8.9406 * 0.0024 * CO2a )
+   ELSE
+     !Heald et al. [2009] and Guenther et al. [2012]
+     !For CO2a=500ppmv, fGAMMA_CO2 = 0.913
+     Ci = 0.7 * CO2a
+     fGAMMA_CO2 = ISmax - ((ISmax*Ci**hCO2) / (Cstar**hCO2 + Ci**hCO2))
+   ENDIF
 
    end function fGAMMA_CO2
+
 !--------------------------------------------------------------------
 
 
@@ -2843,24 +3848,26 @@ end function fGAMMA_PAR_AM4
 
    integer                               :: nlon, nlat, i, m
 
-   integer, parameter                    :: nlonin = 720
-   integer, parameter                    :: nlatin = 360
-   integer, parameter                    :: metlonin = 360
-   integer, parameter                    :: metlatin = 180
+   !integer, parameter                    :: nlonin = 720
+   !integer, parameter                    :: nlatin = 360
+   !integer, parameter                    :: metlonin = 360
+   !integer, parameter                    :: metlatin = 180
 
-   character(len=35), parameter  :: tasfile = 'INPUT/tas_monthly_clim_1980-2000.nc'
+   !character(len=35), parameter  :: tasfile = 'INPUT/tas_monthly_clim_1980-2000.nc'
    character(len=5)              :: tasnames(12) = (/'tas01', 'tas02', 'tas03', &
                                                      'tas04', 'tas05', 'tas06', &
                                                      'tas07', 'tas08', 'tas09', &
                                                      'tas10', 'tas11', 'tas12'/)
 
    integer                               :: id_tas(12)
-   real, dimension(nlonin,nlatin)        :: datain
-   real, dimension(metlonin,metlatin,12) :: tas
-   real, dimension(metlonin)             :: metlon
-   real, dimension(metlatin)             :: metlat
-   real, dimension(metlonin+1)           :: metlone
-   real, dimension(metlatin+1)           :: metlate
+   !real, dimension(nlonin,nlatin)        :: datain
+   integer              :: metlonin 
+   integer              :: metlatin
+   real, dimension(:,:,:), allocatable :: tas
+   real, dimension(:),     allocatable :: metlon
+   real, dimension(:),     allocatable :: metlat
+   real, dimension(:),     allocatable :: metlone
+   real, dimension(:),     allocatable :: metlate
    integer, dimension(12)                :: mos
    logical                               :: used
    real                                  :: dlat, dlon
@@ -2870,13 +3877,26 @@ end function fGAMMA_PAR_AM4
    nlon = size(lonb,1) - 1
    nlat = size(latb,2) - 1
 
-   IF (open_file(tasfile_obj,tasfile,"read")) then
+   IF ( file_exist(file_TEMP) ) THEN
       IF (mpp_pe() == mpp_root_pe()) call error_mesg ('temp_init_AM3', &
-         'Reading NetCDF formatted input file: tas_monthly_clim_1980-2000.nc',NOTE)
+         'Reading NetCDF formatted input file: '//file_TEMP, NOTE)
 
 !read in lat & lon from input file, get boundaries and convert to radians
-      call read_data (tasfile_obj, 'lon', metlon)
-      call read_data (tasfile_obj, 'lat', metlat)
+      IF ( file_TEMP == 'INPUT/tas_monthly_clim_1980-2000.nc' ) then
+        metlonin = 360 
+        metlatin = 180 
+      ELSE
+        metlonin = 1440 
+        metlatin =  721 
+      ENDIF
+
+      ALLOCATE( metlon(metlonin) )
+      ALLOCATE( metlat(metlatin) )
+      ALLOCATE( metlone(metlonin+1) )
+      ALLOCATE( metlate(metlatin+1) )
+
+      call read_data (file_TEMP, 'lon', metlon, no_domain=.true.)
+      call read_data (file_TEMP, 'lat', metlat, no_domain=.true.)
 
       dlon = 0.5*(metlon(1)-metlon(2))
       dlat = 0.5*(metlat(2)-metlat(1))
@@ -2898,8 +3918,9 @@ end function fGAMMA_PAR_AM4
       call horiz_interp_init
       call horiz_interp_new ( Interp, metlone, metlate, lonb, latb )
 
-      call read_data (tasfile_obj, 'time', mos)
-      call read_data (tasfile_obj,'tas_clim', tas(:,:,:))
+      ALLOCATE( tas(metlonin,metlatin,12) )
+      call read_data (file_TEMP, 'time', mos, no_domain=.true.)
+      call read_data (file_TEMP,'tas_clim', tas(:,:,:), no_domain=.true.)
 
       DO m = 1, 12
          call horiz_interp (Interp, tas(:,:,m), Tmo(:,:,m), verbose=verbose)
@@ -2911,22 +3932,25 @@ end function fGAMMA_PAR_AM4
             used = send_data(id_tas(m),Tmo(:,:,m))
          ENDIF
       ENDDO
-      call horiz_interp_del( Interp )
-      call close_file(tasfile_obj)
+
+      DEALLOCATE( tas )
+      DEALLOCATE( metlon )
+      DEALLOCATE( metlat )
+      DEALLOCATE( metlone )
+      DEALLOCATE( metlate )
+       
    ELSE
       call error_mesg ('temp_init_AM3',  &
-          'tasfile :'//tasfile//' does not exist', FATAL)
+          'file_TEMP: '//file_TEMP//' does not exist', FATAL)
    ENDIF
 
 end subroutine temp_init_AM3
 
 
-
 !##########################################################################
 !<SUBROUTINE NAME="ppfd_init_AM3">
 !   <OVERVIEW>
-!
-! Read in the the monthly average PAR data
+! Read in the monthly average PAR data and store in Pmo
 !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 subroutine ppfd_init_AM3 (lonb, latb, axes)
 
@@ -2934,20 +3958,21 @@ subroutine ppfd_init_AM3 (lonb, latb, axes)
    integer, intent(in)                     :: axes(4)
 
    integer                                 :: nlon, nlat, i, m
-   integer, parameter                      :: nlonin = 720, nlatin = 360
-   integer, parameter                      :: metlonin = 360, metlatin= 180
-   character(len=37), parameter :: dswfile = 'INPUT/dswrf_monthly_clim_1980-2000.nc'
+   !integer, parameter                      :: nlonin = 720, nlatin = 360
+   !real, dimension(nlonin, nlatin)         :: datain
+   !integer, parameter                      :: metlonin = 360, metlatin= 180
+   !character(len=37), parameter :: dswfile = 'INPUT/dswrf_monthly_clim_1980-2000.nc'
 
    character(len=5) :: dswnames(12)        = (/'dsw01','dsw02','dsw03','dsw04', &
                                                'dsw05','dsw06','dsw07','dsw08', &
                                                'dsw09','dsw10','dsw11','dsw12' /)
    integer                                 :: id_dsw(12)
-   real, dimension(nlonin, nlatin)         :: datain
-   real, dimension(metlonin,metlatin,12)   :: dswrf
-   real, dimension(metlonin)               :: metlon
-   real, dimension(metlatin)               :: metlat
-   real, dimension(metlonin+1)             :: metlone
-   real, dimension(metlatin+1)             :: metlate
+   integer                                 :: metlonin, metlatin
+   real, dimension(:,:,:), allocatable  :: dswrf
+   real, dimension(:),     allocatable  :: metlon
+   real, dimension(:),     allocatable  :: metlat
+   real, dimension(:),     allocatable  :: metlone
+   real, dimension(:),     allocatable  :: metlate
    integer, dimension(12)                  :: mos
    logical                                 :: used
    real                                    :: dlat, dlon
@@ -2967,8 +3992,21 @@ subroutine ppfd_init_AM3 (lonb, latb, axes)
           'Reading NetCDF formatted input file: dswrf_monthly_clim_1980-2000.nc', NOTE)
 
 !read in lat & lon from input file, get boundaries and convert to radians
-     call read_data (dswfile_obj, 'lon', metlon)
-     call read_data (dswfile_obj, 'lat', metlat)
+     IF ( file_PPFD == 'INPUT/dswrf_monthly_clim_1980-2000.nc' ) then
+        metlonin = 360 
+        metlatin = 180 
+     ELSE
+        metlonin = 1440 
+        metlatin =  721 
+     ENDIF
+
+     ALLOCATE( metlon(metlonin) )
+     ALLOCATE( metlat(metlatin) )
+     ALLOCATE( metlone(metlonin+1) )
+     ALLOCATE( metlate(metlatin+1) )
+
+     call read_data (file_PPFD, 'lon', metlon, no_domain=.true.)
+     call read_data (file_PPFD, 'lat', metlat, no_domain=.true.)
 
      dlon = 0.5*(metlon(1)-metlon(2))
      dlat = 0.5*(metlat(2)-metlat(1))
@@ -2990,12 +4028,14 @@ subroutine ppfd_init_AM3 (lonb, latb, axes)
      call horiz_interp_init
      call horiz_interp_new ( Interp, metlone, metlate, lonb, latb )
 
+     ALLOCATE( dswrf(metlonin,metlatin,12) )
      call read_data (dswfile_obj, 'time', mos)
      call read_data (dswfile_obj,'dswrf_clim', dswrf(:,:,:))
 
      DO m = 1, 12
         call horiz_interp (Interp, dswrf(:,:,m), Pmo(:,:,m),verbose=verbose)
 !!! Convert total shortwave to PPFD !!!!!
+!       assume 1/2 of srad is in 400-700nm band (PAR)
         Pmo(:,:,m) = Pmo(:,:,m) * const0 * 0.5
 !register diagnostic field
         id_dsw(m) = register_static_field( 'tracers', dswnames(m), axes(1:2), &
@@ -3007,9 +4047,15 @@ subroutine ppfd_init_AM3 (lonb, latb, axes)
      ENDDO
      call horiz_interp_del( Interp )
      call close_file(dswfile_obj)
+     DEALLOCATE( dswrf )
+     DEALLOCATE( metlon )
+     DEALLOCATE( metlat )
+     DEALLOCATE( metlone )
+     DEALLOCATE( metlate )
+
   ELSE
      call error_mesg ('ppfd_init_AM3',  &
-          'dswfile does not exist', FATAL)
+          'file_PPFD: '//file_PPFD//' does not exist', FATAL)
   ENDIF
 
 end subroutine ppfd_init_AM3
@@ -3021,7 +4067,7 @@ end subroutine ppfd_init_AM3
 !
 !<SUBROUTINE NAME="pft_init_AM3">
 !   <OVERVIEW>
-!     Reads in and stores the monthly average LAI data
+!     Reads in monthly average PFT data stores in PCTPFT
 !   </OVERVIEW>
 !   <DESCRIPTION
 !     Reads in the file "mksrf_pft
@@ -3036,12 +4082,23 @@ subroutine pft_init_AM3( lonb, latb, axes )
    integer, intent(in)                :: axes(4)
 
    integer                            :: nlon, nlat, i
-   integer, parameter                 :: nlonin = 720, nlatin = 360
+! MYL: comment out 
+!   integer, parameter                 :: nlonin = 720, nlatin = 360
+!   real, dimension(nlonin)            :: inlon, lonpft
+!   real, dimension(nlatin)            :: inlat, latpft
+!   real, dimension(nlonin+1)          :: lonpfte
+!   real, dimension(nlatin+1)          :: latpfte
    integer, dimension(nPFT)           :: pft
-   real, dimension(nlonin)            :: inlon, lonpft
-   real, dimension(nlatin)            :: inlat, latpft
-   real, dimension(nlonin+1)          :: lonpfte
-   real, dimension(nlatin+1)          :: latpfte
+!   real, dimension(nlonin,nlatin,nPFT)      :: datapft
+
+! MYL: use allocatatable arrays
+   integer                            :: nlonin, nlatin 
+   real, dimension(:), allocatable    :: lonpft
+   real, dimension(:), allocatable    :: latpft
+   real, dimension(:), allocatable    :: lonpfte
+   real, dimension(:), allocatable    :: latpfte
+   real, dimension(:,:,:), allocatable     :: datapft
+
    real                               :: edgen, edgee, edges, edgew, dlat, dlon
    logical                            :: used
 
