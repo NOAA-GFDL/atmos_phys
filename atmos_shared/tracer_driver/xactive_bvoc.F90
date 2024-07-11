@@ -254,7 +254,6 @@ logical             :: use_isop_shrub_crop_bug = .false.       ! if T, swap shru
 logical             :: fix_megan2_isop   = .TRUE.              ! if T, increases isop emis factors by 50% to achieve ~500 Tg/yr global
 
 real                :: T_s = 297.                              ! Temperature that represents standard conditions [K]
-
 real                :: scale_isoprene_emissions = 1.           ! Global scale for isoprene emission
 real                :: scale_terpene_emissions = 1.            ! Global scale for terpene emission
 real                :: min_land_frac = 0.01                    ! Fraction of land required to calculate emissions
@@ -941,8 +940,8 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                                              'pft09','pft10','pft11','pft12',        &
                                              'pft13','pft14','pft15','pft16', 'pft17'/)
    !++myl bug fix, should match order in pft_li and pft_lu hardcoded in calc_xactive_bvoc_AM3
-!  character(len=3) :: vegnames(nVEG)      =  (/ 'ntr', 'btr', 'crp', 'grs', 'shr' /)
-   character(len=3) :: vegnames(nVEG)      =  (/ 'ntr', 'btr', 'shr', 'grs', 'crp' /)
+!  character(len=3) :: vegnames(nVEG)      =  (/'ntr', 'btr', 'crp', 'grs', 'shr' /)
+   character(len=3) :: vegnames(nVEG)      =  (/'ntr', 'btr', 'shr', 'grs', 'crp'/)
 
    character(len=7) :: terpnames_megan3(8) =  (/'MT_PINE', 'MT_ACYC', 'MT_CAMP',  &
                                                 'MT_SABI', 'MT_AROM', 'MT_OXY ',  &
@@ -1122,7 +1121,6 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
       ENDIF
    ENDIF
 
-
    if (use_isop_shrub_crop_bug) vegnames(:) =  (/ 'ntr', 'btr', 'crp', 'grs', 'shr' /)
 
    indices(:) = 0
@@ -1269,7 +1267,7 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
             ENDIF
         ELSE IF ( trim(tracnam(i))=='ISOP' .AND. do_MEGAN2_EPMAP_ISOP ) THEN !M.Lin (Jan 2022)
             ecfile = 'INPUT/megan2.epmap.ISOP.0.1x0.1.nc'
-            IF ( file_exist(ecfile) ) THEN
+            if (open_file(ecfile_obj,ecfile,"read")) then
 !set up data dimension, ideally read in from input file 
                IF ( mpp_pe()==mpp_root_pe()) call error_mesg('xactive_bvoc_init',  &
                   'MYL: Using '//trim(ecfile),NOTE)
@@ -1280,8 +1278,8 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                ALLOCATE( inlone(nlonin+1) )
                ALLOCATE( inlate(nlatin+1) )
                ALLOCATE( EP_DATAIN(nlonin,nlatin) )
-               call read_data (ecfile, 'lon', inlon, no_domain=.true.)
-               call read_data (ecfile, 'lat', inlat, no_domain=.true.)
+               call read_data (ecfile_obj, 'lon', inlon)
+               call read_data (ecfile_obj, 'lat', inlat)
                inlon = inlon*DEG_TO_RAD
                inlat = inlat*DEG_TO_RAD
                dlat = inlat(2)-inlat(1)
@@ -1292,7 +1290,7 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                inlate(nlatin+1) = inlat(nlatin)+(dlat/2.)
                call horiz_interp_init
                call horiz_interp_new ( Interp, inlone, inlate, lonb, latb )
-               call read_data (ecfile,'ISOP_EF',EP_DATAIN, no_domain=.true.)
+               call read_data (ecfile_obj,'ISOP_EF',EP_DATAIN)
                call horiz_interp (Interp,EP_DATAIN,ECISOP_M2MAP, verbose=verbose)
                !++myl++: check var range 
                !IF ( Ldebug .and. mpp_pe()==mpp_root_pe()) THEN 
@@ -1302,6 +1300,8 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                     write(*,*) 'xactive_bvoc_init, ECISOP maxloc = ', MAXLOC(ECISOP_M2MAP)
                ENDIF
 
+               call horiz_interp_del( Interp )
+               call close_file(ecfile_obj)
                !release memory
                DEALLOCATE( inlon  )
                DEALLOCATE( inlat  )
@@ -1317,7 +1317,7 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
             IF ( xactive_algorithm == 'MEGAN2' ) THEN
                IF ( do_AM3_TERP ) THEN        !M.Lin (Aug2022)
                    ecfile = 'INPUT/megan2.epmap_Xveg.C10H16.0.5x0.5.nc' !For each vegn type (ntr/btr/shr/crp/grs)
-                  IF ( file_exist(ecfile) ) THEN
+                  if (open_file(ecfile_obj,ecfile,"read")) then
 !set up data dimension, ideally read in from input file 
                     nlonin = 720
                     nlatin = 360 
@@ -1326,8 +1326,8 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                     ALLOCATE( inlone(nlonin+1) )
                     ALLOCATE( inlate(nlatin+1) )
                     ALLOCATE( EP_DATAIN(nlonin,nlatin) )
-                    call read_data (ecfile, 'lon', inlon, no_domain=.true.)
-                    call read_data (ecfile, 'lat', inlat, no_domain=.true.)
+                    call read_data (ecfile_obj, 'lon', inlon)
+                    call read_data (ecfile_obj, 'lat', inlat)
                     inlon = inlon*DEG_TO_RAD
                     inlat = inlat*DEG_TO_RAD
                     dlat = inlat(2)-inlat(1)
@@ -1343,6 +1343,8 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                       call horiz_interp(Interp,EP_DATAIN,ECTERP_AM3(:,:,j),verbose=verbose)
                     ENDDO
 
+                    call horiz_interp_del( Interp )
+                    call close_file(ecfile_obj)
                     !release memory
                     DEALLOCATE( inlon  )
                     DEALLOCATE( inlat  )
@@ -1361,7 +1363,7 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                  ELSE
                     ecfile = 'INPUT/megan2.epmap.C10H16.0.1x0.1.nc'
                  ENDIF
-                 IF ( file_exist(ecfile) ) THEN
+                 if (open_file(ecfile_obj,ecfile,"read")) then
                     IF ( mpp_pe()==mpp_root_pe()) call error_mesg('xactive_bvoc_init',&
                       'Using '//trim(ecfile),NOTE)
                     nlonin = 3600
@@ -1371,8 +1373,8 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                     ALLOCATE( inlone(nlonin+1) )
                     ALLOCATE( inlate(nlatin+1) )
                     ALLOCATE( EP_DATAIN(nlonin,nlatin) )
-                    call read_data (ecfile, 'lon', inlon, no_domain=.true.)
-                    call read_data (ecfile, 'lat', inlat, no_domain=.true.)
+                    call read_data (ecfile_obj, 'lon', inlon)
+                    call read_data (ecfile_obj, 'lat', inlat)
                     inlon = inlon*DEG_TO_RAD
                     inlat = inlat*DEG_TO_RAD
                     dlat = inlat(2)-inlat(1)
@@ -1385,18 +1387,20 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                     call horiz_interp_new ( Interp, inlone, inlate, lonb, latb )
                     IF ( do_PARSED_TERP ) THEN
                       DO k = 1, nTERP
-                          call read_data (ecfile,trim(terpnames_megan2(k))//'_EF', &
-                                          EP_DATAIN, no_domain=.true.)
+                          call read_data (ecfile_obj,trim(terpnames_megan2(k))//'_EF', &
+                                          EP_DATAIN)
                           call horiz_interp (Interp,EP_DATAIN,             &
                                              ECTERP_M2MAP(:,:,k), verbose=verbose)
                       ENDDO!nterp
                     ELSE
-                          call read_data (ecfile,'C10H16_EF', &
-                                          EP_DATAIN, no_domain=.true.)
+                          call read_data (ecfile_obj,'C10H16_EF', &
+                                          EP_DATAIN)
                           call horiz_interp (Interp,EP_DATAIN,             &
                                              ECTERP_LUMP_M2MAP(:,:), verbose=verbose)
                     ENDIF
 
+                    call horiz_interp_del( Interp )
+                    call close_file(ecfile_obj)
                     ! release memory
                     DEALLOCATE( inlon  )
                     DEALLOCATE( inlat  )
@@ -1421,21 +1425,22 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                        ecfile = 'INPUT/megan2.xactive.lumped_terpenes_mono.nc'
                     ENDIF
                  ENDIF
-                 IF ( file_exist(ecfile) ) THEN
+                 if (open_file(ecfile_obj,ecfile,"read")) then
                     IF ( do_PARSED_TERP) THEN
                        DO k = 1, nTERP
                           DO j = 1, nPFT
-                             call read_data(ecfile,terpnames_megan2(k)//'_'//pftnames(j), &
-                                            toss, no_domain=.true.)
+                             call read_data(ecfile_obj,terpnames_megan2(k)//'_'//pftnames(j), &
+                                            toss)
                              ECTERP(:,:,j,k) = toss
                           ENDDO
                        ENDDO
                     ELSE
                        DO j = 1, nPFT
-                          call read_data(ecfile,pftnames(j),toss, no_domain=.true.)
+                          call read_data(ecfile_obj,pftnames(j),toss)
                           ECBVOC(:,:,j,xknt) = toss
                        ENDDO
                     ENDIF
+                    call close_file(ecfile_obj)
                  ELSE
                     call error_mesg ('xactive_bvoc_init',  &
                         'MEGAN EF file for '//trim(tracnam(i))//' does not exist', FATAL)
@@ -1453,17 +1458,17 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                        ecfile = 'INPUT/megan3.xactive.lumped_terpenes_mono.nc'
                     ENDIF
                  ENDIF
-                 IF ( file_exist(ecfile) ) THEN
+                 if (open_file(ecfile_obj,ecfile,"read")) then
                     IF ( do_PARSED_TERP) THEN
                        call horiz_interp_init
                        call horiz_interp_new ( Interp, m3inlone, m3inlate, lonb, latb )
                        DO k = 1, nTERP
-                          call read_data (ecfile,trim(terpnames_megan3(k))//'_EF',        &
-                                          MEGAN3_DATAIN, no_domain=.true.)
+                          call read_data (ecfile_obj,trim(terpnames_megan3(k))//'_EF',        &
+                                          MEGAN3_DATAIN)
                           call horiz_interp (Interp,MEGAN3_DATAIN,                  &
                                              ECTERP_MEGAN3(:,:,k), verbose=verbose)
-                          call read_data (ecfile,trim(terpnames_megan3(k))//'_LDF',       &
-                                          MEGAN3_DATAIN,no_domain=.true.)
+                          call read_data (ecfile_obj,trim(terpnames_megan3(k))//'_LDF',       &
+                                          MEGAN3_DATAIN)
                           call horiz_interp (Interp,MEGAN3_DATAIN,                  &
                                              LDFg_TERP(:,:,k), verbose=verbose)
                        ENDDO!nterp
@@ -1475,6 +1480,8 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                        call read_data (ecfile,'LDF',MEGAN3_DATAIN, no_domain=.true.)
                        call horiz_interp (Interp, MEGAN3_DATAIN, LDFg(:,:,xknt ))
                     ENDIF
+                    call horiz_interp_del( Interp )
+                    call close_file(ecfile_obj)
                  ELSE
                     call error_mesg ('xactive_bvoc_init',  &
                         'MEGAN file for '//trim(tracnam(i))//' does not exist', FATAL)
@@ -3877,7 +3884,7 @@ end function fGAMMA_PAR_AM4
    nlon = size(lonb,1) - 1
    nlat = size(latb,2) - 1
 
-   IF ( file_exist(file_TEMP) ) THEN
+   IF ( file_exists(file_TEMP) ) THEN
       IF (mpp_pe() == mpp_root_pe()) call error_mesg ('temp_init_AM3', &
          'Reading NetCDF formatted input file: '//file_TEMP, NOTE)
 
