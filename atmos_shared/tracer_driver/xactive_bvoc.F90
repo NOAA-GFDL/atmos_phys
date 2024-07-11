@@ -4449,9 +4449,16 @@ subroutine lai_init_megan3( lonb,latb, axes )
       ENDDO
       call horiz_interp_del( Interp )
       call close_file(file_LAI_obj)
+! MYL: Release memory
+      DEALLOCATE(datalai)
+      DEALLOCATE(inlon)
+      DEALLOCATE(inlat)
+      DEALLOCATE(inlone)
+      DEALLOCATE(inlate)
+
    ELSE
       call error_mesg ('lai_init_megan3',  &
-           'laifile: '//file_LAI//' does not exist', FATAL)
+           'laifile: '//file_LAIv//' does not exist', FATAL)
    ENDIF
 end subroutine lai_init_megan3
 !</SUBROUTINE>
@@ -4583,10 +4590,9 @@ subroutine xactive_bvoc_register_restart_domains(Til_restart)
      if (ALLOCATED(O3_STORE)) call &
         register_restart_field(Til_restart, 'O3_STORE_'//mon_string,  O3_STORE(:,:,ihour), dim_names, is_optional = .true.)
    end do
+
 end subroutine xactive_bvoc_register_restart_domains
 ! </SUBROUTINE>
-
-
 
 
 !##########################################################################
@@ -4636,10 +4642,14 @@ subroutine xactive_bvoc_end
       write(*,*) 'xactive_bvoc_end: Deallocating xactive arrays'
    ENDIF
 
+   IF ( ALLOCATED(ECTERP_AM3) )              DEALLOCATE(ECTERP_AM3)
    IF ( ALLOCATED(ECISOP_AM3) )              DEALLOCATE(ECISOP_AM3)
+   IF ( ALLOCATED(ECISOP_M2MAP) )            DEALLOCATE(ECISOP_M2MAP)
    IF ( ALLOCATED(ECBVOC) )                  DEALLOCATE(ECBVOC)
    IF ( ALLOCATED(ECBVOC_MEGAN3) )           DEALLOCATE(ECBVOC_MEGAN3)
    IF ( ALLOCATED(ECTERP) )                  DEALLOCATE(ECTERP)
+   IF ( ALLOCATED(ECTERP_M2MAP) )            DEALLOCATE(ECTERP_M2MAP)
+   IF ( ALLOCATED(ECTERP_LUMP_M2MAP) )       DEALLOCATE(ECTERP_LUMP_M2MAP)
    IF ( ALLOCATED(ECTERP_MEGAN3) )           DEALLOCATE(ECTERP_MEGAN3)
    IF ( ALLOCATED(MEGAN_PARAM) )             DEALLOCATE(MEGAN_PARAM)
    IF ( ALLOCATED(TERP_PARAM) )              DEALLOCATE(TERP_PARAM)
@@ -4668,6 +4678,8 @@ subroutine xactive_bvoc_end
    IF ( ALLOCATED(diag_gamma_sm) )           DEALLOCATE(diag_gamma_sm)
    IF ( ALLOCATED(diag_gamma_age) )          DEALLOCATE(diag_gamma_age)
    IF ( ALLOCATED(diag_gamma_lai) )          DEALLOCATE(diag_gamma_lai)
+   IF ( ALLOCATED(diag_gamma_age_epmap) )    DEALLOCATE(diag_gamma_age_epmap)
+   IF ( ALLOCATED(diag_gamma_lai_epmap) )    DEALLOCATE(diag_gamma_lai_epmap)
    IF ( ALLOCATED(diag_gamma_age_megan3) )   DEALLOCATE(diag_gamma_age_megan3)
    IF ( ALLOCATED(diag_gamma_lai_megan3) )   DEALLOCATE(diag_gamma_lai_megan3)
    IF ( ALLOCATED(diag_gamma_bdlai_megan3) ) DEALLOCATE(diag_gamma_bdlai_megan3)
