@@ -4116,15 +4116,28 @@ subroutine pft_init_AM3( lonb, latb, axes )
    nlon = size(lonb,1) - 1
    nlat = size(latb,1) - 1
 
-   IF ( do_AM3_ISOP .AND. file_PFT/='INPUT/mksrf_pft.060929.nc' ) THEN
-      call error_mesg ('pft_init', 'incorrect file to reproduce AM3'//  &
-                       'isoprene emissions--correcting',WARNING)
-      file_PFT = 'INPUT/mksrf_pft.060929.nc'
-   ENDIF
+   !MYL: comment out to use high-res pft files
+   !IF ( do_AM3_ISOP .AND. file_PFT/='INPUT/mksrf_pft.060929.nc' ) THEN
+   !   call error_mesg ('pft_init', 'incorrect file to reproduce AM3'//  &
+   !                    'isoprene emissions--correcting',WARNING)
+   !   file_PFT = 'INPUT/mksrf_pft.060929.nc'
+   !ENDIF
 
    IF ( open_file(file_PFT_obj, file_PFT, "read") ) THEN
       IF ( mpp_pe() == mpp_root_pe() ) call error_mesg ( 'pft_init_AM3', &
-           'Reading NetCDF formatted input file: mksrf_pft.060929.nc', NOTE)
+           'Reading NetCDF formatted input file: '//file_PFT, NOTE)
+! Get lat/lon dims and allocate memory
+      IF ( file_PFT == 'INPUT/mksrf_pft.060929.nc' ) then
+       nlonin = 720
+       nlatin = 360
+      ELSE
+       nlonin = 3600 
+       nlatin = 1800
+      ENDIF
+      allocate( lonpft(nlonin) )
+      allocate( latpft(nlatin) )
+      allocate( lonpfte(nlonin+1) )
+      allocate( latpfte(nlatin+1) )
 ! Read in lat & lon from input file, get boundaries and convert to radians
       call read_data (file_PFT_obj, 'lon', lonpft)
       call read_data (file_PFT_obj, 'lat', latpft)
@@ -4154,9 +4167,16 @@ subroutine pft_init_AM3( lonb, latb, axes )
       call horiz_interp_init
       call horiz_interp_new ( Interp, lonpfte, latpfte, lonb, latb )
 
+!MYL: Release memory for input lat/lon  
+      deallocate( lonpft )
+      deallocate( latpft )
+      deallocate( lonpfte )
+      deallocate( latpfte )
+
       call read_data (file_PFT_obj, 'pft', pft)
 
-! Read pct_pft field
+! MYL: Allocate and Read pct_pft field
+      allocate( datapft(nlonin,nlatin,nPFT) )
       call read_data (file_PFT_obj, 'PCT_PFT', datapft)
 
 ! Loop over pftnames
@@ -4174,6 +4194,8 @@ subroutine pft_init_AM3( lonb, latb, axes )
       PCTPFT(:,:,:) = 0.01 * PCTPFT(:,:,:)
       call horiz_interp_del( Interp )
       call close_file(file_PFT_obj)
+! MYL: Release memory
+      DEALLOCATE(datapft)
    ELSE
       call error_mesg ('lai_pft_init', &
            'PFT file: '//file_PFT//' does not exist.', FATAL )
@@ -4201,11 +4223,22 @@ subroutine lai_init_AM3( lonb,latb, axes )
    real, intent(in), dimension(:,:)          :: lonb, latb
    integer, intent(in)                       :: axes(4)
    integer                                   :: nlon, nlat, i, m
-   integer, parameter                        :: nlonin = 720, nlatin = 360
-   real, dimension(nlonin+1)                 :: lonlaie
-   real, dimension(nlatin+1)                 :: latlaie
-   real, dimension(nlonin)                   :: inlon, lonlai
-   real, dimension(nlatin)                   :: inlat, latlai
+
+   !integer, parameter                        :: nlonin = 720, nlatin = 360
+   !real, dimension(nlonin+1)                 :: lonlaie
+   !real, dimension(nlatin+1)                 :: latlaie
+   !real, dimension(nlonin)                   :: inlon, lonlai
+   !real, dimension(nlatin)                   :: inlat, latlai
+   !real, dimension(nlonin,nlatin,nPFT,nMOS)  :: datalai
+
+   !MYL: Use allocatable arrays
+   integer                                   :: nlonin , nlatin
+   real, dimension(:), allocatable           :: lonlaie
+   real, dimension(:), allocatable           :: latlaie
+   real, dimension(:), allocatable           :: lonlai
+   real, dimension(:), allocatable           :: latlai
+   real, dimension(:,:,:), allocatable       :: datalai
+
    real                                      :: edgen, edgee, edges, edgew
    real                                      :: dlat, dlon
    integer                                   :: id_lai(nPFT)
@@ -4223,18 +4256,34 @@ subroutine lai_init_AM3( lonb,latb, axes )
    nlon = size(lonb,1) - 1
    nlat = size(latb,1) - 1
 
-   IF ( do_AM3_ISOP .AND. file_LAI/='INPUT/mksrf_lai.060929.nc' ) THEN
-      call error_mesg ('lai_init, incorrect file to reproduce AM3', &
-                       'isoprene emissions--correcting',WARNING)
-      file_LAI = 'INPUT/mksrf_lai.060929.nc'
-   ENDIF
+! MYL: comment out to use Yuan-processed MODIS LAI
+!   IF ( do_AM3_ISOP .AND. file_LAI/='INPUT/mksrf_lai.060929.nc' ) THEN
+!      call error_mesg ('lai_init, incorrect file to reproduce AM3', &
+!                       'isoprene emissions--correcting',WARNING)
+!      file_LAI = 'INPUT/mksrf_lai.060929.nc'
+!   ENDIF
 
 !  --- check existence of input file containing monthly lai, for each pft
 !  --------
    IF (open_file(file_LAI_obj, file_LAI, "read")) THEN
 ! Set up for input grid
       IF(mpp_pe() == mpp_root_pe()) call error_mesg ('lai_pft_init',  &
-           'Reading NetCDF formatted input file: mksrf_lai.060929.nc', NOTE)
+           'Reading NetCDF formatted input file: '//file_LAI, NOTE)
+! MYL: Get data dims and allocate arrays
+!      Ideally, this should be read from file_LAI, hard coded here for now
+         IF ( file_LAI == 'INPUT/mksrf_lai.060929.nc' ) then
+            nlonin = 720
+            nlatin = 360
+         ELSE               ! high-res data
+            nlonin = 3600 
+            nlatin = 1800
+         ENDIF
+
+         ALLOCATE( lonlai(nlonin) )
+         ALLOCATE( latlai(nlatin) )
+         ALLOCATE( lonlaie(nlonin+1) )
+         ALLOCATE( latlaie(nlatin+1) )
+
 ! Read in lat & lon from input file, get boundaries and convert to radians
          call read_data (file_LAI_obj, 'lon', lonlai)
          call read_data (file_LAI_obj, 'lat', latlai)
@@ -4262,11 +4311,18 @@ subroutine lai_init_AM3( lonb,latb, axes )
          call horiz_interp_new ( Interp, lonlaie, latlaie, lonb, latb )
 ! Read in pft and time dimensions from lai file
          call read_data (file_LAI_obj, 'time', mos)
+
+
+! MYL: Allocate dims for datalai
+         ALLOCATE( datalai(nlonin,nlatin,nMOS) )
+
 ! Loop over pftnames
          DO i = 1, nPFT
-            call read_data (file_LAI_obj,lainames(i),datalai(:,:,i,:))
+            !MYL change datalai to 3D data to reduce memory use
+            !call read_data (file_LAI_obj,lainames(i),datalai(:,:,i,:))
+            call read_data (file_LAI_obj,lainames(i),datalai(:,:,:))
             DO m = 1, nMOS
-               call horiz_interp (Interp, datalai(:,:,i,m),        &
+               call horiz_interp (Interp, datalai(:,:,m),        &
                                   MLAI(:,:,i,m),verbose=verbose)
 ! Store diagnostics for one month only - choose July for now
             IF (m .eq. 7) THEN
@@ -4282,10 +4338,18 @@ subroutine lai_init_AM3( lonb,latb, axes )
       ENDDO
       call horiz_interp_del( Interp )
       call close_file(file_LAI_obj)
+! MYL: Release memory
+      DEALLOCATE(datalai)
+      DEALLOCATE(lonlai)
+      DEALLOCATE(latlai)
+      DEALLOCATE(lonlaie)
+      DEALLOCATE(latlaie)
+
    ELSE
       call error_mesg ('lai_init_AM3',  &
            'laifile: '//file_LAI//' does not exist', FATAL)
    ENDIF
+
 end subroutine lai_init_AM3
 !</SUBROUTINE>
 
@@ -4296,6 +4360,7 @@ end subroutine lai_init_AM3
 ! <SUBROUTINE NAME="lai_init_megan3">
 !   <OVERVIEW>
 !     Reads in monthly LAI data and places into the array 'MLAI_MEGAN3'
+!     Reads in monthly FVC data and places into the array 'FCOVER' (myl)
 !   </OVERVIEW>
 !   <DESCRIPTION
 !
@@ -4311,31 +4376,48 @@ subroutine lai_init_megan3( lonb,latb, axes )
    real, intent(in), dimension(:,:)          :: lonb, latb
    integer, intent(in)                       :: axes(4)
    integer                                   :: m
-   integer, parameter                        :: nlonin = 720, nlatin = 360
-   real, dimension(nlonin+1)                 :: inlone
-   real, dimension(nlatin+1)                 :: inlate
-   real, dimension(nlonin)                   :: inlon
-   real, dimension(nlatin)                   :: inlat
+
+   !MYL: Comment out
+   !integer, parameter                        :: nlonin = 720, nlatin = 360
+   !real, dimension(nlonin+1)                 :: inlone
+   !real, dimension(nlatin+1)                 :: inlate
+   !real, dimension(nlonin)                   :: inlon
+   !real, dimension(nlatin)                   :: inlat
+   !real, dimension(nlonin,nlatin,nMOS)       :: datalai
+   !MYL: Use allocatable arrays
+   integer                                   :: nlonin, nlatin
+   real, dimension(:), allocatable           :: inlone
+   real, dimension(:), allocatable           :: inlate
+   real, dimension(:), allocatable           :: inlon
+   real, dimension(:), allocatable           :: inlat
+   real, dimension(:,:,:), allocatable       :: datalai
+
    real                                      :: dlat, dlon
    integer                                   :: id_lai
    logical                                   :: used
    real, dimension(nlonin,nlatin,nMOS)       :: datalai
-   type(FmsNetcdfFile_t)                     :: file_LAI_obj !< Fms2io fileobj
+   type(FmsNetcdfFile_t)                     :: file_LAIv_obj !< Fms2io fileobj
    type (horiz_interp_type)                  :: Interp
 
-   IF ( file_LAI =='INPUT/mksrf_lai.060929.nc' ) THEN
-      call error_mesg ('lai_init_megan3, incorrect file for MEGAN3', &
-                       'needs to be combined LAI--correcting',WARNING)
-      file_LAI = 'INPUT/mksrf_lai.060929.combined_pft.nc'
+   IF ( file_LAIv =='INPUT/mksrf_lai.060929.nc' ) THEN
+       call error_mesg ('lai_init_megan3, incorrect file for do_MEGAN2_EPMAP_ISOP or MEGAN3', &
+                       'needs to be pft-combined LAI',FATAL)
    ENDIF
 
-   IF (open_file(file_LAI_obj, file_LAI, "read")) THEN
+   IF (open_file(file_LAIv_obj, file_LAIv, "read")) THEN
 ! Set up for input grid
+! MYL: Ideally, read grid dims from file_LAIv, hard coded here for now
+      nlonin = 3600 
+      nlatin = 1800
+      ALLOCATE( inlon(nlonin) )
+      ALLOCATE( inlat(nlatin) )
+      ALLOCATE( inlone(nlonin+1) )
+      ALLOCATE( inlate(nlatin+1) )
       IF (mpp_pe() == mpp_root_pe()) call error_mesg ('lai_init_megan3',  &
-           'Reading NetCDF formatted input file'//file_LAI, NOTE)
+           'Reading NetCDF formatted input file'//file_LAIv, NOTE)
 
-      call read_data (file_LAI_obj, 'lon', inlon)
-      call read_data (file_LAI_obj, 'lat', inlat)
+      call read_data (file_LAIv_obj, 'lon', inlon)
+      call read_data (file_LAIv_obj, 'lat', inlat)
       inlon = inlon*DEG_TO_RAD
       inlat = inlat*DEG_TO_RAD
       dlat  = inlat(2)-inlat(1)
@@ -4345,16 +4427,20 @@ subroutine lai_init_megan3( lonb,latb, axes )
       inlate(1:nlatin) = inlat-(dlat/2.)
       inlate(nlatin+1) = inlat(nlatin)+(dlat/2.)
 
+      ALLOCATE(datalai(nlonin,nlatin,nMOS))
       call horiz_interp_init
       call horiz_interp_new ( Interp, inlone, inlate, lonb, latb )
-      call read_data (file_LAI_obj,'LAI',datalai)
+
+      !Read in gridcell mean LAI here, will normalize by PFTs in xactive_bvoc  
+      call read_data (file_LAIv_obj,'LAI',datalai)
+
       DO m = 1, nMOS
          call horiz_interp (Interp, datalai(:,:,m), MLAI_MEGAN3(:,:,m),verbose=verbose)
 ! Store diagnostics for one month only - choose July for now
          IF (m .eq. 7) THEN
 ! Register diagnostic field
-            id_lai = register_static_field( 'tracers', 'LAIv', &
-                        axes(1:2), 'LAIv', 'unitless')
+            id_lai = register_static_field( 'tracers', 'LAI', &
+                        axes(1:2), 'LAI', 'unitless')
 ! Send data to diagnostic
             IF (id_lai > 0) THEN
                   used = send_data(id_lai,MLAI_MEGAN3(:,:,m))
