@@ -1063,6 +1063,8 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
       ALLOCATE ( LDFg(nlon,nlat,nxactive) )
 ! Populate these so it doesn't need to be done each time a new species is read in
       if (open_file(megan3_isop,"INPUT/megan3.xactive.ISOP.nc","read")) then
+         IF(mpp_pe() == mpp_root_pe()) call error_mesg ('xactive_bvoc_init',  &
+           'Reading NetCDF formatted input file: megan3.xactive.ISOP.nc', NOTE)
          call read_data (megan3_isop, 'lon', m3inlon)
          call read_data (megan3_isop, 'lat', m3inlat)
          call close_file(megan3_isop)
@@ -1097,10 +1099,10 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
          ENDIF
       ELSE
          IF ( xactive_algorithm == 'MEGAN2' ) THEN
-            IF ( do_AM3_TERP ) THEN
-               nTERP = 8  ! LWH repro AM3/AM4
-            ELSE
+            IF ( do_AM3_TERP .or. do_MEGAN2_EPMAP_TERP  ) THEN
                nTERP = 7  ! M.Lin (8/2022): remove other monoterpenes (not in Sindelarova et al, but in Geos-Chem)
+            ELSE
+               nTERP = 8  ! LWH repro AM3/AM4
             ENDIF
          ELSE
             nTERP = 6
@@ -1231,6 +1233,8 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
 !           ecfile = 'INPUT/megan2.epmap_Xveg.ISOP.0.5x0.5.nc' ! M1L
             ecfile = 'INPUT/megan.ISOP.nc' ! LWH repro AM3/AM4
             if (open_file(ecfile_obj,ecfile,"read")) then
+               IF(mpp_pe() == mpp_root_pe()) call error_mesg ('xactive_bvoc_init',  &
+                    'Reading NetCDF formatted input file: megan.ISOP.nc', NOTE)
 !set up data dimension, ideally read in from input file 
 !LWH: could switch to 
 !              call get_dimension_size(ecfile_obj,"lon",nlonin)
@@ -1323,9 +1327,10 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
          ELSE IF ( trim(tracnam(i))=='C10H16' ) THEN
             IF ( xactive_algorithm == 'MEGAN2' ) THEN
                IF ( do_AM3_TERP ) THEN        !M.Lin (Aug2022)
-!                 ecfile = 'INPUT/megan2.epmap_Xveg.C10H16.0.5x0.5.nc' !For each vegn type (ntr/btr/shr/crp/grs)
-                  ecfile = 'INPUT/megan2.xactive.parsed_terpenes.nc' ! LWH repro AM3/AM4
+                  ecfile = 'INPUT/megan2.epmap_Xveg.C10H16.0.5x0.5.nc' !For each vegn type (ntr/btr/shr/crp/grs)
                   if (open_file(ecfile_obj,ecfile,"read")) then
+                    IF(mpp_pe() == mpp_root_pe()) call error_mesg ('xactive_bvoc_init',  &
+                         'Reading NetCDF formatted input file: '//ecfile, NOTE)
 !set up data dimension, ideally read in from input file 
                     nlonin = 720
                     nlatin = 360 
@@ -1434,6 +1439,8 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                     ENDIF
                  ENDIF
                  if (open_file(ecfile_obj,ecfile,"read")) then
+                    IF(mpp_pe() == mpp_root_pe()) call error_mesg ('xactive_bvoc_init',  &
+                         'Reading NetCDF formatted input file: '//ecfile, NOTE)
                     IF ( do_PARSED_TERP) THEN
                        DO k = 1, nTERP
                           DO j = 1, nPFT
@@ -1467,6 +1474,8 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                     ENDIF
                  ENDIF
                  if (open_file(ecfile_obj,ecfile,"read")) then
+                    IF(mpp_pe() == mpp_root_pe()) call error_mesg ('xactive_bvoc_init',  &
+                         'Reading NetCDF formatted input file: '//ecfile, NOTE)
                     IF ( do_PARSED_TERP) THEN
                        call horiz_interp_init
                        call horiz_interp_new ( Interp, m3inlone, m3inlate, lonb, latb )
@@ -1819,6 +1828,8 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
    deallocate(pes)
 
    if (open_file(Til_restart,"INPUT/xactive_bvoc.res.nc","read", xactive_domain, is_restart=.true.)) then
+      IF ( mpp_pe() == mpp_root_pe() ) call error_mesg ( 'xactive_bvoc_init', &
+           'Reading NetCDF formatted restart file: xactive_bvoc.res.nc', NOTE)
       call xactive_bvoc_register_restart_domains(Til_restart)
       call read_restart(Til_restart)
       call close_file(Til_restart)
@@ -4425,6 +4436,8 @@ subroutine lai_init_megan3( lonb,latb, axes )
    ENDIF
 
    IF (open_file(file_LAIv_obj, file_LAIv, "read")) THEN
+      IF(mpp_pe() == mpp_root_pe()) call error_mesg ('lai_init_megan3',  &
+           'Reading NetCDF formatted input file: '//file_LAIv, NOTE)
 ! Set up for input grid
 ! MYL: Ideally, read grid dims from file_LAIv, hard coded here for now
       nlonin = 3600 
@@ -4636,6 +4649,8 @@ subroutine xactive_bvoc_end
 
    !< Open the scalar file with the current pelist, so that only the root pe opens and writes the file
    if (open_file(Xbvoc_restart,"RESTART/xactive_bvoc.res.nc","overwrite", is_restart=.true., pelist=pes)) then
+      IF(mpp_pe() == mpp_root_pe()) call error_mesg ('xactive_bvoc_end',  &
+           'Writing NetCDF formatted restart file: xactive_bvoc.res.nc', NOTE)
       call xactive_bvoc_register_restart_scalars(Xbvoc_restart)
       call write_restart(Xbvoc_restart)
       call close_file(Xbvoc_restart)
