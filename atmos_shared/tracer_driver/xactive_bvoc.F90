@@ -1097,8 +1097,11 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
          ENDIF
       ELSE
          IF ( xactive_algorithm == 'MEGAN2' ) THEN
-            nTERP = 7  ! M.Lin (8/2022): remove other monoterpenes (not in Sindelarova et al, but in Geos-Chem)
-            !nTERP = 8
+            IF ( do_AM3_TERP ) THEN
+               nTERP = 8  ! LWH repro AM3/AM4
+            ELSE
+               nTERP = 7  ! M.Lin (8/2022): remove other monoterpenes (not in Sindelarova et al, but in Geos-Chem)
+            ENDIF
          ELSE
             nTERP = 6
          ENDIF
@@ -1225,9 +1228,13 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
 !  ... >>>>>>> parsed vs. lumped terpenes
 !--------------------------------------------------------------------------------------
          IF ( trim(tracnam(i))=='ISOP' .AND. do_AM3_ISOP ) THEN
-            ecfile = 'INPUT/megan2.epmap_Xveg.ISOP.0.5x0.5.nc'
+!           ecfile = 'INPUT/megan2.epmap_Xveg.ISOP.0.5x0.5.nc' ! M1L
+            ecfile = 'INPUT/megan.ISOP.nc' ! LWH repro AM3/AM4
             if (open_file(ecfile_obj,ecfile,"read")) then
 !set up data dimension, ideally read in from input file 
+!LWH: could switch to 
+!              call get_dimension_size(ecfile_obj,"lon",nlonin)
+!              call get_dimension_size(ecfile_obj,"lat",nlatin)
                nlonin = 720
                nlatin = 360 
                ALLOCATE( inlon(nlonin) )
@@ -1316,7 +1323,8 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
          ELSE IF ( trim(tracnam(i))=='C10H16' ) THEN
             IF ( xactive_algorithm == 'MEGAN2' ) THEN
                IF ( do_AM3_TERP ) THEN        !M.Lin (Aug2022)
-                   ecfile = 'INPUT/megan2.epmap_Xveg.C10H16.0.5x0.5.nc' !For each vegn type (ntr/btr/shr/crp/grs)
+!                 ecfile = 'INPUT/megan2.epmap_Xveg.C10H16.0.5x0.5.nc' !For each vegn type (ntr/btr/shr/crp/grs)
+                  ecfile = 'INPUT/megan2.xactive.parsed_terpenes.nc' ! LWH repro AM3/AM4
                   if (open_file(ecfile_obj,ecfile,"read")) then
 !set up data dimension, ideally read in from input file 
                     nlonin = 720
