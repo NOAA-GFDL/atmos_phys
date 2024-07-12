@@ -167,7 +167,8 @@ use            fms2_io_mod,  only : FmsNetcdfFile_t, FmsNetcdfDomainFile_t, &
                                     register_restart_field, register_axis, unlimited, &
                                     open_file, read_restart, write_restart, close_file, &
                                     register_field, write_data, get_global_io_domain_indices, &
-                                    register_variable_attribute, read_data, file_exists
+                                    register_variable_attribute, read_data, file_exists, &
+                                    get_dimension_size
 use         M_TRACNAME_MOD,  only : tracnam
 use      tracer_manager_mod, only : get_tracer_index,      &
                                     query_method
@@ -1236,11 +1237,10 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                IF(mpp_pe() == mpp_root_pe()) call error_mesg ('xactive_bvoc_init',  &
                     'Reading NetCDF formatted input file: megan.ISOP.nc', NOTE)
 !set up data dimension, ideally read in from input file 
-!LWH: could switch to 
-!              call get_dimension_size(ecfile_obj,"lon",nlonin)
-!              call get_dimension_size(ecfile_obj,"lat",nlatin)
-               nlonin = 720
-               nlatin = 360 
+!              nlonin = 720
+!              nlatin = 360 
+               call get_dimension_size(ecfile_obj,'lon',nlonin)
+               call get_dimension_size(ecfile_obj,'lat',nlatin)
                ALLOCATE( inlon(nlonin) )
                ALLOCATE( inlat(nlatin) )
                ALLOCATE( inlone(nlonin+1) )
@@ -1282,8 +1282,10 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
 !set up data dimension, ideally read in from input file 
                IF ( mpp_pe()==mpp_root_pe()) call error_mesg('xactive_bvoc_init',  &
                   'MYL: Using '//trim(ecfile),NOTE)
-               nlonin = 3600
-               nlatin = 1800 
+!              nlonin = 3600
+!              nlatin = 1800 
+               call get_dimension_size(ecfile_obj,'lon',nlonin)
+               call get_dimension_size(ecfile_obj,'lat',nlatin)
                ALLOCATE( inlon(nlonin) )
                ALLOCATE( inlat(nlatin) )
                ALLOCATE( inlone(nlonin+1) )
@@ -1332,8 +1334,10 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                     IF(mpp_pe() == mpp_root_pe()) call error_mesg ('xactive_bvoc_init',  &
                          'Reading NetCDF formatted input file: '//ecfile, NOTE)
 !set up data dimension, ideally read in from input file 
-                    nlonin = 720
-                    nlatin = 360 
+!                   nlonin = 720
+!                   nlatin = 360 
+                    call get_dimension_size(ecfile_obj,'lon',nlonin)
+                    call get_dimension_size(ecfile_obj,'lat',nlatin)
                     ALLOCATE( inlon(nlonin) )
                     ALLOCATE( inlat(nlatin) )
                     ALLOCATE( inlone(nlonin+1) )
@@ -1379,8 +1383,10 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
                  if (open_file(ecfile_obj,ecfile,"read")) then
                     IF ( mpp_pe()==mpp_root_pe()) call error_mesg('xactive_bvoc_init',&
                       'Using '//trim(ecfile),NOTE)
-                    nlonin = 3600
-                    nlatin = 1800 
+!                   nlonin = 3600
+!                   nlatin = 1800 
+                    call get_dimension_size(ecfile_obj,'lon',nlonin)
+                    call get_dimension_size(ecfile_obj,'lat',nlatin)
                     ALLOCATE( inlon(nlonin) )
                     ALLOCATE( inlat(nlatin) )
                     ALLOCATE( inlone(nlonin+1) )
@@ -3912,13 +3918,15 @@ end function fGAMMA_PAR_AM4
          'Reading NetCDF formatted input file: '//file_TEMP, NOTE)
 
 !read in lat & lon from input file, get boundaries and convert to radians
-      IF ( file_TEMP == 'INPUT/tas_monthly_clim_1980-2000.nc' ) then
-        metlonin = 360 
-        metlatin = 180 
-      ELSE
-        metlonin = 1440 
-        metlatin =  721 
-      ENDIF
+!     IF ( file_TEMP == 'INPUT/tas_monthly_clim_1980-2000.nc' ) then
+!       metlonin = 360 
+!       metlatin = 180 
+!     ELSE
+!       metlonin = 1440 
+!       metlatin =  721 
+!     ENDIF
+      call get_dimension_size(tasfile_obj,'lon',metlonin)
+      call get_dimension_size(tasfile_obj,'lat',metlatin)
 
       ALLOCATE( metlon(metlonin) )
       ALLOCATE( metlat(metlatin) )
@@ -4028,13 +4036,15 @@ subroutine ppfd_init_AM3 (lonb, latb, axes)
           'Reading NetCDF formatted input file: '//file_PPFD, NOTE)
 
 !read in lat & lon from input file, get boundaries and convert to radians
-     IF ( file_PPFD == 'INPUT/dswrf_monthly_clim_1980-2000.nc' ) then
-        metlonin = 360 
-        metlatin = 180 
-     ELSE
-        metlonin = 1440 
-        metlatin =  721 
-     ENDIF
+!    IF ( file_PPFD == 'INPUT/dswrf_monthly_clim_1980-2000.nc' ) then
+!       metlonin = 360 
+!       metlatin = 180 
+!    ELSE
+!       metlonin = 1440 
+!       metlatin =  721 
+!    ENDIF
+     call get_dimension_size(dswfile_obj,'lon',metlonin)
+     call get_dimension_size(dswfile_obj,'lat',metlatin)
 
      ALLOCATE( metlon(metlonin) )
      ALLOCATE( metlat(metlatin) )
@@ -4162,13 +4172,15 @@ subroutine pft_init_AM3( lonb, latb, axes )
       IF ( mpp_pe() == mpp_root_pe() ) call error_mesg ( 'pft_init_AM3', &
            'Reading NetCDF formatted input file: '//file_PFT, NOTE)
 ! Get lat/lon dims and allocate memory
-      IF ( file_PFT == 'INPUT/mksrf_pft.060929.nc' ) then
-       nlonin = 720
-       nlatin = 360
-      ELSE
-       nlonin = 3600 
-       nlatin = 1800
-      ENDIF
+!     IF ( file_PFT == 'INPUT/mksrf_pft.060929.nc' ) then
+!      nlonin = 720
+!      nlatin = 360
+!     ELSE
+!      nlonin = 3600 
+!      nlatin = 1800
+!     ENDIF
+      call get_dimension_size(file_PFT_obj,'lon',nlonin)
+      call get_dimension_size(file_PFT_obj,'lat',nlatin)
       allocate( lonpft(nlonin) )
       allocate( latpft(nlatin) )
       allocate( lonpfte(nlonin+1) )
@@ -4303,13 +4315,15 @@ subroutine lai_init_AM3( lonb,latb, axes )
            'Reading NetCDF formatted input file: '//file_LAI, NOTE)
 ! MYL: Get data dims and allocate arrays
 !      Ideally, this should be read from file_LAI, hard coded here for now
-         IF ( file_LAI == 'INPUT/mksrf_lai.060929.nc' ) then
-            nlonin = 720
-            nlatin = 360
-         ELSE               ! high-res data
-            nlonin = 3600 
-            nlatin = 1800
-         ENDIF
+!        IF ( file_LAI == 'INPUT/mksrf_lai.060929.nc' ) then
+!           nlonin = 720
+!           nlatin = 360
+!        ELSE               ! high-res data
+!           nlonin = 3600 
+!           nlatin = 1800
+!        ENDIF
+         call get_dimension_size(file_LAI_obj,'lon',nlonin)
+         call get_dimension_size(file_LAI_obj,'lat',nlatin)
 
          ALLOCATE( lonlai(nlonin) )
          ALLOCATE( latlai(nlatin) )
@@ -4440,8 +4454,10 @@ subroutine lai_init_megan3( lonb,latb, axes )
            'Reading NetCDF formatted input file: '//file_LAIv, NOTE)
 ! Set up for input grid
 ! MYL: Ideally, read grid dims from file_LAIv, hard coded here for now
-      nlonin = 3600 
-      nlatin = 1800
+!     nlonin = 3600 
+!     nlatin = 1800
+      call get_dimension_size(file_LAIv_obj,'lon',nlonin)
+      call get_dimension_size(file_LAIv_obj,'lat',nlatin)
       ALLOCATE( inlon(nlonin) )
       ALLOCATE( inlat(nlatin) )
       ALLOCATE( inlone(nlonin+1) )
