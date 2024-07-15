@@ -1,7 +1,8 @@
 module xactive_bvoc_mod
 !
-! <CONTACT EMAIL="Jordan.Schnell@noaa.gov">
-!   Jordan L. Schnell
+! <CONTACT EMAIL="Meiyun.Lin@noaa.gov">
+!   Initial codes by Jordan L. Schnell
+!   Modified by Meiyun Lin for precomputed emission potential maps
 ! </CONTACT>
 !
 ! <OVERVIEW>
@@ -1231,6 +1232,7 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx)
 !  ... >>>>>>> parsed vs. lumped terpenes
 !--------------------------------------------------------------------------------------
          IF ( trim(tracnam(i))=='ISOP' .AND. do_AM3_ISOP ) THEN
+! LWH: revert to AM3/AM4 file
 !           ecfile = 'INPUT/megan2.epmap_Xveg.ISOP.0.5x0.5.nc' ! M1L
             ecfile = 'INPUT/megan.ISOP.nc' ! LWH repro AM3/AM4
             if (open_file(ecfile_obj,ecfile,"read")) then
@@ -4019,8 +4021,9 @@ subroutine ppfd_init_AM3 (lonb, latb, axes)
 !       ppfd: srad - short wave from sun (W/m2)
 !       assuming 4.5 (umol m-2 s-1) per (W m-2)
 !       assume 1/2 of srad is in 400-700nm band (PAR)
-   !real, parameter                         :: const0 = 4.766
-   real, parameter                         :: const0 = 4.5 
+! LWH: revert to AM3/AM4 value
+   real, parameter                         :: const0 = 4.766
+!  real, parameter                         :: const0 = 4.5
    type(FmsNetcdfFile_t)                   :: dswfile_obj !< Fms2io fileobj
    type (horiz_interp_type)                :: Interp
 
