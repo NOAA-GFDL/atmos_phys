@@ -1,5 +1,4 @@
 MODULE CONV_PLUMES_k_MOD
-#include <fms_platform.h>
 
     use  aer_ccn_act_k_mod,   only: aer_ccn_act_k
     use  conv_utilities_k_mod,only: findt_k, exn_k, qsat_k, adicloud, sounding, uw_params
@@ -48,19 +47,19 @@ MODULE CONV_PLUMES_k_MOD
         logical :: use_new_let, do_subcloud_flx, use_lcl_only, do_new_pevap, do_limit_wmax, stop_at_let,do_hlflx_zero
         logical :: do_varying_rpen, do_new_pblfac, do_new_subflx, do_new_qnact, do_2nd_act, do_downdraft, do_conv_micro_N
         logical :: do_limit_fdr
-        character(len=32), dimension(:), _ALLOCATABLE  :: tracername _NULL
-        character(len=32), dimension(:), _ALLOCATABLE  :: tracer_units _NULL
-        type(cwetdep_type), dimension(:), _ALLOCATABLE :: wetdep _NULL
+        character(len=32), dimension(:), allocatable  :: tracername 
+        character(len=32), dimension(:), allocatable  :: tracer_units 
+        type(cwetdep_type), dimension(:), allocatable :: wetdep 
     end type cpnlist
 
     public ddraft
     type ddraft
-        real, _ALLOCATABLE :: hld   (:) _NULL, qctd  (:) _NULL, qvd   (:) _NULL
-        real, _ALLOCATABLE :: qld   (:) _NULL, qid   (:) _NULL, qnd   (:) _NULL
-        real, _ALLOCATABLE :: ud    (:) _NULL, vd    (:) _NULL, wd    (:) _NULL
-        real, _ALLOCATABLE :: pptr_d(:) _NULL, ppti_d(:) _NULL, pptn_d(:) _NULL
-        real, _ALLOCATABLE :: dmf   (:) _NULL
-        real, _ALLOCATABLE :: trd (:,:) _NULL, trd_dwet(:,:) _NULL
+        real, allocatable :: hld   (:) , qctd  (:) , qvd   (:) 
+        real, allocatable :: qld   (:) , qid   (:) , qnd   (:) 
+        real, allocatable :: ud    (:) , vd    (:) , wd    (:) 
+        real, allocatable :: pptr_d(:) , ppti_d(:) , pptn_d(:) 
+        real, allocatable :: dmf   (:) 
+        real, allocatable :: trd (:,:) , trd_dwet(:,:) 
     end type ddraft
 
     public cplume
@@ -69,25 +68,25 @@ MODULE CONV_PLUMES_k_MOD
         real    :: cush, cldhgt, prel, zrel, nbuo, pdep, ptop, umf_plev
         real    :: maxcldfrac
         real    :: qn_act, qn_act_diag !drop
-        real, _ALLOCATABLE :: thcu  (:) _NULL, qctu  (:) _NULL, uu    (:) _NULL
-        real, _ALLOCATABLE :: vu    (:) _NULL, qlu   (:) _NULL, qiu   (:) _NULL
-        real, _ALLOCATABLE :: pptr  (:) _NULL, ppti  (:) _NULL, wu    (:) _NULL
-        real, _ALLOCATABLE :: umf   (:) _NULL, emf   (:) _NULL, thvu  (:) _NULL
-        real, _ALLOCATABLE :: rei   (:) _NULL, fer   (:) _NULL, fdr   (:) _NULL
-        real, _ALLOCATABLE :: dp    (:) _NULL, thc   (:) _NULL, qct   (:) _NULL
-        real, _ALLOCATABLE :: ql    (:) _NULL, qi    (:) _NULL, qa    (:) _NULL
-        real, _ALLOCATABLE :: u     (:) _NULL, v     (:) _NULL, p     (:) _NULL
-        real, _ALLOCATABLE :: ps    (:) _NULL, ufrc  (:) _NULL, thvtop(:) _NULL
-        real, _ALLOCATABLE :: thvbot(:) _NULL, fdrsat(:) _NULL, z     (:) _NULL
-        real, _ALLOCATABLE :: qn    (:) _NULL, qnu   (:) _NULL, zs    (:) _NULL 
-        real, _ALLOCATABLE :: qn_act_pop  (:) _NULL, qn_act_pop_diag  (:) _NULL !XL, drop_pop
-        real, _ALLOCATABLE :: qn_act_pop_mass  (:) _NULL, qn_act_pop_mass_diag  (:) _NULL !XL, drop_pop_mass
-        real, _ALLOCATABLE :: hlu   (:) _NULL, hl    (:) _NULL, clu   (:) _NULL
-        real, _ALLOCATABLE :: ciu   (:) _NULL, buo   (:) _NULL, t     (:) _NULL
-        real, _ALLOCATABLE :: crate (:) _NULL, prate (:) _NULL, peff  (:) _NULL
-        real, _ALLOCATABLE :: dbuodp(:) _NULL, buog  (:) _NULL
-        real, _ALLOCATABLE :: tr  (:,:) _NULL, tru (:,:) _NULL, tru_dwet(:,:) _NULL
-        real, _ALLOCATABLE :: pptn  (:) _NULL, rhu   (:) _NULL
+        real, allocatable :: thcu  (:) , qctu  (:) , uu    (:) 
+        real, allocatable :: vu    (:) , qlu   (:) , qiu   (:) 
+        real, allocatable :: pptr  (:) , ppti  (:) , wu    (:) 
+        real, allocatable :: umf   (:) , emf   (:) , thvu  (:) 
+        real, allocatable :: rei   (:) , fer   (:) , fdr   (:) 
+        real, allocatable :: dp    (:) , thc   (:) , qct   (:) 
+        real, allocatable :: ql    (:) , qi    (:) , qa    (:) 
+        real, allocatable :: u     (:) , v     (:) , p     (:) 
+        real, allocatable :: ps    (:) , ufrc  (:) , thvtop(:) 
+        real, allocatable :: thvbot(:) , fdrsat(:) , z     (:) 
+        real, allocatable :: qn    (:) , qnu   (:) , zs    (:)  
+        real, allocatable :: qn_act_pop  (:) , qn_act_pop_diag  (:)  !XL, drop_pop
+        real, allocatable :: qn_act_pop_mass  (:) , qn_act_pop_mass_diag  (:)  !XL, drop_pop_mass
+        real, allocatable :: hlu   (:) , hl    (:) , clu   (:) 
+        real, allocatable :: ciu   (:) , buo   (:) , t     (:) 
+        real, allocatable :: crate (:) , prate (:) , peff  (:) 
+        real, allocatable :: dbuodp(:) , buog  (:) 
+        real, allocatable :: tr  (:,:) , tru (:,:) , tru_dwet(:,:) 
+        real, allocatable :: pptn  (:) , rhu   (:) 
         type(ddraft) :: dd
     end type cplume
 
@@ -96,21 +95,21 @@ MODULE CONV_PLUMES_k_MOD
         integer :: botlev, toplev
         real    :: rain, snow, denth, uav, vav, conint, freint,  &
             dtint, dqint, dqtmp, dting, cpool, dhfin, mslcl
-        real, _ALLOCATABLE :: uten  (:) _NULL, vten  (:) _NULL, tten  (:) _NULL
-        real, _ALLOCATABLE :: qvten (:) _NULL, qlten (:) _NULL, qiten (:) _NULL
-        real, _ALLOCATABLE :: qaten (:) _NULL, thcten(:) _NULL, qctten(:) _NULL
-        real, _ALLOCATABLE :: qvdiv (:) _NULL, qldiv (:) _NULL, qidiv (:) _NULL
-        real, _ALLOCATABLE :: thcflx(:) _NULL, qctflx(:) _NULL, qtflxu(:) _NULL
-        real, _ALLOCATABLE :: umflx (:) _NULL, vmflx (:) _NULL, qvflx (:) _NULL
-        real, _ALLOCATABLE :: qlflx (:) _NULL, qiflx (:) _NULL, qaflx (:) _NULL
-        real, _ALLOCATABLE :: qnflx (:) _NULL, qnten (:) _NULL, pflx  (:) _NULL
-        real, _ALLOCATABLE :: hlflx (:) _NULL, hlten (:) _NULL, pflx_e(:) _NULL
-        real, _ALLOCATABLE :: tevap (:) _NULL, qevap (:) _NULL, nqtflx(:) _NULL
-        real, _ALLOCATABLE :: qldet (:) _NULL, qidet (:) _NULL, qadet (:) _NULL
-        real, _ALLOCATABLE :: qndet (:) _NULL, udet  (:) _NULL, vdet  (:) _NULL
+        real, allocatable :: uten  (:) , vten  (:) , tten  (:) 
+        real, allocatable :: qvten (:) , qlten (:) , qiten (:) 
+        real, allocatable :: qaten (:) , thcten(:) , qctten(:) 
+        real, allocatable :: qvdiv (:) , qldiv (:) , qidiv (:) 
+        real, allocatable :: thcflx(:) , qctflx(:) , qtflxu(:) 
+        real, allocatable :: umflx (:) , vmflx (:) , qvflx (:) 
+        real, allocatable :: qlflx (:) , qiflx (:) , qaflx (:) 
+        real, allocatable :: qnflx (:) , qnten (:) , pflx  (:) 
+        real, allocatable :: hlflx (:) , hlten (:) , pflx_e(:) 
+        real, allocatable :: tevap (:) , qevap (:) , nqtflx(:) 
+        real, allocatable :: qldet (:) , qidet (:) , qadet (:) 
+        real, allocatable :: qndet (:) , udet  (:) , vdet  (:) 
         !++++yim
-        real, _ALLOCATABLE :: trflx(:,:) _NULL,trten (:,:) _NULL, trwet(:,:) _NULL
-        real, _ALLOCATABLE :: trevp(:,:) _NULL, dtring(:) _NULL
+        real, allocatable :: trflx(:,:) ,trten (:,:) , trwet(:,:) 
+        real, allocatable :: trevp(:,:) , dtring(:) 
     end type ctend
 
 contains

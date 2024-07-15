@@ -1,5 +1,4 @@
 MODULE UW_CONV_MOD
-#include <fms_platform.h>
 
   use           mpp_mod, only : mpp_pe, mpp_root_pe, stdlog
   use      Constants_Mod, ONLY: tfreeze,HLv,HLf,HLs,CP_AIR,GRAV,Kappa,rdgas,rvgas
@@ -1720,6 +1719,8 @@ contains
           qv(i,j,:), qtr(i,j,:,nql), qtr(i,j,:,nqi), qtr(i,j,:,nqa), qntmp,        &
           am1(i,j,:),  am2(i,j,:),  am3(i,j,:),  am4(i,j,:),                       &
           amx1(i,j,:), amx2(i,j,:), amx3(i,j,:), amx4(i,j,:),                      &
+          asol%matrix_N(i,j,:,:),   asol%matrix_Dg_dry(i,j,:,:),                   & !matrix input
+          asol%matrix_MSPCS(i,j,:,:,:), asol%matrix_sigma(:),                      & !matrix input
           tracers(i,j,:,:), src_choice,                                            &
           tdt_rad(i,j,:), tdt_dyn(i,j,:), qvdt_dyn(i,j,:), qidt_dyn(i,j,:),        &
           dgz_dyn(i,j,:), ddp_dyn(i,j,:), tdt_dif(i,j,:), dgz_phy(i,j,:),          &
@@ -2297,12 +2298,12 @@ contains
     call cp_end_k(cp1)
     call ct_end_k(ct)
     call ct_end_k(ct1)
-    if (_ALLOCATED ( cpn%tracername    ))  deallocate ( cpn%tracername    )
-    if (_ALLOCATED ( cpn%tracer_units  ))  deallocate ( cpn%tracer_units  )
-    if (_ALLOCATED ( cpn%wetdep        ))  deallocate ( cpn%wetdep        )
-    if (_ALLOCATED ( dpn%tracername    ))  deallocate ( dpn%tracername    )
-    if (_ALLOCATED ( dpn%tracer_units  ))  deallocate ( dpn%tracer_units  )
-    if (_ALLOCATED ( dpn%wetdep        ))  deallocate ( dpn%wetdep        )
+    if (allocated ( cpn%tracername    ))  deallocate ( cpn%tracername    )
+    if (allocated ( cpn%tracer_units  ))  deallocate ( cpn%tracer_units  )
+    if (allocated ( cpn%wetdep        ))  deallocate ( cpn%wetdep        )
+    if (allocated ( dpn%tracername    ))  deallocate ( dpn%tracername    )
+    if (allocated ( dpn%tracer_units  ))  deallocate ( dpn%tracer_units  )
+    if (allocated ( dpn%wetdep        ))  deallocate ( dpn%wetdep        )
 
     if (do_uwcmt) then
         half_delt = delt*0.5

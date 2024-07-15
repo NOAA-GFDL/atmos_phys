@@ -1,5 +1,7 @@
 module aero_wet 
-    !-----------------------------------------------------------------------
+use mpp_mod, only: mpp_pe, mpp_sync
+
+        !-----------------------------------------------------------------------
     ! written by x5l (Xiaohan.Li@noaa.gov), used to calculate water uptake by k-Kohler theory
     !--------------
     ! use kappa-kohler theory: Petters & Kreidenweis, 2007
@@ -47,6 +49,11 @@ CONTAINS
         real, parameter :: surften = 72.
         real, parameter :: third = 1./3.
         real, parameter :: ugascon = 8.314e7
+!        call mpp_sync()
+!$omp critical
+        write(mpp_pe()+100, *) ddry_in, hygro, s, tair
+!$omp end critical
+
         rdry_in = ddry_in/2
         !effect of organics on surface tension is neglected
         a=2.e4*mw*surften/(ugascon*tair*rhow) !in um, note: 2.e4 is due to ugascon in 10^7

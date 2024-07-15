@@ -1,3 +1,4 @@
 {
-    "fortran.fortls.disabled": true
+    "fortran.fortls.disabled": true,
+    "fortran.fortls.path": "/ncrc/home1/Fabien.Paulot/miniconda3/bin/fortls"
 }

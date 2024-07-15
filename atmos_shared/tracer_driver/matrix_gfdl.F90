@@ -266,7 +266,7 @@ contains
                     !                       Note: this step doesn't include new particle formation
                     !    Note: the mass sources have been already updated before matrix_run
                     !------------------------------------------------------------------------------
-                    call set_matrix_emis_number !update tracer source of  num_rate 
+                    call set_matrix_emis_number(is,ie,js,je) !update tracer source of  num_rate 
                     call mpp_clock_end(ini_clock)
                     !------------------------------------------------------------------------------------
                     !               Step *: H2SO4 condensational growth, must prior new particle formation
@@ -1414,15 +1414,16 @@ end subroutine set_matrix_source_generic
 ! 1. convert mass concentration into number concentration
 ! 2. assign number information to tracers with number type
 !-----------------------------------------------------------------------
-subroutine set_matrix_emis_number
+subroutine set_matrix_emis_number(is,ie,js,je)
     integer :: n,nt,ntt 
+    integer, intent(in) :: is,ie,js,je
     do n=1,npop
     if (matrix_all_pop(n)%nb_tracer_pop > 0) then !if this population exist in current configuration
             do nt = 1,matrix_all_pop(n)%nb_tracer_pop
             if (matrix_all_pop(n)%has_emission(nt)) then
                     ntt = matrix_all_pop(n)%tracer_index(nt)
-                    matrix_all_tracer(matrix_all_pop(n)%I_N)%source = &
-                            matrix_all_tracer(ntt)%source/(PI6*matrix_all_tracer(ntt)%dens*matrix_all_tracer(ntt)%DP0**3)*1E-9 !emission rate converted to number rate
+                    matrix_all_tracer(matrix_all_pop(n)%I_N)%source(is:ie,js:je,:) = &
+                            matrix_all_tracer(ntt)%source(is:ie,js:je,:)/(PI6*matrix_all_tracer(ntt)%dens*matrix_all_tracer(ntt)%DP0**3)*1E-9 !emission rate converted to number rate
 
             endif
             end do

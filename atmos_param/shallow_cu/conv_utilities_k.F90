@@ -1,5 +1,4 @@
 MODULE CONV_UTILITIES_k_MOD
-#include <fms_platform.h>
 
   use Sat_Vapor_Pres_k_Mod, ONLY: compute_qs_k
   use matrix_gfdl,       only: query_matrix_info
@@ -35,37 +34,37 @@ MODULE CONV_UTILITIES_k_MOD
     real     :: tke, cgust, cgust0, cgust_max, sigma0, lat, lon, p_minmse, plev_omg
     real     :: dpsum, hmint, hmint0
     real     :: pblht_avg, hlsrc_avg, qtsrc_avg, cape_avg, cin_avg, numx
-    real, _ALLOCATABLE :: t     (:)_NULL, qv   (:)_NULL, u     (:)_NULL
-    real, _ALLOCATABLE :: v     (:)_NULL, ql   (:)_NULL, qi    (:)_NULL
-    real, _ALLOCATABLE :: qa    (:)_NULL, thc  (:)_NULL, qct   (:)_NULL
-    real, _ALLOCATABLE :: thv   (:)_NULL, rh   (:)_NULL, p     (:)_NULL
-    real, _ALLOCATABLE :: z     (:)_NULL, dp   (:)_NULL, dz    (:)_NULL
-    real, _ALLOCATABLE :: rho   (:)_NULL, nu   (:)_NULL, leff  (:)_NULL
-    real, _ALLOCATABLE :: exner (:)_NULL, ps   (:)_NULL, exners(:)_NULL
-    real, _ALLOCATABLE :: zs    (:)_NULL, ssthc(:)_NULL, ssqct (:)_NULL
-    real, _ALLOCATABLE :: dudp  (:)_NULL, dvdp (:)_NULL, thvbot(:)_NULL
-    real, _ALLOCATABLE :: thvtop(:)_NULL, qn   (:)_NULL, qs    (:)_NULL
-    real, _ALLOCATABLE :: am1   (:)_NULL, am2  (:)_NULL, am3   (:)_NULL
-    real, _ALLOCATABLE :: am4   (:)_NULL, dthvdp(:)_NULL !x5lnote: sd%am1-am4 unit: g/cm3
-    real, _ALLOCATABLE :: amx1  (:)_NULL, amx2 (:)_NULL, amx3  (:)_NULL
-    real, _ALLOCATABLE :: amx4  (:)_NULL !x5lnote: sd%amx1-amx4 unit: kg/kg
-    real, _ALLOCATABLE :: matrix_N(:,:)_NULL !XL unit:
-    real, _ALLOCATABLE :: matrix_Dg_dry(:,:)_NULL !XL unit:
-    real, _ALLOCATABLE :: matrix_MSPCS(:,:,:)_NULL !XL unit:
-    real, _ALLOCATABLE :: matrix_sigma(:) !XL unit:
-    real, _ALLOCATABLE :: tdt_rad(:)_NULL
-    real, _ALLOCATABLE :: tdt_dyn(:)_NULL,qvdt_dyn(:)_NULL,qidt_dyn(:)_NULL
-    real, _ALLOCATABLE :: tdt_dif(:)_NULL,qvdt_dif(:)_NULL,qidt_dif(:)_NULL
-    real, _ALLOCATABLE :: hl    (:)_NULL, sshl (:)_NULL, hm    (:)_NULL
-    real, _ALLOCATABLE :: hms   (:)_NULL, omg  (:)_NULL, hdt_vadv(:)_NULL
-    real, _ALLOCATABLE :: tdt   (:)_NULL, dgz_dyn(:)_NULL, dgz_phy(:)_NULL
-    real, _ALLOCATABLE :: hdt_forc(:)_NULL
-    real, _ALLOCATABLE :: qtflx_up(:)_NULL, qtflx_dn(:)_NULL
-    real, _ALLOCATABLE :: omega_up(:)_NULL, omega_dn(:)_NULL
-    real, _ALLOCATABLE :: hf0   (:)_NULL, ddp_dyn(:)_NULL, hdp_dyn(:)_NULL
-    real, _ALLOCATABLE :: hfint(:)_NULL, hfintn(:)_NULL, dpint(:)_NULL
+    real, allocatable :: t     (:), qv   (:), u     (:)
+    real, allocatable :: v     (:), ql   (:), qi    (:)
+    real, allocatable :: qa    (:), thc  (:), qct   (:)
+    real, allocatable :: thv   (:), rh   (:), p     (:)
+    real, allocatable :: z     (:), dp   (:), dz    (:)
+    real, allocatable :: rho   (:), nu   (:), leff  (:)
+    real, allocatable :: exner (:), ps   (:), exners(:)
+    real, allocatable :: zs    (:), ssthc(:), ssqct (:)
+    real, allocatable :: dudp  (:), dvdp (:), thvbot(:)
+    real, allocatable :: thvtop(:), qn   (:), qs    (:)
+    real, allocatable :: am1   (:), am2  (:), am3   (:)
+    real, allocatable :: am4   (:), dthvdp(:) !x5lnote: sd%am1-am4 unit: g/cm3
+    real, allocatable :: amx1  (:), amx2 (:), amx3  (:)
+    real, allocatable :: amx4  (:) !x5lnote: sd%amx1-amx4 unit: kg/kg
+    real, allocatable :: matrix_N(:,:) !XL unit:
+    real, allocatable :: matrix_Dg_dry(:,:) !XL unit:
+    real, allocatable :: matrix_MSPCS(:,:,:) !XL unit:
+    real, allocatable :: matrix_sigma(:) !XL unit:
+    real, allocatable :: tdt_rad(:)
+    real, allocatable :: tdt_dyn(:),qvdt_dyn(:),qidt_dyn(:)
+    real, allocatable :: tdt_dif(:),qvdt_dif(:),qidt_dif(:)
+    real, allocatable :: hl    (:), sshl (:), hm    (:)
+    real, allocatable :: hms   (:), omg  (:), hdt_vadv(:)
+    real, allocatable :: tdt   (:), dgz_dyn(:), dgz_phy(:)
+    real, allocatable :: hdt_forc(:)
+    real, allocatable :: qtflx_up(:), qtflx_dn(:)
+    real, allocatable :: omega_up(:), omega_dn(:)
+    real, allocatable :: hf0   (:), ddp_dyn(:), hdp_dyn(:)
+    real, allocatable :: hfint(:), hfintn(:), dpint(:)
 !++++yim     
-    real, _ALLOCATABLE :: tr    (:,:)_NULL, sstr(:,:)_NULL
+    real, allocatable :: tr    (:,:), sstr(:,:)
  end type sounding
 
  public adicloud
@@ -74,10 +73,10 @@ MODULE CONV_UTILITIES_k_MOD
     integer  :: klcl, klfc, klnb
     real     :: plcl, zlcl, thvlcl, thv0lcl, rho0lcl
     real     :: plfc, plnb, cape, cin
-    real, _ALLOCATABLE :: t  (:)_NULL, qv  (:)_NULL, ql  (:)_NULL
-    real, _ALLOCATABLE :: qi (:)_NULL, thc (:)_NULL, qct (:)_NULL
-    real, _ALLOCATABLE :: thv(:)_NULL, nu  (:)_NULL, leff(:)_NULL
-    real, _ALLOCATABLE :: hl (:)_NULL, buo (:)_NULL, buog(:)_NULL, dbuodp(:)_NULL
+    real, allocatable :: t  (:), qv  (:), ql  (:)
+    real, allocatable :: qi (:), thc (:), qct (:)
+    real, allocatable :: thv(:), nu  (:), leff(:)
+    real, allocatable :: hl (:), buo (:), buog(:), dbuodp(:)
  end type adicloud
 
  public uw_params
