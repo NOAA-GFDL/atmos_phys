@@ -172,7 +172,7 @@ contains
 !<OVERVIEW>
 ! The constructor routine for the soa module.
 !</OVERVIEW>
-subroutine atmos_SOA_init ( lonb, latb, nlev, axes, Time, mask)
+function atmos_SOA_init ( lonb, latb, nlev, axes, Time, mask) result(Linteractive_BVOC)
 !-----------------------------------------------------------------------
 real,             intent(in), dimension(:,:)        :: lonb, latb
 integer,          intent(in)                        :: nlev
@@ -180,6 +180,8 @@ type(time_type),  intent(in)                        :: Time
 integer,          intent(in)                        :: axes(4)
 real, intent(in), dimension(:,:,:), optional        :: mask
 character(len=7), parameter :: mod_name = 'tracers'
+
+logical                                             :: Linteractive_BVOC
 !
 !-----------------------------------------------------------------------
 !
@@ -196,6 +198,8 @@ character(len=7), parameter :: mod_name = 'tracers'
         read (input_nml_file, nml=secondary_organics_nml, iostat=io)
         ierr = check_nml_error(io,'secondary_organics_nml')
       endif
+     
+     Linteractive_BVOC = use_interactive_BVOC_emis
 
 !---------------------------------------------------------------------
 !    write version number and namelist to logfile.
@@ -497,7 +501,7 @@ character(len=7), parameter :: mod_name = 'tracers'
       module_is_initialized = .TRUE.
 
 !-----------------------------------------------------------------------
-end subroutine atmos_SOA_init
+end function atmos_SOA_init
 
 
 
