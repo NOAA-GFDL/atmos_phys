@@ -821,9 +821,15 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
       enddo
 
       if (id_om_ddep > 0 .and. nomphilic > 0 .and. nomphobic > 0) then
-        used  = send_data (id_om_ddep,  &
-         pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic)),  &
-                                              Time_next, is_in=is, js_in=js)
+        if (nSOA > 0) then
+           used  = send_data (id_om_ddep,  &
+            pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic) + dsinku(:,:,nSOA)),  &
+                                                 Time_next, is_in=is, js_in=js)
+        else
+           used  = send_data (id_om_ddep,  &
+            pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic)),  &
+                                                 Time_next, is_in=is, js_in=js)
+        endif
       endif
       if (id_bc_ddep > 0 .and. nbcphilic > 0 .and. nbcphobic > 0) then
         used  = send_data (id_bc_ddep,  &
@@ -877,10 +883,16 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
             pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic)),  &
                                      Time_next, is_in=is, js_in=js)
       endif
-      if (id_dryoa > 0 .and. nomphilic > 0 .and. nomphobic > 0 .and. nSOA > 0) then
-        used  = send_data (id_dryoa,  &
-            pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic) + dsinku(:,:,nSOA)),  &
-                                     Time_next, is_in=is, js_in=js)
+      if (id_dryoa > 0 .and. nomphilic > 0 .and. nomphobic > 0) then
+        if (nSOA > 0) then
+          used  = send_data (id_dryoa,  &
+              pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic) + dsinku(:,:,nSOA)),  &
+                                       Time_next, is_in=is, js_in=js)
+        else
+          used  = send_data (id_dryoa,  &
+              pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic)),  &
+                                       Time_next, is_in=is, js_in=js)
+        endif
       endif
 
       if (do_cmip6_bug_diag) then
@@ -908,12 +920,18 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
         used = send_data (id_bc_col_kg_m2, suma, Time_next, is_in=is, js_in=js)
       end if
 
-      if (id_oa_col_kg_m2.gt.0 .and. nomphilic.gt.0 .and. nomphobic.gt.0 .and. nSOA.gt.0) then
+      if (id_oa_col_kg_m2.gt.0 .and. nomphilic.gt.0 .and. nomphobic.gt.0) then
         suma = 0.
         do k=1,kd
            suma(:,:) = suma(:,:) + &
-                       pwt(:,:,k)*(tracer_diag(:,:,k,nomphilic)+tracer_diag(:,:,k,nomphobic)+tracer(:,:,k,nSOA))
+                       pwt(:,:,k)*(tracer_diag(:,:,k,nomphilic)+tracer_diag(:,:,k,nomphobic))
         end do
+        if (nSOA.gt.0) then
+           do k=1,kd
+              suma(:,:) = suma(:,:) + pwt(:,:,k)*tracer_diag(:,:,k,nSOA)
+           end do
+        else
+        end if
         used = send_data (id_oa_col_kg_m2, suma, Time_next, is_in=is, js_in=js)
       end if
 
@@ -1188,8 +1206,14 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
      end if
 
      if ( query_cmip_diag_id(ID_OM) .and. nomphilic > 0 .and. nomphobic > 0) then
-        used = send_cmip_data_3d ( ID_OM, tracer_diag(:,:,:,nomphilic)+tracer_diag(:,:,:,nomphobic), &
-             Time_next, is_in=is, js_in=js, ks_in=1)
+        if (nSOA > 0) then
+           used = send_cmip_data_3d ( ID_OM, &
+                tracer_diag(:,:,:,nomphilic)+tracer_diag(:,:,:,nomphobic)+tracer_diag(:,:,:,nSOA), &
+                Time_next, is_in=is, js_in=js, ks_in=1)
+        else
+           used = send_cmip_data_3d ( ID_OM, tracer_diag(:,:,:,nomphilic)+tracer_diag(:,:,:,nomphobic), &
+                Time_next, is_in=is, js_in=js, ks_in=1)
+        end if
      end if
 
      if ( query_cmip_diag_id(ID_BC) .and. nbcphilic > 0 .and. nbcphobic > 0) then
