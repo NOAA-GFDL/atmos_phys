@@ -361,6 +361,7 @@ type(interpolate_type), allocatable :: drydep_data(:)
 
 integer, allocatable :: local_indices(:)
 integer, allocatable :: xactive_ndx(:)   ! Loc of xactive tracers in rdt, will have dim=nxactive
+character(len=64), allocatable    :: xactive_trname(:)
 
 ! This is the array of indices for the local model.
 ! local_indices(1) = 5 implies that the first local tracer is the fifth
@@ -793,9 +794,9 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
                                  tracer(:,:,kd,n), Time, Time_next, &
                                  lon, half_day, &
                                  drydep_data(n),albedo,con_atm)
-            if (do_nh3_atm_ocean_exchange .and. (n.eq.nNH3.or.is_nh3_tag_tracer(n))) then 
+            if (do_nh3_atm_ocean_exchange .and. (n.eq.nNH3.or.is_nh3_tag_tracer(n))) then
                !f1p: scale dry deposition of nh3 by the land fraction since ocean exchange is handled separately
-               dsinku(:,:,n) = dsinku(:,:,n)*max(1.-frac_open_sea,0.) 
+               dsinku(:,:,n) = dsinku(:,:,n)*max(1.-frac_open_sea,0.)
                !f1p: archive the dry deposition of nh3, since it needs to be forced to 0. for the ocean
                if (n.eq.nNH3) nh3_ddep = pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n_red(n)
             end if
@@ -808,7 +809,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
             if (nb_n(n).gt.0) &
                  sum_n_ddep     = sum_n_ddep + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n(n)
             if (nb_n_ox(n).gt.0) &
-                 sum_n_ox_ddep  = sum_n_ox_ddep + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n_ox(n) 
+                 sum_n_ox_ddep  = sum_n_ox_ddep + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n_ox(n)
             if (nb_n_red(n).gt.0) &
                  sum_n_red_ddep = sum_n_red_ddep + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n_red(n)
 
@@ -820,9 +821,15 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
       enddo
 
       if (id_om_ddep > 0 .and. nomphilic > 0 .and. nomphobic > 0) then
-        used  = send_data (id_om_ddep,  &
-         pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic)),  &
-                                              Time_next, is_in=is, js_in=js)
+        if (nSOA > 0) then
+           used  = send_data (id_om_ddep,  &
+            pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic) + dsinku(:,:,nSOA)),  &
+                                                 Time_next, is_in=is, js_in=js)
+        else
+           used  = send_data (id_om_ddep,  &
+            pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic)),  &
+                                                 Time_next, is_in=is, js_in=js)
+        endif
       endif
       if (id_bc_ddep > 0 .and. nbcphilic > 0 .and. nbcphobic > 0) then
         used  = send_data (id_bc_ddep,  &
@@ -876,10 +883,16 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
             pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic)),  &
                                      Time_next, is_in=is, js_in=js)
       endif
-      if (id_dryoa > 0 .and. nomphilic > 0 .and. nomphobic > 0 .and. nSOA > 0) then
-        used  = send_data (id_dryoa,  &
-            pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic) + dsinku(:,:,nSOA)),  &
-                                     Time_next, is_in=is, js_in=js)
+      if (id_dryoa > 0 .and. nomphilic > 0 .and. nomphobic > 0) then
+        if (nSOA > 0) then
+          used  = send_data (id_dryoa,  &
+              pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic) + dsinku(:,:,nSOA)),  &
+                                       Time_next, is_in=is, js_in=js)
+        else
+          used  = send_data (id_dryoa,  &
+              pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic)),  &
+                                       Time_next, is_in=is, js_in=js)
+        endif
       endif
 
       if (do_cmip6_bug_diag) then
@@ -907,12 +920,18 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
         used = send_data (id_bc_col_kg_m2, suma, Time_next, is_in=is, js_in=js)
       end if
 
-      if (id_oa_col_kg_m2.gt.0 .and. nomphilic.gt.0 .and. nomphobic.gt.0 .and. nSOA.gt.0) then
+      if (id_oa_col_kg_m2.gt.0 .and. nomphilic.gt.0 .and. nomphobic.gt.0) then
         suma = 0.
         do k=1,kd
            suma(:,:) = suma(:,:) + &
-                       pwt(:,:,k)*(tracer_diag(:,:,k,nomphilic)+tracer_diag(:,:,k,nomphobic)+tracer(:,:,k,nSOA))
+                       pwt(:,:,k)*(tracer_diag(:,:,k,nomphilic)+tracer_diag(:,:,k,nomphobic))
         end do
+        if (nSOA.gt.0) then
+           do k=1,kd
+              suma(:,:) = suma(:,:) + pwt(:,:,k)*tracer_diag(:,:,k,nSOA)
+           end do
+        else
+        end if
         used = send_data (id_oa_col_kg_m2, suma, Time_next, is_in=is, js_in=js)
       end if
 
@@ -1187,8 +1206,14 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
      end if
 
      if ( query_cmip_diag_id(ID_OM) .and. nomphilic > 0 .and. nomphobic > 0) then
-        used = send_cmip_data_3d ( ID_OM, tracer_diag(:,:,:,nomphilic)+tracer_diag(:,:,:,nomphobic), &
-             Time_next, is_in=is, js_in=js, ks_in=1)
+        if (nSOA > 0) then
+           used = send_cmip_data_3d ( ID_OM, &
+                tracer_diag(:,:,:,nomphilic)+tracer_diag(:,:,:,nomphobic)+tracer_diag(:,:,:,nSOA), &
+                Time_next, is_in=is, js_in=js, ks_in=1)
+        else
+           used = send_cmip_data_3d ( ID_OM, tracer_diag(:,:,:,nomphilic)+tracer_diag(:,:,:,nomphobic), &
+                Time_next, is_in=is, js_in=js, ks_in=1)
+        end if
      end if
 
      if ( query_cmip_diag_id(ID_BC) .and. nbcphilic > 0 .and. nbcphobic > 0) then
@@ -1530,21 +1555,24 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
    if ( nxactive > 0 ) then
 ! PAR [umoles/m2/s]
       PPFD = 4.766 * (flux_sw_down_vis_dir + flux_sw_down_vis_dif)
+
       call xactive_bvoc(lon, lat, land, is, ie, js, je, Time,              &
                         Time_next, coszen, pwt(:,:,kd), t(:,:,kd),         &
                         PPFD, w10m_land, tracer(:,:,kd,nco2),              &
-                        tracer(:,:,kd,no3), rtnd_xactive,                  &
-                        xbvoc4soa)
+                        tracer(:,:,kd,no3), xactive_trname,                &
+                        rtnd_xactive, xbvoc4soa)
 ! Update the tendencies based on the returned indices
       do ixact = 1, nxactive
-         rdt(:,:,kd,xactive_ndx(ixact)) = rdt(:,:,kd,xactive_ndx(ixact))   &
-                                          + rtnd_xactive(:,:,ixact)
-         if (xactive_ndx(ixact)==nISOP .and. id_emiisop_biogenic>0) then
-           used  = send_data (id_emiisop_biogenic, &
-                 xbvoc4soa(:,:,ind_xbvoc_ISOP)*1.0e04*0.068/AVOGNO,        &
-                 Time_next, is_in=is, js_in=js)
-         endif
+         if (xactive_ndx(ixact)>0) then
+            rdt(:,:,kd,xactive_ndx(ixact)) = rdt(:,:,kd,xactive_ndx(ixact))   &
+                 + rtnd_xactive(:,:,ixact)
+         end if
       enddo
+      if (id_emiisop_biogenic>0) then
+         used  = send_data (id_emiisop_biogenic, &
+              xbvoc4soa(:,:,ind_xbvoc_ISOP)*1.0e04*0.068/AVOGNO,        &
+              Time_next, is_in=is, js_in=js)
+      endif
       if (id_emibvoc>0) then
         used  = send_data (id_emibvoc, &
               (xbvoc4soa(:,:,ind_xbvoc_ISOP)*0.060 + &
@@ -1821,6 +1849,7 @@ type(time_type), intent(in)                                :: Time
         '==>Note from ' // trim(mod_name) // '(' // trim(sub_name) // '):'
 !>
 
+      logical :: do_interactive_bvoc_emis_for_soa
 !-----------------------------------------------------------------------
 !
 !  When initializing additional tracers, the user needs to make changes
@@ -1828,6 +1857,8 @@ type(time_type), intent(in)                                :: Time
 !-----------------------------------------------------------------------
 
       if (module_is_initialized) return
+
+      outunit = stdout()
 
 !------------------------------------------------------------------------
 !   read namelist.
@@ -2002,7 +2033,7 @@ type(time_type), intent(in)                                :: Time
       endif
 !SOA
       if ( nSOA > 0 ) then
-        call atmos_SOA_init ( lonb, latb, nbr_layers, axes, Time, mask)
+        do_interactive_bvoc_emis_for_soa = atmos_SOA_init ( lonb, latb, nbr_layers, axes, Time, mask)
         SOA_clock = mpp_clock_id( 'Tracer: SOA', &
                     grain=CLOCK_MODULE )
       endif
@@ -2035,25 +2066,55 @@ type(time_type), intent(in)                                :: Time
 
 !--------------------------------------------------------------------------------------
 ! xactive bvocs (jls)
+!--------------------------------------------------------------------------------------
       nxactive = 0
+      allocate(xactive_trname(ntp))
+      xactive_trname(:) = ''
       do n = 1, ntp
          call get_tracer_names (MODEL_ATMOS, n, name = tracer_name,  &
               units = tracer_units)
          ix   = get_tracer_index( MODEL_ATMOS, tracer_name )
          has_xactive = query_method('xactive_emissions', MODEL_ATMOS, ix, name2, control)
-
          if ( has_xactive ) then
             nxactive = nxactive + 1
+            xactive_trname(nxactive) = trim(tracer_name)
          endif
       enddo
+      if (do_interactive_bvoc_emis_for_soa) then
+         ! for simple chem with interactive bvoc emis, force ISOP and C10H16
+         if (.not. ANY(xactive_trname(:) == 'isop')) then
+            nxactive = nxactive + 1
+            xactive_trname(nxactive) = 'isop'
+         endif
+         if (.not. ANY(xactive_trname(:) == 'c10h16')) then
+            nxactive = nxactive + 1
+            xactive_trname(nxactive) = 'c10h16'
+         endif
+         if (mpp_pe() == mpp_root_pe()) &
+            write(outunit,*) 'Force BVOC calculation of isoprene and terpene emis for SOA'
+      end if
+
       if ( nxactive > 0 ) then
-         IF (mpp_pe() == mpp_root_pe()) THEN
-            write(*,*) 'Allocating xactive_ndx, number of xactive tracers = ', nxactive
-         ENDIF
+         if (mpp_pe() == mpp_root_pe()) &
+            write(outunit,*) 'Allocating xactive_ndx, number of xactive tracers = ', nxactive
          ALLOCATE( xactive_ndx (nxactive) )
-         call xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_ndx )
-         xbvoc_clock = mpp_clock_id( 'xactive_bvocs', &
-                       grain=CLOCK_MODULE )
+         do n=1,nxactive
+! Here we are trying to handle the unlikely case in which isoprene or terpenes are defined as tracers,
+! soa from dynamic bvocs emissions is requested, but isoprene/terpene emisions are not calculated by xactive
+            xactive_ndx(n) = get_tracer_index(MODEL_ATMOS,trim(xactive_trname(n)))
+            if (xactive_ndx(n) /= NO_TRACER) then
+               has_xactive = query_method('xactive_emissions', MODEL_ATMOS, xactive_ndx(n), name2, control)
+! If xactive_emis not specified, do not add xactive emis to tracer tendency
+!               if (.not. has_xactive) xactive_ndx(n) = NO_TRACER
+! Crash the model. this requires some further checking
+               if (.not. has_xactive .and. do_interactive_bvoc_emis_for_soa) call error_mesg ('amos_tracer_driver', &
+                    'inconsistency between soa and xactive bvoc request', FATAL)
+            endif
+            if (mpp_pe() == mpp_root_pe()) &
+               write(outunit,*) 'xactive_trname/xactive_ndx',xactive_trname(n),xactive_ndx(n)
+         end do
+         call xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_trname, xactive_ndx )
+         xbvoc_clock = mpp_clock_id( 'xactive_bvocs', grain=CLOCK_MODULE )
       endif
 
 !---------------------------------------------------------------------------------------
@@ -2073,7 +2134,7 @@ type(time_type), intent(in)                                :: Time
                                num_prog=ntp)
 
 !initialized nh3 tag
-     do_nh3_tag = atmos_nh3_tag_init(nt,axes,Time,lonb,latb,do_nh3_atm_ocean_exchange)     
+     do_nh3_tag = atmos_nh3_tag_init(nt,axes,Time,lonb,latb,do_nh3_atm_ocean_exchange)
 
      id_landfr = register_diag_field ( mod_name,                    &
             'landfr_atm', axes(1:2), Time,               &
@@ -2249,7 +2310,7 @@ type(time_type), intent(in)                                :: Time
       id_dryoa = register_cmip_diag_field_2d ( mod_name, &
                   'dryoa', Time, 'Dry Deposition Rate of Dry Aerosol Total Organic Matter', 'kg m-2 s-1', &
                   standard_name='tendency_of_atmosphere_mass_content_of_particulate_organic_matter_dry_aerosol_particles_due_to_dry_deposition')
- 
+
       id_emiisop_biogenic = register_cmip_diag_field_2d ( mod_name, &
                   'emiisop_biogenic', Time, 'Total Emission Rate of Isoprene from biogenic', 'kg m-2 s-1', &
                   standard_name='tendency_of_atmosphere_mass_content_of_isoprene_due_to_emission')
@@ -2371,8 +2432,6 @@ type(time_type), intent(in)                                :: Time
       id_tropoz = register_cmip_diag_field_2d ( mod_name, 'tropoz', &
                        Time, 'Tropospheric Ozone Column', 'm', &
                        standard_name='equivalent_thickness_at_stp_of_atmosphere_ozone_content')
-
-      outunit = stdout()
 
       do n = 1,nt
          call get_tracer_names (MODEL_ATMOS, n, name = tracer_name,  &
@@ -2579,7 +2638,7 @@ subroutine atmos_nitrogen_flux_init
 
       nNH3 = get_tracer_index(MODEL_ATMOS,'nh3')
       if (do_nh3_atm_ocean_exchange .and. nNH3.gt.0) then
-         if (mpp_root_pe().eq.mpp_pe()) write(*,*) 'setting up nh3_flux (atmos)'
+         if (mpp_root_pe().eq.mpp_pe()) write(outunit,*) 'setting up nh3_flux (atmos)'
          ind_nh3_flux = aof_set_coupler_flux('nh3_flux',                       &
               flux_type = 'air_sea_gas_flux_generic', implementation = 'johnson',       &
               atm_tr_index = nNH3,                                          &
@@ -2601,7 +2660,7 @@ end subroutine atmos_nitrogen_flux_init
 subroutine atmos_tracer_driver_time_vary (Time)
 
 type(time_type), intent(in) :: Time
-      
+
 !!! armanp
       if (do_bb_plumerise) then
         call atmos_fire_plumerise_time_vary (Time)
@@ -2724,7 +2783,7 @@ integer :: logunit
 
       logunit=stdlog()
       write (logunit,'(/,(a))') 'Exiting tracer_driver, have a nice day ...'
-      
+
       call atmos_fire_plumerise_end   !!!armanp
       call atmos_radon_end
       call atmos_sulfur_hex_end
