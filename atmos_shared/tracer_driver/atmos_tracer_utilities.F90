@@ -1852,7 +1852,7 @@ subroutine get_drydep_param(text_in_scheme,text_in_param,scheme,land_does_drydep
 
  ! if LM3 or lm3 is present anywhere in the scheme, land model handles the dry
  ! deposition over land surfaces
- land_does_drydep = (index(lowercase(text_in_scheme),'land:lm3')>0)
+ land_does_drydep = (index(lowercase(text_in_scheme),'land:')>0)
 end subroutine get_drydep_param
 !
 !#######################################################################
