@@ -568,6 +568,7 @@ real, dimension(size(r,1),size(r,2),size(r,3)) :: rtndbcphob, rtndbcphil
 real, dimension(size(r,1),size(r,2),size(r,3)) :: rtndomphob, rtndomphil
 real, dimension(size(r,1),size(r,2),size(r,3)) :: rtndco2, rtndco2_emis
 real, dimension(size(r,1),size(r,2),size(rdt,4)) :: dsinku
+real, dimension(size(r,1),size(r,2))             :: dsinku_ocn
 real, dimension(size(r,1),size(r,2)) :: hno3d_setl, all_so4d_setl
 real, dimension(size(r,1),size(r,2)) ::  w10m_ocean, w10m_land
 integer :: year,month,day,hour,minute,second
@@ -582,7 +583,8 @@ real, dimension(size(r,1),size(r,2),size(r,3)) :: fliq! liq/lwc (f1p)
 real, dimension(size(r,1),size(r,2),size(r,3),nt) :: tracer, tracer_orig, tracer_diag
 real, dimension(size(r,1),size(r,3)) :: dp, temp
 real, dimension(size(r,1),size(r,2)) :: all_salt_settl, all_dust_settl
-real, dimension(size(r,1),size(r,2)) :: suma, ocn_flx_fraction, sum_n_ddep, sum_n_red_ddep, sum_n_ox_ddep, nh3_ddep
+real, dimension(size(r,1),size(r,2)) :: suma, ocn_flx_fraction, sum_n_ddep, sum_n_red_ddep, sum_n_ox_ddep
+real, dimension(size(r,1),size(r,2)) :: sum_n_red_ddep_ocn, sum_n_ox_ddep_ocn
 real, dimension(size(r,1),size(r,2)) :: frland, frsnow, frsea, frice, PPFD
 real, dimension(size(r,1),size(r,2),size(r,3)) :: sumb
 integer, dimension(size(r,1),size(r,2)) ::  tropopause_ind
@@ -609,6 +611,8 @@ integer :: hh
 real :: local_hour_3d(size(r,1),size(r,2),size(r,3)),local_hour
 real :: local_hour_2d(size(r,1),size(r,2))
 logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
+
+logical :: ocn_does_deposition
 
 !-----------------------------------------------------------------------
     !!! armanp
@@ -779,26 +783,28 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
 !------------------------------------------------------------------------
 !++lwh
 
-     sum_n_ddep(:,:) = 0.
-     sum_n_ox_ddep(:,:) = 0.
-     sum_n_red_ddep(:,:) = 0.
-     nh3_ddep(:,:) = 0.
+     sum_n_ddep(:,:)         = 0.
+     sum_n_ox_ddep(:,:)      = 0.
+     sum_n_red_ddep(:,:)     = 0.
+     sum_n_ox_ddep_ocn(:,:)  = 0.
+     sum_n_red_ddep_ocn(:,:) = 0.
 
       do n=1,ntp
          if (n /= nqq .and. n/=nqa .and. n/=nqi .and. n/=nql) then
+
+            if (do_nh3_atm_ocean_exchange .and. (n.eq.nNH3.or.is_nh3_tag_tracer(n))) then 
+                ocn_does_deposition = .TRUE.
+            else 
+                ocn_does_deposition = .FALSE.
+            end if
+          
             call dry_deposition( n, is, js, u(:,:,kd), v(:,:,kd), t(:,:,kd), &
                                  pwt(:,:,kd), pfull(:,:,kd), &
                                  z_half(:,:,kd)-z_half(:,:,kd+1), u_star, &
-                                 land, frac_open_sea, dsinku(:,:,n), dt, &
+                                 land, frac_open_sea, dsinku(:,:,n), dsinku_ocn, dt, &
                                  tracer(:,:,kd,n), Time, Time_next, &
                                  lon, half_day, &
-                                 drydep_data(n),albedo,con_atm)
-            if (do_nh3_atm_ocean_exchange .and. (n.eq.nNH3.or.is_nh3_tag_tracer(n))) then 
-               !f1p: scale dry deposition of nh3 by the land fraction since ocean exchange is handled separately
-               dsinku(:,:,n) = dsinku(:,:,n)*max(1.-frac_open_sea,0.) 
-               !f1p: archive the dry deposition of nh3, since it needs to be forced to 0. for the ocean
-               if (n.eq.nNH3) nh3_ddep = pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n_red(n)
-            end if
+                                 drydep_data(n),albedo,ocn_does_deposition,con_atm)
 
             rdt(:,:,kd,n) = rdt(:,:,kd,n) - dsinku(:,:,n)
             if ( step_update_tracer ) then
@@ -806,11 +812,13 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
             end if
 
             if (nb_n(n).gt.0) &
-                 sum_n_ddep     = sum_n_ddep + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n(n)
+                 sum_n_ddep     = sum_n_ddep + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n(n)                
             if (nb_n_ox(n).gt.0) &
-                 sum_n_ox_ddep  = sum_n_ox_ddep + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n_ox(n) 
+                 sum_n_ox_ddep      = sum_n_ox_ddep     + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n_ox(n) 
+                 sum_n_ox_ddep_ocn  = sum_n_ox_ddep_ocn + pwt(:,:,kd)*dsinku_ocn*WTMN/wtmair*nb_n_ox(n)                  
             if (nb_n_red(n).gt.0) &
-                 sum_n_red_ddep = sum_n_red_ddep + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n_red(n)
+                 sum_n_red_ddep = sum_n_red_ddep         + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n_red(n)
+                 sum_n_red_ddep_ocn = sum_n_red_ddep_ocn + pwt(:,:,kd)*dsinku_ocn*WTMN/wtmair*nb_n_red(n)
 
             if (id_tracer_ddep_kg_m2_s(n)>0) then
                used = send_data ( id_tracer_ddep_kg_m2_s(n), dsinku(:,:,n)*pwt(:,:,kd)*conv_vmr_mmr(n), Time_next, is_in=is,js_in=js)
@@ -1737,7 +1745,8 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
 
 !for coupler
 !f1p: remove nh3_ddep from sum_n_red_ddep if nh3 is exchanged between atmosphere and ocean
-   call atmos_nitrogen_drydep_flux_set(max(sum_n_red_ddep-nh3_ddep,0.),sum_n_ox_ddep, is,ie,js,je)
+!call atmos_nitrogen_drydep_flux_set(max(sum_n_red_ddep-nh3_ddep,0.),sum_n_ox_ddep, is,ie,js,je)
+call atmos_nitrogen_drydep_flux_set(sum_n_red_ddep_ocn,sum_n_ox_ddep_ocn, is,ie,js,je)
 
 !tag nh3
    if (do_nh3_tag) then

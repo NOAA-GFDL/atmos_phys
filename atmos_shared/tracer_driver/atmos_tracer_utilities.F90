@@ -359,7 +359,7 @@ contains
     if (Drydep(n)%land_does_drydep) then
        if (get_tracer_index(MODEL_LAND,tracer_names(n))<=0) then
           call error_mesg('atmos_tracer_utilities_init', &
-               'Dry deposition of atmospheric tracer //"'//trim(Drydep(n)%name)//&
+               'Dry deposition of atmospheric tracer "'//lowercase(trim(tracer_names(n)))//&
                '" is done on land side, but corresponding land tracer is not defined in the field table.',&
                FATAL)
        endif
@@ -623,8 +623,8 @@ end subroutine write_namelist_values
 !
 !<SUBROUTINE NAME = "dry_deposition">
 subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
-    u_star, landfrac, frac_open_sea,dsinku, dt, tracer, Time, &
-    Time_next, lon, half_day, drydep_data, albedo, con_atm)
+    u_star, landfrac, frac_open_sea,dsinku, dsinku_ocn,dt, tracer, Time, &
+    Time_next, lon, half_day, drydep_data, albedo, ocean_does_deposition, con_atm)
   ! When formulation of dry deposition is resolved perhaps use the following?
   !                           landfr, seaice_cn, snow_area, &
   !                           vegn_cover, vegn_lai, &
@@ -731,6 +731,7 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
  real, intent(in), dimension(:,:)    :: lon, half_day
  real, intent(in), dimension(:,:)    :: landfrac,frac_open_sea
  real, intent(in), dimension(:,:)    :: albedo
+ logical, intent(in)                 :: ocean_does_deposition
  real, intent(in), dimension(:,:), optional    :: con_atm
  ! When formulation of dry deposition is resolved perhaps use the following?
  !real, intent(in), dimension(:,:)    :: landfr, z_pbl, b_star, rough_mom
@@ -739,7 +740,7 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
  type(time_type), intent(in)         :: Time, Time_next
  type(interpolate_type),intent(inout)  :: drydep_data
  real, intent(in)                   :: dt
- real, intent(out), dimension(:,:)   :: dsinku
+ real, intent(out), dimension(:,:)   :: dsinku, dsinku_ocn
 
  real,dimension(size(u,1),size(u,2))   :: hwindv,frictv,resisa,drydep_vel,ka,kss,kbs,km,vd_ocean,A,B,alpha,landr2
  !real,dimension(size(u,1),size(u,2))   :: mo_length_inv, vds, rs, k1, k2
@@ -995,12 +996,6 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
     drydep_vel(:,:) = 0.
  end select
 
- if (Drydep(n)%land_does_drydep) then
-    ! land handles dry deposition, so we need to scale the calculated values of
-    ! sink by the fraction of the non-land in the grid cell
-    dsinku = dsinku*(1-landfrac)
- endif
- dsinku(:,:) = MAX(dsinku(:,:), 0.0E+00)
  if ( drydep_exp ) then
     where(tracer>0)
        dsinku=tracer*(1. - exp(-dsinku*dt))/dt
@@ -1013,7 +1008,27 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
     elsewhere
        dsinku=0.0
     endwhere
- end if
+ end if 
+
+ if (ocean_does_deposition) then
+   dsinku_ocn = 0.
+   if (Drydep(n)%land_does_drydep) then
+      dsinku = 0.
+   else
+      !use 1-frac_open_sea instead of land_frac as the ocean does not calculate deposition when covered with ice      
+      dsinku = dsinku*(1.-frac_open_sea)
+   end if
+ else
+   dsinku_ocn = dsinku
+   if (Drydep(n)%land_does_drydep) then
+      dsinku = dsinku*(1.-landfrac)
+   end if
+ end if  
+
+ dsinku(:,:)     = MAX(dsinku(:,:), 0.0E+00)
+ dsinku_ocn(:,:) = MAX(dsinku_ocn(:,:), 0.0E+00)
+ 
+
 
  ! Now save the dry deposition to the diagnostic manager
  ! delta z = dp/(rho * grav)
