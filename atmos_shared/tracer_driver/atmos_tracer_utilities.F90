@@ -1013,7 +1013,8 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
  if (ocean_does_deposition) then
    dsinku_ocn = 0.
    if (Drydep(n)%land_does_drydep) then
-      dsinku = 0.
+      !the atmosphere should only see deposition on sea ice:
+      dsinku = dsinku*(1.-frac_open_sea-landfrac)
    else
       !use 1-frac_open_sea instead of land_frac as the ocean does not calculate deposition when covered with ice      
       dsinku = dsinku*(1.-frac_open_sea)
