@@ -67,7 +67,6 @@ MODULE CONV_PLUMES_k_MOD
         integer :: ltop, let, krel
         real    :: cush, cldhgt, prel, zrel, nbuo, pdep, ptop, umf_plev
         real    :: maxcldfrac
-        real    :: qn_act, qn_act_diag !drop
         real, allocatable :: thcu  (:) , qctu  (:) , uu    (:) 
         real, allocatable :: vu    (:) , qlu   (:) , qiu   (:) 
         real, allocatable :: pptr  (:) , ppti  (:) , wu    (:) 
@@ -78,7 +77,9 @@ MODULE CONV_PLUMES_k_MOD
         real, allocatable :: u     (:) , v     (:) , p     (:) 
         real, allocatable :: ps    (:) , ufrc  (:) , thvtop(:) 
         real, allocatable :: thvbot(:) , fdrsat(:) , z     (:) 
-        real, allocatable :: qn    (:) , qnu   (:) , zs    (:)  
+        real, allocatable :: qn    (:) , qnu   (:) , zs    (:) 
+        real, allocatable :: qnu_debug(:), qnu_diag(:)
+        real, allocatable :: single_act(:), single_act_debug(:), single_act_diag(:) !XL  
         real, allocatable :: qn_act_pop  (:) , qn_act_pop_diag  (:)  !XL, drop_pop
         real, allocatable :: qn_act_pop_mass  (:) , qn_act_pop_mass_diag  (:)  !XL, drop_pop_mass
         real, allocatable :: hlu   (:) , hl    (:) , clu   (:) 
@@ -178,7 +179,12 @@ contains
         allocate ( cp%rhu   (0:kd)); cp%rhu   =0.;
         allocate ( cp%crate (0:kd)); cp%crate =0.;
         allocate ( cp%prate (0:kd)); cp%prate =0.;
-        allocate ( cp%qnu   (0:kd)); cp%qnu   =0.;
+        allocate ( cp%qnu   (0:kd)); cp%qnu   =0.; !yim
+        allocate ( cp%qnu_debug   (0:kd));cp%qnu_debug   =0.; !XL yim_only_sulf
+        allocate ( cp%qnu_diag    (0:kd)); cp%qnu_diag   =0.; !XL matrix_only_sulf
+        allocate ( cp%single_act   (0:kd)); cp%single_act   =0.; !XL yim, single function test
+        allocate ( cp%single_act_debug   (0:kd));cp%single_act_debug   =0.; !XL yim_only_sulf, single function test
+        allocate ( cp%single_act_diag    (0:kd)); cp%single_act_diag   =0.; !XL matrix_only_sulf, single function test
         allocate ( cp%qn_act_pop          (npop));   cp%qn_act_pop           =0.; !XL, drop_pop
         allocate ( cp%qn_act_pop_diag     (npop));   cp%qn_act_pop_diag      =0.; !XL, drop_pop_diag
         allocate ( cp%qn_act_pop_mass     (npop));   cp%qn_act_pop_mass      =0.; !XL, drop_pop_mass
@@ -230,7 +236,8 @@ contains
             cp%rei, cp%fer, cp%fdr, cp%dp, cp%thc, cp%qct, cp%u, &
             cp%v, cp%p, cp%ps, cp%ufrc, cp%thvbot, cp%thvtop, &
             cp%fdrsat, cp%peff, cp%qnu, cp%ql, cp%qi, cp%qa, cp%qn, &
-            cp%qn_act_pop, cp%qn_act_pop_diag, cp%qn_act_pop_mass, cp%qn_act_pop_mass_diag, & !XL, qn_act
+            cp%single_act, cp%single_act_debug, cp%single_act_diag, & !XL
+            cp%qnu_debug, cp%qnu_diag, cp%qn_act_pop, cp%qn_act_pop_diag, cp%qn_act_pop_mass, cp%qn_act_pop_mass_diag, & !XL, qn_act
             cp%pptn, cp%z, cp%zs, cp%hl, cp%hlu, cp%clu, cp%ciu, &
             cp%buo, cp%buog, cp%dbuodp, cp%t, cp%rhu, cp%crate, cp%prate, cp%tr, cp%tru, &
             cp%tru_dwet)
@@ -244,7 +251,9 @@ contains
         type(cplume), intent(inout) :: cp
         cp%thcu  =0.;    cp%qctu  =0.;    cp%uu    =0.;    cp%vu    =0.;
         cp%qlu   =0.;    cp%qiu   =0.;    cp%qnu   =0.;    cp%pptr  =0.;
-        cp%qn_act =0.;   cp%qn_act_diag =0.; cp%qn_act_pop = 0.;!XL, qn_act 
+        cp%qnu_debug = 0.; cp%qnu_diag = 0.; !XL
+        cp%single_act = 0.; cp%single_act_debug = 0.; cp%single_act_diag = 0.;
+        cp%qn_act_pop = 0.;!XL, qn_act 
         cp%qn_act_pop_diag =0.; cp%qn_act_pop_mass =0.; cp%qn_act_pop_mass_diag = 0.;!XL, qn_act
         cp%ppti  =0.;    cp%wu    =0.;    cp%umf   =0.;    cp%emf   =0.;
         cp%thvu  =0.;    cp%rei   =0.;    cp%fer   =0.;    cp%fdr   =0.;
@@ -461,7 +470,9 @@ contains
 
     !#####################################################################
     !#####################################################################
-
+    !!-------------------------------------XL X xl xl test ---------------------
+    !need to delete sd_debug
+    !---------------------------------------------------------------------------
     subroutine cumulus_plume_k (cpn, sd, ac, cp, rkm, cbmf, wrel, scaleh,&
             Uw_p, ier, ermesg)
 
@@ -475,6 +486,12 @@ contains
         character(len=*),   intent(out)   :: ermesg
 
         real, dimension(4)            :: totalmass, totalmass1
+
+        !-------------------------------------XL X xl xl test ---------------------
+        !need to delete later xl debug
+        real, dimension(4)            :: totalmass_debug
+        real                          :: drop_debug
+        !-------------------------------------XL X xl xl test ---------------------
         integer                       :: tym
         real                          :: drop
         integer                       :: tpop, tspcs
@@ -493,6 +510,7 @@ contains
             total_rain, total_snow, delta_tracer, delta_qn, wrel2, gamma
         real    :: cflim, plnb_tmp, plfc_tmp, ptmp, rkm1, emass, wlev, tlev
         real    :: qn_act, b700
+        real    :: qn_act_diag, qn_act_debug !XL
         integer :: n, nnn
         logical :: kbelowlet
         tpop = size((sd%matrix_sigma))
@@ -580,11 +598,26 @@ contains
             totalmass(4)= sd%am4(krel-1);
         endif
 
+        !-------------------------------------XL X xl xl test ---------------------
+        !need to delete later xl debug
+        totalmass_debug = 0.
+        totalmass_debug(1) = totalmass(1) !only pass in sulfate mass for test yim
+        !-------------------------------------XL X xl xl test ---------------------
+
+        drop_diag = 0.
+        drop_pop = 0.
+        drop_pop_mass = 0.
+        drop_pop_diag = 0.
+        drop_pop_mass_diag = 0.
+        drop_debug = 0.
+        drop = 0.
         if (SUM(totalmass(:)) /= 0.0 .and. cpn%use_online_aerosol) then
             wrel2 = wrel*cpn%wrel_min
             !XL
             !call aer_ccn_act_k(thj*exn_k(prel,Uw_p), prel, wrel2, totalmass, &
             !                   tym, drop, ier, ermesg)
+            !debug version: only use sulf mass as input to yim's code
+            call aer_ccn_act_k( thj*exn_k(prel,Uw_p), prel, wrel2, totalmass_debug, tym, drop_debug, ier, ermesg)
             call aer_ccn_act_k( thj*exn_k(prel,Uw_p), prel, wrel2, totalmass, tym, drop, ier, ermesg, &
                 tpop, tspcs, drop_diag,  &
                 drop_pop, drop_pop_mass, &
@@ -593,26 +626,47 @@ contains
             if (ier /= 0) then
                 return
             endif
-            cp%qn_act = drop*1.0e6 /(prel/(Uw_p%rdgas*cp%thvu(krel-1)*exn_k(prel,Uw_p)))
-            cp%qn_act_diag = drop_diag*1.0e6 /(prel/(Uw_p%rdgas*cp%thvu(krel-1)*exn_k(prel,Uw_p)))
+            qn_act_debug = drop_debug*1.0e6 /(prel/(Uw_p%rdgas*cp%thvu(krel-1)*exn_k(prel,Uw_p))) !activated drop by totalmass(1) of yim
+            qn_act = drop*1.0e6 /(prel/(Uw_p%rdgas*cp%thvu(krel-1)*exn_k(prel,Uw_p))) ! activated drop calculated by full_total_mass of yim
+            qn_act_diag = drop_diag*1.0e6 /(prel/(Uw_p%rdgas*cp%thvu(krel-1)*exn_k(prel,Uw_p)))
             cp%qn_act_pop = drop_pop*1.0e6 /(prel/(Uw_p%rdgas*cp%thvu(krel-1)*exn_k(prel,Uw_p)))
             cp%qn_act_pop_diag = drop_pop_diag*1.0e6 /(prel/(Uw_p%rdgas*cp%thvu(krel-1)*exn_k(prel,Uw_p)))
             cp%qn_act_pop_mass = drop_pop_mass !note for unit
             cp%qn_act_pop_mass_diag = drop_pop_mass_diag !note for unit
         else
-            cp%qn_act = 0.0
-            cp%qn_act_diag = 0.0
+            qn_act_debug = 0.
+            drop = 0.
+            qn_act = 0.0
+            drop_debug = 0.
+            qn_act_debug = 0.
+            drop_diag = 0.
+            qn_act_diag = 0.0
             cp%qn_act_pop = 0.0
             cp%qn_act_pop_diag = 0.0
             cp%qn_act_pop_mass = 0.0
             cp%qn_act_pop_mass_diag = 0.0
         endif
 
-        qn_act = cp%qn_act
+        !XL printout
+        !write(*,*) 'totalmass_debug(1), drop_debug, drop_yim, drop_matrix', totalmass_debug(1), drop_debug, drop, drop_diag
+
         if (cpn%do_new_qnact) then
             cp%qnu(krel-1) = qn_act + cp%qn(krel-1)
+            !XL
+            cp%qnu_debug(krel-1) = qn_act_debug + cp%qn(krel-1)
+            cp%qnu_diag(krel-1) = qn_act_diag + cp%qn(krel-1)
+            cp%single_act((krel-1)) = qn_act
+            cp%single_act_debug(krel-1) = qn_act_debug
+            cp%single_act_diag((krel-1)) = qn_act_diag
+
         else
             cp%qnu(krel-1) = qn_act
+            !XL
+            cp%qnu_debug(krel-1) = qn_act_debug
+            cp%qnu_diag(krel-1) = qn_act_diag
+            cp%single_act((krel-1)) = qn_act
+            cp%single_act_debug(krel-1) = qn_act_debug
+            cp%single_act_diag((krel-1)) = qn_act_diag
         endif
 
         !(krel) represents the first partial updraft layer
@@ -811,6 +865,11 @@ contains
             exp(-cp%fer(k)*cp%dp(k))
         cp%qnu (k)=cp%qn (k)-(cp%qn (k)-cp%qnu (km1))*  &
             exp(-cp%fer(k)*cp%dp(k))
+        cp%qnu_debug(k)=cp%qn (k)-(cp%qn (k)-cp%qnu_debug (km1))*  &
+            exp(-cp%fer(k)*cp%dp(k))
+        cp%qnu_diag(k)=cp%qn (k)-(cp%qn (k)-cp%qnu_diag (km1))*  &
+            exp(-cp%fer(k)*cp%dp(k))
+
         cp%tru (k,:)=cp%tr (k,:)-(cp%tr (k,:)-cp%tru (km1,:))*  &
             exp(-cp%fer(k)*cp%dp(k))
         if (cpn%do_new_qnact) then
@@ -822,7 +881,10 @@ contains
                 totalmass(4)=sd%amx4(k)*emass; !entrained aerosol mass per unit kg of updraft air mass
                 totalmass(:)=totalmass(:)*sd%rho(k)*1.0e-3 !convert mixing ratio kg/kg to g/cm3
 
-
+                !----------------------------XL XL XL xl debug---------------------------------
+                totalmass_debug = 0.
+                totalmass_debug(1) = totalmass(1)
+                !----------------------------XL XL XL xl debug---------------------------------
                 !add input mapping for x5l
 
                 wlev = cp%wu(k-1)
@@ -832,6 +894,7 @@ contains
                     tlev = cp%thcu(k-1)*exn_k(plev,Uw_p)
                     !XL
                     !call aer_ccn_act_k(tlev, plev, wlev, totalmass, tym, drop, ier, ermesg)
+                    call aer_ccn_act_k( tlev, plev, wlev, totalmass_debug, tym, drop_debug, ier, ermesg)
                     call aer_ccn_act_k( tlev, plev, wlev, totalmass, tym, drop, ier, ermesg, &
                         tpop, tspcs, drop_diag,  &
                         drop_pop, drop_pop_mass, &
@@ -840,24 +903,29 @@ contains
                     if (ier /= 0) then
                         return
                     endif
-                    cp%qn_act = drop*1.0e6 /sd%rho(k)
-                    cp%qn_act_diag = drop_diag*1.0e6 /sd%rho(k)
+                    qn_act_debug = drop_debug*1.0e6 /sd%rho(k)
+                    qn_act = drop*1.0e6 /sd%rho(k)
+                    qn_act_diag = drop_diag*1.0e6 /sd%rho(k)
                     cp%qn_act_pop = drop_pop*1.0e6 /sd%rho(k)
                     cp%qn_act_pop_diag = drop_pop_diag*1.0e6 /sd%rho(k)
                     cp%qn_act_pop_mass = drop_pop_mass
                     cp%qn_act_pop_mass_diag = drop_pop_mass_diag
 
                 else
-                    cp%qn_act = 0.0
-                    cp%qn_act_diag = 0.0
+                    qn_act_debug = 0.0
+                    drop = 0.0
+                    qn_act = 0.0
+                    qn_act_diag = 0.0
                     cp%qn_act_pop = 0.0
                     cp%qn_act_pop_diag = 0.0
                     cp%qn_act_pop_mass = 0.0
                     cp%qn_act_pop_mass_diag = 0.0
                 endif
 
-
                 cp%qnu(k) = cp%qnu(k) + qn_act
+                !XL
+                cp%qnu_debug(k) = cp%qnu_debug(k) + qn_act_debug!xl XL
+                cp%qnu_diag(k) = cp%qnu_diag(k) + qn_act_diag
             endif
         endif
 
@@ -1764,6 +1832,8 @@ contains
             cp%qlu (k)   =0.;
             cp%qiu (k)   =0.;
             cp%qnu (k)   =0.;
+            cp%qnu_debug (k)   =0.;
+            cp%qnu_diag (k)   =0.;
             cp%uu  (k)   =cp%uu(krel-1)
             cp%vu  (k)   =cp%vu(krel-1)
             ct%hlflx(k)  =cp%umf(k)*(cp%hlu (k)-(cp%hl (kp1)+sd%sshl (kp1)*(sd%ps(k)-sd%p(kp1))))

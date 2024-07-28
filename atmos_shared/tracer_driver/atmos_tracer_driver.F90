@@ -335,6 +335,8 @@ integer :: ne90 =0
 integer :: nsulfate  =0
 integer :: nISOP     =0
 
+integer :: n_debug = 0
+
 integer, dimension(6) :: tr_nbr_sulfate=0
 logical, dimension(6) :: do_tracer_sulfate=.false.
 
@@ -1625,6 +1627,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
    call mpp_clock_begin(matrix_clock)
    call matrix_run(tracer, pfull, rh, t, dt, pwt, z_half, rdt_matrix, Time,is,ie,js,je)
    !rdt has the same dimension as r
+
    rdt = rdt + rdt_matrix(:,:,:,1:size(r,4))
    !XL TEST
    call mpp_clock_end(matrix_clock)
@@ -2119,8 +2122,7 @@ type(time_type), intent(in)                                :: Time
             'vegetation leaf area index',                                &
             'fraction', missing_value=-999.     )
     !-----------------------------------------------------------------------
-    !!XL: register matrix data
-    !nh2so4 = get_tracer_index(MODEL_ATMOS,'simpleH2SO4')
+    !!XL: register matrix data    
     !do nid = 1, size(r,4)
     !    if (matrix_all_tracer(nid)%is_active) then
     !            if (matrix_all_tracer(nid)%type .eq. 'mass') then

@@ -292,11 +292,9 @@ INTEGER, PARAMETER :: NWEIGHTS = NMODES
       K3IJ = REAL(K3IJ_TMP/UKI(4))                                 ! divide by U3i*U0j=UKI(4)*1.0
 
       !XL debug
-           if (mpp_root_pe().eq.mpp_pe()) then
-                write(*,*) 'DGI, SIGGI, DGJ, SIGGJ, K0IJ, K3IJ'
-                write(*,*) DGI, SIGGI, DGJ, SIGGJ, K0IJ, K3IJ
-
-           endif 
+      if ((K0IJ > 1) .or. (K3IJ > 1)) then
+                write(*,*) 'PRES, TEMP, DGI, SIGGI, DGJ, SIGGJ, K0IJ, K3IJ', PRES, TEMP, DGI, SIGGI, DGJ, SIGGJ, K0IJ, K3IJ
+      endif
 
 !-------------------------------------------------------------------------------
 !     WRITE(AUNIT2,'(A,4F9.4,2E13.5)') 'DGI, SIGGI, DGJ, SIGGJ, K0IJ, K3IJ = ',

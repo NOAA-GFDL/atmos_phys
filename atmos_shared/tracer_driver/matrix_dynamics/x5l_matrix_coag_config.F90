@@ -309,7 +309,7 @@ MODULE AERO_COAG_CONFIG
             end do
             end do
             end do
-            NDIKL = n
+            nDIKL = n
     end subroutine initializeDiklControl
     !--------------------------------------------------------------------
     !record the pair with non-zero Giklq

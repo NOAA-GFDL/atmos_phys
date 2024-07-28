@@ -66,6 +66,7 @@ MODULE UW_CONV_MOD
   logical         :: module_is_initialized = .false.
 
   character(len=7) :: mod_name = 'uw_conv'
+  character(len=7) :: matrix_mod_name = 'matrix' !XL xl
 
   !namelist parameters for UW convection scheme
   integer :: iclosure = 0      ! 0: Bretherton UWShCu orginal / -CIN/TKE based
@@ -318,6 +319,9 @@ MODULE UW_CONV_MOD
              id_pct_uwc, id_pcb_uwc, id_pct_uws, id_pcb_uws, id_pct_uwd, id_pcb_uwd,   &
              id_cqa_uwc, id_cql_uwc, id_cqi_uwc, id_cqn_uwc, id_cltc_uwc,              &
              id_cqa_uws, id_cql_uws, id_cqi_uws, id_cqn_uws,                           &
+             id_cqn_uws_matrix, id_cqn_uws_diag_matrix, id_cqn_uws_debug_matrix, & !xl, XL
+             id_cqn_uwc_matrix, id_cqn_uwc_diag_matrix, id_cqn_uwc_debug_matrix, & !XL xl
+             id_single_act, id_single_act_debug, id_single_act_diag, & !XL
        id_cin_uwc, id_cbmf_uwc, id_tke_uwc, id_plcl_uwc, id_zlcl_uwc, id_zinv_uwc,  &
        id_cush_uws,  id_plfc_uwc, id_enth_uwc,  &
        id_qldt_uwc, id_qidt_uwc, id_qadt_uwc, id_qndt_uwc, id_qtdt_uwc, id_cmf_uwc, &
@@ -361,6 +365,7 @@ MODULE UW_CONV_MOD
        id_cmf_uwd, id_wuo_uwd, id_fwu_uwd, id_fqa_uwd, id_fql_uwd, id_fqi_uwd, id_fqn_uwd, &
        id_fer_uwd, id_cbmf_uwd, id_enth_uwd, &
        id_fdr_uwd, id_fdrs_uwd, id_cqa_uwd, id_cql_uwd, id_cqi_uwd, id_cqn_uwd, &
+       id_cqn_uwd_matrix, id_cqn_uwd_diag_matrix, id_cqn_uwd_debug_matrix, & !XL xl
        id_hlflx_uwd, id_qtflx_uwd, id_nqtflx_uwd, id_dcin_uwd, &
        id_dcapedm_uwd, id_dcwfndm_uwd, id_ocode_uwd, id_cush_uwd,      &
        id_tdt_pevap_uwd, id_qdt_pevap_uwd, id_rkm_uwd, id_frkm_uwd, id_buo_uwd,  &
@@ -555,7 +560,12 @@ contains
          'mass fraction of convective cloud ice water from uw_conv', 'kg/kg', missing_value=mv)
     id_cqn_uwc = register_diag_field ( mod_name, 'cqn_uwc', axes(1:3), Time, &
          'Updraft liquid drop number from uw_conv', '/kg', missing_value=mv)
-
+    id_cqn_uwc_matrix = register_diag_field ( matrix_mod_name, 'cqn_uwc', axes(1:3), Time, &
+         'Updraft liquid drop number from uw_conv', '/kg', missing_value=mv) !XL xl
+    id_cqn_uwc_debug_matrix = register_diag_field ( matrix_mod_name, 'cqn_uwc_debug', axes(1:3), Time, &
+         'Updraft liquid drop number from uw_conv', '/kg', missing_value=mv) !XL xl
+    id_cqn_uwc_diag_matrix = register_diag_field ( matrix_mod_name, 'cqn_uwc_diag', axes(1:3), Time, &
+         'Updraft liquid drop number from uw_conv', '/kg', missing_value=mv) !XL xl
     id_cqa_uws = register_diag_field ( mod_name, 'cqa_uws', axes(half), Time, &
          'Updraft fractional area from shallow plume', 'none', missing_value=mv)
     id_cql_uws = register_diag_field ( mod_name, 'cql_uws', axes(half), Time, &
@@ -564,7 +574,18 @@ contains
          'Updraft ice water mixing ratio from shallow plume', 'kg/kg', missing_value=mv)
     id_cqn_uws = register_diag_field ( mod_name, 'cqn_uws', axes(half), Time, &
          'Updraft liquid drop number from shallow plume', '/kg', missing_value=mv)
-
+    id_cqn_uws_matrix = register_diag_field ( matrix_mod_name, 'cqn_uws', axes(half), Time, &
+         'Updraft liquid drop number from shallow plume', '/kg', missing_value=mv) !XL xl
+    id_cqn_uws_diag_matrix = register_diag_field ( matrix_mod_name, 'cqn_uws_diag', axes(half), Time, &
+         'Updraft liquid drop number from shallow plume', '/kg', missing_value=mv) !XL xl
+    id_cqn_uws_debug_matrix = register_diag_field (matrix_mod_name, 'cqn_uws_debug', axes(half), Time, &
+         'Updraft liquid drop number from shallow plume', '/kg', missing_value=mv) !XL xl
+    id_single_act = register_diag_field (matrix_mod_name, 'single_act', axes(half), Time, &
+            'activated droplet number from yim code with totalmass', '/kg', missing_value=mv)
+    id_single_act_debug = register_diag_field (matrix_mod_name, 'single_act_debug', axes(half), Time, &
+            'activated droplet number from yim code with 1 species mass', '/kg', missing_value=mv)
+    id_single_act_diag = register_diag_field (matrix_mod_name, 'single_act_diag', axes(half), Time, &
+            'activated droplet number from matrix code with 1 species mass', '/kg', missing_value=mv)
    !---- cmip diagnostics ----
     id_cltc_uwc = register_cmip_diag_field_2d (mod_name, 'cltc_uw', Time,  &
                                 'Convective Cloud Cover Percentage', '%',  &
@@ -951,6 +972,12 @@ contains
             'Updraft ice water mixing ratio from deep plume', 'kg/kg', missing_value=mv)
        id_cqn_uwd = register_diag_field ( mod_name, 'cqn_uwd', axes(half), Time, &
             'Updraft liquid drop number from deep plume', '/kg', missing_value=mv)
+       id_cqn_uwd_matrix = register_diag_field ( matrix_mod_name, 'cqn_uwd', axes(half), Time, &
+            'Updraft liquid drop number from deep plume', '/kg', missing_value=mv) !XL, xl
+       id_cqn_uwd_diag_matrix = register_diag_field ( matrix_mod_name, 'cqn_uwd_diag', axes(half), Time, &
+            'Updraft liquid drop number from deep plume', '/kg', missing_value=mv) !XL, xl
+       id_cqn_uwd_debug_matrix = register_diag_field ( matrix_mod_name, 'cqn_uwd_debug', axes(half), Time, &
+            'Updraft liquid drop number from deep plume', '/kg', missing_value=mv) !XL, xl
        id_hlflx_uwd=register_diag_field (mod_name,'hlflx_uwd',axes(1:3),Time, &
             'liquid water static energy flux from deep plume', 'W/m2', missing_value=mv)
        id_qtflx_uwd = register_diag_field (mod_name,'qtflx_uwd',axes(1:3),Time, &
@@ -1150,6 +1177,7 @@ contains
     real, intent(out), dimension(:,:,:)  :: uten,vten               ! u,v tendencies
 
     real, intent(out), dimension(:,:,:)  :: cldql,cldqi,cldqa, cldqn!in-updraft q
+    real, dimension(size(cldqn,1),size(cldqn,2),size(cldqn,3)) :: cldqn_diag, cldqn_debug !XL, xl
     real, intent(out), dimension(:,:,:)  :: cmf    ! mass flux at level above layer (kg/m2/s)
     real, intent(out), dimension(:,:,:)  :: liq_pflx   ! liq precipitation flux removed from a layer
     real, intent(out), dimension(:,:,:)  :: ice_pflx   ! solid precipitation flux removed from a layer
@@ -1216,9 +1244,10 @@ contains
     real, dimension(size(tb,1),size(tb,2),size(tb,3)) :: qldet_s, qidet_s, qadet_s, qndet_s, peo, hmo, hms, abu, buo_s
     real, dimension(size(tb,1),size(tb,2),size(tb,3)) :: qldet_d, qidet_d, qadet_d, qndet_d, dbuodp_s, dbuodp_d
 
-    real, dimension(size(tb,1),size(tb,2),size(tb,3)+1) :: cfq_s, cqa_s, cql_s, cqi_s, cqn_s, wuo_s, cmf_s
-    real, dimension(size(tb,1),size(tb,2),size(tb,3)+1) :: cfq_d, cqa_d, cql_d, cqi_d, cqn_d, wuo_d, cmf_d
-    real, dimension(size(tb,3)+1)                       :: cqa, cql, cqi, cqn
+    real, dimension(size(tb,1),size(tb,2),size(tb,3)+1) :: cfq_s, cqa_s, cql_s, cqi_s, cqn_s, wuo_s, cmf_s, cqn_s_diag, cqn_s_debug
+    real, dimension(size(tb,1),size(tb,2),size(tb,3)+1) :: single_act, single_act_debug, single_act_diag !XL
+    real, dimension(size(tb,1),size(tb,2),size(tb,3)+1) :: cfq_d, cqa_d, cql_d, cqi_d, cqn_d, wuo_d, cmf_d, cqn_d_diag, cqn_d_debug
+    real, dimension(size(tb,3)+1)                       :: cqa, cql, cqi, cqn, cqn_debug, cqn_diag
 
     real, dimension(size(tb,1),size(tb,2),size(tb,3))   :: hdt_vadv_int, hdt_hadv_int, hdt_forc_int,           &
                                                            hdt_adv_int, hdp_dyn_int, hdt_dyn_int, hdt_sum_int, &
@@ -1473,10 +1502,11 @@ contains
 
     tten=0.; qvten=0.; qlten=0.; qiten=0.; qaten=0.; qnten=0.;
     uten=0.; vten =0.; rain =0.; snow =0.; plcl =0.; plfc=0.; plnb=0.;
-    cldqa=0.; cldql=0.; cldqi=0.; cldqn=0.; zlcl=0.; cltc=0.;
+    cldqa=0.; cldql=0.; cldqi=0.; cldqn=0.; zlcl=0.; cltc=0.; cldqn_debug = 0.; cldqn_diag = 0.;
 
     cqa  =0.; cql  =0.; cqi  =0.; cqn  =0.;
-    cqa_s=0.; cql_s=0.; cqi_s=0.; cqn_s=0.;
+    cqa_s=0.; cql_s=0.; cqi_s=0.; cqn_s=0.; cqn_s_debug = 0.; cqn_s_diag = 0.;
+    single_act = 0.; single_act_debug = 0.; single_act_diag = 0.; !XL
     hlflx=0.; qtflx=0.; nqtflx=0.; pflx=0.;
     am1=0.; am2=0.; am3=0.; am4=0.; am5=0.;
     amx1=0.; amx2=0.; amx3=0.; amx4=0.; amx5=0.;
@@ -1513,7 +1543,7 @@ contains
     tten_d=0.; qvten_d=0.; qlten_d=0.; qiten_d=0.; qaten_d=0.; qnten_d=0.;
     uten_d=0.; vten_d =0.; rain_d =0.; snow_d =0.; qtten_d=0.; cfq_d=0.;
     trevp_d=0.; trevp_s=0.; cush_d=-1.;
-    cqa_d=0.; cql_d=0.; cqi_d=0.; cqn_d=0.;
+    cqa_d=0.; cql_d=0.; cqi_d=0.; cqn_d=0.; cqn_d_debug=0.; cqn_d_diag=0.;
     hlflx_d=0.; qtflx_d=0.; nqtflx_d=0.; pflx_d=0.;
     wuo_d=0.; fero_d=0.; fdro_d=0.; fdrso_d=0.;
     cmf_d=0.; buo_d=0.; buo_s=0.;
@@ -1968,10 +1998,19 @@ contains
              cql_s (i,j,nk) = cp%qlu(k)
              cqi_s (i,j,nk) = cp%qiu(k)
              cqn_s (i,j,nk) = cp%qnu(k)
+             cqn_s_debug (i,j,nk) = cp%qnu_debug(k) !XL xl
+             cqn_s_diag (i,j,nk) = cp%qnu_diag(k) !XL xl
+             !XL
+             single_act(i,j,nk) = cp%single_act(k)
+             single_act_debug(i,j,nk) = cp%single_act_debug(k)
+             single_act_diag(i,j,nk) = cp%single_act_diag(k)
+
              cldqa (i,j,nk) = cqa_s (i,j,nk)
              cldql (i,j,nk) = cql_s (i,j,nk)
              cldqi (i,j,nk) = cqi_s (i,j,nk)
              cldqn (i,j,nk) = cqn_s (i,j,nk)
+             cldqn_debug (i,j,nk) = cqn_s_debug (i,j,nk) !XL xl
+             cldqn_diag (i,j,nk) = cqn_s_diag (i,j,nk) !XL xl
 
              if (include_emf_s) then
                 cmf_s (i,j,nk) = cp%umf(k) + cp%emf(k)
@@ -2135,6 +2174,8 @@ contains
                 cql_d   (i,j,nk) = cp1%qlu(k)
                 cqi_d   (i,j,nk) = cp1%qiu(k)
                 cqn_d   (i,j,nk) = cp1%qnu(k)
+                cqn_d_diag   (i,j,nk) = cp1%qnu_diag(k) !XL, xl
+                cqn_d_debug   (i,j,nk) = cp1%qnu_debug(k) !XL, xl
 
                 if (include_emf_d) then
                    cmf_d (i,j,nk) = cp1%umf(k) + cp1%emf(k)
@@ -2239,17 +2280,21 @@ contains
         if (do_new_convcld) then
           do j = 1,jmax
             do i = 1,imax
-              cqa(kmax+1)=0.; cql(kmax+1)=0.; cqi(kmax+1)=0.; cqn(kmax+1)=0.;
+              cqa(kmax+1)=0.; cql(kmax+1)=0.; cqi(kmax+1)=0.; cqn(kmax+1)=0.; cqn_diag(kmax+1)=0.; cqn_debug(kmax+1)=0.
               do k = 1,kmax
-                cqa(k) =cqa_s(i,j,k)+cqa_d(i,j,k)
+                cqa(k) =cqa_s(i,j,k)+cqa_d(i,j,k) !XL xl note: area of shallow and deep-convection plume
                 if (cqa(k).ne.0.) then
                   cql(k)=(cql_s(i,j,k)*cqa_s(i,j,k)+cql_d(i,j,k)*cqa_d(i,j,k))/cqa(k)
                   cqi(k)=(cqi_s(i,j,k)*cqa_s(i,j,k)+cqi_d(i,j,k)*cqa_d(i,j,k))/cqa(k)
                   cqn(k)=(cqn_s(i,j,k)*cqa_s(i,j,k)+cqn_d(i,j,k)*cqa_d(i,j,k))/cqa(k)
+                  cqn_diag(k)  = (cqn_s_diag(i,j,k)*cqa_s(i,j,k)  + cqn_d_diag(i,j,k)*cqa_d(i,j,k))/cqa(k)
+                  cqn_debug(k) = (cqn_s_debug(i,j,k)*cqa_s(i,j,k) + cqn_d_debug(i,j,k)*cqa_d(i,j,k))/cqa(k)
                 else
                   cql(k)=0.
                   cqi(k)=0.
                   cqn(k)=0.
+                  cqn_diag(k)=0.
+                  cqn_debug(k)=0.
                 end if
                 cqa(k) = min(cqa(k),1.0)
               end do
@@ -2258,6 +2303,8 @@ contains
                 cldql(i,j,k)=(cql(k)+cql(k+1))*0.5
                 cldqi(i,j,k)=(cqi(k)+cqi(k+1))*0.5
                 cldqn(i,j,k)=(cqn(k)+cqn(k+1))*0.5
+                cldqn_diag(i,j,k)=(cqn_diag(k)+cqn_diag(k+1))*0.5
+                cldqn_debug(i,j,k)=(cqn_debug(k)+cqn_debug(k+1))*0.5
               end do
 
               do k = 1,kmax
@@ -2552,6 +2599,11 @@ contains
     used = send_data( id_cql_uwc,    cldql,        Time, is, js, 1)
     used = send_data( id_cqi_uwc,    cldqi,        Time, is, js, 1)
     used = send_data( id_cqn_uwc,    cldqn,        Time, is, js, 1)
+    !XL xl
+    used = send_data( id_cqn_uwc_matrix,          cldqn,        Time, is, js, 1) !XL
+    used = send_data( id_cqn_uwc_debug_matrix,    cldqn_debug,        Time, is, js, 1) !XL
+    used = send_data( id_cqn_uwc_diag_matrix,     cldqn_diag,         Time, is, js, 1) !XL
+
     used = send_data( id_pcb_uwc,    pcb_c*0.01,   Time, is, js)
     used = send_data( id_pct_uwc,    pct_c*0.01,   Time, is, js)
    ! cmip diagnostics
@@ -2565,6 +2617,14 @@ contains
     used = send_data( id_cql_uws,    cql_s,        Time, is, js, 1)
     used = send_data( id_cqi_uws,    cqi_s,        Time, is, js, 1)
     used = send_data( id_cqn_uws,    cqn_s,        Time, is, js, 1)
+    used = send_data( id_cqn_uws_matrix,    cqn_s,        Time, is, js, 1) !XL, xl
+    used = send_data( id_cqn_uws_debug_matrix,    cqn_s_debug,        Time, is, js, 1) !XL, xl
+    used = send_data( id_cqn_uws_diag_matrix,     cqn_s_diag,        Time, is, js, 1) !XL, xl
+   !XL
+    used = send_data( id_single_act,    single_act,        Time, is, js, 1) !XL, xl
+    used = send_data( id_single_act_debug,    single_act_debug,        Time, is, js, 1)
+    used = send_data( id_single_act_diag,     single_act_diag,        Time, is, js, 1) 
+
     used = send_data( id_pcb_uws,    pcb_s*0.01,   Time, is, js)
     used = send_data( id_pct_uws,    pct_s*0.01,   Time, is, js)
 
@@ -2838,6 +2898,9 @@ contains
        used=send_data( id_cql_uwd,   cql_d,          Time, is, js, 1)
        used=send_data( id_cqi_uwd,   cqi_d,          Time, is, js, 1)
        used=send_data( id_cqn_uwd,   cqn_d,          Time, is, js, 1)
+       used=send_data( id_cqn_uwd_matrix,   cqn_d,          Time, is, js, 1) !XL, xl
+       used=send_data( id_cqn_uwd_diag_matrix,    cqn_d_diag,          Time, is, js, 1) !XL, xl
+       used=send_data( id_cqn_uwd_debug_matrix,   cqn_d_debug,          Time, is, js, 1) !XL, xl
        used=send_data( id_feq_uwd,   feq_d,          Time, is, js )
        used=send_data( id_pcb_uwd,   pcb_d*0.01,     Time, is, js)
        used=send_data( id_pct_uwd,   pct_d*0.01,     Time, is, js)
@@ -2885,7 +2948,7 @@ contains
     end if
 
     if (zero_out_conv_area) then
-       cldql=0.; cldqi=0.; cldqa=0.; cldqn=0.;
+       cldql=0.; cldqi=0.; cldqa=0.; cldqn=0.; cldqn_debug=0.; cldqn_diag=0.;
     end if
 
     if (do_imposing_rad_cooling) then
