@@ -105,6 +105,7 @@ logical :: repeat_volcano_year = .false. !< the same single year's data from the
                                          !! used for each model year?
 integer :: volcano_year_used = 0      !< year of volcanic data to repeat when repeat_volcano_year is .true.
 logical :: using_im_bcsul = .false.   !< bc and sulfate aerosols are treated as an internal mixture?
+logical :: use_im_bcsul_bug = .true.  !< use bc and sulfate internal mixture bug?
 
 integer, dimension(0:100) ::  nitrate_indices = (/        &
                              0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, &
@@ -229,6 +230,7 @@ namelist / aerosolrad_package_nml /                          &
                                     repeat_volcano_year, &
                                     volcano_year_used, &
                                     using_im_bcsul, &
+                                    use_im_bcsul_bug, &
                                     sw_ext_filename, sw_ssa_filename, &
                                     sw_asy_filename, lw_ext_filename, &
                                     lw_ssa_filename, lw_asy_filename, &
@@ -1285,12 +1287,13 @@ real, dimension(:,:,:,:),      intent(out)   :: aerooptdep, aerooptdep_volc, &
           do k = 1,size(Aerosol%aerosol,3)
             do j = 1,size(Aerosol%aerosol,2)
               do i = 1,size(Aerosol%aerosol,1)
-                if (bc(i,j,k) > 0 .and. sul(i,j,k) > 0.0) then
-                  ivol(i,j,k) = 100-MIN(100, MAX( 0,     &
+                if (bc(i,j,k) > 0. .and. sul(i,j,k) > 0.) then
+                  ivol(i,j,k) = 100 - MIN(100, MAX( 0,     &
                    NINT(100.*sul(i,j,k)/(sul(i,j,k) +bc(i,j,k)*1.74))))
                 else
                   ivol(i,j,k) = 0
-                end if
+                  if (.not. use_im_bcsul_bug .and. sul(i,j,k) <= 0.0) ivol(i,j,k) = 100
+                endif
               enddo
             end do
           end do
