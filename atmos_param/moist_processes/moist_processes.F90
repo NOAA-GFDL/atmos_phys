@@ -30,7 +30,7 @@ use fms_mod,               only: error_mesg, FATAL, NOTE,        &
                                  mpp_clock_end, CLOCK_MODULE,    &
                                  MPP_CLOCK_SYNC
 use fms2_io_mod,           only: file_exists
-use field_manager_mod,     only: MODEL_ATMOS
+use field_manager_mod,     only: MODEL_ATMOS, MODEL_LAND
 use tracer_manager_mod,    only: get_tracer_index,&
                                  get_tracer_names, &
                                  NO_TRACER
@@ -86,6 +86,8 @@ use atmos_cmip_diag_mod,   only: register_cmip_diag_field_2d, &
                                  send_cmip_data_3d, &
                                  cmip_diag_id_type, &
                                  query_cmip_diag_id
+
+use gex_mod, only : gex_get_index                                
 
 
 implicit none
@@ -266,6 +268,10 @@ integer :: nSOA      =0
 integer :: nNH4NO3   =0
 integer :: nNH4      =0
 integer :: nH2O2     =0
+
+!index of requested gex fields
+
+integer :: gex_wetoa = 0
 
 
 !------------------- other global variables and parameters -------------
@@ -526,6 +532,12 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
 !-----------------------------------------------------------------------
       call diag_field_init ( axes, Time )
 
+!Check for possible gex exchange
+
+      gex_wetoa = gex_get_index(MODEL_ATMOS,MODEL_LAND,'wetoa')
+
+      if (gex_wetoa) call error_mesg('moist_processes','gex/atm2lnd wetoa found',NOTE)
+
 !-----------------------------------------------------------------------
 !   mark the module as initialized.
 !-----------------------------------------------------------------------
@@ -561,7 +573,7 @@ subroutine moist_processes ( is, ie, js, je, npz, Time,     land, ustar,  &
                              Physics_input_block, Moist_clouds_block,   &
                              Physics_tendency_block, Phys_mp_exch,  &
                              Surf_diff, Removal_mp, shflx, lhflx,  &
-                             lprec, fprec, gust_cv,  Aerosol)
+                             lprec, fprec, gust_cv, gex_wetoalnd, Aerosol)
 
 !-----------------------------------------------------------------------
 !
@@ -630,6 +642,8 @@ type(mp_removal_type),    intent(inout) :: Removal_mp
 real, dimension(:,:),     intent(in)    :: shflx, lhflx
 
 real, intent(out), dimension(:,:)       :: lprec, fprec, gust_cv
+real, intent(inout), dimension(:,:,:)   :: gex_wetoalnd
+
 type(aerosol_type),intent(in), optional :: Aerosol
 
 !-----------------------------------------------------------------------
@@ -705,7 +719,7 @@ type(aerosol_type),intent(in), optional :: Aerosol
 !------------------------------------------------------------------------
       call combined_MP_diagnostics   &
               (is, ie, js, je, Time, tdt_init, qdt_init, Input_mp,   &
-               Moist_clouds_block, Output_mp, Removal_mp)  
+               Moist_clouds_block, Output_mp, Removal_mp,gex_wetoalnd)  
 
 !------------------------------------------------------------------------
 !    define needed output arguments. redefine r to be the value after 
@@ -960,13 +974,14 @@ end subroutine define_cosp_precip_fluxes
 
 subroutine combined_MP_diagnostics    &
         (is, ie, js, je, Time, tdt_init, qdt_init,    &
-         Input_mp, Moist_clouds_block, Output_mp, Removal_mp)
+         Input_mp, Moist_clouds_block, Output_mp, Removal_mp,gex_atm2lnd)
                        
 integer,                   intent(in)    :: is, ie, js, je
 type(time_type),           intent(in)    :: Time
 real, dimension(:,:,:,:),  intent(in   ) :: qdt_init
 real, dimension(:,:,:  ),  intent(in   ) :: tdt_init
-type(mp_input_type),       intent(in)    :: Input_mp
+real, dimension(:,:,:  ),  intent(inout) :: gex_atm2lnd
+type(mp_input_type),       intent(out)   :: Input_mp
 
 type(clouds_from_moist_block_type),          &
                            intent(inout) :: Moist_clouds_block
@@ -1146,6 +1161,10 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
               total_wetdep(:,:,nomphilic) + total_wetdep(:,:,nomphobic) + &
                          total_wetdep(:,:,nSOA) , Time, is,js)
      endif
+
+     if (gex_wetoa.gt.0) then
+          gex_atm2lnd(:,:,gex_wetoa) = total_wetdep(:,:,nomphilic) + total_wetdep(:,:,nomphobic) + total_wetdep(:,:,nSOA)
+      end if 
 
      if (id_wetdep_bc > 0) then
        used = send_data (id_wetdep_bc,  &

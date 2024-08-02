@@ -2249,7 +2249,7 @@ real,  dimension(:,:,:), intent(out)  ,optional :: diffm, difft
                                Physics_tendency_block,     &
                                Moist_clouds_block,         &
                                Cosp_block, Surf_diff,      &
-                               lprec, fprec, gust)
+                               lprec, fprec, gust, gex_atm2lnd)
 
 !----------------------------------------------------------------------
 !    physics_driver_up completes the calculation of vertical diffusion 
@@ -2267,6 +2267,7 @@ type(clouds_from_moist_block_type), intent(inout) :: Moist_clouds_block
 type(cosp_from_rad_block_type),     intent(inout) :: Cosp_block
 type(surf_diff_type),   intent(inout)             :: Surf_diff
 real,dimension(:,:),    intent(out)               :: lprec, fprec
+real,dimension(:,:,:),  intent(inout)             :: gex_atm2lnd
 real,dimension(:,:),    intent(inout)             :: gust
 
 !-----------------------------------------------------------------------
@@ -2578,7 +2579,7 @@ real,dimension(:,:),    intent(inout)             :: gust
               b_star, q_star, area, lon, lat, Physics_input_block,   &
               Moist_clouds_block, Physics_tendency_block, Phys_mp_exch, &
               Surf_diff, Removal_mp, shflx, lhflx,  &
-              lprec, fprec, gust_cv, Aerosol=Aerosol)
+              lprec, fprec, gust_cv, gex_atm2lnd, Aerosol=Aerosol)
         call mpp_clock_end ( moist_processes_clock )
 
 !-------------------------------------------------------------------------
