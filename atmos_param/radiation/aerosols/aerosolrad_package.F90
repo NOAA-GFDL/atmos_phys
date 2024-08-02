@@ -83,6 +83,7 @@ logical :: using_volcanic_sw_files = .false. !< files containing sw aerosol opti
 logical :: using_volcanic_lw_files = .false. !< files containing lw aerosol optical properties from
                                              !! volcanic activity are to be used to supplement those
                                              !! calculated by model?
+logical :: scale_volcanic_lw_optdep, = .false. !< scale LW volcanic aerosol optical depth to account for diffuse radiation
 character(len=64) :: sw_ext_filename = ' '   !< name of file containing the aerosol sw extinction optical depth
 character(len=64) :: sw_ssa_filename = ' '   !< name of file containing the aerosol sw single scattering albedo
 character(len=64) :: sw_asy_filename = ' '   !< name of file containing the aerosol sw asymmetry factor   
@@ -222,6 +223,7 @@ namelist / aerosolrad_package_nml /                          &
                                     optical_filename   , &
                                     using_volcanic_sw_files, &
                                     using_volcanic_lw_files, &
+                                    scale_volcanic_lw_optdep, &
                                     volcanic_dataset_entry, &
                                     interpolating_volcanic_data, &
                                     repeat_volcano_year, &
@@ -2628,6 +2630,7 @@ integer :: i, j, k, ix, jx, kx
             end do
             end do
             end do
+            if (scale_volcanic_lw_optdep) aerooptdep(:,:,:) = aerooptdep(:,:,:) * diffac
 
             ! diagnostics
             if (n == 5 .or. n == 6) then
