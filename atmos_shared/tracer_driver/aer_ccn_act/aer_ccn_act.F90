@@ -54,11 +54,13 @@ real ::  highmass5=100.
 real :: lowT2=243.15 !K
 real :: highT2=308.15
 
+real :: min_drop = 0.
+
 namelist /aer_ccn_act_nml/ nooc, sul_concen, low_concen, high_concen, &
                            lowup, highup, lowup2, highup2, lowmass2, &
                            highmass2, lowmass3, highmass3,  &
                            lowmass4, highmass4, lowmass5, highmass5, &
-                           lowT2, highT2
+                           lowT2, highT2, min_drop
 
 
 logical :: module_is_initialized  = .false.
@@ -80,6 +82,7 @@ real, intent(inout) :: Drop
   call aer_ccn_act_k (T1, P1, Updraft1, TotalMass, tym, Drop, ier,  &
                       ermesg)
   if (ier /= 0) call error_mesg ('aer_ccn_act', ermesg, FATAL)
+  Drop = max( Drop, min_drop )
 
   
 end subroutine aer_ccn_act
@@ -113,6 +116,7 @@ real, intent(inout) :: Drop
   call aer_ccn_act2_k (T1, P1, Updraft1, TotalMass, tym, mu,  &
                        airdens,Nc,qc,qt,qe,tc,te,Drop, ier, ermesg)
   if (ier /= 0) call error_mesg ('aer_ccn_act2', ermesg, FATAL)
+  Drop = max( Drop, min_drop )
 
 end subroutine aer_ccn_act2
 
@@ -139,6 +143,7 @@ real, intent(out)   :: drop
    call aer_ccn_act_wpdf_k (T, p, wm, wp2, totalmass, tym,           &
                             drop, ier, ermesg)
   if (ier /= 0) call error_mesg ('aer_ccn_act_wpdf', ermesg, FATAL)
+  drop = max( drop, min_drop )
 
 end subroutine aer_ccn_act_wpdf
 
@@ -164,6 +169,7 @@ real, intent(out)   :: drop
   call aer_ccn_act_wpdf_m_k (T, p, wm, wp2, offs, totalmass, tym,       &
                              drop, ier, ermesg)
   if (ier /= 0) call error_mesg ('aer_ccn_act_wpdf_m', ermesg, FATAL)
+  drop = max( drop, min_drop )
 
 end subroutine aer_ccn_act_wpdf_m
 
