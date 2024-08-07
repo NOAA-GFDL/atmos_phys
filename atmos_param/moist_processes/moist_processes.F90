@@ -65,7 +65,7 @@ use atmos_global_diag_mod, only: register_global_diag_field, &
                                  send_global_diag
 use vert_diff_driver_mod, only : surf_diff_type
 use aerosol_types_mod,    only : aerosol_type
-use atmos_tracer_utilities_mod, only : get_cmip_param, get_chem_param
+use atmos_tracer_utilities_mod, only : get_cmip_param, get_chem_param, atmos_tracer_utilities_init
 use moist_proc_utils_mod, only : tempavg, column_diag, rh_calc,  &
                                  MP_input_type, MP_nml_type,  &
                                  mp_tendency_type, mp_removal_type, &
@@ -450,6 +450,7 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
       nbcphilic = get_tracer_index(MODEL_ATMOS,'bcphil')
       nomphobic = get_tracer_index(MODEL_ATMOS,'omphob')
       nomphilic = get_tracer_index(MODEL_ATMOS,'omphil')
+      call atmos_tracer_utilities_init(lonb, latb, axes, Time)
       call atmos_dust_init (lonb, latb, axes, Time )
       call atmos_sea_salt_init (lonb, latb, axes, Time )
 
