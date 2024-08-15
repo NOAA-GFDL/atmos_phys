@@ -65,7 +65,7 @@ use atmos_global_diag_mod, only: register_global_diag_field, &
                                  send_global_diag
 use vert_diff_driver_mod, only : surf_diff_type
 use aerosol_types_mod,    only : aerosol_type
-use atmos_tracer_utilities_mod, only : get_cmip_param, get_chem_param
+use atmos_tracer_utilities_mod, only : get_cmip_param, get_chem_param, atmos_tracer_utilities_init
 use moist_proc_utils_mod, only : tempavg, column_diag, rh_calc,  &
                                  MP_input_type, MP_nml_type,  &
                                  mp_tendency_type, mp_removal_type, &
@@ -457,6 +457,7 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
       nbcphilic = get_tracer_index(MODEL_ATMOS,'bcphil')
       nomphobic = get_tracer_index(MODEL_ATMOS,'omphob')
       nomphilic = get_tracer_index(MODEL_ATMOS,'omphil')
+      call atmos_tracer_utilities_init(lonb, latb, axes, Time)
       call atmos_dust_init (lonb, latb, axes, Time )
       call atmos_sea_salt_init (lonb, latb, axes, Time )
 
@@ -1216,14 +1217,13 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
        if (id_wetdms_cmip > 0) used = send_data (id_wetdms_cmip, temp_2d, Time, is,js)
      endif
 
-     if (id_wetdep_NH4NO3 > 0 .or. id_wetnh4_cmip > 0) then
+     if (id_wetnh4_cmip > 0) then
        temp_2d = 0.0
-       if( do_donner_deep ) temp_2d = temp_2d + (18.0/WTMAIR)*(total_wetdep_donner(:,:,nnH4NO3) + &
+       if( do_donner_deep ) temp_2d = temp_2d + (18.0/WTMAIR)*( &
                                                                total_wetdep_donner(:,:,nNH4) )
-       if( do_uw_conv  )    temp_2d = temp_2d + (18.0/WTMAIR)*(total_wetdep_uw(:,:,nNH4NO3) + &
+       if( do_uw_conv  )    temp_2d = temp_2d + (18.0/WTMAIR)*( &
                                                                total_wetdep_uw(:,:,nNH4) )
-       if( doing_prog_clouds )       temp_2d = temp_2d - 0.018*(Removal_mp%ls_wetdep(:,:,nNH4NO3) + Removal_mp%ls_wetdep(:,:,nNH4))
-       if (id_wetdep_NH4NO3 > 0) used = send_data (id_wetdep_NH4NO3, temp_2d, Time, is,js)
+       if( doing_prog_clouds )       temp_2d = temp_2d - 0.018*(Removal_mp%ls_wetdep(:,:,nNH4))
        if (id_wetnh4_cmip   > 0) used = send_data (id_wetnh4_cmip,   temp_2d, Time, is,js)
      endif
 
@@ -2508,7 +2508,7 @@ integer                     :: id_wetdep_cmip
 
      !-------- cmip wet deposition fields  ---------
       do ic = 1, size(cmip_names,1)
-        if (TRIM(cmip_names(ic)) .eq. 'nh4' .and. (nNH4NO3 .eq. NO_TRACER .or. nNH4 .eq. NO_TRACER)) then
+        if (TRIM(cmip_names(ic)) .eq. 'nh4' .and. ( nNH4 .eq. NO_TRACER)) then
           id_wetnh4_cmip = 0; cycle  ! skip when tracers are not in field table
         endif
 

@@ -29,7 +29,7 @@ module atmos_tracer_utilities_mod
        mpp_pe, mpp_root_pe, stdlog, &
        write_version_number, &
        check_nml_error, error_mesg, &
-       FATAL
+       FATAL, stdout
   ! <---h1g,
 
   use            fms_mod, only : lowercase, uppercase, &
@@ -97,9 +97,19 @@ module atmos_tracer_utilities_mod
        get_cldf, &
        sjl_fillz, &
        get_cmip_param, &
-       get_chem_param, &
        sedimentation_velocity, &
-       sedimentation_flux
+       sedimentation_flux, &
+       get_chem_param, tr_mw, tr_is_vmr
+
+
+  public :: calc_mw_air!_0d, Mw_air_3d
+
+  interface calc_mw_air
+     module procedure calc_mw_air_0d
+     module procedure calc_mw_air_2d
+     module procedure calc_mw_air_3d
+  end interface calc_mw_air
+  
 
   !---- version number -----
   character(len=128) :: version = '$Id$'
@@ -109,6 +119,8 @@ module atmos_tracer_utilities_mod
 
   character(len=7), parameter :: mod_name = 'tracers'
   integer, parameter :: max_tracers = MAX_TRACER_FIELDS
+
+  integer :: sphum_ndx = -1
 
   real, parameter :: T_homogeneous = 233.15
   !-----------------------------------------------------------------------
@@ -146,6 +158,16 @@ module atmos_tracer_utilities_mod
   real, parameter :: mw_so4 = 96./1000.     ! Convert from [g/mole] to [kg/mole]
   real, parameter :: twopi = 2*PI
 
+
+
+  type chem_param_type
+      logical :: is_vmr
+      real    :: mw 
+      real    :: nb_N_ox, nb_N_red, nb_N
+      real    :: frac_pm1, frac_pm10, frac_pm25
+      logical :: is_aerosol
+  end type chem_param_type
+
   type wetdep_type
      character (len=500) :: scheme, text_in_scheme, control
      real  :: Henry_constant
@@ -158,7 +180,8 @@ module atmos_tracer_utilities_mod
      logical :: Lwetdep, Lgas, Laerosol, Lice, so2_so4_evap, is_so2
   end type wetdep_type
 
-  type(wetdep_type), dimension(:), allocatable :: Wetdep
+  type(wetdep_type),     dimension(:), allocatable :: Wetdep
+  type(chem_param_type), dimension(:), allocatable :: tracer_prop
 
 
   type drydep_type
@@ -244,6 +267,7 @@ contains
     integer   :: io, ierr
     ! <---h1g,
 
+    if (module_is_initialized) return    
     ! Make local copies of the local domain dimensions for use
     ! in interp_emiss.
     allocate ( blon_out(size(lonb,1),size(lonb,2)))
@@ -265,6 +289,7 @@ contains
     if (ntrace > 0) then
        allocate (Wetdep(ntrace))
        allocate (Drydep(ntrace))
+       allocate (tracer_prop(ntrace))
     endif
     do n = 1, ntrace
        !--- set tracer tendency names where tracer names have changed ---
@@ -310,6 +335,8 @@ contains
        read (input_nml_file, nml=atmos_tracer_utilities_nml, iostat=io)
        ierr = check_nml_error(io,'atmos_tracer_utilities_nml')
 
+    call read_chem_param(n,tracer_prop(n))
+
     flag = query_method ('wet_deposition',MODEL_ATMOS,n, &
          Wetdep(n)%text_in_scheme,Wetdep(n)%control)
     call get_wetdep_param(Wetdep(n)%text_in_scheme,  &
@@ -349,17 +376,17 @@ contains
     Drydep(n)%Ldrydep = query_method ('dry_deposition', MODEL_ATMOS,&
          n,Drydep(n)%name, Drydep(n)%control)
 
-
     call get_drydep_param(Drydep(n)%name,Drydep(n)%control,  &
          Drydep(n)%scheme, Drydep(n)%land_does_drydep, &
          Drydep(n)%land_dry_dep_vel, Drydep(n)%sea_dry_dep_vel, &
          Drydep(n)%surfr,Drydep(n)%landr,Drydep(n)%snowr,Drydep(n)%sear)
+
     ! check that the corresonding land tracer is present in the land if the
     ! dry deposition is done on the land side
     if (Drydep(n)%land_does_drydep) then
        if (get_tracer_index(MODEL_LAND,tracer_names(n))<=0) then
           call error_mesg('atmos_tracer_utilities_init', &
-               'Dry deposition of atmospheric tracer //"'//trim(Drydep(n)%name)//&
+               'Dry deposition of atmospheric tracer "'//lowercase(trim(tracer_names(n)))//&
                '" is done on land side, but corresponding land tracer is not defined in the field table.',&
                FATAL)
        endif
@@ -493,6 +520,9 @@ contains
       'pso4_aq_so2_reevap_ls', Time, 'Sulfate aerosol production by SO2 re-evaporation by lscale clouds', 'kg m-2 s-1', &
       standard_name='tendency_of_atmosphere_mass_content_of_sulfate_dry_aerosol_particles_due_to_sulfur_dioxide_reevaporation')
 
+ sphum_ndx = get_tracer_index(MODEL_ATMOS,'sphum')
+ if (sphum_ndx<0) call ERROR_MESG('atmos_tracer_utilities_init', 'sphum was not found', FATAL )
+
  call write_version_number (version, tagname)
 
  if ( mpp_pe() == mpp_root_pe() ) then
@@ -623,8 +653,8 @@ end subroutine write_namelist_values
 !
 !<SUBROUTINE NAME = "dry_deposition">
 subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
-    u_star, landfrac, frac_open_sea,dsinku, dt, tracer, Time, &
-    Time_next, lon, half_day, drydep_data, albedo, con_atm)
+    u_star, landfrac, frac_open_sea,dsinku, dsinku_ocn,dt, tracer, Time, &
+    Time_next, lon, half_day, drydep_data, albedo, ocean_does_deposition, sum_wat, con_atm)
   ! When formulation of dry deposition is resolved perhaps use the following?
   !                           landfr, seaice_cn, snow_area, &
   !                           vegn_cover, vegn_lai, &
@@ -731,6 +761,8 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
  real, intent(in), dimension(:,:)    :: lon, half_day
  real, intent(in), dimension(:,:)    :: landfrac,frac_open_sea
  real, intent(in), dimension(:,:)    :: albedo
+ logical, intent(in)                 :: ocean_does_deposition
+ real, intent(in), dimension(:,:)    :: sum_wat !sum of water tracers (used to correct deposition for vmr tracers)
  real, intent(in), dimension(:,:), optional    :: con_atm
  ! When formulation of dry deposition is resolved perhaps use the following?
  !real, intent(in), dimension(:,:)    :: landfr, z_pbl, b_star, rough_mom
@@ -739,7 +771,7 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
  type(time_type), intent(in)         :: Time, Time_next
  type(interpolate_type),intent(inout)  :: drydep_data
  real, intent(in)                   :: dt
- real, intent(out), dimension(:,:)   :: dsinku
+ real, intent(out), dimension(:,:)   :: dsinku, dsinku_ocn
 
  real,dimension(size(u,1),size(u,2))   :: hwindv,frictv,resisa,drydep_vel,ka,kss,kbs,km,vd_ocean,A,B,alpha,landr2
  !real,dimension(size(u,1),size(u,2))   :: mo_length_inv, vds, rs, k1, k2
@@ -747,7 +779,7 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
  real    :: land_dry_dep_vel, sea_dry_dep_vel, ice_dry_dep_vel,  &
       snow_dry_dep_vel, vegn_dry_dep_vel,   &
       surfr, sear,  snowr, vegnr, landr
- real    :: diag_scale
+ real, dimension(size(u,1),size(u,2))  :: diag_scale
  real    :: factor_tmp, gmt, dv_on, dv_off, dayfrac, vd_night, vd_day, loc_angle
  logical :: used, diurnal
  integer :: flag_species, flag_diurnal
@@ -995,12 +1027,6 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
     drydep_vel(:,:) = 0.
  end select
 
- if (Drydep(n)%land_does_drydep) then
-    ! land handles dry deposition, so we need to scale the calculated values of
-    ! sink by the fraction of the non-land in the grid cell
-    dsinku = dsinku*(1-landfrac)
- endif
- dsinku(:,:) = MAX(dsinku(:,:), 0.0E+00)
  if ( drydep_exp ) then
     where(tracer>0)
        dsinku=tracer*(1. - exp(-dsinku*dt))/dt
@@ -1013,44 +1039,57 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
     elsewhere
        dsinku=0.0
     endwhere
- end if
+ end if 
 
+ if (ocean_does_deposition) then
+   dsinku_ocn = 0.
+   if (Drydep(n)%land_does_drydep) then
+      !the atmosphere should only see deposition on sea ice:
+      dsinku = dsinku*(1.-frac_open_sea-landfrac)
+   else
+      !use 1-frac_open_sea instead of land_frac as the ocean does not calculate deposition when covered with ice      
+      dsinku = dsinku*(1.-frac_open_sea)
+   end if
+ else
+   dsinku_ocn = dsinku
+   if (Drydep(n)%land_does_drydep) then
+      dsinku = dsinku*(1.-landfrac)
+   end if
+end if
+
+
+!
+!scale dsinku by (1.-frac_open_sea,0.)
+
+ dsinku(:,:)     = MAX(dsinku(:,:), 0.0E+00)
+ dsinku_ocn(:,:) = MAX(dsinku_ocn(:,:), 0.0E+00)
+ 
  ! Now save the dry deposition to the diagnostic manager
  ! delta z = dp/(rho * grav)
  ! delta z *rho  = dp/g
  ! tracer(kgtracer/kgair) * dz(m)* rho(kgair/m3) = kgtracer/m2
  ! so rho drops out of the equation
  if (id_tracer_ddep(n) > 0 ) then
-    call get_tracer_names(MODEL_ATMOS,n,names,units=units)
-    select case (trim(units))
-    case ('vmr')
-       diag_scale = mw_air
-    case ('mol/mol')
-       diag_scale = mw_air
-    case ('mole/mole')
-       diag_scale = mw_air
-    case default
-       diag_scale = 1.
-    end select
-    used = send_data ( id_tracer_ddep(n), dsinku*pwt/diag_scale, Time_next, &
+    if (tracer_prop(n)%is_vmr) then
+      diag_scale = 1000./calc_mw_air(sum_wat)
+    else
+      diag_scale = 1.
+    end if
+    
+    !mol/mol(air) * kg(air)/m2/s -> mol/m2/s or kg/m2/s
+
+    used = send_data ( id_tracer_ddep(n), dsinku*pwt*diag_scale, Time_next, &
          is_in =is,js_in=js)
  endif
 
  if (id_tracer_ddep_cmip(n) > 0 ) then
-    call get_tracer_names(MODEL_ATMOS,n,names,units=units)
-    select case (trim(names))
-    case ('so2')
-       diag_scale = mw_air/0.064
-    case ('so4')
-       diag_scale = mw_air/0.096
-    case ('dms')
-       diag_scale = mw_air/0.062
-    case ('nh3')
-       diag_scale = mw_air/0.017
-    case default
-       diag_scale = 1.
-    end select
-    used = send_data ( id_tracer_ddep_cmip(n), dsinku*pwt/diag_scale,Time_next, &
+    if (tracer_prop(n)%is_vmr) then 
+      diag_scale = tracer_prop(n)%mw / calc_mw_air(sum_wat)
+    else 
+      diag_scale = 1.  
+    end if
+
+    used = send_data ( id_tracer_ddep_cmip(n), dsinku*pwt*diag_scale,Time_next, &
          is_in =is,js_in=js)
  endif
  if (id_tracer_dvel(n) > 0 ) then
@@ -1852,7 +1891,7 @@ subroutine get_drydep_param(text_in_scheme,text_in_param,scheme,land_does_drydep
 
  ! if LM3 or lm3 is present anywhere in the scheme, land model handles the dry
  ! deposition over land surfaces
- land_does_drydep = (index(lowercase(text_in_scheme),'land:lm3')>0)
+ land_does_drydep = (index(lowercase(text_in_scheme),'land:')>0)
 end subroutine get_drydep_param
 !
 !#######################################################################
@@ -2066,11 +2105,12 @@ subroutine get_cmip_param(n,cmip_name,cmip_longname,cmip_longname2)
 
  integer, intent(in) :: n
  character(len=*), intent(out), optional :: cmip_name, cmip_longname, cmip_longname2
- character(len=200) :: cmip_data, cmip_scheme
+ character(len=200) :: cmip_data, cmip_scheme, tracer_name, tunits
  logical flag
  real :: mw
- integer :: iflag
+ integer :: iflag,outunit
 
+ call get_tracer_names (MODEL_ATMOS, n, name = tracer_name, units = tunits)
  flag = query_method('cmip',MODEL_ATMOS,n,cmip_scheme,cmip_data)
 
  if (flag) then
@@ -2099,92 +2139,125 @@ subroutine get_cmip_param(n,cmip_name,cmip_longname,cmip_longname2)
     cmip_longname2 = cmip_longname
  end if
 
+ if (module_is_initialized.eq..FALSE.) then
+   outunit = stdout()
+   write(outunit,'(7a)') 'tracer_name="',trim(tracer_name),'", cmip_name="',trim(cmip_name),'", cmip_longname="',trim(cmip_longname),'"'
+ end if
+
 end subroutine get_cmip_param
 
 !#######################################################################
 
-subroutine get_chem_param (n, mw, nb_N, nb_N_ox, nb_N_red, is_aerosol, conv_vmr_mmr, &
-                           frac_pm1, frac_pm25, frac_pm10)
+subroutine read_chem_param (n, tprop)
 
- integer, intent(in) :: n
- real, intent(out), optional :: mw,nb_N,nb_N_ox,nb_N_red,conv_vmr_mmr
- real, intent(out), optional :: frac_pm1,frac_pm10,frac_pm25
- logical, intent(out), optional :: is_aerosol
- character(len=100) :: scheme, chem_type, tracer_name, tracer_units, name
+ integer, intent(in)                :: n
+ type(chem_param_type), intent(out) :: tprop
+
+ integer :: outunit
+
+ character(len=100) :: scheme, chem_type, tracer_name, tunits, name
  character(len=150) :: chem_data
  logical :: is_aerosol_local
- real :: mwt,nbt_N_red,nbt_N_ox
- logical flag
+ logical :: flag
  integer :: iflag
 
  flag = query_method('chem_param',MODEL_ATMOS,n,scheme,chem_data)
 
- call get_tracer_names (MODEL_ATMOS, n, name = tracer_name, units = tracer_units)
+ call get_tracer_names (MODEL_ATMOS, n, name = tracer_name, units = tunits)
 
  if (flag) then
-    if (present(mw))     then
-       iflag=parse(chem_data,'mw',mw)
-       if (iflag == 0) mw=-999.
-    end if
-    iflag=parse(chem_data,'nb_N_ox',nbt_N_ox)
-    if (iflag == 0) nbt_N_ox=0
-    iflag=parse(chem_data,'nb_N_red',nbt_N_red)
-    if (iflag == 0) nbt_N_red=0
-    If (present(nb_N_ox))  nb_N_ox  = nbt_N_ox
-    If (present(nb_N_red)) nb_N_red = nbt_N_red
-    if (present(nb_N))     nb_N = nbt_N_ox+nbt_N_red
+    iflag=parse(chem_data,'mw',tprop%mw)
+    if (iflag == 0) tprop%mw=-999.
+    if (parse(chem_data,'nb_N_ox',tprop%nb_N_ox).eq.0) tprop%nb_N_ox=0.
+    if (parse(chem_data,'nb_N_red',tprop%nb_N_red).eq.0) tprop%nb_N_red=0.
+    tprop%nb_N = tprop%nb_N_red + tprop%nb_N_ox
 
     if (trim(scheme).eq."aerosol") then
-       is_aerosol_local=.true.
+      tprop%is_aerosol=.true.
     else
-       is_aerosol_local=.false.
-    end if
+      tprop%is_aerosol=.false.
+   end if
 
-    if (present(is_aerosol)) is_aerosol=is_aerosol_local
+    tprop%frac_pm1 =0.
+    tprop%frac_pm10=0.
+    tprop%frac_pm25=0.   
 
-    if (present(frac_pm1).or.present(frac_pm10).or.present(frac_pm25)) then
-       if (is_aerosol_local) then
-          if (present(frac_pm1)) then
-             iflag=parse(chem_data,'frac_pm1',frac_pm1)
-             if (iflag == 0)        call ERROR_MESG('get_chem_param', 'frac_pm1 not defined for '//trim(tracer_name), FATAL )
-          end if
-          if (present(frac_pm25)) then
-             iflag=parse(chem_data,'frac_pm25',frac_pm25)
-             if (iflag == 0)        call ERROR_MESG('get_chem_param', 'frac_pm25 not defined for '//trim(tracer_name), FATAL )
-          end if
-          if (present(frac_pm10)) then
-             iflag=parse(chem_data,'frac_pm10',frac_pm10)
-             if (iflag == 0)        call ERROR_MESG('get_chem_param', 'frac_pm10 not defined for '//trim(tracer_name), FATAL )
-          end if
-       else
-          if (present(frac_pm1))  frac_pm1=0.
-          if (present(frac_pm25)) frac_pm25=0.
-          if (present(frac_pm10)) frac_pm10=0.
-       end if
-    end if
-    if (present(conv_vmr_mmr)) then
-       if (trim(tracer_units).eq."vmr") then
-          iflag=parse(chem_data,'mw',mwt)
-          if (iflag == 0) mwt=-999.
-          conv_vmr_mmr = mwt/wtmair
-       else
-          conv_vmr_mmr = 1.
-       end if
-    end if
+    if (tprop%is_aerosol) then 
+      iflag=parse(chem_data,'frac_pm1',tprop%frac_pm1)
+      if (iflag == 0)        call ERROR_MESG('read_chem_param', 'frac_pm1 not defined for '//trim(tracer_name), FATAL )
+      iflag=parse(chem_data,'frac_pm25',tprop%frac_pm25)
+      if (iflag == 0)        call ERROR_MESG('read_chem_param', 'frac_pm25 not defined for '//trim(tracer_name), FATAL ) 
+      iflag=parse(chem_data,'frac_pm10',tprop%frac_pm10)
+      if (iflag == 0)        call ERROR_MESG('read_chem_param', 'frac_pm10 not defined for '//trim(tracer_name), FATAL )           
+    end if   
 
+    if ((trim(tunits).eq."vmr") .or. (trim(tunits).eq.'mol/mol').or.(trim(tunits).eq.'mole/mole')) then
+       tprop%is_vmr = .TRUE.
+    else
+       tprop%is_vmr = .FALSE.
+    end if
  else
-    if (present(is_aerosol))   is_aerosol=.false.
-    if (present(mw))           mw=-999.
-    if (present(nb_N_red))     nb_N_red=0.
-    if (present(nb_N_ox))      nb_N_ox=0.
-    if (present(nb_N))         nb_N=0.
-    if (present(conv_vmr_mmr)) conv_vmr_mmr = -1.0
-    if (present(frac_pm1))     frac_pm1=0.
-    if (present(frac_pm10))    frac_pm10=0.
-    if (present(frac_pm25))    frac_pm25=0.
+    tprop%is_aerosol=.false.
+    tprop%is_vmr = .false.
+    tprop%mw=-999.
+    tprop%nb_N_red=0.
+    tprop%nb_N_ox =0.
+    tprop%nb_N =0.
+    tprop%frac_pm1 =0.
+    tprop%frac_pm10=0.
+    tprop%frac_pm25=0.
  end if
 
+ if (module_is_initialized == .FALSE.) then
+
+   outunit = stdout()
+   write(outunit,'(a,i3)') 'n=',n
+   write(outunit,'(7a)') 'tracer_name="',trim(tracer_name)
+   write(outunit,'(4(a,g14.6))') 'mwt=',tprop%mw, &
+                                 ', nb_N=',tprop%nb_N,', nb_N_ox=',tprop%nb_N_ox,', nb_N_red=',tprop%nb_N_red
+   write(outunit,'(3(a,f7.4))') 'frac_pm1=',tprop%frac_pm1, ', frac_pm25=',tprop%frac_pm25, ', frac_pm10=',tprop%frac_pm10
+   write(outunit,*) 'is_vmr',tprop%is_vmr
+
+ end if
+
+end subroutine read_chem_param
+
+!#######################################################################
+
+subroutine get_chem_param (n, mw, nb_N, nb_N_ox, nb_N_red, is_aerosol, is_vmr, &
+   frac_pm1, frac_pm25, frac_pm10)
+
+integer, intent(in)            :: n
+real,    intent(out), optional :: mw,nb_N,nb_N_ox,nb_N_red
+real,    intent(out), optional :: frac_pm1,frac_pm10,frac_pm25
+logical, intent(out), optional :: is_aerosol, is_vmr
+
+if (present(mw))         mw         = tracer_prop(n)%mw
+if (present(nb_N))       nb_N       = tracer_prop(n)%nb_N
+if (present(nb_N_ox))    nb_N_ox    = tracer_prop(n)%nb_N_ox
+if (present(nb_N_red))   nb_N_red   = tracer_prop(n)%nb_N_red
+if (present(is_aerosol)) is_aerosol = tracer_prop(n)%is_aerosol
+if (present(is_vmr))     is_vmr = tracer_prop(n)%is_vmr
+if (present(frac_pm1))   frac_pm1   = tracer_prop(n)%frac_pm1
+if (present(frac_pm10))  frac_pm10  = tracer_prop(n)%frac_pm10
+if (present(frac_pm25))  frac_pm25  = tracer_prop(n)%frac_pm25
+
 end subroutine get_chem_param
+
+function tr_is_vmr(n)
+   integer, intent(in) :: n
+   logical :: tr_is_vmr
+   tr_is_vmr = tracer_prop(n)%is_vmr
+end function
+
+function tr_mw(n)
+   integer, intent(in) :: n
+   real :: tr_mw
+   tr_mw = tracer_prop(n)%mw
+end function
+
+
+!#######################################################################
 
 
 !<SUBROUTINE NAME="interp_emiss">
@@ -2626,11 +2699,36 @@ subroutine sedimentation_flux(sj_scheme,kb,dt,mtv,dz,vdep,air_dens,&
         endif
        enddo
        tracer_dt(1)=tracer_dt(1)-setl(1)/pwt(1)*mtv
-       tracer_dt(2:kb)=tracer_dt(2:kb) &
-          + ( setl(1:kb-1) - setl(2:kb) )/pwt(2:kb)*mtv
+       tracer_dt(2:kb)=tracer_dt(2:kb) + ( setl(1:kb-1) - setl(2:kb) )/pwt(2:kb)
      endif
 end subroutine sedimentation_flux
 ! ==============================================================================
+
+
+  !f1p: calculate molecular weight of ambient (air+h2o) air. required for vmr
+  !sum_wat: sum of water tracers  (g/mol)
+function calc_mw_air_0d(sum_wat) result(out)
+   implicit none
+   real,intent(in)                                           :: sum_wat
+   real                                                      :: out
+   out = WTMAIR*WTMH2O/((1-sum_wat)*WTMH2O+sum_wat*WTMAIR)
+ end function calc_mw_air_0d
+
+ function calc_mw_air_2d(sum_wat) result(out)
+   implicit none
+   real,dimension(:,:),intent(in)                                           :: sum_wat
+   real, dimension(size(sum_wat,1),size(sum_wat,2))                         :: out
+   out = WTMAIR*WTMH2O/((1.-sum_wat)*WTMH2O+sum_wat*WTMAIR)
+ end function calc_mw_air_2d
+
+ function calc_mw_air_3d(sum_wat) result(out)
+   implicit none
+   real,dimension(:,:,:),intent(in)                                           :: sum_wat
+   real, dimension(size(sum_wat,1),size(sum_wat,2),size(sum_wat,3))           :: out
+   out = WTMAIR*WTMH2O/((1.-sum_wat)*WTMH2O+sum_wat*WTMAIR)
+ end function calc_mw_air_3d
+
+ !=========================================================================
 
 end module atmos_tracer_utilities_mod
 
