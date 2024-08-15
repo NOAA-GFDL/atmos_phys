@@ -1027,7 +1027,6 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
     drydep_vel(:,:) = 0.
  end select
 
- ! f1p: this would probably be preferable than doing it after the ocean scaling but this wasn't done this way in ESM4p1. Leave it as is to avoid creating too many option
  if ( drydep_exp ) then
     where(tracer>0)
        dsinku=tracer*(1. - exp(-dsinku*dt))/dt
@@ -1065,8 +1064,6 @@ end if
  dsinku(:,:)     = MAX(dsinku(:,:), 0.0E+00)
  dsinku_ocn(:,:) = MAX(dsinku_ocn(:,:), 0.0E+00)
  
-
-
  ! Now save the dry deposition to the diagnostic manager
  ! delta z = dp/(rho * grav)
  ! delta z *rho  = dp/g
