@@ -231,6 +231,9 @@ use atmos_fire_plumerise_mod,only : atmos_fire_plumerise_time_vary,    &
                                     atmos_fire_plumerise_endts, &
                                     atmos_fire_plumerise_init, &
                                     atmos_fire_plumerise_driver
+
+use gex_mod,                only : gex_get_index                                
+                                    
 implicit none
 private
 !-----------------------------------------------------------------------
@@ -414,6 +417,10 @@ integer   :: ind_wet_dep_no3_flux = 0
 integer   :: ind_nh3_flux = 0
 
 
+integer :: gex_dryoa   = 0
+integer :: gex_drybc   = 0
+integer :: gex_drydust = 0
+
 !-----------------------------------------------------------------------
 type(time_type) :: Time
 
@@ -522,6 +529,7 @@ contains
                            Time_next,              &
                            flux_sw_down_vis_dir,   &
                            flux_sw_down_vis_dif,   &
+                           gex_atm2lnd,            &
                            mask,                   &
                            kbot, con_atm)
 
@@ -547,6 +555,7 @@ real, intent(in),    dimension(:,:)           :: albedo
 real, intent(in), dimension(:,:)              :: flux_sw_down_vis_dir
 real, intent(in), dimension(:,:)              :: flux_sw_down_vis_dif
 type(time_type), intent(in)                   :: Time_next
+real,dimension(:,:,:),   intent(inout)        :: gex_atm2lnd
 integer, intent(in), dimension(:,:), optional :: kbot
 real, intent(in), dimension(:,:,:),  optional :: mask
 real, intent(in), dimension(:,:),    optional :: con_atm
@@ -876,10 +885,19 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
             pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic)),  &
                                      Time_next, is_in=is, js_in=js)
       endif
+
+      if (gex_drybc > 0 .and. nomphilic > 0 .and. nomphobic > 0 .and. nSOA > 0) then
+          gex_atm2lnd(:,:,gex_drybc) = pwt(:,:,kd)*(dsinku(:,:,nbcphilic) + dsinku(:,:,nbcphobic))
+      endif
+
       if (id_dryoa > 0 .and. nomphilic > 0 .and. nomphobic > 0 .and. nSOA > 0) then
         used  = send_data (id_dryoa,  &
             pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic) + dsinku(:,:,nSOA)),  &
                                      Time_next, is_in=is, js_in=js)
+      endif
+
+      if (gex_dryoa > 0 .and. nomphilic > 0 .and. nomphobic > 0 .and. nSOA > 0) then
+          gex_atm2lnd(:,:,gex_dryoa) = pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic) + dsinku(:,:,nSOA))
       endif
 
       if (do_cmip6_bug_diag) then
@@ -2530,6 +2548,15 @@ type(time_type), intent(in)                                :: Time
   !BW    end if
   !BW end do
 !>
+
+!Check for possible gex exchange
+      gex_dryoa = gex_get_index(MODEL_ATMOS,MODEL_LAND,'dryoa')
+      if (gex_dryoa .gt. 0) call error_mesg('atmos_tracer_driver','gex/atm2lnd dryoa found',NOTE)
+      gex_drybc = gex_get_index(MODEL_ATMOS,MODEL_LAND,'drybc')
+      if (gex_drybc .gt. 0) call error_mesg('atmos_tracer_driver','gex/atm2lnd drybc found',NOTE)      
+      gex_drydust = gex_get_index(MODEL_ATMOS,MODEL_LAND,'drydust')
+      if (gex_drydust .gt. 0) call error_mesg('atmos_tracer_driver','gex/atm2lnd drydust found',NOTE)         
+
 
       module_is_initialized = .TRUE.
 

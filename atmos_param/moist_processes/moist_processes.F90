@@ -271,8 +271,9 @@ integer :: nH2O2     =0
 
 !index of requested gex fields
 
-integer :: gex_wetoa = 0
-
+integer :: gex_wetoa   = 0
+integer :: gex_wetbc   = 0
+integer :: gex_wetdust = 0
 
 !------------------- other global variables and parameters -------------
 
@@ -533,10 +534,12 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
       call diag_field_init ( axes, Time )
 
 !Check for possible gex exchange
-
       gex_wetoa = gex_get_index(MODEL_ATMOS,MODEL_LAND,'wetoa')
-
-      if (gex_wetoa) call error_mesg('moist_processes','gex/atm2lnd wetoa found',NOTE)
+      if (gex_wetoa .gt. 0) call error_mesg('moist_processes','gex/atm2lnd wetoa found',NOTE)
+      gex_wetbc = gex_get_index(MODEL_ATMOS,MODEL_LAND,'wetbc')
+      if (gex_wetbc .gt. 0) call error_mesg('moist_processes','gex/atm2lnd wetbc found',NOTE)      
+      gex_wetdust = gex_get_index(MODEL_ATMOS,MODEL_LAND,'wetdust')
+      if (gex_wetdust .gt. 0) call error_mesg('moist_processes','gex/atm2lnd wetdust found',NOTE)        
 
 !-----------------------------------------------------------------------
 !   mark the module as initialized.
@@ -981,7 +984,7 @@ type(time_type),           intent(in)    :: Time
 real, dimension(:,:,:,:),  intent(in   ) :: qdt_init
 real, dimension(:,:,:  ),  intent(in   ) :: tdt_init
 real, dimension(:,:,:  ),  intent(inout) :: gex_atm2lnd
-type(mp_input_type),       intent(out)   :: Input_mp
+type(mp_input_type),       intent(in)    :: Input_mp
 
 type(clouds_from_moist_block_type),          &
                            intent(inout) :: Moist_clouds_block
@@ -1177,6 +1180,10 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
                total_wetdep(:,:,nbcphilic) + total_wetdep(:,:,nbcphobic), Time, is,js)
      endif
 
+     if (gex_wetbc.gt.0) then
+        gex_atm2lnd(:,:,gex_wetbc) = total_wetdep(:,:,nbcphilic) + total_wetdep(:,:,nbcphobic)
+     end if      
+
      if (id_wetdep_so4 > 0 .or. id_wetso4_cmip > 0) then
        temp_2d = 0.0
        do n=1,size(nso4)
@@ -1239,6 +1246,9 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
        if (id_wetdep_dust  > 0) used = send_data (id_wetdep_dust,  total_wetdep_dust, Time, is,js) 
        if (id_wetdust_cmip > 0) used = send_data (id_wetdust_cmip, total_wetdep_dust, Time, is,js) 
 
+     if (gex_wetdust.gt.0) then
+        gex_atm2lnd(:,:,gex_wetdust) =  total_wetdep_dust
+     end if             
 
      total_wetdep_nred  = 0.
      total_wetdep_nox  = 0.
@@ -1532,7 +1542,7 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
           used = send_data (id_conv_ice_amt, &
                   tot_conv_ice/(1.0 + total_conv_cloud), &
                                                          Time, is, js, 1)
-
+        
         if (id_IWP_all_clouds > 0 ) &
           call column_diag (id_IWP_all_clouds, is, js, Time, &
          Moist_clouds_block%cloud_data(i_lsc)%ice_amt+tot_conv_ice+    &
@@ -1758,7 +1768,7 @@ type(mp2uwconv_type),     intent(inout) :: Mp2uwconv
       jx = size(Physics_input_block%t,2) 
       kx = size(Physics_input_block%t,3) 
       nt = size(Physics_tendency_block%q_dt,4)
-
+      
 !------------------------------------------------------------------------
 !    allocate and initialize (or associate where possible) an mp_input_type
 !    variable which will contain atmospheric field inputs needed in 

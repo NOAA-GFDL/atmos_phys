@@ -1155,7 +1155,7 @@ logical, optional,            intent(in)    :: override_aerosols
       integer         :: nn
       logical         :: do_override, used
       integer         :: ie, je
-      real, dimension(id,jd,size(p_half,3)-1) :: frac_nh4_so4
+      real, dimension(size(tracer,1),size(tracer,2),size(tracer,3)) :: frac_nh4_so4
 
 !---------------------------------------------------------------------
 !    be sure module has been initialized.
