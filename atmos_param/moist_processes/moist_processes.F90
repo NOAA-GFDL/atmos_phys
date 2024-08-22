@@ -535,12 +535,13 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
       call diag_field_init ( axes, Time )
 
 !Check for possible gex exchange
-      gex_wetoa = gex_get_index(MODEL_ATMOS,MODEL_LAND,'wetoa')
+      gex_wetoa = gex_get_index(MODEL_ATMOS,MODEL_LAND,'wetoa',record=.TRUE.)
       if (gex_wetoa .gt. 0) call error_mesg('moist_processes','gex/atm2lnd wetoa found',NOTE)
-      gex_wetbc = gex_get_index(MODEL_ATMOS,MODEL_LAND,'wetbc')
+      gex_wetbc = gex_get_index(MODEL_ATMOS,MODEL_LAND,'wetbc',record=.TRUE.)
       if (gex_wetbc .gt. 0) call error_mesg('moist_processes','gex/atm2lnd wetbc found',NOTE)      
-      gex_wetdust = gex_get_index(MODEL_ATMOS,MODEL_LAND,'wetdust')
-      if (gex_wetdust .gt. 0) call error_mesg('moist_processes','gex/atm2lnd wetdust found',NOTE)        
+      gex_wetdust = gex_get_index(MODEL_ATMOS,MODEL_LAND,'wetdust',record=.TRUE.)
+      if (gex_wetdust .gt. 0) call error_mesg('moist_processes','gex/atm2lnd wetdust found',NOTE)
+
 
 !-----------------------------------------------------------------------
 !   mark the module as initialized.

@@ -256,6 +256,7 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
   if (id_dust_ddep > 0) then
      used = send_data (id_dust_ddep, all_dust_setl(:,:), Time, is_in=is, js_in=js)
   endif
+  
   if (id_dust_emis > 0) then
      used = send_data (id_dust_emis, all_dust_emis(:,:), Time, is_in=is, js_in=js)
   endif

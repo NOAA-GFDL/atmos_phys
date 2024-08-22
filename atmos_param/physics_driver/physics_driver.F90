@@ -2244,7 +2244,7 @@ real,  dimension(:,:,:), intent(out)  ,optional :: diffm, difft
 !   Surface diffusion 
 !  </INOUT>
 ! </SUBROUTINE>
-ph!
+
  subroutine physics_driver_up (is, ie, js, je, npz,        &
                                Time_prev, Time, Time_next, &
                                lat, lon, area,             &
