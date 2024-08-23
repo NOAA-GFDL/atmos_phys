@@ -2723,10 +2723,10 @@ type(time_type), intent(in) :: model_time
      endif
      do_bb_emis_diurnal = atmos_fire_do_bb_emis_diurnal() 
      if (do_bb_emis_diurnal) then
-             call get_date (model_time, mo_yr, mo, dy, hr, mn, sc)
-             bcbb_time = set_date(mo_yr, mo, dy, 0, 0, 1)
-     else
-             bcbb_time = bcbb_time
+!            call get_date (model_time, mo_yr, mo, dy, hr, mn, sc)
+!            bcbb_time = set_date(mo_yr, mo, dy, 0, 0, 1)
+             call get_date (bcbb_time, yr, mo, dy, hr, mn, sc)
+             bcbb_time = set_date(yr, mo, dy, 0, 0, 1)
      endif
      call obtain_interpolator_time_slices   &
                        (bcbb_aerosol_interp, bcbb_time)
