@@ -2219,6 +2219,7 @@ end if
                         lbc_names(i) = trim(lowercase(tracnam(i)))
                      end if
 
+                     flag_fixed = parse(control, 'fixed_year', fixed_year)
                      if (mpp_root_pe().eq.mpp_pe()) write(*,*) 'fixed_year',flag_fixed,fixed_year
                      
                      if( flag_fixed > 0 ) then                        
