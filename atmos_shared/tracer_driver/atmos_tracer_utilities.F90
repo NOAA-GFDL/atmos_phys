@@ -653,7 +653,7 @@ end subroutine write_namelist_values
 !
 !<SUBROUTINE NAME = "dry_deposition">
 subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
-    u_star, landfrac, frac_open_sea,dsinku, dsinku_ocn,dt, tracer, Time, &
+    u_star, landfrac, frac_open_sea,dsinku, dsinku_lnd, dsinku_ocn,dt, tracer, Time, &
     Time_next, lon, half_day, drydep_data, albedo, ocean_does_deposition, sum_wat, con_atm)
   ! When formulation of dry deposition is resolved perhaps use the following?
   !                           landfr, seaice_cn, snow_area, &
@@ -771,7 +771,7 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
  type(time_type), intent(in)         :: Time, Time_next
  type(interpolate_type),intent(inout)  :: drydep_data
  real, intent(in)                   :: dt
- real, intent(out), dimension(:,:)   :: dsinku, dsinku_ocn
+ real, intent(out), dimension(:,:)   :: dsinku, dsinku_ocn, dsinku_lnd
 
  real,dimension(size(u,1),size(u,2))   :: hwindv,frictv,resisa,drydep_vel,ka,kss,kbs,km,vd_ocean,A,B,alpha,landr2
  !real,dimension(size(u,1),size(u,2))   :: mo_length_inv, vds, rs, k1, k2
@@ -1041,19 +1041,25 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
     endwhere
  end if 
 
+ !note that this is not quite correct if the parameterization specifies different resistances for land and ocean. 
  if (ocean_does_deposition) then
    dsinku_ocn = 0.
    if (Drydep(n)%land_does_drydep) then
       !the atmosphere should only see deposition on sea ice:
       dsinku = dsinku*(1.-frac_open_sea-landfrac)
+      dsinku_lnd = 0.
    else
-      !use 1-frac_open_sea instead of land_frac as the ocean does not calculate deposition when covered with ice      
+      !use 1-frac_open_sea instead of land_frac as the ocean does not calculate deposition when covered with ice
+      dsinku_lnd = dsinku      
       dsinku = dsinku*(1.-frac_open_sea)
    end if
  else
    dsinku_ocn = dsinku
    if (Drydep(n)%land_does_drydep) then
-      dsinku = dsinku*(1.-landfrac)
+      dsinku     = dsinku*(1.-landfrac)
+      dsinku_lnd = 0.
+   else
+      dsinku_lnd = dsinku
    end if
 end if
 
@@ -1061,9 +1067,9 @@ end if
 !
 !scale dsinku by (1.-frac_open_sea,0.)
 
- dsinku(:,:)     = MAX(dsinku(:,:), 0.0E+00)
+ dsinku(:,:)     = MAX(dsinku(:,:),     0.0E+00)
  dsinku_ocn(:,:) = MAX(dsinku_ocn(:,:), 0.0E+00)
- 
+ dsinku_lnd(:,:) = MAX(dsinku_lnd(:,:), 0.0E+00)
  ! Now save the dry deposition to the diagnostic manager
  ! delta z = dp/(rho * grav)
  ! delta z *rho  = dp/g

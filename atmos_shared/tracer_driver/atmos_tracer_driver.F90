@@ -105,7 +105,8 @@ use fms_mod,               only : check_nml_error, &
                                   mpp_clock_begin, &
                                   mpp_clock_end, &
                                   CLOCK_MODULE, &
-                                  uppercase
+                                  uppercase, &
+                                  NOTE
 use time_manager_mod,      only : time_type, &
                                   get_date, get_date_julian, &
                                   real_to_time_type
@@ -124,7 +125,7 @@ use tracer_manager_mod,    only : get_tracer_index,   &
                                   adjust_positive_def, &
                                   query_method, &
                                   NO_TRACER
-use field_manager_mod,     only : MODEL_ATMOS, fm_field_name_len
+use field_manager_mod,     only : MODEL_ATMOS, fm_field_name_len, MODEL_LAND
 use atmos_tracer_utilities_mod, only :                      &
                                   dry_deposition,           &
                                   dry_deposition_init,      &
@@ -232,6 +233,9 @@ use atmos_fire_plumerise_mod,only : atmos_fire_plumerise_time_vary,    &
                                     atmos_fire_plumerise_endts, &
                                     atmos_fire_plumerise_init, &
                                     atmos_fire_plumerise_driver
+
+use gex_mod,                only : gex_get_index                                
+                                    
 implicit none
 private
 !-----------------------------------------------------------------------
@@ -415,6 +419,10 @@ integer   :: ind_wet_dep_no3_flux = 0
 integer   :: ind_nh3_flux = 0
 
 
+integer :: gex_dryoa   = 0
+integer :: gex_drybc   = 0
+integer :: gex_drydust = 0
+
 !-----------------------------------------------------------------------
 type(time_type) :: Time
 
@@ -523,6 +531,7 @@ contains
                            Time_next,              &
                            flux_sw_down_vis_dir,   &
                            flux_sw_down_vis_dif,   &
+                           gex_atm2lnd,            &
                            mask,                   &
                            kbot, con_atm)
 
@@ -548,6 +557,7 @@ real, intent(in),    dimension(:,:)           :: albedo
 real, intent(in), dimension(:,:)              :: flux_sw_down_vis_dir
 real, intent(in), dimension(:,:)              :: flux_sw_down_vis_dif
 type(time_type), intent(in)                   :: Time_next
+real,dimension(:,:,:),   intent(inout)        :: gex_atm2lnd
 integer, intent(in), dimension(:,:), optional :: kbot
 real, intent(in), dimension(:,:,:),  optional :: mask
 real, intent(in), dimension(:,:),    optional :: con_atm
@@ -568,8 +578,7 @@ real, dimension(size(r,1),size(r,2),size(r,3)) :: rtndso2, rtndso4,rtnddms
 real, dimension(size(r,1),size(r,2),size(r,3)) :: rtndbcphob, rtndbcphil
 real, dimension(size(r,1),size(r,2),size(r,3)) :: rtndomphob, rtndomphil
 real, dimension(size(r,1),size(r,2),size(r,3)) :: rtndco2, rtndco2_emis
-real, dimension(size(r,1),size(r,2),size(rdt,4)) :: dsinku
-real, dimension(size(r,1),size(r,2))             :: dsinku_ocn
+real, dimension(size(r,1),size(r,2),size(rdt,4)) :: dsinku, dsinku_lnd, dsinku_ocn
 real, dimension(size(r,1),size(r,2)) :: hno3d_setl, all_so4d_setl
 real, dimension(size(r,1),size(r,2)) ::  w10m_ocean, w10m_land
 integer :: year,month,day,hour,minute,second
@@ -803,7 +812,7 @@ logical :: ocn_does_deposition
             call dry_deposition( n, is, js, u(:,:,kd), v(:,:,kd), t(:,:,kd), &
                                  pwt(:,:,kd), pfull(:,:,kd), &
                                  z_half(:,:,kd)-z_half(:,:,kd+1), u_star, &
-                                 land, frac_open_sea, dsinku(:,:,n), dsinku_ocn, dt, &
+                                 land, frac_open_sea, dsinku(:,:,n), dsinku_lnd(:,:,n), dsinku_ocn(:,:,n), dt, &
                                  tracer(:,:,kd,n), Time, Time_next, &
                                  lon, half_day, &
                                  drydep_data(n),albedo,ocn_does_deposition,tracer(:,:,kd,nsphum), con_atm)
@@ -817,10 +826,10 @@ logical :: ocn_does_deposition
                  sum_n_ddep     = sum_n_ddep + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n(n)                
             if (nb_n_ox(n).gt.0) &
                  sum_n_ox_ddep      = sum_n_ox_ddep     + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n_ox(n) 
-                 sum_n_ox_ddep_ocn  = sum_n_ox_ddep_ocn + pwt(:,:,kd)*dsinku_ocn*WTMN/wtmair*nb_n_ox(n)                  
+                 sum_n_ox_ddep_ocn  = sum_n_ox_ddep_ocn + pwt(:,:,kd)*dsinku_ocn(:,:,n)*WTMN/wtmair*nb_n_ox(n)                  
             if (nb_n_red(n).gt.0) &
                  sum_n_red_ddep = sum_n_red_ddep         + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n_red(n)
-                 sum_n_red_ddep_ocn = sum_n_red_ddep_ocn + pwt(:,:,kd)*dsinku_ocn*WTMN/wtmair*nb_n_red(n)
+                 sum_n_red_ddep_ocn = sum_n_red_ddep_ocn + pwt(:,:,kd)*dsinku_ocn(:,:,n)*WTMN/wtmair*nb_n_red(n)
 
             if (id_tracer_ddep_kg_m2_s(n)>0) then
               if (tr_is_vmr(n)) then
@@ -891,10 +900,19 @@ logical :: ocn_does_deposition
             pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic)),  &
                                      Time_next, is_in=is, js_in=js)
       endif
+
+      if (gex_drybc > 0 .and. nomphilic > 0 .and. nomphobic > 0 .and. nSOA > 0) then
+          gex_atm2lnd(:,:,gex_drybc) = pwt(:,:,kd)*(dsinku_lnd(:,:,nbcphilic) + dsinku_lnd(:,:,nbcphobic))
+      endif
+
       if (id_dryoa > 0 .and. nomphilic > 0 .and. nomphobic > 0 .and. nSOA > 0) then
         used  = send_data (id_dryoa,  &
             pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic) + dsinku(:,:,nSOA)),  &
                                      Time_next, is_in=is, js_in=js)
+      endif
+
+      if (gex_dryoa > 0 .and. nomphilic > 0 .and. nomphobic > 0 .and. nSOA > 0) then
+          gex_atm2lnd(:,:,gex_dryoa) = pwt(:,:,kd)*(dsinku_lnd(:,:,nomphilic) + dsinku_lnd(:,:,nomphobic) + dsinku_lnd(:,:,nSOA))
       endif
 
       if (do_cmip6_bug_diag) then
@@ -2526,7 +2544,8 @@ type(time_type), intent(in)                                :: Time
             call get_tracer_names (MODEL_ATMOS, n, name = tracer_name, units = tracer_units)
             write (outunit,'(a,a,f7.4)') trim(tracer_name),', frac_pm10=', frac_pm10(n)
         end if
-      end do
+     end do
+
       write (outunit,*) 'pm25 is comprised of :'
       do n = 1,nt
         if (frac_pm25(n).gt.0.) then
@@ -2541,6 +2560,17 @@ type(time_type), intent(in)                                :: Time
             write (outunit,'(a,a,f7.4)') trim(tracer_name),', frac_pm1=',frac_pm1(n)
         end if
       end do         
+     
+!Check for possible gex exchange
+      gex_dryoa = gex_get_index(MODEL_ATMOS,MODEL_LAND,'dryoa',record=.TRUE.)
+      if (gex_dryoa .gt. 0) call error_mesg('atmos_tracer_driver','gex/atm2lnd dryoa found',NOTE)
+      gex_drybc = gex_get_index(MODEL_ATMOS,MODEL_LAND,'drybc',record=.TRUE.)
+      if (gex_drybc .gt. 0) call error_mesg('atmos_tracer_driver','gex/atm2lnd drybc found',NOTE)      
+      gex_drydust = gex_get_index(MODEL_ATMOS,MODEL_LAND,'drydust',record=.TRUE.)
+      if (gex_drydust .gt. 0) call error_mesg('atmos_tracer_driver','gex/atm2lnd drydust found',NOTE)         
+
+      if (mpp_root_pe().eq.mpp_pe()) write(*,*) 'gex_dry',gex_dryoa,gex_drybc,gex_drydust
+      
       module_is_initialized = .TRUE.
 
  end subroutine atmos_tracer_driver_init
