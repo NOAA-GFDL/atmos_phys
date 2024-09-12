@@ -1544,7 +1544,10 @@ logical :: ocn_does_deposition
    call mpp_clock_end (dust_clock)
 
    !from mol/m2/s to kgN/m2/s
-   sum_n_ox_ddep  = sum_n_ox_ddep + hno3d_setl(:,:) * WTMN/1000.
+   sum_n_ox_ddep      = sum_n_ox_ddep     + hno3d_setl(:,:) * WTMN/1000.
+   sum_n_ox_ddep_ocn  = sum_n_ox_ddep_ocn + hno3d_setl(:,:) * WTMN/1000.
+
+   
    !---- cmip variables ----
    if (id_n_ox_ddep > 0) used = send_data (id_n_ox_ddep, sum_n_ox_ddep, Time_next, &
                                               is_in=is, js_in=js)
