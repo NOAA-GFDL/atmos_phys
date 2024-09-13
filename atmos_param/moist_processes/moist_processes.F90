@@ -30,7 +30,7 @@ use fms_mod,               only: error_mesg, FATAL, NOTE,        &
                                  mpp_clock_end, CLOCK_MODULE,    &
                                  MPP_CLOCK_SYNC
 use fms2_io_mod,           only: file_exists
-use field_manager_mod,     only: MODEL_ATMOS
+use field_manager_mod,     only: MODEL_ATMOS, MODEL_LAND
 use tracer_manager_mod,    only: get_tracer_index,&
                                  get_tracer_names, &
                                  NO_TRACER
@@ -65,7 +65,7 @@ use atmos_global_diag_mod, only: register_global_diag_field, &
                                  send_global_diag
 use vert_diff_driver_mod, only : surf_diff_type
 use aerosol_types_mod,    only : aerosol_type
-use atmos_tracer_utilities_mod, only : get_cmip_param, get_chem_param
+use atmos_tracer_utilities_mod, only : get_cmip_param, get_chem_param, atmos_tracer_utilities_init
 use moist_proc_utils_mod, only : tempavg, column_diag, rh_calc,  &
                                  MP_input_type, MP_nml_type,  &
                                  mp_tendency_type, mp_removal_type, &
@@ -86,6 +86,8 @@ use atmos_cmip_diag_mod,   only: register_cmip_diag_field_2d, &
                                  send_cmip_data_3d, &
                                  cmip_diag_id_type, &
                                  query_cmip_diag_id
+
+use gex_mod, only : gex_get_index
 
 
 implicit none
@@ -267,6 +269,11 @@ integer :: nNH4NO3   =0
 integer :: nNH4      =0
 integer :: nH2O2     =0
 
+!index of requested gex fields
+
+integer :: gex_wetoa   = 0
+integer :: gex_wetbc   = 0
+integer :: gex_wetdust = 0
 
 !------------------- other global variables and parameters -------------
 
@@ -450,6 +457,7 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
       nbcphilic = get_tracer_index(MODEL_ATMOS,'bcphil')
       nomphobic = get_tracer_index(MODEL_ATMOS,'omphob')
       nomphilic = get_tracer_index(MODEL_ATMOS,'omphil')
+      call atmos_tracer_utilities_init(lonb, latb, axes, Time)
       call atmos_dust_init (lonb, latb, axes, Time )
       call atmos_sea_salt_init (lonb, latb, axes, Time )
 
@@ -526,6 +534,15 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
 !-----------------------------------------------------------------------
       call diag_field_init ( axes, Time )
 
+!Check for possible gex exchange
+      gex_wetoa = gex_get_index(MODEL_ATMOS,MODEL_LAND,'wetoa',record=.TRUE.)
+      if (gex_wetoa .gt. 0) call error_mesg('moist_processes','gex/atm2lnd wetoa found',NOTE)
+      gex_wetbc = gex_get_index(MODEL_ATMOS,MODEL_LAND,'wetbc',record=.TRUE.)
+      if (gex_wetbc .gt. 0) call error_mesg('moist_processes','gex/atm2lnd wetbc found',NOTE)
+      gex_wetdust = gex_get_index(MODEL_ATMOS,MODEL_LAND,'wetdust',record=.TRUE.)
+      if (gex_wetdust .gt. 0) call error_mesg('moist_processes','gex/atm2lnd wetdust found',NOTE)
+
+
 !-----------------------------------------------------------------------
 !   mark the module as initialized.
 !-----------------------------------------------------------------------
@@ -561,7 +578,7 @@ subroutine moist_processes ( is, ie, js, je, npz, Time,     land, ustar,  &
                              Physics_input_block, Moist_clouds_block,   &
                              Physics_tendency_block, Phys_mp_exch,  &
                              Surf_diff, Removal_mp, shflx, lhflx,  &
-                             lprec, fprec, gust_cv,  Aerosol)
+                             lprec, fprec, gust_cv, gex_atm2lnd, Aerosol)
 
 !-----------------------------------------------------------------------
 !
@@ -630,6 +647,8 @@ type(mp_removal_type),    intent(inout) :: Removal_mp
 real, dimension(:,:),     intent(in)    :: shflx, lhflx
 
 real, intent(out), dimension(:,:)       :: lprec, fprec, gust_cv
+real, intent(inout), dimension(:,:,:)   :: gex_atm2lnd
+
 type(aerosol_type),intent(in), optional :: Aerosol
 
 !-----------------------------------------------------------------------
@@ -705,7 +724,7 @@ type(aerosol_type),intent(in), optional :: Aerosol
 !------------------------------------------------------------------------
       call combined_MP_diagnostics   &
               (is, ie, js, je, Time, tdt_init, qdt_init, Input_mp,   &
-               Moist_clouds_block, Output_mp, Removal_mp)  
+               Moist_clouds_block, Output_mp, Removal_mp, gex_atm2lnd)
 
 !------------------------------------------------------------------------
 !    define needed output arguments. redefine r to be the value after 
@@ -960,12 +979,13 @@ end subroutine define_cosp_precip_fluxes
 
 subroutine combined_MP_diagnostics    &
         (is, ie, js, je, Time, tdt_init, qdt_init,    &
-         Input_mp, Moist_clouds_block, Output_mp, Removal_mp)
+         Input_mp, Moist_clouds_block, Output_mp, Removal_mp, gex_atm2lnd)
                        
 integer,                   intent(in)    :: is, ie, js, je
 type(time_type),           intent(in)    :: Time
 real, dimension(:,:,:,:),  intent(in   ) :: qdt_init
 real, dimension(:,:,:  ),  intent(in   ) :: tdt_init
+real, dimension(:,:,:  ),  intent(inout) :: gex_atm2lnd
 type(mp_input_type),       intent(in)    :: Input_mp
 
 type(clouds_from_moist_block_type),          &
@@ -1147,6 +1167,10 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
                          total_wetdep(:,:,nSOA) , Time, is,js)
      endif
 
+     if (gex_wetoa.gt.0) then
+          gex_atm2lnd(:,:,gex_wetoa) = total_wetdep(:,:,nomphilic) + total_wetdep(:,:,nomphobic) + total_wetdep(:,:,nSOA)
+     endif
+
      if (id_wetdep_bc > 0) then
        used = send_data (id_wetdep_bc,  &
                total_wetdep       (:,:,nbcphilic) + &
@@ -1157,6 +1181,10 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
        used = send_data (id_wetbc_cmip,  &
                total_wetdep(:,:,nbcphilic) + total_wetdep(:,:,nbcphobic), Time, is,js)
      endif
+
+     if (gex_wetbc.gt.0) then
+        gex_atm2lnd(:,:,gex_wetbc) = total_wetdep(:,:,nbcphilic) + total_wetdep(:,:,nbcphobic)
+     end if
 
      if (id_wetdep_so4 > 0 .or. id_wetso4_cmip > 0) then
        temp_2d = 0.0
@@ -1190,14 +1218,13 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
        if (id_wetdms_cmip > 0) used = send_data (id_wetdms_cmip, temp_2d, Time, is,js)
      endif
 
-     if (id_wetdep_NH4NO3 > 0 .or. id_wetnh4_cmip > 0) then
+     if (id_wetnh4_cmip > 0) then
        temp_2d = 0.0
-       if( do_donner_deep ) temp_2d = temp_2d + (18.0/WTMAIR)*(total_wetdep_donner(:,:,nnH4NO3) + &
+       if( do_donner_deep ) temp_2d = temp_2d + (18.0/WTMAIR)*( &
                                                                total_wetdep_donner(:,:,nNH4) )
-       if( do_uw_conv  )    temp_2d = temp_2d + (18.0/WTMAIR)*(total_wetdep_uw(:,:,nNH4NO3) + &
+       if( do_uw_conv  )    temp_2d = temp_2d + (18.0/WTMAIR)*( &
                                                                total_wetdep_uw(:,:,nNH4) )
-       if( doing_prog_clouds )       temp_2d = temp_2d - 0.018*(Removal_mp%ls_wetdep(:,:,nNH4NO3) + Removal_mp%ls_wetdep(:,:,nNH4))
-       if (id_wetdep_NH4NO3 > 0) used = send_data (id_wetdep_NH4NO3, temp_2d, Time, is,js)
+       if( doing_prog_clouds )       temp_2d = temp_2d - 0.018*(Removal_mp%ls_wetdep(:,:,nNH4))
        if (id_wetnh4_cmip   > 0) used = send_data (id_wetnh4_cmip,   temp_2d, Time, is,js)
      endif
 
@@ -1220,6 +1247,9 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
        if (id_wetdep_dust  > 0) used = send_data (id_wetdep_dust,  total_wetdep_dust, Time, is,js) 
        if (id_wetdust_cmip > 0) used = send_data (id_wetdust_cmip, total_wetdep_dust, Time, is,js) 
 
+     if (gex_wetdust.gt.0) then
+        gex_atm2lnd(:,:,gex_wetdust) =  total_wetdep_dust
+     end if
 
      total_wetdep_nred  = 0.
      total_wetdep_nox  = 0.
@@ -2479,7 +2509,7 @@ integer                     :: id_wetdep_cmip
 
      !-------- cmip wet deposition fields  ---------
       do ic = 1, size(cmip_names,1)
-        if (TRIM(cmip_names(ic)) .eq. 'nh4' .and. (nNH4NO3 .eq. NO_TRACER .or. nNH4 .eq. NO_TRACER)) then
+        if (TRIM(cmip_names(ic)) .eq. 'nh4' .and. ( nNH4 .eq. NO_TRACER)) then
           id_wetnh4_cmip = 0; cycle  ! skip when tracers are not in field table
         endif
 

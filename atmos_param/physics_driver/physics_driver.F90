@@ -1691,6 +1691,7 @@ subroutine physics_driver_down (is, ie, js, je, npz,              &
                                 gust,                             &
                                 Rad_flux_control,                 &
                                 Rad_flux_block,                   &
+                                gex_atm2lnd,                      &
                                 shflx, lhflx,                     & ! optional input not used by am4 physics
                                 wind, thv_atm, thv_surf,          & ! optional input not used by am4 physics
                                 diffm, difft  )
@@ -1720,6 +1721,7 @@ real,dimension(:,:),     intent(out)            :: gust
 type(surf_diff_type),    intent(inout)          :: Surf_diff
 type(radiation_flux_control_type),  intent(in)  :: Rad_flux_control
 type(radiation_flux_block_type),    intent(in)  :: Rad_flux_block
+real,dimension(:,:,:),   intent(inout)          :: gex_atm2lnd
 real,  dimension(:,:),   intent(in), optional   :: shflx, lhflx            ! optional input not used by am4 physics
 real,  dimension(:,:),   intent(in), optional   :: wind, thv_atm, thv_surf ! optional input not used by am4 physics
 real,  dimension(:,:,:), intent(out)  ,optional :: diffm, difft 
@@ -1998,7 +2000,8 @@ real,  dimension(:,:,:), intent(out)  ,optional :: diffm, difft
                                 u_star, b_star, q_star, z_half, z_full, &
                                 t_surf_rad, albedo, Time_next, &
                                 Rad_flux_block%flux_sw_down_vis_dir, &
-                                Rad_flux_block%flux_sw_down_vis_dif)
+                                Rad_flux_block%flux_sw_down_vis_dif,  &
+                                gex_atm2lnd = gex_atm2lnd)
       call mpp_clock_end ( tracer_clock )
 
 !-----------------------------------------------------------------------
@@ -2234,6 +2237,9 @@ real,  dimension(:,:,:), intent(out)  ,optional :: diffm, difft
 !  </OUT>
 !  <OUT NAME="gust" TYPE="real">
 !  </OUT>
+!  <OUT NAME="gex_atm2lnd" TYPE="real">
+!      fields passed from the atmosphere to the land
+!  </OUT>
 !  <INOUT NAME="Surf_diff" TYPE="surface_diffusion_type">
 !   Surface diffusion 
 !  </INOUT>
@@ -2249,7 +2255,7 @@ real,  dimension(:,:,:), intent(out)  ,optional :: diffm, difft
                                Physics_tendency_block,     &
                                Moist_clouds_block,         &
                                Cosp_block, Surf_diff,      &
-                               lprec, fprec, gust)
+                               lprec, fprec, gust, gex_atm2lnd)
 
 !----------------------------------------------------------------------
 !    physics_driver_up completes the calculation of vertical diffusion 
@@ -2267,6 +2273,7 @@ type(clouds_from_moist_block_type), intent(inout) :: Moist_clouds_block
 type(cosp_from_rad_block_type),     intent(inout) :: Cosp_block
 type(surf_diff_type),   intent(inout)             :: Surf_diff
 real,dimension(:,:),    intent(out)               :: lprec, fprec
+real,dimension(:,:,:),  intent(inout)             :: gex_atm2lnd
 real,dimension(:,:),    intent(inout)             :: gust
 
 !-----------------------------------------------------------------------
@@ -2578,7 +2585,7 @@ real,dimension(:,:),    intent(inout)             :: gust
               b_star, q_star, area, lon, lat, Physics_input_block,   &
               Moist_clouds_block, Physics_tendency_block, Phys_mp_exch, &
               Surf_diff, Removal_mp, shflx, lhflx,  &
-              lprec, fprec, gust_cv, Aerosol=Aerosol)
+              lprec, fprec, gust_cv, gex_atm2lnd, Aerosol=Aerosol)
         call mpp_clock_end ( moist_processes_clock )
 
 !-------------------------------------------------------------------------
