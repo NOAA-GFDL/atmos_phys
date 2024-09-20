@@ -150,11 +150,15 @@ MODULE UW_CONV_MOD
   real    :: sigma0 = 0.5
   real    :: tmax0  = 363.15
 
+
   integer :: tracer_check_type = -999 !legacy
   !< select realizability checks to be applied to tracers
   !! -999 (default): apply min/max checks (with scaling of tendencies), no filling
   !!              1: omit min/max checks, apply filling (using sjl_fillz), no scaling
   !!              2: omit min/max checks, no filling (apply scaling to avoid negatives)
+
+  logical :: treat_nitrate_as_sulfate = .false.  !temporary fix, while we develop explicit treatment of activation by nitrate aerosol
+
 
   logical :: use_turb_tke = .false.  !h1g, 2015-08-11
 
@@ -168,7 +172,7 @@ MODULE UW_CONV_MOD
        duration, do_subcloud_flx, do_new_subflx, src_choice, gqt_choice,   &
        zero_out_conv_area, tracer_check_type, use_turb_tke, use_lcl_only, do_new_pevap, plev_for, stop_at_let, &
        use_pblhttke_avg, use_hlqtsrc_avg, use_capecin_avg, reproduce_old_version, do_plev_umf, plev_umf, shallow_umf_thresh, &
-       do_eis_limit, do_eis_limitn, do_lts_limit, do_lts_limitn
+       do_eis_limit, do_eis_limitn, do_lts_limit, do_lts_limitn, treat_nitrate_as_sulfate
 
   !namelist parameters for UW convective plume
   real    :: rle      = 0.10   ! for critical stopping distance for entrainment
@@ -1562,7 +1566,8 @@ contains
       do na = 1,naer
         if(asol%aerosol_names(na) == 'so4' .or. &
            asol%aerosol_names(na) == 'so4_anthro' .or. &
-           asol%aerosol_names(na) == 'so4_natural') then     !aerosol unit: kg/m2
+           asol%aerosol_names(na) == 'so4_natural' .or. &
+           (asol%aerosol_names(na) == 'nitrate' .and. treat_nitrate_as_sulfate))  then     !aerosol unit: kg/m2
           do k=1,kmax
             do j = 1, jmax
               do i=1, imax
