@@ -626,8 +626,8 @@ subroutine xactive_bvoc( lon, lat, land, is, ie, js, je, Time, Time_next, coszen
       ENDIF
       IF (xactive_algorithm == 'MEGAN3' .OR. do_MEGAN2_EPMAP_ISOP .OR. do_MEGAN2_EPMAP_TERP) THEN
          !M.Lin: Divide by total PFT coverage to obtain LAI of vegetated area
-         LAIc3 = MIN(MLAI_MEGAN3(is:ie,js:je,month)/SUM(PCTPFT(is:ie,js:je,2:17),DIM=3), LAIMAX)
-         LAIp3 = MIN(MLAI_MEGAN3(is:ie,js:je,month_p)/SUM(PCTPFT(is:ie,js:je,2:17),DIM=3), LAIMAX)
+         LAIc3 = MIN(MLAI_MEGAN3(is:ie,js:je,month)/MAX(SUM(PCTPFT(is:ie,js:je,2:17),DIM=3),EPSLN), LAIMAX)
+         LAIp3 = MIN(MLAI_MEGAN3(is:ie,js:je,month_p)/MAX(SUM(PCTPFT(is:ie,js:je,2:17),DIM=3),EPSLN), LAIMAX)
       ENDIF
    ENDIF
 
@@ -3952,14 +3952,15 @@ end function fGAMMA_PAR_AM4
       call read_data (tasfile_obj, 'lon', metlon)
       call read_data (tasfile_obj, 'lat', metlat)
 
-      dlon = 0.5*(metlon(1)-metlon(2))
+      dlon = 0.5*(metlon(2)-metlon(1))
       dlat = 0.5*(metlat(2)-metlat(1))
 
       DO i = 1, metlatin
          metlate(i) = metlat(i)-dlat
       ENDDO
 
-      metlate(metlatin+1) = metlat(metlatin)+dlat
+      metlate(1) = MAX( MIN( metlate(1), 90. ), -90. )
+      metlate(metlatin+1) = MAX( MIN( metlat(metlatin)+dlat, 90. ), -90. )
 
       DO i = 1, metlonin
          metlone(i) = metlon(i)-dlon
