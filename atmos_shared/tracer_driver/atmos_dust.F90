@@ -34,6 +34,7 @@ use interpolator_mod,      only: interpolate_type, interpolator_init, &
                                  unset_interpolator_time_flag, &
                                  interpolator, interpolator_end, &
                                  CONSTANT, INTERP_WEIGHTED_P
+use coupler_types_mod, only: coupler_2d_bc_type, ind_deposition
 
 implicit none
 private
@@ -787,43 +788,41 @@ subroutine atmos_dust_init (lonb, latb, axes, Time, mask)
 
 subroutine atmos_dust_gather_data (gas_fields, tr_bot)
 
-use coupler_types_mod, only: coupler_2d_bc_type, ind_pcair
-
 type(coupler_2d_bc_type), intent(inout) :: gas_fields
 real, dimension(:,:,:), intent(in)      :: tr_bot
 
 !lith
 if (ind_dry_dep_lith_dust_flux .gt. 0) then
-  gas_fields%bc(ind_dry_dep_lith_dust_flux)%field(ind_pcair)%values(:,:) = -dry_dep_lith_dust_flux(:,:)!sign flip
+  gas_fields%bc(ind_dry_dep_lith_dust_flux)%field(ind_deposition)%values(:,:) = -dry_dep_lith_dust_flux(:,:)!sign flip
 endif
 
 if (ind_wet_dep_lith_dust_flux .gt. 0) then
-  gas_fields%bc(ind_wet_dep_lith_dust_flux)%field(ind_pcair)%values(:,:) = wet_dep_lith_dust_flux(:,:)
+  gas_fields%bc(ind_wet_dep_lith_dust_flux)%field(ind_deposition)%values(:,:) = wet_dep_lith_dust_flux(:,:)
 endif
 
 !alk
 if (ind_dry_dep_alk_dust_flux .gt. 0) then
-  gas_fields%bc(ind_dry_dep_alk_dust_flux)%field(ind_pcair)%values(:,:) = -dry_dep_alk_dust_flux(:,:)!sign flip
+  gas_fields%bc(ind_dry_dep_alk_dust_flux)%field(ind_deposition)%values(:,:) = -dry_dep_alk_dust_flux(:,:)!sign flip
 endif
 if (ind_wet_dep_alk_dust_flux .gt. 0) then
-  gas_fields%bc(ind_wet_dep_alk_dust_flux)%field(ind_pcair)%values(:,:) = wet_dep_alk_dust_flux(:,:)
+  gas_fields%bc(ind_wet_dep_alk_dust_flux)%field(ind_deposition)%values(:,:) = wet_dep_alk_dust_flux(:,:)
 endif
 
 !soluble iron
 if (ind_dry_dep_solubleFe_flux .gt. 0) then
-  gas_fields%bc(ind_dry_dep_solubleFe_flux)%field(ind_pcair)%values(:,:) = -dry_dep_solubleFe_flux(:,:)!sign flip
+  gas_fields%bc(ind_dry_dep_solubleFe_flux)%field(ind_deposition)%values(:,:) = -dry_dep_solubleFe_flux(:,:)!sign flip
 endif
 
 if (ind_wet_dep_solubleFe_flux .gt. 0) then
-  gas_fields%bc(ind_wet_dep_solubleFe_flux)%field(ind_pcair)%values(:,:) = wet_dep_solubleFe_flux(:,:)
+  gas_fields%bc(ind_wet_dep_solubleFe_flux)%field(ind_deposition)%values(:,:) = wet_dep_solubleFe_flux(:,:)
 endif
 !soluble iron
 if (ind_dry_dep_solubleP_flux .gt. 0) then
-  gas_fields%bc(ind_dry_dep_solubleP_flux)%field(ind_pcair)%values(:,:) = -dry_dep_solubleP_flux(:,:)!sign flip
+  gas_fields%bc(ind_dry_dep_solubleP_flux)%field(ind_deposition)%values(:,:) = -dry_dep_solubleP_flux(:,:)!sign flip
 endif
 
 if (ind_wet_dep_solubleP_flux .gt. 0) then
-  gas_fields%bc(ind_wet_dep_solubleP_flux)%field(ind_pcair)%values(:,:) = wet_dep_solubleP_flux(:,:)
+  gas_fields%bc(ind_wet_dep_solubleP_flux)%field(ind_deposition)%values(:,:) = wet_dep_solubleP_flux(:,:)
 endif
 
 end subroutine atmos_dust_gather_data

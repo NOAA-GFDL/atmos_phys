@@ -233,7 +233,7 @@ use atmos_fire_plumerise_mod,only : atmos_fire_plumerise_time_vary,    &
                                     atmos_fire_plumerise_endts, &
                                     atmos_fire_plumerise_init, &
                                     atmos_fire_plumerise_driver
-
+use coupler_types_mod, only: coupler_2d_bc_type, ind_pcair, ind_deposition
 use gex_mod,                only : gex_get_index                                
                                     
 implicit none
@@ -2853,8 +2853,6 @@ end subroutine atmos_tracer_flux_init
 !   </TEMPLATE>
  subroutine atmos_tracer_driver_gather_data(gas_fields, tr_bot)
 
-use coupler_types_mod, only: coupler_2d_bc_type, ind_pcair
-
 type(coupler_2d_bc_type), intent(inout) :: gas_fields
 real, dimension(:,:,:), intent(in)      :: tr_bot
 
@@ -2874,8 +2872,6 @@ real, dimension(:,:,:), intent(in)      :: tr_bot
 
  subroutine atmos_tracer_driver_gather_data_down(gas_fields, tr_bot)
 
-use coupler_types_mod, only: coupler_2d_bc_type, ind_pcair
-
 type(coupler_2d_bc_type), intent(inout) :: gas_fields
 real, dimension(:,:,:), intent(in)      :: tr_bot
 
@@ -2887,18 +2883,18 @@ real, dimension(:,:,:), intent(in)      :: tr_bot
 
 !nitrogen
 if (ind_dry_dep_no3_flux .gt. 0) then
-  gas_fields%bc(ind_dry_dep_no3_flux)%field(ind_pcair)%values(:,:) = -dry_dep_no3_flux(:,:)!sign flip
+  gas_fields%bc(ind_dry_dep_no3_flux)%field(ind_deposition)%values(:,:) = -dry_dep_no3_flux(:,:)!sign flip
 endif
 
 if (ind_wet_dep_no3_flux .gt. 0) then
-  gas_fields%bc(ind_wet_dep_no3_flux)%field(ind_pcair)%values(:,:) = wet_dep_no3_flux(:,:)
+  gas_fields%bc(ind_wet_dep_no3_flux)%field(ind_deposition)%values(:,:) = wet_dep_no3_flux(:,:)
 endif
 if (ind_dry_dep_nh4_flux .gt. 0) then
-  gas_fields%bc(ind_dry_dep_nh4_flux)%field(ind_pcair)%values(:,:) = -dry_dep_nh4_flux(:,:)!sign flip
+  gas_fields%bc(ind_dry_dep_nh4_flux)%field(ind_deposition)%values(:,:) = -dry_dep_nh4_flux(:,:)!sign flip
 endif
 
 if (ind_wet_dep_nh4_flux .gt. 0) then
-  gas_fields%bc(ind_wet_dep_nh4_flux)%field(ind_pcair)%values(:,:) = wet_dep_nh4_flux(:,:)
+  gas_fields%bc(ind_wet_dep_nh4_flux)%field(ind_deposition)%values(:,:) = wet_dep_nh4_flux(:,:)
 endif
 
 
