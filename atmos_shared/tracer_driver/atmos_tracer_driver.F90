@@ -232,10 +232,10 @@ use atmos_fire_plumerise_mod,only : atmos_fire_plumerise_time_vary,    &
                                     atmos_fire_plumerise_end, &
                                     atmos_fire_plumerise_endts, &
                                     atmos_fire_plumerise_init, &
-                                    atmos_fire_plumerise_driver
+                                     atmos_fire_plumerise_driver
 use coupler_types_mod, only: coupler_2d_bc_type, ind_pcair, ind_deposition
 use gex_mod,                only : gex_get_index                                
-                                    
+                                   
 implicit none
 private
 !-----------------------------------------------------------------------
@@ -908,7 +908,7 @@ logical :: ocn_does_deposition
                                      Time_next, is_in=is, js_in=js)
       endif
 
-      if (gex_drybc > 0 .and. nomphilic > 0 .and. nomphobic > 0 .and. nSOA > 0) then
+      if (gex_drybc > 0 .and. nbcphilic > 0 .and. nbcphobic > 0) then
           gex_atm2lnd(:,:,gex_drybc) = pwt(:,:,kd)*(dsinku_lnd(:,:,nbcphilic) + dsinku_lnd(:,:,nbcphobic))
       endif
 
@@ -918,8 +918,11 @@ logical :: ocn_does_deposition
                                      Time_next, is_in=is, js_in=js)
       endif
 
-      if (gex_dryoa > 0 .and. nomphilic > 0 .and. nomphobic > 0 .and. nSOA > 0) then
-          gex_atm2lnd(:,:,gex_dryoa) = pwt(:,:,kd)*(dsinku_lnd(:,:,nomphilic) + dsinku_lnd(:,:,nomphobic) + dsinku_lnd(:,:,nSOA))
+      if (gex_dryoa > 0 .and. nomphilic > 0 .and. nomphobic > 0) then
+          gex_atm2lnd(:,:,gex_dryoa) = pwt(:,:,kd)*(dsinku_lnd(:,:,nomphilic) + dsinku_lnd(:,:,nomphobic))
+          if (nSOA > 0) then 
+            gex_atm2lnd(:,:,gex_dryoa) = gex_atm2lnd(:,:,gex_dryoa) +  pwt(:,:,kd)*dsinku_lnd(:,:,nsoa)
+          endif 
       endif
 
       if (do_cmip6_bug_diag) then
@@ -2579,7 +2582,6 @@ type(time_type), intent(in)                                :: Time
       gex_drydust = gex_get_index(MODEL_ATMOS,MODEL_LAND,'drydust',record=.TRUE.)
       if (gex_drydust .gt. 0) call error_mesg('atmos_tracer_driver','gex/atm2lnd drydust found',NOTE)         
 
-      if (mpp_root_pe().eq.mpp_pe()) write(*,*) 'gex_dry',gex_dryoa,gex_drybc,gex_drydust
       
       module_is_initialized = .TRUE.
 
