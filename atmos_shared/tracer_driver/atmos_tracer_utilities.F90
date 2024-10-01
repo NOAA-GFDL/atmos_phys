@@ -654,7 +654,7 @@ end subroutine write_namelist_values
 !<SUBROUTINE NAME = "dry_deposition">
 subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
     u_star, landfrac, frac_open_sea,dsinku, dsinku_lnd, dsinku_ocn,dt, tracer, Time, &
-    Time_next, lon, half_day, drydep_data, albedo, ocean_does_deposition, sum_wat, con_atm)
+    Time_next, lon, half_day, drydep_data, albedo, ocean_does_deposition, mw_air_amb, con_atm)
   ! When formulation of dry deposition is resolved perhaps use the following?
   !                           landfr, seaice_cn, snow_area, &
   !                           vegn_cover, vegn_lai, &
@@ -762,7 +762,7 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
  real, intent(in), dimension(:,:)    :: landfrac,frac_open_sea
  real, intent(in), dimension(:,:)    :: albedo
  logical, intent(in)                 :: ocean_does_deposition
- real, intent(in), dimension(:,:)    :: sum_wat !sum of water tracers (used to correct deposition for vmr tracers)
+ real, intent(in), dimension(:,:)    :: mw_air_amb !molecular weight of air
  real, intent(in), dimension(:,:), optional    :: con_atm
  ! When formulation of dry deposition is resolved perhaps use the following?
  !real, intent(in), dimension(:,:)    :: landfr, z_pbl, b_star, rough_mom
@@ -1077,7 +1077,7 @@ end if
  ! so rho drops out of the equation
  if (id_tracer_ddep(n) > 0 ) then
     if (tracer_prop(n)%is_vmr) then
-      diag_scale = 1000./calc_mw_air(sum_wat)
+      diag_scale = 1000./mw_air_amb 
     else
       diag_scale = 1.
     end if
@@ -1090,7 +1090,7 @@ end if
 
  if (id_tracer_ddep_cmip(n) > 0 ) then
     if (tracer_prop(n)%is_vmr) then 
-      diag_scale = tracer_prop(n)%mw / calc_mw_air(sum_wat)
+      diag_scale = tracer_prop(n)%mw / mw_air_amb
     else 
       diag_scale = 1.  
     end if
@@ -2712,12 +2712,13 @@ end subroutine sedimentation_flux
 
 
   !f1p: calculate molecular weight of ambient (air+h2o) air. required for vmr
-  !sum_wat: sum of water tracers  (g/mol)
+  !sum_wat: sum of water tracers 
+  !MW_air is in g/mol
 function calc_mw_air_0d(sum_wat) result(out)
    implicit none
    real,intent(in)                                           :: sum_wat
    real                                                      :: out
-   out = WTMAIR*WTMH2O/((1-sum_wat)*WTMH2O+sum_wat*WTMAIR)
+   out = WTMAIR*WTMH2O/((1.-sum_wat)*WTMH2O+sum_wat*WTMAIR)
  end function calc_mw_air_0d
 
  function calc_mw_air_2d(sum_wat) result(out)

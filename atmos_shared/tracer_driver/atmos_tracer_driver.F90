@@ -605,6 +605,7 @@ real, dimension(size(r,1),size(r,2),2)         :: xbvoc4soa ! emis isop (1), ter
 real, dimension(size(r,1),size(r,2),size(r,3)+1) :: lphalf
 
 real, dimension(size(r,1),size(r,2)) :: moa_emis !marine organic emissions !kg/m2/s
+real, dimension(size(r,1),size(r,2),size(r,3)) :: mw_air_amb   !ambient mw_air (at the surface)
 
 integer :: isulf, ixact, i, j, k, id, jd, kd, ntcheck
 integer :: nqq  ! index of specific humidity
@@ -710,6 +711,9 @@ logical :: ocn_does_deposition
 
       tracer_orig = tracer
 
+     !calculate ambient mw air (should probably add all other water tracers)
+     mw_air_amb = calc_mw_air(tracer(:,:,:,nsphum))
+      
 !------------------------------------------------------------------------
 ! Rediagnose meteoroligical variables. Note these parameterizations
 ! are not consistent with those used elsewhere in the GCM
@@ -815,25 +819,28 @@ logical :: ocn_does_deposition
                                  land, frac_open_sea, dsinku(:,:,n), dsinku_lnd(:,:,n), dsinku_ocn(:,:,n), dt, &
                                  tracer(:,:,kd,n), Time, Time_next, &
                                  lon, half_day, &
-                                 drydep_data(n),albedo,ocn_does_deposition,tracer(:,:,kd,nsphum), con_atm)
+                                 drydep_data(n),albedo,ocn_does_deposition,mw_air_amb(:,:,kd), con_atm)
 
             rdt(:,:,kd,n) = rdt(:,:,kd,n) - dsinku(:,:,n)
             if ( step_update_tracer ) then
                tracer(:,:,kd,n) = tracer(:,:,kd,n) - dsinku(:,:,n)*dt
             end if
 
-            if (nb_n(n).gt.0) &
-                 sum_n_ddep     = sum_n_ddep + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n(n)                
-            if (nb_n_ox(n).gt.0) &
-                 sum_n_ox_ddep      = sum_n_ox_ddep     + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n_ox(n) 
-                 sum_n_ox_ddep_ocn  = sum_n_ox_ddep_ocn + pwt(:,:,kd)*dsinku_ocn(:,:,n)*WTMN/wtmair*nb_n_ox(n)                  
-            if (nb_n_red(n).gt.0) &
-                 sum_n_red_ddep = sum_n_red_ddep         + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/wtmair*nb_n_red(n)
-                 sum_n_red_ddep_ocn = sum_n_red_ddep_ocn + pwt(:,:,kd)*dsinku_ocn(:,:,n)*WTMN/wtmair*nb_n_red(n)
+            if (nb_n(n).gt.0) then
+               sum_n_ddep     = sum_n_ddep + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/mw_air_amb(:,:,kd)*nb_n(n)
+            end if
+            if (nb_n_ox(n).gt.0) then
+               sum_n_ox_ddep      = sum_n_ox_ddep     + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/mw_air_amb(:,:,kd)*nb_n_ox(n) 
+               sum_n_ox_ddep_ocn  = sum_n_ox_ddep_ocn + pwt(:,:,kd)*dsinku_ocn(:,:,n)*WTMN/mw_air_amb(:,:,kd)*nb_n_ox(n)
+            end if
+            if (nb_n_red(n).gt.0) then
+               sum_n_red_ddep = sum_n_red_ddep         + pwt(:,:,kd)*dsinku(:,:,n)*WTMN/mw_air_amb(:,:,kd)*nb_n_red(n)
+               sum_n_red_ddep_ocn = sum_n_red_ddep_ocn + pwt(:,:,kd)*dsinku_ocn(:,:,n)*WTMN/mw_air_amb(:,:,kd)*nb_n_red(n)
+            end if
 
             if (id_tracer_ddep_kg_m2_s(n)>0) then
               if (tr_is_vmr(n)) then
-                  used = send_data ( id_tracer_ddep_kg_m2_s(n), dsinku(:,:,n)*pwt(:,:,kd) * tr_mw(n)/calc_mw_air(tracer(:,:,kd,nsphum)) , &
+                  used = send_data ( id_tracer_ddep_kg_m2_s(n), dsinku(:,:,n)*pwt(:,:,kd) * tr_mw(n)/mw_air_amb(:,:,kd) , &
                                      Time_next, is_in=is,js_in=js)
               else 
                 used = send_data ( id_tracer_ddep_kg_m2_s(n), dsinku(:,:,n)*pwt(:,:,kd), Time_next, is_in=is,js_in=js)
@@ -926,7 +933,7 @@ logical :: ocn_does_deposition
             suma = 0.
             do k=1,kd
               if (tr_is_vmr(n)) then
-                suma(:,:) = suma(:,:) + pwt(:,:,k)*tracer_diag(:,:,k,n)*tr_mw(n)/calc_mw_air(tracer(:,:,k,nsphum))
+                suma(:,:) = suma(:,:) + pwt(:,:,k)*tracer_diag(:,:,k,n)*tr_mw(n)/mw_air_amb(:,:,k)
               else  
                 suma(:,:) = suma(:,:) + pwt(:,:,k)*tracer_diag(:,:,k,n)
               end if
@@ -1195,7 +1202,7 @@ logical :: ocn_does_deposition
      do n=1,nt
 
       if (tr_is_vmr(n)) then 
-        tmp3d = tr_mw(n)/calc_mw_air(tracer_diag(:,:,:,nsphum))
+        tmp3d = tr_mw(n)/mw_air_amb
       else 
         tmp3d = 1.
       end if
@@ -1537,7 +1544,7 @@ logical :: ocn_does_deposition
    if (do_dust) then
       call atmos_dust_sourcesink(lon,lat,land,pwt, dt, &
               z_half, pfull, w10m_land, t, rh, &
-              tracer(:,:,:,:), dsinku(:,:,:), rdt(:,:,:,:), &
+              tracer(:,:,:,:), dsinku(:,:,:), mw_air_amb, rdt(:,:,:,:), &
               hno3d_setl(:,:), all_so4d_setl(:,:), &
               Time, is,ie,js,je, kbot)
    endif
