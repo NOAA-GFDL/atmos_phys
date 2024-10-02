@@ -34,6 +34,7 @@ use interpolator_mod,      only: interpolate_type, interpolator_init, &
                                  unset_interpolator_time_flag, &
                                  interpolator, interpolator_end, &
                                  CONSTANT, INTERP_WEIGHTED_P
+use coupler_types_mod, only: coupler_2d_bc_type, ind_deposition
 
 implicit none
 private
@@ -132,7 +133,7 @@ contains
 ! this subroutine calculates tendencies for all dust tracers, and reports
 ! total fields, like total dust emission and settling
 subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
-       zhalf, pfull, w10m, t, rh, tracer, dsinku, rdt, hno3d_setl, all_so4d_setl, Time, is,ie,js,je, kbot)
+       zhalf, pfull, w10m, t, rh, tracer, dsinku, mw_air_amb, rdt, hno3d_setl, all_so4d_setl, Time, is,ie,js,je, kbot)
 
   real, intent(in) :: lon(:,:), lat(:,:) ! geographical coordinates, units?
   real, intent(in) :: frac_land(:,:) ! fraction of land in the grid cell
@@ -145,6 +146,7 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
   real, intent(in) :: tracer(:,:,:,:) ! tracer concentrations
   real, intent(in) :: dsinku(:,:,:) ! dry deposition flux at the surface, for diag only
   real, intent(in) :: dt ! model timestep
+  real, intent(in) :: mw_air_amb(:,:,:)
   real, intent(inout) :: rdt(:,:,:,:) ! tendency of tracers, to be updated for dust tracers
   real, intent(out)   :: hno3d_setl(:,:)
   real, intent(out)   :: all_so4d_setl(:,:)
@@ -218,19 +220,19 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
      ! accumulate total dust deposition flux
      if (dust_tracers(i)%is_dust) then
         all_dust_setl(:,:) = all_dust_setl(:,:) &
-             + dust_tracers(i)%dust_setl(is:ie,js:je) + pwt(:,:,kd)*dsinku(:,:,ndust) ! shouldn't kd be kbot?
+             + dust_tracers(i)%dust_setl(is:ie,js:je) + pwt(:,:,kd)*dsinku(:,:,ndust) ! shouldnt kd be kbot?
      end if
 
      if (dust_tracers(i)%is_hno3d ) then
         ! accumulate total dust deposition flux
         all_hno3d_setl(:,:) = all_hno3d_setl(:,:) &
-               + dust_tracers(i)%dust_setl(is:ie,js:je) + 1.e3*pwt(:,:,kd)/WTMAIR*dsinku(:,:,ndust) ! shouldn't kd be kbot?
+               + dust_tracers(i)%dust_setl(is:ie,js:je) + 1.e3*pwt(:,:,kd)/mw_air_amb(:,:,kd)*dsinku(:,:,ndust) ! shouldnt kd be kbot?
         hno3d_setl(:,:) = hno3d_setl(:,:) + dust_tracers(i)%dust_setl(is:ie,js:je)
      endif
      if (dust_tracers(i)%is_so4d ) then
         ! accumulate total dust deposition flux
         all_so4d_setl(:,:) = all_so4d_setl(:,:) &
-               + dust_tracers(i)%dust_setl(is:ie,js:je) + 1.e3*pwt(:,:,kd)/WTMAIR*dsinku(:,:,ndust) ! shouldn't kd be kbot?
+               + dust_tracers(i)%dust_setl(is:ie,js:je) + 1.e3*pwt(:,:,kd)/mw_air_amb(:,:,kd)*dsinku(:,:,ndust) ! shouldnt kd be kbot?
      endif
      
 
@@ -786,43 +788,41 @@ subroutine atmos_dust_init (lonb, latb, axes, Time, mask)
 
 subroutine atmos_dust_gather_data (gas_fields, tr_bot)
 
-use coupler_types_mod, only: coupler_2d_bc_type, ind_pcair
-
 type(coupler_2d_bc_type), intent(inout) :: gas_fields
 real, dimension(:,:,:), intent(in)      :: tr_bot
 
 !lith
 if (ind_dry_dep_lith_dust_flux .gt. 0) then
-  gas_fields%bc(ind_dry_dep_lith_dust_flux)%field(ind_pcair)%values(:,:) = -dry_dep_lith_dust_flux(:,:)!sign flip
+  gas_fields%bc(ind_dry_dep_lith_dust_flux)%field(ind_deposition)%values(:,:) = -dry_dep_lith_dust_flux(:,:)!sign flip
 endif
 
 if (ind_wet_dep_lith_dust_flux .gt. 0) then
-  gas_fields%bc(ind_wet_dep_lith_dust_flux)%field(ind_pcair)%values(:,:) = wet_dep_lith_dust_flux(:,:)
+  gas_fields%bc(ind_wet_dep_lith_dust_flux)%field(ind_deposition)%values(:,:) = wet_dep_lith_dust_flux(:,:)
 endif
 
 !alk
 if (ind_dry_dep_alk_dust_flux .gt. 0) then
-  gas_fields%bc(ind_dry_dep_alk_dust_flux)%field(ind_pcair)%values(:,:) = -dry_dep_alk_dust_flux(:,:)!sign flip
+  gas_fields%bc(ind_dry_dep_alk_dust_flux)%field(ind_deposition)%values(:,:) = -dry_dep_alk_dust_flux(:,:)!sign flip
 endif
 if (ind_wet_dep_alk_dust_flux .gt. 0) then
-  gas_fields%bc(ind_wet_dep_alk_dust_flux)%field(ind_pcair)%values(:,:) = wet_dep_alk_dust_flux(:,:)
+  gas_fields%bc(ind_wet_dep_alk_dust_flux)%field(ind_deposition)%values(:,:) = wet_dep_alk_dust_flux(:,:)
 endif
 
 !soluble iron
 if (ind_dry_dep_solubleFe_flux .gt. 0) then
-  gas_fields%bc(ind_dry_dep_solubleFe_flux)%field(ind_pcair)%values(:,:) = -dry_dep_solubleFe_flux(:,:)!sign flip
+  gas_fields%bc(ind_dry_dep_solubleFe_flux)%field(ind_deposition)%values(:,:) = -dry_dep_solubleFe_flux(:,:)!sign flip
 endif
 
 if (ind_wet_dep_solubleFe_flux .gt. 0) then
-  gas_fields%bc(ind_wet_dep_solubleFe_flux)%field(ind_pcair)%values(:,:) = wet_dep_solubleFe_flux(:,:)
+  gas_fields%bc(ind_wet_dep_solubleFe_flux)%field(ind_deposition)%values(:,:) = wet_dep_solubleFe_flux(:,:)
 endif
 !soluble iron
 if (ind_dry_dep_solubleP_flux .gt. 0) then
-  gas_fields%bc(ind_dry_dep_solubleP_flux)%field(ind_pcair)%values(:,:) = -dry_dep_solubleP_flux(:,:)!sign flip
+  gas_fields%bc(ind_dry_dep_solubleP_flux)%field(ind_deposition)%values(:,:) = -dry_dep_solubleP_flux(:,:)!sign flip
 endif
 
 if (ind_wet_dep_solubleP_flux .gt. 0) then
-  gas_fields%bc(ind_wet_dep_solubleP_flux)%field(ind_pcair)%values(:,:) = wet_dep_solubleP_flux(:,:)
+  gas_fields%bc(ind_wet_dep_solubleP_flux)%field(ind_deposition)%values(:,:) = wet_dep_solubleP_flux(:,:)
 endif
 
 end subroutine atmos_dust_gather_data

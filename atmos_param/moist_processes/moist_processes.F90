@@ -1168,8 +1168,11 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
      endif
 
      if (gex_wetoa.gt.0) then
-          gex_atm2lnd(:,:,gex_wetoa) = total_wetdep(:,:,nomphilic) + total_wetdep(:,:,nomphobic) + total_wetdep(:,:,nSOA)
-     endif
+          gex_atm2lnd(:,:,gex_wetoa) = total_wetdep(:,:,nomphilic) + total_wetdep(:,:,nomphobic)
+          if (nSOA.gt.0) then
+            gex_atm2lnd(:,:,gex_wetoa) = gex_atm2lnd(:,:,gex_wetoa) + total_wetdep(:,:,nSOA)
+          end if
+     end if
 
      if (id_wetdep_bc > 0) then
        used = send_data (id_wetdep_bc,  &
