@@ -787,6 +787,8 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
 
  ! Default zero
  dsinku = 0.0
+ dsinku_ocn = 0.0
+ dsinku_lnd = 0.0
  if (.not. Drydep(n)%Ldrydep) return
  name =Drydep(n)%name
  control = Drydep(n)%control
