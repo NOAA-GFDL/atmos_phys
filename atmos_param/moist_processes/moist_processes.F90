@@ -1484,7 +1484,7 @@ type(mp_removal_type),     intent(inout) :: Removal_mp
         do k=1,kx
           tca2(:,:) = tca2(:,:)*(1.0 - total_cloud_area(:,:,k))
         end do
-        tca2 = (1. - tca2) ! cmip6 = Cloud Area Fraction
+        tca2 = 100.*(1. - tca2) ! cmip6 = Cloud Area Fraction (in percentage)
         used = send_data (id_clt, tca2, Time, is, js)
       endif
 
