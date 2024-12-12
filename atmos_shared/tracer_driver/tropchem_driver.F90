@@ -115,8 +115,7 @@ use cloud_chem, only: CLOUD_CHEM_PH_LEGACY, CLOUD_CHEM_PH_BISECTION, &
                       CLOUD_CHEM_F1P_BUG, CLOUD_CHEM_F1P_BUG2, CLOUD_CHEM_LEGACY
 use aerosol_thermodynamics, only: AERO_ISORROPIA, AERO_LEGACY, NO_AERO
 use mo_usrrxt_mod, only: HET_CHEM_LEGACY, HET_CHEM_J1M, &
-                         GSO2_WANG2014, GSO2_ZHENG2015, &
-                         GSO2_ZHENG2015_LOW
+                         GSO2_ZHENG2015
 use mo_chem_utls_mod, only : get_rxt_ndx
 
 use atmos_cmip_diag_mod,   only : register_cmip_diag_field_3d, &
@@ -228,6 +227,8 @@ character(len=64)  :: het_chem_type         = 'legacy'
 real               :: gN2O5                 = 0.1
 real               :: gNO2                  = 1e-4
 real               :: gSO2                  = 0.
+real               :: gSO2_rh50             = 0.  !specify gamma_so2 for rh<50%
+real               :: gSO2_rh100            = 0.  !specify maximum gamma_so2 (ramps between 50->100%)
 real               :: gSO2_dust             = 0.
 real               :: gNH3                  = 0.05
 real               :: gHNO3_dust            = 0.
@@ -239,7 +240,7 @@ logical            :: cloud_ho2_h2o2        = .true.
 real               :: gNO3                  = 0.1
 real               :: gHO2                  = 1.
 
-logical            :: het_chem_bug1         = .true. !index error in surface area calculation. affects surface area of organic carbon
+logical            :: het_chem_bug1         = .false. !index error in surface area calculation. affects surface area of organic carbon. TRUE reproduces bug in ESM4p1
 real               :: rh_het_max            = 9999. !maximum rh used to calculate surface area.
 
 character(len=128) :: sim_data_filename = 'sim.dat'      ! Input file for chemistry pre-processor
@@ -322,6 +323,7 @@ namelist /tropchem_driver_nml/    &
                                aerosol_thermo_method, &
                                het_chem_type, &
                                gn2o5,gno2,gno3,gso2,gnh3,ghno3_dust,gh2so4_dust,gho2,ghno3_dust_dynamic,gso2_dust,gn2o5_dust,gno3_dust, &
+                               gso2_rh50,gso2_rh100, &
                                do_h2so4_nucleation, &
                                check_convergence, &
                                cloud_chem_pH_solver, &
@@ -1885,16 +1887,39 @@ trop_option%time_varying_solarflux = time_varying_solarflux
 trop_option%gSO2                     = gSO2
 if(mpp_pe() == mpp_root_pe()) write(*,*) 'gSO2: ',trop_option%gSO2
 if (trim(gso2_dynamic).eq.'none') then
-   trop_option%gSO2_dynamic             = -1
+   trop_option%gSO2_rh50   = -999
+   trop_option%gSO2_rh100  = -999
+   trop_option%gSO2_dynamic = -1 
+   !The following approaches all use the same basic approach
+   !gamma_so2 = gamma_so2_rh50 below 50% RH, and weighted mean between gamma_so2_rh100 and gamma_so2_rh50 above 50% RH
 else if (trim(gso2_dynamic).eq.'wang2014') then
-   trop_option%gSO2_dynamic             = GSO2_WANG2014   
-   !http://onlinelibrary.wiley.com/doi/10.1002/2013JD021426/full  
+   !trop_option%gSO2_dynamic             = GSO2_WANG2014   
+   !http://onlinelibrary.wiley.com/doi/10.1002/2013JD021426/full
+   trop_option%gSO2_rh50   = 1.e-3
+   trop_option%gSO2_rh100  = 1.e-2
+   trop_option%gSO2_dynamic = GSO2_ZHENG2015   
 else if (trim(gso2_dynamic).eq.'zheng2015') then
-   trop_option%gSO2_dynamic             = GSO2_ZHENG2015
-!   http://www.atmos-chem-phys.net/15/2031/2015/
+!  trop_option%gSO2_dynamic             = GSO2_ZHENG2015
+   !   http://www.atmos-chem-phys.net/15/2031/2015/
+   trop_option%gSO2_rh50   = 2.e-5
+   trop_option%gSO2_rh100  = 5.e-5
+   trop_option%gSO2_dynamic = GSO2_ZHENG2015   
 else if (trim(gso2_dynamic).eq.'zheng2015_low') then
-   trop_option%gSO2_dynamic             = GSO2_ZHENG2015_LOW
-!   http://www.atmos-chem-phys.net/15/2031/2015/
+   !  trop_option%gSO2_dynamic             = GSO2_ZHENG2015_LOW
+   !  http://www.atmos-chem-phys.net/15/2031/2015/   
+   trop_option%gSO2_rh50   = 1.e-5
+   trop_option%gSO2_rh100  = 2.e-5
+   trop_option%gSO2_dynamic = GSO2_ZHENG2015   
+else if (trim(gso2_dynamic).eq.'esm4p5') then
+   trop_option%gSO2_rh50   = gSO2_rh50
+   trop_option%gSO2_rh100  = gSO2_rh100
+   trop_option%gSO2_dynamic = GSO2_ZHENG2015   
+end if
+
+if (trop_option%gSO2_dynamic.eq.GSO2_ZHENG2015) then
+   if (trop_option%gSO2_rh50.lt.0 .or. trop_option%gSO2_rh100.lt.0) then
+      call error_mesg ('tropchem_driver_init', 'gSO2_rh50 and gSO2_rh100 need to be >0', FATAL )
+   end if
 end if
 
 trop_option%NO2_SO2_max = NO2_SO2_max

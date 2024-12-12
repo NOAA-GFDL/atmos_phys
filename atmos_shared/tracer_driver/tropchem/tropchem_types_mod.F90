@@ -42,8 +42,9 @@ module tropchem_types_mod
      real                  :: gHNO3_dust
      real                  :: gNO3_dust
      real                  :: gN2O5_dust
-     integer               :: gHNO3_dust_dynamic 
+     integer               :: gHNO3_dust_dynamic
      integer               :: gSO2_dynamic
+     real                  :: gSO2_rh50,gso2_rh100
      real                  :: gHO2
      real                  :: min_lwc_for_cloud_chem
      logical               :: check_convergence
