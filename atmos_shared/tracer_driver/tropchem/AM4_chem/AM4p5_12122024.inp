@@ -1,10 +1,10 @@
 BEGSIM
 output_unit_number = 7
-output_file        = AM4_v20180614_dust.doc
+output_file        = AM4p5_12122024.doc
 procout_path       = ../output/
 src_path           = ../bkend/
 sim_dat_path       = ../output/
-sim_dat_filename   = sim.AM4_v20180614_dust.dat
+sim_dat_filename   = sim.AM4p5_12122024.dat
 
 Comments
      "This is a mozart2 chemical solver with :"
@@ -26,6 +26,7 @@ Comments
      " (15) update RO2 + HO2 reaction based on Bates et al. 2015 JPC.
      " (16) details are described on wiki (page new isoprene chemistry)
      " (17) corrected products from DMS+NO3
+     " (18) add minor glyoxal photolysis pathways
 End Comments
 
       SPECIES
@@ -131,7 +132,9 @@ End Comments
  [jc3h7ooh] C3H7OOH + hv -> 0.82 * CH3COCH3 + OH + HO2
  [jacet] CH3COCH3 + hv -> CH3CO3 + CH3O2
  [jmgly] MGLY + hv -> CH3CO3 + CO + HO2
- [jglyoxal] GLYX + hv -> 2.0*CO + 2.0*HO2
+ [jglyoxal1] GLYX + hv -> 2.0*CO + 2.0*HO2
+ [jglyoxal2] GLYX + hv -> H2 + 2.0*CO
+ [jglyoxal3] GLYX + hv -> CH2O + CO
  [jisopooh] ISOPOOH + hv -> .402 * MVK + .288 * MACR + .69 * CH2O + HO2
  [jhyac] HYAC + hv -> CH3CO3 + HO2 + CH2O
  [jglyald] GLYALD + hv -> 2 * HO2 + CO + CH2O
