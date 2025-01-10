@@ -1,10 +1,10 @@
 BEGSIM
 output_unit_number = 7
-output_file        = AM4p5_12122024.doc
+output_file        = AM4p5_20250107.doc
 procout_path       = ../output/
 src_path           = ../bkend/
 sim_dat_path       = ../output/
-sim_dat_filename   = sim.AM4p5_12122024.dat
+sim_dat_filename   = sim.AM4p5_20250107.dat
 
 Comments
      "This is a mozart2 chemical solver with :"
@@ -27,6 +27,8 @@ Comments
      " (16) details are described on wiki (page new isoprene chemistry)
      " (17) corrected products from DMS+NO3
      " (18) add minor glyoxal photolysis pathways
+     " (19) add CH3SH chemistry (https://acp.copernicus.org/articles/22/6309/2022/acp-22-6309-2022-supplement.pdf)
+     "      assumes SO3->SO4"
 End Comments
 
       SPECIES
@@ -58,6 +60,8 @@ End Comments
  MVKO2, MVKOOH, MACRNO2
  MAO3, MAOP, MAOPO2, ATO2
  ATOOH,INO2, INPN, ISNOOA, ISN1,O3S -> O3, O3S_E90 -> O3
+ CH3SH, CH3S, CH3SO, CH3SOO, CH3SO2, CH3SO3, MSA
+ MTMP, HPMTF
       End Solution
 
       Fixed
@@ -100,6 +104,8 @@ End Comments
        MAO3,MAOP, MAOPO2, ATO2
        ATOOH
        LCH4
+       CH3SH, CH3S, CH3SO, CH3SOO, CH3SO2, CH3SO3, MSA
+       MTMP, HPMTF         
       End Implicit
    End Solution Classes
 
@@ -115,7 +121,7 @@ End Comments
  [jhno3] HNO3 + hv -> NO2 + OH
  [jno3] NO3 + hv -> .89*NO2 + .11*NO + .89*O
  [jho2no2] HO2NO2 + hv -> NO2 + HO2
- [jch3ooh] CH3OOH + hv -> CH2O + HO2 + OH + MHP_J
+ [jch3ooh] CH3OOH + hv -> CH2O + HO2 + OH 
  [jch2o_a] CH2O + hv -> CO + HO2 + H
  [jch2o_b] CH2O + hv -> CO + H2
  [jh2o] H2O + hv -> OH + H
@@ -346,6 +352,21 @@ End Comments
          C10H16 + OH -> 1.64 * ISOPO2 + 0.1 * CH3COCH3  ; 1.2e-11, 440
 [ol_c10h16] C10H16 + O3 ->1.122 * MACR + .442*MVK + .765*O + 1.156*OH ; 5.3e-16, -530   
          C10H16 + NO3 -> 1.7 * ISOPO2 + NO2                 ; 1.2e-12, 490
+	 CH3SH + OH -> CH3S + H2O                                 ; 9.9e-12, 360
+	 CH3SH + NO3 -> CH3S + HNO3                               ; 9.2e-13
+	 CH3S + NO2 -> CH3SO + NO                                 ; 6.0e-11, 240
+	 CH3S + O3  -> CH3SO + O2                                 ; 1.15e-12,430
+	 CH3S + O2  -> CH3SOO                                     ; 1.2e-16,1580
+	 CH3SO + O3 -> CH3O2 + SO2                                ; 4e-13
+	 CH3SO + NO2 ->  0.75*CH3SO2 + 0.25*CH3O2 + 0.25*SO2 + NO ; 1.2e-11
+	 CH3SOO + NO -> NO2 + CH3SO                               ; 1.1e-11
+	 CH3SOO + NO2 -> NO3 + CH3SO                              ; 2.2e-11 
+	 CH3SOO -> CH3O2 +  SO2                                   ; 5.6e16,-10870
+	 CH3SOO -> CH3S                                           ; 3.5e10,-3560
+	 CH3SO2 + O3 -> CH3SO3                                    ; 3.0e-13
+	 CH3SO2 -> CH3O2 + SO2                                    ; 5e13,-9673
+	 CH3SO3 + HO2 -> MSA                                      ; 5e-11
+	 CH3SO3 -> CH3O2 + SO4                                    ; 5e13,-9946	 
 [n2o5h] N2O5 -> 2 * HNO3
 [no3h] NO3  -> HNO3
 [ho2h] HO2  -> H2O
@@ -354,10 +375,18 @@ End Comments
 *         Rn -> Pb ; 2.1e-6
 *         BC1 -> BC2                             ; 7.1e-6
 *         OC1 -> OC2                             ; 7.1e-6
-          SO2 + OH + M -> SO4 + M                ; 3.3e-31,4.3, 1.6e-12,0., 0.6
-          DMS + OH -> SO2 + CH2O                 ; 1.2e-11,-280
-[uoh_dms] DMS + OH -> 0.75*SO2 + CH2O
-          DMS + NO3 -> SO2 + HNO3 + CH2O         ; 1.90e-13,530
+          SO2 + OH + M -> SO4 + M                ; 3.3e-31,4.3, 1.6e-12,0., 0.6	  
+          DMS + OH  -> MTMP + H2O                ; 1.2e-11,-280
+[uoh_dms] DMS + OH -> 0.75*SO2 + 0.25*MSA
+          DMS + NO3 -> MTMP + HNO3               ; 1.90e-13,520
+	  MTMP  + HO2 -> SO2                     ; 1.13e-13,1300
+	  MTMP  + NO  -> SO2 + NO2               ; 4.9e-12,260
+	  MTMP  + NO3 -> SO2 + NO2               ; 2e-12
+	  MTMP  + CH3O2 -> SO2 + 2*CH2O + 2*HO2  ; 1e-11
+	  MTMP  + MTMP -> 2*SO2                  ; 1e-11
+[mtmp_i]  MTMP -> HPMTF
+[hpmtf_a] HPMTF -> SO4
+	  HPMTF + OH -> SO2                      ; 1.11e-11
 [hno3_d1] HNO3 -> HNO3_D1
 [hno3_d2] HNO3 -> HNO3_D2
 [hno3_d3] HNO3 -> HNO3_D3

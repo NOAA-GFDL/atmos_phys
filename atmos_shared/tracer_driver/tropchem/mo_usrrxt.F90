@@ -37,7 +37,7 @@ implicit none
                  h2o_ndx, hcl_ndx, clono2_ndx, hbr_ndx, &
                  strat37_ndx, strat38_ndx, strat72_ndx, strat73_ndx, strat74_ndx, &
                  strat75_ndx, strat76_ndx, strat77_ndx, strat78_ndx, strat79_ndx, &
-                 strat80_ndx
+                 strat80_ndx, mtmp_i_ndx, hpmtf_a_ndx
 
       integer :: usr_hno3_dust(ndust_reac), usr_n2o5_dust(ndust_reac), usr_no3_dust(ndust_reac), usr_so4_dust(ndust_reac),usr_so2_dust(ndust_reac)
       integer :: hno3_d_ndx(ndust_reac), so4_d_ndx(ndust_reac)
@@ -108,6 +108,7 @@ logical                       :: module_is_initialized = .false.
       uoh_xooh_ndx = get_rxt_ndx( 'uoh_xooh' )
       uoh_acet_ndx = get_rxt_ndx( 'uoh_acet' )
       uoh_dms_ndx = get_rxt_ndx( 'uoh_dms' )
+      mtmp_i_ndx  = get_rxt_ndx( 'mtmp_i' )      
       strat37_ndx = get_rxt_ndx( 'strat37' )
       strat38_ndx = get_rxt_ndx( 'strat38' )
       strat72_ndx = get_rxt_ndx( 'strat72' )
@@ -119,6 +120,12 @@ logical                       :: module_is_initialized = .false.
       strat78_ndx = get_rxt_ndx( 'strat78' )
       strat79_ndx = get_rxt_ndx( 'strat79' )
       strat80_ndx = get_rxt_ndx( 'strat80' )
+      hpmtf_a_ndx = get_rxt_ndx( 'hpmtf_a' )
+
+      if (mpp_root_pe().eq.mpp_pe()) then
+         write(*,*) 'mtmp_i_ndx',mtmp_i_ndx
+         write(*,*) 'hpmtf_a_ndx',hpmtf_a_ndx
+      end if   
 
       !dust reaction
       ndust = 0
@@ -337,6 +344,7 @@ end if
       real, parameter :: mw_nh3 = 17.
       real, parameter :: mw_so2 = 64.
       real, parameter :: mw_hno3 = 63.
+      real, parameter :: mw_hpmtf = 108.12 !HOOCH2SCHO
       real, dimension(size(qin,1), naero_het)::drymass_het,&
                                         rd_het,re_het,sfca_het
       real :: uptk_het
@@ -447,7 +455,17 @@ end if
             end if
          end if
 
-if (trop_option%het_chem .eq. HET_CHEM_LEGACY) then
+!-----------------------------------------------------------------
+! MTMP isomerization -> DMS
+!-----------------------------------------------------------------
+         if (mtmp_i_ndx .gt. 0) then
+            !based on Veres (2020)
+            !2.24e11*exp(-9800*tinv(:)+1.03e8*tinv(:)**3)                  
+            rxt(:,k,mtmp_i_ndx) = exp(26.1349-9800*tinv(:)+1.03e8*tinv(:)**3)            
+         end if         
+
+
+         if (trop_option%het_chem .eq. HET_CHEM_LEGACY) then
 !-----------------------------------------------------------------
 !        ... ho2 + ho2 --> h2o2
 !        note: this rate involves the water vapor number density
@@ -473,7 +491,6 @@ if (trop_option%het_chem .eq. HET_CHEM_LEGACY) then
             rxt(:,k,uoh_dms_ndx) = 1.0e-39 * exp( 5820.*tinv(:) ) &
                                  * m(:,k) * 0.21 / ko(:)
          end if
-
 
          if( n2o5h_ndx > 0 .or. no3h_ndx > 0 .or. nh3h_ndx > 0 ) then
 !-----------------------------------------------------------------
@@ -537,7 +554,7 @@ if (trop_option%het_chem .eq. HET_CHEM_LEGACY) then
                   1./(rm1/dg + 4./(gam_nh3+1.e-30)/(3.75e3 * sqrt( temp(:,k))))*sur(:)
             end if
          end if
-elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
+      elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
 !-----------------------------------------------------------------
 !        ... ho2 + ho2 --> h2o2
 !        note: this rate involves the water vapor number density
@@ -700,6 +717,19 @@ elseif ( trop_option%het_chem .eq. HET_CHEM_J1M) then
             end if
 
 
+            if ( hpmtf_a_ndx > 0) then
+               rxt(i,k,hpmtf_a_ndx)=0.             
+               if ( trop_option%gHPMTF .gt. 0. ) then
+                  do n=1, naero_het_eff
+                     uptk_het = 0.
+                  ! we need to make sure the effective radius unit is cm.
+                     call calc_hetrate(sfca_het(i,n),re_het(i,n)*1.D-4,m(i,k),trop_option%gHPMTF, &
+                          sqrt( temp(i,k)),sqrt(mw_hpmtf),uptk_het)
+                     rxt(i,k,hpmtf_a_ndx) = rxt(i,k,hpmtf_a_ndx) + uptk_het
+                  end do
+               end if
+            end if
+            
             !NH3+SO4->NH4SO4,(NH4)2SO4
             if( nh3h_ndx > 0 ) then
                rxt(i,k,nh3h_ndx)=0.             

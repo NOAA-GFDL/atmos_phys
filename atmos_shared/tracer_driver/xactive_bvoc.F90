@@ -671,7 +671,7 @@ subroutine xactive_bvoc( lon, lat, land, is, ie, js, je, Time, Time_next, coszen
 
          EMIS(:,:) = 0.
 
-         IF ( trim(xactive_trname(xknt))=='dms' ) THEN
+         IF ( trim(xactive_trname(xknt))=='dms' .or. trim(xactive_trname(xknt))=='ch3sh') THEN
             ! SKIP - calculated in tropchem driver
          ELSEIF ( do_AM3_ISOP .AND. trim(xactive_trname(xknt))=='isop' ) THEN
 ! Reproduces AM3 isoprene emissions
@@ -1152,7 +1152,7 @@ subroutine xactive_bvoc_init(domain, lonb, latb, Time, axes, xactive_trname, xac
    
    DO xknt = 1,nxactive
 
-      IF ( trim(xactive_trname(xknt))=='dms' ) THEN
+      IF ( trim(xactive_trname(xknt))=='dms' .or.  trim(xactive_trname(xknt))=='ch3sh' ) THEN
          IF ( mpp_pe()==mpp_root_pe()) call error_mesg('xactive_bvoc_init',       &
               'skipping set up for non-BVOC tracer '//trim(xactive_trname(xknt)),NOTE)
 
