@@ -2689,7 +2689,7 @@ if ( do_implicit_fall ) then
      dum_1D(:) = dumr(i,:)
      call implicit_fall ( deltat, 1, nlev, zhalf(i,:) , fr(i,:), pdel(i,:), dum_1D, precip, flx)
      do k=1,nlev
-       if ( flx(k) .ge. qsmall ) rflx(i,k+1) = rflx(i,k+1) + flx(k)/g/deltat !h1g, 2019-11-26, ensure numerical stability
+       rflx(i,k+1) = rflx(i,k+1) + flx(k)/g/deltat !h1g, 2019-11-26, ensure numerical stability
        qrsedten(i,k)= qrsedten(i,k) + (dum_1D(k) - dumr(i,k))/deltat
        qrtend (i,k) = qrtend(i,k)   + (dum_1D(k) - dumr(i,k))/deltat
      enddo
@@ -2719,7 +2719,7 @@ if ( do_implicit_fall ) then
     dum_1D(:) = dums(i,:)    
     call implicit_fall ( deltat, 1, nlev, zhalf(i,:) , fs(i,:), pdel(i,:), dum_1D, precip, flx)
     do k=1,nlev
-       if ( flx(k) .ge. qsmall ) sflx(i,k+1) = sflx(i,k+1) + flx(k)/g/deltat !h1g, 2019-11-26, ensure numerical stability
+       sflx(i,k+1) = sflx(i,k+1) + flx(k)/g/deltat !h1g, 2019-11-26, ensure numerical stability
        qssedten(i,k)= qssedten(i,k) + (dum_1D(k) - dums(i,k))/deltat
        qstend(i,k)  = qstend(i,k)   + (dum_1D(k) - dums(i,k))/deltat
     enddo
@@ -3239,6 +3239,10 @@ rflx   = rflx /real(iter)
 sflx   = sflx /real(iter)
 
 if ( include_ice_in_snowflx ) sflx   = sflx + iflx  ! h1g, 2024-01-31
+
+! precipitation flux should be non-negative at half levels
+rflx(:,:) = max( rflx(:,:), 0._r8 )  ! h1g, 2025-01-11
+sflx(:,:) = max( sflx(:,:), 0._r8 )  ! h1g, 2025-01-11
 
 qcsedten = qcsedten/real(iter)
 qisedten = qisedten/real(iter)
