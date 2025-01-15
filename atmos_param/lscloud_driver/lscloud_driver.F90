@@ -32,7 +32,7 @@ use field_manager_mod,     only: MODEL_ATMOS
 use tracer_manager_mod,    only: get_tracer_names, get_tracer_index, &
                                  NO_TRACER
 use constants_mod,         only: CP_AIR, GRAV, HLV, HLS, HLF, &
-                                 RDGAS, RVGAS
+                                 RDGAS, RVGAS, WTMAIR
 use physics_types_mod,     only: physics_control_type
 
 ! lscloud_driver modules
@@ -229,8 +229,10 @@ namelist / lscloud_driver_nml / do_legacy_strat_cloud, Dmin, cfact, &
 !------------------------------------------------------------------------
 !     ------ constants used in the module -------
 !-----------------------------------------------------------------------
-real, parameter :: d608 = (RVGAS - RDGAS)/RDGAS
-real, parameter :: mw_so4 = 96./1000.     ! Convert from [g/mole] to [kg/mole]
+real, parameter   :: d608 = (RVGAS - RDGAS)/RDGAS
+real, parameter   :: mw_so4 = 96./1000.     ! Convert from [g/mole] to [kg/mole]
+real, parameter   :: mw_air = WTMAIR/1000.  ! Convert from [g/mole] to [kg/mole]
+
 
 
 
@@ -1699,8 +1701,8 @@ type(time_type),         intent(in) :: Time
 
 !------------------------------------------------------------------------
 
-  ! Register in-cloud SO2 re-evaporation by large scale clouds (CMIP6)
-  ID_so2_reevap_ls = register_cmip_diag_field_3d ( mod_name,               &
+  ! Register in-cloud SO2 re-evaporation by large scale clouds (CMIP6) - no module=tracers to keep compatibile with cmip6 diag table
+  ID_so2_reevap_ls = register_cmip_diag_field_3d ( 'tracers',               &
                     'pso4_aq_so2_reevap_ls', Time, 'Sulfate aerosol production by SO2 re-evaporation by lscale clouds', 'kg m-2 s-1', &
                     standard_name='tendency_of_atmosphere_mass_content_of_sulfate_dry_aerosol_particles_due_to_sulfur_dioxide_reevaporation')      
 
@@ -3401,7 +3403,7 @@ type(precip_state_type), intent(inout) :: Precip_state
 
       real, dimension(size(Input_mp%t,1), &
                       size(Input_mp%t,2), &
-                      size(Input_mp%t,3))  :: reevap, so2_reevap, h2o2_reevap
+                      size(Input_mp%t,3))  :: reevap, so2_reevap, h2o2_reevap, pwt
       integer :: n
       integer :: kx
       logical :: used
@@ -3546,7 +3548,6 @@ type(precip_state_type), intent(inout) :: Precip_state
 !-----------------------------------------------------------------------
 
       if ( nso2 .ne.  NO_TRACER .and. nso4 .ne. NO_TRACER .and. so2_so4_reevap_id .gt. 0) then
-
         if (nh2o2 .ne. NO_TRACER .and. so2_so4_reevap_id .eq. SO2_SO4_REEVAP_H2O2_LIM ) then
           so2_reevap = min(so2_reevap,h2o2_reevap)
           Output_mp%rdt(:,:,:,nh2o2) = Output_mp%rdt(:,:,:,nh2o2) -   &
@@ -3558,9 +3559,13 @@ type(precip_state_type), intent(inout) :: Precip_state
         Output_mp%rdt(:,:,:,nso4) = Output_mp%rdt(:,:,:,nso4) +   &
                                                              so2_reevap
 
+        do k=1,size(so2_reevap,3)
+           pwt(:,:,k)  = ( Input_mp%phalf(:,:,k+1) - Input_mp%phalf(:,:,k) )/GRAV ! kg/m2
+        end do
+        
         if (query_cmip_diag_id(ID_so2_reevap_ls)) then
           used = send_cmip_data_3d (ID_so2_reevap_ls,  &
-                so2_reevap * mw_so4, &
+                so2_reevap * pwt * mw_so4/mw_air, &
                 Time, is_in=is, js_in=js, ks_in=1)
         endif
       else
@@ -3569,7 +3574,7 @@ type(precip_state_type), intent(inout) :: Precip_state
                   so2_reevap * 0., &
                   Time, is_in=is, js_in=js, ks_in=1)
         endif                
-      end if
+     end if
 !-----------------------------------------------------------------------
 
 

@@ -1731,10 +1731,9 @@ subroutine wet_deposition( n, T, pfull, phalf, zfull, zhalf, &
     !--lwh
     !
 
-   !if ( wetdep(n)%is_so2 ) then
-   !comment this out so that any reevaporation
-   reevap_out = reevap_diag / pwt
-   !end if
+   if (present(reevap_out)) then
+      reevap_out = reevap_diag / pwt
+   end if
 
 
  endif ! End branching pag/lwh
