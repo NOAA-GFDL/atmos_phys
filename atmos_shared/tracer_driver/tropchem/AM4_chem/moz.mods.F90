@@ -29,8 +29,8 @@
       save
       integer, parameter :: hetcnt = 0, & ! number of heterogeneous processes
                             phtcnt = 45, & ! number of photo processes
-                            rxntot = 293, & ! number of total reactions
-                            gascnt = 248, & ! number of gas phase reactions
+                            rxntot = 296, & ! number of total reactions
+                            gascnt = 251, & ! number of gas phase reactions
                             nfs = 3, & ! number of "fixed" species
                             relcnt = 0, & ! number of relationship species
                             grpcnt = 0, & ! number of group members
@@ -88,7 +88,7 @@
       explicit%clscnt = 0
       explicit%indprd_cnt = 0
       implicit%clscnt = 119
-      implicit%lin_rxt_cnt = 92
+      implicit%lin_rxt_cnt = 95
       implicit%nln_rxt_cnt = 200
       implicit%indprd_cnt = 1
       implicit%iter_max = 11
@@ -563,6 +563,9 @@
       integer, parameter :: rid_r0230 = 230
       integer, parameter :: rid_r0252 = 252
       integer, parameter :: rid_r0293 = 293
+      integer, parameter :: rid_r0294 = 294
+      integer, parameter :: rid_r0295 = 295
+      integer, parameter :: rid_r0296 = 296
       end module M_RXT_ID_MOD
       module M_HET_ID_MOD
       implicit none

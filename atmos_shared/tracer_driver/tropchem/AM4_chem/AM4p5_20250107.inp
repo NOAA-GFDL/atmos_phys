@@ -450,7 +450,10 @@ End Comments
  [strat78] HOCl + HBr -> BrCl + H2O
  [strat79] HOBr + HBr -> 2*Br + H2O
  [strat80] BrONO2 + H2O -> HOBr + HNO3
-           LCH4 -> ; 3.17e-8
+           LCH4 -> ; 1.16e-5
+	   ROH ->  ; 1.16e-5
+	   RCHO -> ; 1.16e-5
+	   MEK ->  ; 1.16e-5	   	   
    End Reactions
 
    Heterogeneous

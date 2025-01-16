@@ -641,7 +641,10 @@ Class List
   strat78          (245)   HOCl + HBr ->  BrCl + H2O                                            rate = ** User defined **         (290)
   strat79          (246)   HOBr + HBr ->  2*Br + H2O                                            rate = ** User defined **         (291)
   strat80          (247)   BrONO2 + H2O ->  HOBr + HNO3                                         rate = ** User defined **         (292)
-                   (248)   LCH4 -> (No products)                                                rate = 3.17E-08                   (293)
+                   (248)   LCH4 -> (No products)                                                rate = 1.16E-05                   (293)
+                   (249)   ROH -> (No products)                                                 rate = 1.16E-05                   (294)
+                   (250)   RCHO -> (No products)                                                rate = 1.16E-05                   (295)
+                   (251)   MEK -> (No products)                                                 rate = 1.16E-05                   (296)
   
 Heterogeneous loss species
   
@@ -911,8 +914,10 @@ Extraneous prod/loss species
                  + r244*HOBr*HCl  + r245*HOCl*HBr  + r246*HOBr*HBr                                                      
                  - j14*H2O  - r19*O1D*H2O  - r29*N2O5*H2O  - r241*N2O5*H2O  - r242*ClONO2*H2O  - r247*BrONO2*H2O        
     d(ROH)/dt = .24*r85*ISOPO2*CH3O2  + .48*r86*ISOPO2*ISOPO2  + .25*r100*MVKO2*CH3O2  + .15*r109*MACRO2*CH3O2          
+                 - r249*ROH                                                                                             
     d(RCHO)/dt = j34*ISOPNB  + .13*j37*R4N2  + .791*r55*POOH*OH  + .3*r85*ISOPO2*CH3O2  + .5*r86*ISOPO2*ISOPO2          
                   + .613*r91*ISOPOOH*OH  + .033*r99*MVKO2*HO2  + .23*r139*INO2*NO  + .23*r140*INO2*NO3                  
+                  - r250*RCHO                                                                                           
     d(ISOPNB)/dt = .1*r83*ISOPO2*NO                                                                                     
                     - j34*ISOPNB  - r87*OH*ISOPNB  - r90*O3*ISOPNB                                                      
     d(ISOPNBO2)/dt = r87*ISOPNB*OH                                                                                      
@@ -925,6 +930,7 @@ Extraneous prod/loss species
                   + .3*r148*ISN1*O3                                                                                     
                   - j37*R4N2  - r150*OH*R4N2                                                                            
     d(MEK)/dt = .19*j37*R4N2  + .13*r99*MVKO2*HO2  + .25*r100*MVKO2*CH3O2  + .791*r101*MVKOOH*OH  + r142*INPN*OH        
+                 - r251*MEK                                                                                             
     d(R4N1)/dt = r150*R4N2*OH                                                                                           
     d(IEPOX)/dt = r92*ISOPOOH*OH                                                                                        
                    - r93*OH*IEPOX                                                                                       
