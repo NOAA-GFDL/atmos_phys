@@ -35,6 +35,8 @@ use interpolator_mod,      only: interpolate_type, interpolator_init, &
                                  interpolator, interpolator_end, &
                                  CONSTANT, INTERP_WEIGHTED_P
 use coupler_types_mod, only: coupler_2d_bc_type, ind_deposition
+use gex_mod,           only: gex_get_index
+
 
 implicit none
 private
@@ -104,6 +106,7 @@ type(interpolate_type),save       :: dust_source_interp
 ! ---- identification numbers for diagnostic fields ----
 integer :: id_dust_source, id_dust_emis, id_dust_ddep, id_dust_conc = -1, id_hno3d_ddep, id_so4d_ddep 
 integer :: id_emidust, id_drydust ! cmip
+integer :: gex_drydust = 0
 
 !---------------------------------------------------------------------
 !-------- namelist  ---------
@@ -133,7 +136,7 @@ contains
 ! this subroutine calculates tendencies for all dust tracers, and reports
 ! total fields, like total dust emission and settling
 subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
-       zhalf, pfull, w10m, t, rh, tracer, dsinku, mw_air_amb, rdt, hno3d_setl, all_so4d_setl, Time, is,ie,js,je, kbot)
+       zhalf, pfull, w10m, t, rh, tracer, dsinku, mw_air_amb, rdt, hno3d_setl, all_so4d_setl, gex_atm2lnd, Time, is,ie,js,je, kbot)
 
   real, intent(in) :: lon(:,:), lat(:,:) ! geographical coordinates, units?
   real, intent(in) :: frac_land(:,:) ! fraction of land in the grid cell
@@ -150,6 +153,7 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
   real, intent(inout) :: rdt(:,:,:,:) ! tendency of tracers, to be updated for dust tracers
   real, intent(out)   :: hno3d_setl(:,:)
   real, intent(out)   :: all_so4d_setl(:,:)
+  real, intent(inout) :: gex_atm2lnd(:,:,:) ! to pass dust flux to land
   type(time_type), intent(in) :: Time ! current model time
   integer, intent(in) :: is, ie, js, je ! boundaries of physical window
   integer, intent(in), optional :: kbot(:,:) ! index of bottom level
@@ -254,6 +258,10 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
   call atmos_dust_solP_frac_set(all_dust_conc, is,ie,js,je)  
   call atmos_dust_alkalinity_set(all_dust_conc, is,ie,js,je)  
   call atmos_dust_drydep_flux_set(all_dust_setl, is,ie,js,je)
+
+  if (gex_drydust > 0) then
+   gex_atm2lnd(:,:,gex_drydust) = all_dust_setl(:,:)
+  endif
 
   if (id_dust_ddep > 0) then
      used = send_data (id_dust_ddep, all_dust_setl(:,:), Time, is_in=is, js_in=js)
@@ -649,6 +657,8 @@ subroutine atmos_dust_init (lonb, latb, axes, Time, mask)
   allocate(atmos_dust_solP_frac( size(lonb,1)-1,size(latb,2)-1)); atmos_dust_solP_frac=0.0
   allocate(atmos_dust_alk_frac( size(lonb,1)-1,size(latb,2)-1)); atmos_dust_alk_frac=0.0
 
+  gex_drydust = gex_get_index(MODEL_ATMOS,MODEL_LAND,'drydust',record=.TRUE.)
+  if (gex_drydust .gt. 0) call error_mesg('atmos_tracer_driver','gex/atm2lnd drydust found',NOTE)
 
   do_dust = .TRUE.
   module_is_initialized = .TRUE.

@@ -235,7 +235,7 @@ use atmos_fire_plumerise_mod,only : atmos_fire_plumerise_time_vary,    &
                                     atmos_fire_plumerise_driver
 
 use coupler_types_mod, only: coupler_2d_bc_type, ind_pcair, ind_deposition
-use gex_mod,                only : gex_get_index
+use gex_mod,           only: gex_get_index, gex_get_n_ex, gex_name, gex_units, gex_get_property
 
 implicit none
 private
@@ -423,7 +423,8 @@ integer   :: ind_nh3_flux = 0
 
 integer :: gex_dryoa   = 0
 integer :: gex_drybc   = 0
-integer :: gex_drydust = 0
+
+integer, allocatable :: id_gex_lnd2atm_diag(:)
 
 !-----------------------------------------------------------------------
 type(time_type) :: Time
@@ -534,6 +535,7 @@ contains
                            flux_sw_down_vis_dir,   &
                            flux_sw_down_vis_dif,   &
                            gex_atm2lnd,            &
+                           gex_lnd2atm,            &
                            mask,                   &
                            kbot, con_atm)
 
@@ -560,6 +562,7 @@ real, intent(in), dimension(:,:)              :: flux_sw_down_vis_dir
 real, intent(in), dimension(:,:)              :: flux_sw_down_vis_dif
 type(time_type), intent(in)                   :: Time_next
 real,dimension(:,:,:),   intent(inout)        :: gex_atm2lnd
+real,dimension(:,:,:),   intent(inout)        :: gex_lnd2atm
 integer, intent(in), dimension(:,:), optional :: kbot
 real, intent(in), dimension(:,:,:),  optional :: mask
 real, intent(in), dimension(:,:),    optional :: con_atm
@@ -951,7 +954,7 @@ logical :: ocn_does_deposition
             do k=1,kd
               if (tr_is_vmr(n)) then
                 suma(:,:) = suma(:,:) + pwt(:,:,k)*tracer_diag(:,:,k,n)*tr_mw(n)/mw_air_amb(:,:,k)
-              else  
+              else
                 suma(:,:) = suma(:,:) + pwt(:,:,k)*tracer_diag(:,:,k,n)
               end if
             end do
@@ -1224,9 +1227,9 @@ logical :: ocn_does_deposition
 
      do n=1,nt
 
-      if (tr_is_vmr(n)) then 
+      if (tr_is_vmr(n)) then
         tmp3d = tr_mw(n)/mw_air_amb
-      else 
+      else
         tmp3d = 1.
       end if
 
@@ -1574,7 +1577,7 @@ logical :: ocn_does_deposition
       call atmos_dust_sourcesink(lon,lat,land,pwt, dt, &
               z_half, pfull, w10m_land, t, rh, &
               tracer(:,:,:,:), dsinku(:,:,:), mw_air_amb, rdt(:,:,:,:), &
-              hno3d_setl(:,:), all_so4d_setl(:,:), &
+              hno3d_setl(:,:), all_so4d_setl(:,:), gex_atm2lnd(:,:,:),  &
               Time, is,ie,js,je, kbot)
    endif
    call mpp_clock_end (dust_clock)
@@ -1832,6 +1835,15 @@ call atmos_nitrogen_drydep_flux_set(sum_n_red_ddep_ocn,sum_n_ox_ddep_ocn, is,ie,
            Time_next,  &
            kbot)
    end if
+
+!save gex fields passed from land to atmosphere
+do n=1,gex_get_n_ex(MODEL_LAND,MODEL_ATMOS)
+  if (id_gex_lnd2atm_diag(n).gt.0) then
+    used  = send_data (id_gex_lnd2atm_diag(n), gex_lnd2atm(:,:,n), &
+                       Time_next, is_in=is, js_in=js)
+  end if
+end do
+
 
  end subroutine atmos_tracer_driver
 ! </SUBROUTINE>
@@ -2638,8 +2650,16 @@ type(time_type), intent(in)                                :: Time
       if (gex_dryoa .gt. 0) call error_mesg('atmos_tracer_driver','gex/atm2lnd dryoa found',NOTE)
       gex_drybc = gex_get_index(MODEL_ATMOS,MODEL_LAND,'drybc',record=.TRUE.)
       if (gex_drybc .gt. 0) call error_mesg('atmos_tracer_driver','gex/atm2lnd drybc found',NOTE)
-      gex_drydust = gex_get_index(MODEL_ATMOS,MODEL_LAND,'drydust',record=.TRUE.)
-      if (gex_drydust .gt. 0) call error_mesg('atmos_tracer_driver','gex/atm2lnd drydust found',NOTE)
+
+!initialize gex diagnostics
+      allocate(id_gex_lnd2atm_diag(gex_get_n_ex(MODEL_LAND,MODEL_ATMOS)))
+
+      do n=1,gex_get_n_ex(MODEL_LAND,MODEL_ATMOS)
+        id_gex_lnd2atm_diag(n) = register_diag_field       ( module_name, trim(gex_get_property(MODEL_LAND,MODEL_ATMOS,n,gex_name))//'_gex_lnd2atm', &
+                                                             axes, time, &
+                                                             trim(gex_get_property(MODEL_LAND,MODEL_ATMOS,n,gex_name)), &
+                                                             trim(gex_get_property(MODEL_LAND,MODEL_ATMOS,n,gex_units)))
+      end do
 
       module_is_initialized = .TRUE.
 
