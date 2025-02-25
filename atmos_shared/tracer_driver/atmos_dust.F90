@@ -106,7 +106,7 @@ type(interpolate_type),save       :: dust_source_interp
 ! ---- identification numbers for diagnostic fields ----
 integer :: id_dust_source, id_dust_emis, id_dust_ddep, id_dust_conc = -1, id_hno3d_ddep, id_so4d_ddep 
 integer :: id_emidust, id_drydust ! cmip
-integer :: gex_drydust = 0
+integer :: gex_atm2lnd_drydust = 0
 
 !---------------------------------------------------------------------
 !-------- namelist  ---------
@@ -259,8 +259,8 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
   call atmos_dust_alkalinity_set(all_dust_conc, is,ie,js,je)  
   call atmos_dust_drydep_flux_set(all_dust_setl, is,ie,js,je)
 
-  if (gex_drydust > 0) then
-   gex_atm2lnd(:,:,gex_drydust) = all_dust_setl(:,:)
+  if (gex_atm2lnd_drydust > 0) then
+   gex_atm2lnd(:,:,gex_atm2lnd_drydust) = all_dust_setl(:,:)
   endif
 
   if (id_dust_ddep > 0) then
@@ -657,8 +657,8 @@ subroutine atmos_dust_init (lonb, latb, axes, Time, mask)
   allocate(atmos_dust_solP_frac( size(lonb,1)-1,size(latb,2)-1)); atmos_dust_solP_frac=0.0
   allocate(atmos_dust_alk_frac( size(lonb,1)-1,size(latb,2)-1)); atmos_dust_alk_frac=0.0
 
-  gex_drydust = gex_get_index(MODEL_ATMOS,MODEL_LAND,'drydust',record=.TRUE.)
-  if (gex_drydust .gt. 0) call error_mesg('atmos_tracer_driver','gex/atm2lnd drydust found',NOTE)
+  gex_atm2lnd_drydust = gex_get_index(MODEL_ATMOS,MODEL_LAND,'drydust',record=.TRUE.)
+  if (gex_atm2lnd_drydust .gt. 0) call error_mesg('atmos_tracer_driver','gex/atm2lnd drydust found',NOTE)
 
   do_dust = .TRUE.
   module_is_initialized = .TRUE.

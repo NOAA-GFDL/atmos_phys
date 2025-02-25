@@ -421,8 +421,8 @@ integer   :: ind_wet_dep_no3_flux = 0
 integer   :: ind_nh3_flux = 0
 
 
-integer :: gex_dryoa   = 0
-integer :: gex_drybc   = 0
+integer :: gex_atm2lnd_dryoa   = 0
+integer :: gex_atm2lnd_drybc   = 0
 
 integer, allocatable :: id_gex_lnd2atm_diag(:)
 
@@ -914,8 +914,8 @@ logical :: ocn_does_deposition
                                                Time_next, is_in=is, js_in=js)
       endif
 
-      if (gex_drybc > 0 .and. nbcphilic > 0 .and. nbcphobic > 0) then
-          gex_atm2lnd(:,:,gex_drybc) = pwt(:,:,kd)*(dsinku_lnd(:,:,nbcphilic) + dsinku_lnd(:,:,nbcphobic))
+      if (gex_atm2lnd_drybc > 0 .and. nbcphilic > 0 .and. nbcphobic > 0) then
+          gex_atm2lnd(:,:,gex_atm2lnd_drybc) = pwt(:,:,kd)*(dsinku_lnd(:,:,nbcphilic) + dsinku_lnd(:,:,nbcphobic))
       endif
 
       if (id_drypoa > 0 .and. nomphilic > 0 .and. nomphobic > 0) then
@@ -930,15 +930,15 @@ logical :: ocn_does_deposition
             used  = send_data (id_dryoa,  &
               pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic) + dsinku(:,:,nSOA)),  &
                                        Time_next, is_in=is, js_in=js)
-          if (gex_dryoa > 0) &
-            gex_atm2lnd(:,:,gex_dryoa) = pwt(:,:,kd)*(dsinku_lnd(:,:,nomphilic) + dsinku_lnd(:,:,nomphobic) + dsinku_lnd(:,:,nSOA))
+          if (gex_atm2lnd_dryoa > 0) &
+            gex_atm2lnd(:,:,gex_atm2lnd_dryoa) = pwt(:,:,kd)*(dsinku_lnd(:,:,nomphilic) + dsinku_lnd(:,:,nomphobic) + dsinku_lnd(:,:,nSOA))
         else
           if (id_dryoa > 0) &
             used  = send_data (id_dryoa,  &
               pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic)),  &
                                        Time_next, is_in=is, js_in=js)
-          if (gex_dryoa > 0) &
-            gex_atm2lnd(:,:,gex_dryoa) = pwt(:,:,kd)*(dsinku_lnd(:,:,nomphilic) + dsinku_lnd(:,:,nomphobic))
+          if (gex_atm2lnd_dryoa > 0) &
+            gex_atm2lnd(:,:,gex_atm2lnd_dryoa) = pwt(:,:,kd)*(dsinku_lnd(:,:,nomphilic) + dsinku_lnd(:,:,nomphobic))
         endif
       endif
 
@@ -2646,19 +2646,19 @@ type(time_type), intent(in)                                :: Time
       end do
 
 !Check for possible gex exchange
-      gex_dryoa = gex_get_index(MODEL_ATMOS,MODEL_LAND,'dryoa',record=.TRUE.)
-      if (gex_dryoa .gt. 0) call error_mesg('atmos_tracer_driver','gex/atm2lnd dryoa found',NOTE)
-      gex_drybc = gex_get_index(MODEL_ATMOS,MODEL_LAND,'drybc',record=.TRUE.)
-      if (gex_drybc .gt. 0) call error_mesg('atmos_tracer_driver','gex/atm2lnd drybc found',NOTE)
+      gex_atm2lnd_dryoa = gex_get_index(MODEL_ATMOS,MODEL_LAND,'dryoa',record=.TRUE.)
+      if (gex_atm2lnd_dryoa .gt. 0) call error_mesg('atmos_tracer_driver','gex/atm2lnd dryoa found',NOTE)
+      gex_atm2lnd_drybc = gex_get_index(MODEL_ATMOS,MODEL_LAND,'drybc',record=.TRUE.)
+      if (gex_atm2lnd_drybc .gt. 0) call error_mesg('atmos_tracer_driver','gex/atm2lnd drybc found',NOTE)
 
 !initialize gex diagnostics
       allocate(id_gex_lnd2atm_diag(gex_get_n_ex(MODEL_LAND,MODEL_ATMOS)))
 
       do n=1,gex_get_n_ex(MODEL_LAND,MODEL_ATMOS)
-        id_gex_lnd2atm_diag(n) = register_diag_field       ( module_name, trim(gex_get_property(MODEL_LAND,MODEL_ATMOS,n,gex_name))//'_gex_lnd2atm', &
-                                                             axes, time, &
-                                                             trim(gex_get_property(MODEL_LAND,MODEL_ATMOS,n,gex_name)), &
-                                                             trim(gex_get_property(MODEL_LAND,MODEL_ATMOS,n,gex_units)))
+         id_gex_lnd2atm_diag(n) = register_diag_field( mod_name, trim(gex_get_property(MODEL_LAND,MODEL_ATMOS,n,gex_name))//'_gex_lnd2atm', &
+                                                       axes(1:2), Time, &
+                                                       trim(gex_get_property(MODEL_LAND,MODEL_ATMOS,n,gex_name)), &
+                                                       trim(gex_get_property(MODEL_LAND,MODEL_ATMOS,n,gex_units)))
       end do
 
       module_is_initialized = .TRUE.
