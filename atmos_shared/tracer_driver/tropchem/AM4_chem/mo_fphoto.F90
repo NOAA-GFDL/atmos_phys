@@ -48,7 +48,8 @@
                   jethln_ndx, jisn1_ndx, &
                   !add photolysis reaction of ethln and jisn1
                   jmek_ndx, jbigald_ndx, jglyoxal_ndx, jalkooh_ndx, jmekooh_ndx, &
-                  jtolooh_ndx, jterpooh_ndx, jacet_ndx, jmgly_ndx,jmvk_ndx
+                  jtolooh_ndx, jterpooh_ndx, jacet_ndx, jmgly_ndx,jmvk_ndx, &
+                  jglyoxal1_ndx,jglyoxal2_ndx,jglyoxal3_ndx
       integer ::  jh2o2a_ndx, jhno2_ndx, jo3a_ndx , jo1d_ndx 
       integer ::  so4_ndx, bc1_ndx, bc2_ndx, oc1_ndx, oc2_ndx, soa_ndx, &
                   ssa_ndx(5), dust_ndx(5),nh4_ndx, nh4no3_ndx   
@@ -239,10 +240,17 @@
       indexer(TAB_NDX_JMEKetoa) = 0     !   MEK
       indexer(TAB_NDX_JMEKetob) = 0       !get_rxt_ndx( 'jmek' )     !!
       indexer(TAB_NDX_JPrAld)   = 0       !get_rxt_ndx( 'j' ) 
-      indexer(TAB_NDX_JMGlyxl)  = get_rxt_ndx( 'jmgly' )  
-      indexer(TAB_NDX_JGlyxla)  = get_rxt_ndx( 'jglyoxal' )  !!??
-      indexer(TAB_NDX_JGlyxlb)  = 0       !get_rxt_ndx( 'jglyoxal' )       !get_rxt_ndx( 'j' )  
-      indexer(TAB_NDX_JGlyxlc)  = 0       !get_rxt_ndx( 'jglyoxal' )      !get_rxt_ndx( 'j' )  
+      indexer(TAB_NDX_JMGlyxl)  = get_rxt_ndx( 'jmgly' )
+      if (get_rxt_ndx( 'jglyoxal1' ) .gt. 0) then !split glyoxal photolysis across different pathways
+         indexer(TAB_NDX_JGlyxla)  = get_rxt_ndx( 'jglyoxal1' )  
+         indexer(TAB_NDX_JGlyxlb)  = get_rxt_ndx( 'jglyoxal2' )  
+         indexer(TAB_NDX_JGlyxlc)  = get_rxt_ndx( 'jglyoxal3' )  
+      else
+         indexer(TAB_NDX_JGlyxla)  = get_rxt_ndx( 'jglyoxal' )  
+         indexer(TAB_NDX_JGlyxlb)  = 0
+         indexer(TAB_NDX_JGlyxlc)  = 0
+      end if
+      
       indexer(TAB_NDX_JAcet_a)  = get_rxt_ndx( 'jacet' )  
       indexer(TAB_NDX_JAcet_b)  = 0       !get_rxt_ndx( 'j' ) 
       indexer(TAB_NDX_JC2H5OOH) = get_rxt_ndx( 'jc2h5ooh' )             
@@ -304,7 +312,12 @@
       jhno2_ndx    = get_rxt_ndx( 'jhno2' )
       jo1d_ndx     = get_rxt_ndx( 'jo1d' )
         
-!jul--  
+      !jul--
+!f1p
+      jglyoxal1_ndx      = get_rxt_ndx( 'jglyoxal1' )
+      jglyoxal2_ndx      = get_rxt_ndx( 'jglyoxal2' )
+      jglyoxal3_ndx      = get_rxt_ndx( 'jglyoxal3' )      
+!f1p---      
       !jmao (10/28/2013)
       jisopnb_ndx = get_rxt_ndx('jisopnb')
       jisopnd_ndx = get_rxt_ndx('jisopnd')
@@ -374,7 +387,27 @@
       if(  nqi <1 )  call error_mesg ('ATMOS: fphoto','Failed to find ice_wat_ndx', FATAL)
       if(  nql <1 )  call error_mesg ('ATMOS: fphoto','Failed to find liq_wat_ndx', FATAL)
 !      if(  nqq <1 )  call error_mesg ('ATMOS: fphoto','Failed to find c_ndx', FATAL)
-        
+
+
+      if (jglyoxal_ndx.gt.0) then
+         if (jglyoxal1_ndx.gt.0 .or. jglyoxal2_ndx.gt.0 .or. jglyoxal3_ndx.gt.0) then
+            call error_mesg ('ATMOS: fphoto','Conflict in glyoxal photolysis definition', FATAL)
+         end if
+      end if
+      if (jglyoxal1_ndx.gt.0 .or. jglyoxal2_ndx.gt.0 .or. jglyoxal3_ndx.gt.0) then
+         if (jglyoxal1_ndx.le.0 .or. jglyoxal2_ndx.le.0 .or. jglyoxal3_ndx.le.0) then
+            call error_mesg ('ATMOS: fphoto','All glyoxal photolysis pathways need to be defined', FATAL)
+         end if
+      end if
+
+      if (mpp_root_pe().eq.mpp_pe()) then
+         if (jglyoxal1_ndx.gt.0) then
+            write(*,*) 'Glyoxal photolysis pathways are treated separately'
+         else if (jglyoxal_ndx.gt.0) then
+            write(*,*) 'Glyoxal photolysis pathways are merged'
+         end if
+      end if
+      
       
       
       if (mpp_pe() == mpp_root_pe() ) write(*,*) 'fphoto:nqa,nqi,nql,nqq= ',nqa,nqi,nql,nqq
@@ -768,18 +801,13 @@
             photos(:,:,jbigald_ndx) = 0.2 * photos(:,:,jno2_ndx)
          end if
       end if      
-!j2l
+      !j2l
+
       if( jglyoxal_ndx > 0 ) then
          photos(:,:,jglyoxal_ndx) = photos(:,:,jglyoxal_ndx) + & 
                                     tmp_jglyxlb(:,:)         + &
                                     tmp_jglyxlc(:,:) 
       end if       
-
-      if( jglyald_ndx > 0 ) then
-         photos(:,:,jglyald_ndx) = photos(:,:,jglyald_ndx) + & 
-                                   tmp_jglyaldb(:,:)       + &
-                                   tmp_jglyaldc(:,:)
-      end if
 
       if( jmek_ndx > 0 ) then
         photos(:,:,jmek_ndx) = photos(:,:,jmek_ndx) +  &

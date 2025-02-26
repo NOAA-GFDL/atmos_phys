@@ -581,15 +581,17 @@ subroutine dry_deposition_init( n, &
        else
           dry_file = file_dry
        end if
-       call interpolator_init( drydep_data, dry_file, lonb_mod, latb_mod,&
-            data_out_of_bounds=(/CONSTANT/), &
-            vert_interp=(/INTERP_WEIGHTED_P/))
 
        if(flag_spec >0) then
           dry_name  = trim(specname)
        else
           dry_name  = trim(lowercase(tracer_names(n)))
        end if
+
+       call interpolator_init( drydep_data, dry_file, lonb_mod, latb_mod,&
+            !(/dry_name/),                    &
+            data_out_of_bounds=(/CONSTANT/), &
+            vert_interp=(/INTERP_WEIGHTED_P/))
 
        write(logunit,*)'Dry deposition velocity for ',trim(tracer_names(n)), &
             'from file: ',trim(dry_file), ' with the name of '//trim(dry_name)
@@ -2198,14 +2200,8 @@ subroutine read_chem_param (n, tprop)
       if (iflag == 0)        call ERROR_MESG('read_chem_param', 'frac_pm10 not defined for '//trim(tracer_name), FATAL )
     end if
 
-    if ((trim(tunits).eq.'vmr') .or. (trim(tunits).eq.'mol/mol') .or. (trim(tunits).eq.'mole/mole')) then
-       tprop%is_vmr = .TRUE.
-    else
-       tprop%is_vmr = .FALSE.
-    end if
  else
     tprop%is_aerosol=.false.
-    tprop%is_vmr = .false.
     tprop%mw=-999.
     tprop%nb_N_red=0.
     tprop%nb_N_ox =0.
@@ -2213,6 +2209,12 @@ subroutine read_chem_param (n, tprop)
     tprop%frac_pm1 =0.
     tprop%frac_pm10=0.
     tprop%frac_pm25=0.
+ end if
+
+ if ((trim(tunits).eq.'vmr') .or. (trim(tunits).eq.'mol/mol') .or. (trim(tunits).eq.'mole/mole')) then
+    tprop%is_vmr = .TRUE.
+ else
+    tprop%is_vmr = .FALSE.
  end if
 
  if (.not. module_is_initialized) then

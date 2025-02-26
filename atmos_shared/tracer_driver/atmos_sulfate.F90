@@ -28,7 +28,12 @@ use                    fms_mod, only : write_version_number,    &
                                        check_nml_error, error_mesg, &
                                        FATAL, NOTE, WARNING, &
                                        lowercase !f1p
-use                fms2_io_mod, only : file_exists
+use                fms2_io_mod, only : file_exists,              &
+                                       close_file,               &
+                                       open_file,                &
+                                       read_data,                &
+                                       get_dimension_size,       &
+                                       FmsNetcdfFile_t
 use           time_manager_mod, only : time_type, &
                                        days_in_month, days_in_year, &
                                        set_date, set_time, get_date_julian, &
@@ -53,7 +58,14 @@ use           interpolator_mod, only : interpolate_type, interpolator_init, &
                                        unset_interpolator_time_flag, &
                                        interpolator, interpolator_end,     &
                                        CONSTANT, INTERP_WEIGHTED_P
-use              constants_mod, only : PI, GRAV, RDGAS, WTMAIR, PSTD_MKS
+use              constants_mod, only : PI, GRAV, RDGAS, WTMAIR, PSTD_MKS, &
+                                       DEG_TO_RAD, EPSLN
+use           horiz_interp_mod, only : horiz_interp_type,     &
+                                       horiz_interp_init,     &
+                                       horiz_interp_new,      &
+                                       horiz_interp,          &
+                                       horiz_interp_del
+
 
 !f1p
 use cloud_chem, only : cloud_so2_chem, CLOUD_CHEM_LEGACY, CLOUD_CHEM_F1P, &
@@ -68,7 +80,8 @@ private
 !
 public  atmos_sulfate_init, atmos_sulfate_end, &
         atmos_sulfate_time_vary, atmos_sulfate_endts, &
-        atmos_DMS_emission, atmos_SOx_emission, atmos_SOx_chem
+        atmos_DMS_emission, atmos_SOx_emission, atmos_SOx_chem, &
+        atmos_CH3SH_emission
 
 !-----------------------------------------------------------------------
 !----------- namelist -------------------
@@ -85,6 +98,7 @@ real , parameter :: WTM_SO4   = 96.0
 real , parameter :: WTM_NH4_2SO4   = 132.00
 real , parameter :: WTM_DMS   = 62.0
 real , parameter :: WTM_MSA   = 96.0
+real , parameter :: WTM_CH3SH = 48.107
 
 !--- identification numbers for  diagnostic fields and axes ----
 integer ::   id_OH                  = 0
@@ -95,8 +109,11 @@ integer ::   id_O3                  = 0
 integer ::   id_pH                  = 0
 
 integer ::   id_DMSo                = 0
+integer ::   id_CH3SHo              = 0
 integer ::   id_DMS_emis            = 0
 integer ::   id_DMS_emis_cmip       = 0
+integer ::   id_CH3SH_emis          = 0
+integer ::   id_CH3SH_emis_cmip     = 0
 integer ::   id_SO2_emis            = 0
 integer ::   id_SO4_emis            = 0
 integer ::   id_DMS_chem            = 0
@@ -121,6 +138,7 @@ integer ::   id_so2_ff              = 0
 
 ! cmip diagnostics
 integer ::   id_emidms              = 0
+integer ::   id_emich3sh            = 0
 integer ::   id_emiso2              = 0
 integer ::   id_emiso4              = 0
 
@@ -259,6 +277,7 @@ real               :: H_cloud
 
 logical            :: no_biobur_if_no_pbl = .true.
 logical            :: use_bb_plumerise    = .false. !armanp use interactive vert distribution of bb emissions
+real               :: scale_ch3sh_emis = 1.
 
 namelist /simple_sulfate_nml/  &
        critical_sea_fraction,     &
@@ -276,10 +295,13 @@ namelist /simple_sulfate_nml/  &
       aircraft_source, aircraft_emission_name, aircraft_filename, &
         aircraft_time_dependency_type, aircraft_dataset_entry, so2_aircraft_EI,&
       cont_volc_source, expl_volc_source, cloud_chem_solver, pH_cloud, no_biobur_if_no_pbl, &
-      use_bb_plumerise
+      use_bb_plumerise, &
+      scale_ch3sh_emis
 
 type(time_type) :: anthro_time, biobur_time, ship_time, aircraft_time
 type(time_type)        :: gas_conc_time
+
+real, allocatable :: ocn_depth(:,:)
 
 !trim(runtype) 
 !biomass_only; fossil_fuels_only, natural_only, anthrop
@@ -350,6 +372,19 @@ character(len=80) :: simpleSO2_biobur_emis_name, description
                       'simpleSO4', &
                       'simpleMSA', &
                       'simpleH2O2' /
+
+      !for ch3sh
+      integer                              :: nlonin,nlatin
+      real, dimension(:),   allocatable    :: inlon
+      real, dimension(:),   allocatable    :: inlat
+      real, dimension(:),   allocatable    :: inlone
+      real, dimension(:),   allocatable    :: inlate
+      real, dimension(:,:), allocatable    :: DATAIN
+      real                                 :: dlon,dlat
+      real, allocatable                    :: ocn_mask(:,:)
+      type (horiz_interp_type)             :: Interp
+      type(FmsNetcdfFile_t)                :: bathymetry_obj
+      character(len=64)                    :: bathymetry_file
       
       if (module_is_initialized) return
 
@@ -872,10 +907,28 @@ character(len=80) :: simpleSO2_biobur_emis_name, description
                    'DMSo',axes(1:2),Time,                                    &
                    'Dimethylsulfide seawater concentration',                 &
                    'nM/L')
+   id_CH3SHo     = register_diag_field ( mod_name,                           &
+                   'CH3SHo',axes(1:2),Time,                                  &
+                   'CH3SH seawater concentration',                           &
+                   'nM/L')
+
+   id_CH3SH_emis   = register_diag_field ( mod_name,                     &
+                   'CH3SH_emis', axes(1:2),Time,                         &
+                   'CH3SH_emis', 'kgS/m2/s',                             &
+                   missing_value=-999.  )
+   id_CH3SH_emis_cmip   = register_diag_field ( mod_name,                &
+                   'CH3SH_emis_cmip', axes(1:2),Time,                    &
+                   'CH3SH_emis_cmip', 'kg/m2/s',                         &
+                    missing_value=-999.  )
+
    ! cmip field
    id_emidms = register_cmip_diag_field_2d ( mod_name, 'emidms', Time, &
                            'Total Emission Rate of DMS', 'kg m-2 s-1', &
              standard_name='tendency_of_atmosphere_mass_content_of_dimethyl_sulfide_due_to_emission')
+
+   id_emich3sh = register_cmip_diag_field_2d ( mod_name, 'emich3sh', Time, &
+                           'Total Emission Rate of CH3SH', 'kg m-2 s-1', &
+             standard_name='tendency_of_atmosphere_mass_content_of_ch3sh_due_to_emission')
 
 
  ! the routines that save these diagnostics only get called
@@ -1012,7 +1065,59 @@ character(len=80) :: simpleSO2_biobur_emis_name, description
                               'kg m-2 s-1', & 
    standard_name='tendency_of_atmosphere_mass_content_of_sulfate_dry_aerosol_particles_due_to_gaseous_phase_net_chemical_production')
    !----
- endif
+endif
+
+
+   !read bathymetry for MeSH
+   bathymetry_file = 'INPUT/bathymetry.nc'
+
+   if (open_file(bathymetry_obj,trim(bathymetry_file),"read")) then
+      if(mpp_pe() == mpp_root_pe()) call error_mesg ('atmos_sulfate_init',  &
+                    'Reading NetCDF formatted input file: bathymetry.nc', NOTE)
+
+      call get_dimension_size(bathymetry_obj,'lon',nlonin)
+      call get_dimension_size(bathymetry_obj,'lat',nlatin)
+      ALLOCATE( inlon(nlonin) )
+      ALLOCATE( inlat(nlatin) )
+      ALLOCATE( inlone(nlonin+1) )
+      ALLOCATE( inlate(nlatin+1) )
+      allocate( DATAIN(nlonin,nlatin) )
+
+      call read_data (bathymetry_obj, 'lon', inlon)
+      call read_data (bathymetry_obj, 'lat', inlat)
+      inlon = inlon*DEG_TO_RAD
+      inlat = inlat*DEG_TO_RAD
+      dlat = inlat(2)-inlat(1)
+      dlon = inlon(2)-inlon(1)
+      inlone(1:nlonin) = inlon-(dlon/2.)
+      inlone(nlonin+1) = inlon(nlonin)+(dlon/2.)
+      inlate(1:nlatin) = inlat-(dlat/2.)
+      inlate(nlatin+1) = inlat(nlatin)+(dlat/2.)
+      call horiz_interp_init
+      !conservative interpolation
+      call horiz_interp_new ( Interp, inlone, inlate, lonb, latb )
+
+      allocate(ocn_depth(size(lonb,1)-1,size(latb,2)-1))
+      allocate(ocn_mask(size(lonb,1)-1,size(latb,2)-1))
+
+      call read_data (bathymetry_obj,'mask', DATAIN)
+      call horiz_interp (Interp, DATAIN, ocn_mask)
+      call read_data (bathymetry_obj,'topo',DATAIN)
+      call horiz_interp (Interp, DATAIN, ocn_depth)
+
+      ocn_depth = ocn_depth/(ocn_mask+epsln)
+
+      call horiz_interp_del( Interp )
+      call close_file(bathymetry_obj)
+
+      deallocate(ocn_mask)
+      deallocate(inlon)
+      deallocate(inlat)
+      deallocate(inlate)
+      deallocate(inlone)
+
+   end if
+
 
    call write_version_number (version, tagname)
 
@@ -1275,6 +1380,9 @@ end subroutine atmos_sulfate_endts
         call interpolator_end (biobur_emission_interp) 
         call interpolator_end (ship_emission_interp) 
         call interpolator_end (aircraft_emission_interp)
+
+        deallocate(ocn_depth)
+        
         module_is_initialized = .FALSE.
 
  end subroutine atmos_sulfate_end
@@ -1332,7 +1440,7 @@ subroutine atmos_DMS_emission (lon, lat, area, ocn_flx_fraction, t_surf_rad, w10
 
       DMSo(:,:)=0.0
       call interpolator(dms_sw_interp, Time, DMSo, &
-                       trim(gocart_emission_name(1)), is, js)
+           trim(gocart_emission_name(1)), is, js)
 ! --- Send the DMS data to the diag_manager for output.
       if (id_DMSo > 0 ) &
           used = send_data ( id_DMSo, DMSo, Time_next, is_in=is, js_in=js )
@@ -1437,6 +1545,166 @@ subroutine atmos_DMS_emission (lon, lat, area, ocn_flx_fraction, t_surf_rad, w10
       endif
 
 end subroutine atmos_DMS_emission
+
+!#######################################################################
+!</SUBROUTINE>
+!<SUBROUTINE NAME="atmos_CH3SH_emission">
+!<OVERVIEW>
+! The constructor routine for the sulfate module.
+!</OVERVIEW>
+!<DESCRIPTION>
+! A routine to calculate dimethyl sulfide emission form the ocean
+!</DESCRIPTION>
+!<TEMPLATE>
+!call atmos_CH3SH_emission (r, mask, axes, Time)
+!</TEMPLATE>
+!   <INOUT NAME="r" TYPE="real" DIM="(:,:,:,:)">
+!     Tracer fields dimensioned as (nlon,nlat,nlev,ntrace).
+!   </INOUT>
+!   <IN NAME="mask" TYPE="real, optional" DIM="(:,:,:)">
+!      optional mask (0. or 1.) that designates which grid points
+!           are above (=1.) or below (=0.) the ground dimensioned as
+!           (nlon,nlat,nlev).
+!   </IN>
+!   <IN NAME="Time" TYPE="type(time_type)">
+!     Model time.
+!   </IN>
+!   <IN NAME="axes" TYPE="integer" DIM="(4)">
+!     The axes relating to the tracer array dimensioned as
+!      (nlon, nlat, nlev, ntime)
+!   </IN>
+subroutine atmos_CH3SH_emission (lon, lat, area, ocn_flx_fraction, t_surf_rad, w10m, &
+       pwt, CH3SH_dt, Time, Time_next, is,ie,js,je,kbot)
+
+      real, intent(in),    dimension(:,:)           :: lon, lat
+      real, intent(in),    dimension(:,:)           :: ocn_flx_fraction
+      real, intent(in),    dimension(:,:)           :: t_surf_rad
+      real, intent(in),    dimension(:,:)           :: w10m
+      real, intent(in),    dimension(:,:)           :: area
+      real, intent(in),    dimension(:,:,:)         :: pwt
+      real, intent(out),   dimension(:,:,:)         :: CH3SH_dt
+      type(time_type), intent(in)                   :: Time,Time_next
+      integer, intent(in)                           :: is, ie, js, je
+      integer, intent(in), dimension(:,:), optional :: kbot
+!-----------------------------------------------------------------------
+      real, dimension(size(CH3SH_dt,1),size(CH3SH_dt,2)) :: DMSo, CH3SHo, CH3SH_emis
+      integer                                            :: i, j, id, jd, kd
+      real                                               :: sst, Sc, conc, w10
+      real                                               :: ScCO2, Akw
+      real, parameter                                    :: Sc_min=1.
+
+      id=size(ch3sh_dt,1); jd=size(ch3sh_dt,2); kd=size(ch3sh_dt,3)
+
+      CH3SH_dt(:,:,:) =0.0
+
+      DMSo(:,:)=0.0
+      call interpolator(dms_sw_interp, Time, DMSo, &
+           trim(gocart_emission_name(1)), is, js)
+
+      !Concentration in nM/L
+      CH3SHo(:,:) = 0.
+
+      do j = 1, jd
+         do i = 1, id
+            if (ocn_flx_fraction(i,j) .gt. epsln) then
+               if (t_surf_rad(i,j).gt. 281.15 .or. ocn_depth(i,j).le.250.) then
+                  CH3SHo(i,j) =  0.094*DMSo(i,j) + 0.242
+               else
+                  CH3SHo(i,j) =  0.294*DMSo(i,j) + 0.273
+               end if
+            end if
+            end do
+      end do
+
+! --- Send the CH3SHo data to the diag_manager for output.
+      if (id_CH3SHo > 0 ) &
+          used = send_data ( id_CH3SHo, CH3SHo, Time_next, is_in=is, js_in=js )
+
+      do j = 1, jd
+      do i = 1, id
+       SST = t_surf_rad(i,j)-273.15     ! Sea surface temperature [Celsius]
+       if (ocn_flx_fraction(i,j) .gt. critical_sea_fraction) then
+
+!  < Schmidt number for CH3SH (Wohl)
+        Sc = 2815.7-204.01*SST+9.09*SST**2-0.27*SST**3+0.004*SST**4
+        Sc = max(Sc_min, Sc)
+
+! ****************************************************************************
+! *  Calculate transfer velocity in cm/hr  (AKw)                             *
+! *                                                                          *
+! *  Tans et al. transfer velocity (1990) for CO2 at 25oC (Erickson, 1993)   *
+! *                                                                          *
+! *  Tans et al. assumed AKW=0 when W10<=3. I modified it to let             *
+! *  DMS emit at low windseeds too. Chose 3.6m/s as the threshold.           *
+! *                                                                          *
+! *  Schmidt number for CO2:       Sc = 600  (20oC, fresh water)             *
+! *                                Sc = 660  (20oC, seawater)                *
+! *                                Sc = 428  (25oC, Erickson 93)             *
+! ****************************************************************************
+!
+        CONC = CH3SHo(i,j)
+
+        W10  = W10M(i,j)
+
+! ---  Liss and Merlivat (1986) -----------
+        ScCO2 = 600.
+        if (W10 .le. 3.6) then
+         AKw = 0.17 * W10
+        else if (W10 .le. 13.) then
+         AKw = 2.85 * W10 - 9.65
+        else
+         AKw = 5.90 * W10 - 49.3
+        end if
+!------------------------------------------
+
+        if (W10 .le. 3.6) then
+         AKw = AKw * ((ScCO2/Sc) ** 0.667)
+        else
+         AKw = AKw * sqrt(ScCO2/Sc)
+        end if
+
+! ****************************************************************************
+! *  Calculate emission flux in kg/m2/s                                  *
+! *                                                                          *
+! *   AKw is in cm/hr:             AKw/100/3600    -> m/sec.                 *
+! *   CONC is in nM/L (nM/dm3):    CONC*1E-12*1000 -> kmole/m3.              *
+! *   WTM_DMS          : kgDMS/kmol.                                         *
+! *   CH3SH_EMIS         : kgDMS/m2/s.                                         *
+! ****************************************************************************
+!
+        CH3SH_emis(i,j) = AKw/100./3600. * CONC*1.e-12*1000.* WTM_CH3SH &
+            * (ocn_flx_fraction(i,j)) * scale_ch3sh_emis
+!
+       else
+        CH3SH_emis(i,j) = 0.
+       end if
+
+      end do
+      end do
+
+
+
+!--------------------------------------------------------------------
+! Update CH3SH concentration in level kd (where emission occurs)
+!--------------------------------------------------------------------
+      ch3sh_dt(:,:,kd)=CH3SH_emis(:,:)/pwt(:,:,kd)* WTMAIR/WTM_CH3SH
+!------------------------------------------------------------------
+! DIAGNOSTICS:      DMS surface emission in kg/m2/s
+!--------------------------------------------------------------------
+      if (id_CH3SH_emis > 0) then
+        used = send_data ( id_CH3SH_emis, ch3sh_emis*WTM_S/WTM_CH3SH, Time_next, &
+              is_in=is,js_in=js )
+      endif
+      if (id_CH3SH_emis_cmip > 0) then
+        used = send_data ( id_CH3SH_emis_cmip, ch3sh_emis, Time_next, &
+              is_in=is,js_in=js )
+      endif
+      if (id_emich3sh > 0) then
+        used = send_data ( id_emich3sh, ch3sh_emis, Time_next, is_in=is,js_in=js )
+      endif
+
+end subroutine atmos_CH3SH_emission
+
 
 !#######################################################################
 !</SUBROUTINE>

@@ -45,6 +45,7 @@ module tropchem_types_mod
      integer               :: gHNO3_dust_dynamic 
      integer               :: gSO2_dynamic
      real                  :: gHO2
+     real                  :: gHPMTF
      real                  :: min_lwc_for_cloud_chem
      logical               :: check_convergence
      logical               :: use_lsc_in_fastjx

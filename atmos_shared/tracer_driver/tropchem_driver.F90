@@ -103,7 +103,8 @@ use   strat_chem_utilities_mod, only : strat_chem_utilities_init, &
 use           mo_chem_utls_mod, only : get_spc_ndx
 use          atmos_sulfate_mod, only : atmos_sulfate_init, &
                                        atmos_sulfate_time_vary, &
-                                       atmos_DMS_emission
+                                       atmos_DMS_emission,      &
+                                       atmos_ch3sh_emission
 use       shortwave_driver_mod, only : shortwave_number_of_bands, &
                                        get_solar_flux_by_band
 use astronomy_mod,         only : diurnal_solar, universal_time
@@ -229,6 +230,7 @@ real               :: gN2O5                 = 0.1
 real               :: gNO2                  = 1e-4
 real               :: gSO2                  = 0.
 real               :: gSO2_dust             = 0.
+real               :: gHPMTF                = 0.
 real               :: gNH3                  = 0.05
 real               :: gHNO3_dust            = 0.
 real               :: gNO3_dust             = -999.
@@ -337,7 +339,8 @@ namelist /tropchem_driver_nml/    &
                                min_t_sfc_cld_chem, &
                                NO2_SO2_max, &
                                scale_emis_field_names, scale_emis_field_values, &
-                               do_terpene_emis_bug
+                               do_terpene_emis_bug, &
+                               gHPMTF
 
 
 integer                     :: nco2 = 0
@@ -382,7 +385,7 @@ integer :: sphum_ndx=0, cl_ndx=0, clo_ndx=0, hcl_ndx=0, hocl_ndx=0, clono2_ndx=0
            no_ndx=0, no2_ndx=0, no3_ndx=0, n_ndx=0, n2o5_ndx=0, ho2no2_ndx=0, &
            pan_ndx=0, onit_ndx=0, mpan_ndx=0, isopno3_ndx=0, onitr_ndx=0, &
            extinct_ndx=0, noy_ndx=0, cly_ndx=0, bry_ndx=0, ch4_ndx=0, &
-           dms_ndx=0, so4_ndx(6)=0, co_ndx=0, n2o_ndx=0
+           dms_ndx=0, so4_ndx(6)=0, co_ndx=0, n2o_ndx=0, ch3sh_ndx=0
 
 integer :: o3s_ndx=0
 integer :: o3s_e90_ndx=0
@@ -782,10 +785,10 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
          end if
       end if
 !-----------------------------------------------------------------------
-!     ... calculate interactive (DMS only) emissions
+!     ... calculate interactive (DMS, CH3SH only) emissions
 !-----------------------------------------------------------------------
       if ( has_xactive_emis(n) .or. id_xactive_emis(n)>0 ) then
-         if (trim(tracnam(n)) .eq. "DMS") then
+         if ( trim(tracnam(n)).eq."DMS" .or. trim(tracnam(n)).eq."CH3SH" ) then
             call calc_xactive_emis( n, Time, Time_next,lon, lat, pwt, is, ie, js, je, &
                  area, land, ocn_flx_fraction,tsurf, w10m, xactive_emis, &
                  kbot=kbot, id_emis_diag=id_xactive_emis(n) )
@@ -1867,6 +1870,7 @@ if(mpp_pe() == mpp_root_pe())    write(*,*)     "gNH3:",trop_option%gNH3
 trop_option%gHNO3_dust               = gHNO3_dust
 trop_option%gN2O5_dust               = gN2O5_dust
 trop_option%gSO2_dust                = gSO2_dust
+trop_option%gHPMTF                   = gHPMTF
 trop_option%gNO3_dust                = gNO3_dust
 trop_option%scale_dust_uptake        = scale_dust_uptake
 
@@ -2005,6 +2009,7 @@ end if
    o3_ndx     = get_spc_ndx('O3')
    ch4_ndx    = get_spc_ndx('CH4')
    dms_ndx    = get_spc_ndx('DMS')
+   ch3sh_ndx  = get_spc_ndx('CH3SH')
    so4_ndx(1) = get_spc_ndx('SO4')
    so4_ndx(2) = get_spc_ndx('SO4_D1')
    so4_ndx(3) = get_spc_ndx('SO4_D2')
@@ -2112,7 +2117,7 @@ end if
 !-----------------------------------------------------------------------
 !     ... Interactive emissions
 !-----------------------------------------------------------------------
-      if ( .not. do_terpene_emis_bug .or. trim(tracnam(i))=="DMS" ) then
+      if ( .not. do_terpene_emis_bug .or. trim(tracnam(i))=="DMS" .or. trim(tracnam(i))=="CH3SH" ) then
          call init_xactive_emis( MODEL_ATMOS, 'xactive_emissions', indices(i), tracnam(i), &
                                  axes, Time, lonb_mod, latb_mod, phalf, &
                                  has_xactive_emis(i), id_xactive_emis(i), mask )
@@ -2567,11 +2572,11 @@ end if
    end do
 
    if (mpp_root_pe().eq.mpp_pe()) then
-      write(*,*) 'usr_n2o5_dust', usr_n2o5_dust,id_rx_n2o5_dust
-      write(*,*) 'usr_hno3_dust', usr_hno3_dust,id_rx_hno3_dust
-      write(*,*) 'usr_so4_dust', usr_so4_dust,id_rx_so4_dust
-      write(*,*) 'usr_so2_dust', usr_so2_dust,id_rx_so2_dust
-      write(*,*) 'usr_no3_dust', usr_no3_dust,id_rx_no3_dust
+      write(*,*) 'usr_n2o5_dust (rxn, diag_ids)', usr_n2o5_dust,id_rx_n2o5_dust
+      write(*,*) 'usr_hno3_dust (rxn, diag_ids)', usr_hno3_dust,id_rx_hno3_dust
+      write(*,*) 'usr_so4_dust (rxn, diag_ids)', usr_so4_dust,id_rx_so4_dust
+      write(*,*) 'usr_so2_dust (rxn, diag_ids)', usr_so2_dust,id_rx_so2_dust
+      write(*,*) 'usr_no3_dust  (rxn, diag_ids)', usr_no3_dust,id_rx_no3_dust
    end if
 
    
@@ -2902,7 +2907,7 @@ subroutine tropchem_driver_time_vary (Time)
 !----------------------------------------------------------------------
       do n=1,pcnstm1
         if ( has_xactive_emis(n) .or. id_xactive_emis(n)>0 ) then
-          if (tracnam(n) .eq. "DMS") then
+          if ( tracnam(n).eq."DMS" .or. tracnam(n).eq."CH3SH" ) then
               call atmos_sulfate_time_vary (Time)
               exit
           endif
@@ -3183,6 +3188,9 @@ subroutine calc_xactive_emis( index, Time, Time_next, lon, lat, pwt, is, ie, js,
    if (index == dms_ndx) then
       call atmos_DMS_emission( lon, lat, area, ocn_flx_fraction, tsurf, w10m, pwt, &
                                emis, Time, Time_next, is, ie, js, je, kbot )
+   elseif (index == ch3sh_ndx) then
+      call atmos_CH3SH_emission( lon, lat, area, ocn_flx_fraction, tsurf, w10m, pwt, &
+                               emis, Time, Time_next, is, ie, js, je, kbot )
    else
       call error_mesg ('calc_xactive_emis', &
                        'Interactive emissions not defined for species: '//trim(tracnam(index)), FATAL)
@@ -3331,7 +3339,7 @@ subroutine init_xactive_emis( model, method_type, index, species, &
    flag = query_method(trim(method_type),model,index,name,control)
 
    if (flag) then
-   if (trim(species) .eq. "DMS") then
+   if (trim(species) .eq. "DMS" .or. trim(species) .eq. "CH3SH") then
             id_xemis = &
                register_diag_field( module_name, trim(species)//'_xactive_emis', axes(1:3), &
                                     Time, trim(species)//'_xactive_emis', 'VMR/s')
