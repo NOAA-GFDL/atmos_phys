@@ -401,10 +401,13 @@ end if
 
 !-----------------------------------------------------------------
 !            ... mco3 + no2 -> mpan
+!   This rate constant is specified in pre-processor for AM4, so only set here for AM3
 !-----------------------------------------------------------------
+#ifdef AM3_CHEM
          if( umpan_f_ndx > 0 ) then
             rxt(:,k,umpan_f_ndx) = 9.3e-12 * tp(:) / m(:,k)
          end if
+#endif
 
 !-----------------------------------------------------------------
 !        ... pan + m --> ch3co3 + no2 + m
