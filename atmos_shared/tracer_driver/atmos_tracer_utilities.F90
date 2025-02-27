@@ -150,7 +150,6 @@ module atmos_tracer_utilities_mod
   character(len=128), dimension(max_tracers) :: tracer_ddep_longnames = ' '
   character(len=128), dimension(max_tracers) :: tracer_dvel_longnames = ' '
   real, allocatable :: blon_out(:,:), blat_out(:,:)
-  type(cmip_diag_id_type) :: ID_so2_reevap_ls
   !----------------parameter values for the diagnostic units--------------
   real, parameter :: mw_air = WTMAIR/1000.  ! Convert from [g/mole] to [kg/mole]
   real, parameter :: mw_h2o = WTMH2O/1000.  ! Convert from [g/mole] to [kg/mole]
@@ -176,7 +175,7 @@ module atmos_tracer_utilities_mod
      real  :: frac_in_cloud_snow_homogeneous
      real  :: alpha_r
      real  :: alpha_s
-     logical :: Lwetdep, Lgas, Laerosol, Lice, so2_so4_evap, is_so2
+     logical :: Lwetdep, Lgas, Laerosol, Lice
   end type wetdep_type
 
   type(wetdep_type),     dimension(:), allocatable :: Wetdep
@@ -348,7 +347,6 @@ contains
          Wetdep(n)%alpha_r, Wetdep(n)%alpha_s, &
          Wetdep(n)%Lwetdep, Wetdep(n)%Lgas, &
          Wetdep(n)%Laerosol, Wetdep(n)%Lice, &
-         so2_so4_evap = Wetdep(n)%so2_so4_evap, &
          frac_in_cloud_snow_homogeneous = Wetdep(n)%frac_in_cloud_snow_homogeneous)
 
     if (mpp_root_pe().eq.mpp_pe()) then
@@ -359,18 +357,9 @@ contains
           write(*,*) 'frac_in_cloud', Wetdep(n)%frac_in_cloud
           write(*,*) 'frac_in_cloud_snow', Wetdep(n)%frac_in_cloud_snow
           write(*,*) 'frac_in_cloud_snow_homogeneous', Wetdep(n)%frac_in_cloud_snow_homogeneous
-          write(*,*) 'so2_so4_evap', Wetdep(n)%so2_so4_evap
           write(*,*) 'alpha_r,alpha_s', Wetdep(n)%alpha_r, Wetdep(n)%alpha_s
        end if
     end if
-
-
-    if ( lowercase(trim(tracer_names(n))) .eq. "so2" .or. lowercase(trim(tracer_names(n))) .eq. "simpleso2" ) then
-       Wetdep(n)%is_so2 = .true.
-    else
-       Wetdep(n)%is_so2 = .false.
-    end if
-
 
     Drydep(n)%Ldrydep = query_method ('dry_deposition', MODEL_ATMOS,&
          n,Drydep(n)%name, Drydep(n)%control)
@@ -513,11 +502,6 @@ contains
       'vds_atm', mass_axes(1:2), Time,               &
       'vds',                                 &
       'm/s', missing_value=-999.     )
-
-! Register in-cloud SO2 re-evaporation by large scale clouds (CMIP6)
- ID_so2_reevap_ls = register_cmip_diag_field_3d ( mod_name,               &
-      'pso4_aq_so2_reevap_ls', Time, 'Sulfate aerosol production by SO2 re-evaporation by lscale clouds', 'kg m-2 s-1', &
-      standard_name='tendency_of_atmosphere_mass_content_of_sulfate_dry_aerosol_particles_due_to_sulfur_dioxide_reevaporation')
 
  sphum_ndx = get_tracer_index(MODEL_ATMOS,'sphum')
  if (sphum_ndx<0) call ERROR_MESG('atmos_tracer_utilities_init', 'sphum was not found', FATAL )
@@ -1121,7 +1105,7 @@ subroutine wet_deposition( n, T, pfull, phalf, zfull, zhalf, &
     rain, snow, qdt, cloud, cloud_frac, &
     f_snow_berg, rain3d, snow3d, &
     tracer, tracer_dt, Time, cloud_param, &
-    is, js, dt, sum_wdep_out, so2_so4_out )
+    is, js, dt, sum_wdep_out, reevap_out )
   !
   !<OVERVIEW>
   ! Routine to calculate the fraction of tracer removed by wet deposition
@@ -1232,7 +1216,7 @@ subroutine wet_deposition( n, T, pfull, phalf, zfull, zhalf, &
  real,             intent(in)                     :: dt
  real,             intent(in),  dimension(:,:,:)  :: rain3d, snow3d
  real,             intent(out),  dimension(:,:),   optional :: sum_wdep_out
- real,             intent(out),  dimension(:,:,:), optional :: so2_so4_out
+ real,             intent(out),  dimension(:,:,:), optional :: reevap_out
 
  !-----------------------------------------------------------------------
  !     ... local variables
@@ -1746,15 +1730,9 @@ subroutine wet_deposition( n, T, pfull, phalf, zfull, zhalf, &
     !--lwh
     !
 
-
-    if ( present(so2_so4_out) )then
-       so2_so4_out = 0.
-       if ( wetdep(n)%is_so2 ) then
-          if ( wetdep(n)%so2_so4_evap ) then
-             so2_so4_out = reevap_diag / pwt
-          end if
-       end if
-    end if
+   if (present(reevap_out)) then
+      reevap_out = reevap_diag / pwt
+   end if
 
 
  endif ! End branching pag/lwh
@@ -1789,14 +1767,6 @@ subroutine wet_deposition( n, T, pfull, phalf, zfull, zhalf, &
  if(trim(cloud_param) == 'lscale') then
     if (id_tracer_reevap_ls(n) > 0 ) then
        used = send_data ( id_tracer_reevap_ls(n), reevap_diag/diag_scale, Time ,is,js,1)
-    endif
-
-    if ( wetdep(n)%is_so2 .and. wetdep(n)%so2_so4_evap ) then
-      if (query_cmip_diag_id(ID_so2_reevap_ls)) then
-         used = send_cmip_data_3d (ID_so2_reevap_ls,  &
-              reevap_diag/diag_scale * mw_so4, &
-              Time, is_in=is, js_in=js, ks_in=1)
-      endif
     endif
 
     if (id_tracer_wdep_ls(n) > 0 ) then
@@ -1916,7 +1886,7 @@ subroutine get_wetdep_param(text_in_scheme,text_in_param,scheme,&
     frac_in_cloud, frac_in_cloud_snow,  &
     alpha_r,alpha_s, &
     Lwetdep, Lgas, Laerosol, Lice, &
-    frac_in_cloud_uw, frac_in_cloud_donner, so2_so4_evap, frac_in_cloud_snow_homogeneous)
+    frac_in_cloud_uw, frac_in_cloud_donner, frac_in_cloud_snow_homogeneous)
   !<OVERVIEW>
   ! Routine to initialize the parameters for the wet deposition scheme.
   !</OVERVIEW>
@@ -1974,7 +1944,6 @@ subroutine get_wetdep_param(text_in_scheme,text_in_param,scheme,&
  real, intent(out)               :: alpha_r, alpha_s
  logical, intent(out)            :: Lwetdep, Lgas, Laerosol, Lice
  real, intent(out), optional     :: frac_in_cloud_uw, frac_in_cloud_donner
- logical, intent(out), optional  :: so2_so4_evap
  real, intent(out), optional     :: frac_in_cloud_snow_homogeneous
  integer :: flag
 
@@ -1991,10 +1960,6 @@ subroutine get_wetdep_param(text_in_scheme,text_in_param,scheme,&
  Lgas = .false.
  Laerosol = .false.
 
- if ( present(so2_so4_evap) ) then
-    so2_so4_evap = .false.
- end if
-
  if (present(frac_in_cloud_uw))     frac_in_cloud_uw = 0.
  if (present(frac_in_cloud_donner)) frac_in_cloud_donner = 0.
 
@@ -2003,8 +1968,6 @@ subroutine get_wetdep_param(text_in_scheme,text_in_param,scheme,&
  else if( trim(lowercase(text_in_scheme)) == 'henry' .or. &
       trim(lowercase(text_in_scheme)) == 'henry_below' .or. &
       trim(lowercase(text_in_scheme)) == 'henry_noice' .or. &
-      trim(lowercase(text_in_scheme)) == 'henry_below_noice_so2' .or. &
-      trim(lowercase(text_in_scheme)) == 'henry_below_so2' .or. &
       trim(lowercase(text_in_scheme)) == 'henry_below_noice' ) then
     if( trim(lowercase(text_in_scheme)) == 'henry' ) then
        scheme                 = 'henry'
@@ -2014,13 +1977,7 @@ subroutine get_wetdep_param(text_in_scheme,text_in_param,scheme,&
        scheme                 = 'henry_noice'
     else if ( trim(lowercase(text_in_scheme)) == 'henry_below_noice' ) then
        scheme                 = 'henry_below_noice'
-    else if ( trim(lowercase(text_in_scheme)) == 'henry_below_noice_so2' ) then
-       scheme                 = 'henry_below_noice'
-       if ( present(so2_so4_evap) )  so2_so4_evap           = .true.
-    else if ( trim(lowercase(text_in_scheme)) == 'henry_below_so2' ) then
-       scheme                 = 'henry_below'
-       if ( present(so2_so4_evap) )  so2_so4_evap           = .true.
-    end  if
+    end if
     flag=parse(text_in_param,'henry',     henry_constant)
     flag=parse(text_in_param,'dependence',henry_temp    )
     Lgas = .true.
@@ -2209,7 +2166,7 @@ subroutine read_chem_param (n, tprop)
     tprop%frac_pm1 =0.
     tprop%frac_pm10=0.
     tprop%frac_pm25=0.
- end if
+ end if 
 
  if ((trim(tunits).eq.'vmr') .or. (trim(tunits).eq.'mol/mol') .or. (trim(tunits).eq.'mole/mole')) then
     tprop%is_vmr = .TRUE.
