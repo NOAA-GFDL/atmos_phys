@@ -15,7 +15,7 @@ module tropchem_types_mod
      integer :: nb_diag
      integer :: ind_pso4_h2o2
      integer :: ind_pso4_o3
-     integer :: ind_cloud_pH, ind_cloud_pHw, ind_aerosol_pH     
+     integer :: ind_cloud_pH, ind_cloud_pHw, ind_aerosol_pH
      integer :: ind_phno3_d(5), ind_phno3_g_d, ind_ghno3_d, ind_gso2
      integer :: ind_pso4_d(5), ind_pso4_g_d
 !for aerosol surface area
@@ -29,7 +29,7 @@ module tropchem_types_mod
 
 !to store nml. Add options here
      logical               :: retain_cm3_bugs
-     logical               :: do_fastjx_photo 
+     logical               :: do_fastjx_photo
      integer               :: aerosol_thermo
      real                  :: gN2O5
      real                  :: gNO3
@@ -42,8 +42,9 @@ module tropchem_types_mod
      real                  :: gHNO3_dust
      real                  :: gNO3_dust
      real                  :: gN2O5_dust
-     integer               :: gHNO3_dust_dynamic 
+     integer               :: gHNO3_dust_dynamic
      integer               :: gSO2_dynamic
+     real                  :: gSO2_rh50,gso2_rh100
      real                  :: gHO2
      real                  :: gHPMTF
      real                  :: min_lwc_for_cloud_chem
@@ -53,8 +54,8 @@ module tropchem_types_mod
      logical               :: het_chem_fine_aerosol_only
      real                  :: cloud_H
      logical               :: cloud_ho2_h2o2
-!     logical               :: do_h2so4_nucleation 
-!     real                  :: frac_dust_incloud
+!    logical               :: do_h2so4_nucleation
+!    real                  :: frac_dust_incloud
      real                  :: frac_aerosol_incloud
      real                  :: max_rh_aerosol
      logical               :: limit_no3
@@ -64,7 +65,7 @@ module tropchem_types_mod
      logical               :: het_chem_bug1
      real                  :: rh_het_max
      integer               :: verbose
-     logical               :: modulate_frac_ic 
+     logical               :: modulate_frac_ic
      logical               :: scale_dust_uptake
   end type tropchem_opt
 
@@ -98,7 +99,7 @@ module tropchem_types_mod
     trop_diag%ind_SA_DUST    = 0
 
     small_value = ismall_value
-    
+
   end subroutine tropchem_types_init
 
 end module tropchem_types_mod

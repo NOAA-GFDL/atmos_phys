@@ -16,13 +16,12 @@
 implicit none
       public :: usrrxt_init, usrrxt
       public :: HET_CHEM_LEGACY, HET_CHEM_J1M, &
-                GSO2_WANG2014, GSO2_ZHENG2015, GSO2_ZHENG2015_LOW
+                GSO2_ZHENG2015
 
       private
       integer, parameter     :: HET_CHEM_LEGACY    = 1
       integer, parameter     :: HET_CHEM_J1M       = 2
-      integer, parameter     :: GSO2_WANG2014 = 1, GSO2_ZHENG2015 = 2, &
-                                GSO2_ZHENG2015_LOW = 3
+      integer, parameter     :: GSO2_ZHENG2015     = 1
 
       integer, parameter :: ndust_reac           = 5 !maximum number of dust tracers
       integer, parameter :: ndust_het            = 8 !number of tracers in het chem for dust 
@@ -689,16 +688,10 @@ end if
             end if
 
             if ( so2h_ndx > 0) then
-               rxt(i,k,so2h_ndx)=0.             
-               !http://onlinelibrary.wiley.com/doi/10.1002/2013JD021426/full          
-               if ( trop_option%gSO2_dynamic .eq. GSO2_WANG2014) then
-                  gam_SO2 = max(1e-3+(1e-2-1e-3)*(relhum(i,k)-.5)/.5,0.)
-               elseif ( trop_option%gSO2_dynamic .eq. GSO2_ZHENG2015) then
+               rxt(i,k,so2h_ndx)=0.
+               if ( trop_option%gSO2_dynamic .eq. GSO2_ZHENG2015) then
                   !http://www.atmos-chem-phys.net/15/2031/2015/acp-15-2031-2015.pdf
-                  gam_SO2 = max(2e-5+(5e-5-2e-5)*(relhum(i,k)-.5)/.5,2.e-5)
-               elseif ( trop_option%gSO2_dynamic .eq. GSO2_ZHENG2015_LOW) then
-                  !http://www.atmos-chem-phys.net/15/2031/2015/acp-15-2031-2015.pdf
-                  gam_SO2 = max(1e-5+(2e-5-1e-5)*(relhum(i,k)-.5)/.5,1.e-5)
+                  gam_SO2 = max(trop_option%gSO2_rh50+(trop_option%gSO2_rh100 - trop_option%gSO2_rh50)*(relhum(i,k)-0.5)/0.5,trop_option%gSO2_rh50)
                else
                   gam_SO2 = trop_option%gSO2
                end if

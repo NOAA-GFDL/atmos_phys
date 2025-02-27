@@ -116,8 +116,7 @@ use cloud_chem, only: CLOUD_CHEM_PH_LEGACY, CLOUD_CHEM_PH_BISECTION, &
                       CLOUD_CHEM_F1P_BUG, CLOUD_CHEM_F1P_BUG2, CLOUD_CHEM_LEGACY
 use aerosol_thermodynamics, only: AERO_ISORROPIA, AERO_LEGACY, NO_AERO
 use mo_usrrxt_mod, only: HET_CHEM_LEGACY, HET_CHEM_J1M, &
-                         GSO2_WANG2014, GSO2_ZHENG2015, &
-                         GSO2_ZHENG2015_LOW
+                         GSO2_ZHENG2015
 use mo_chem_utls_mod, only : get_rxt_ndx
 
 use atmos_cmip_diag_mod,   only : register_cmip_diag_field_3d, &
@@ -229,6 +228,8 @@ character(len=64)  :: het_chem_type         = 'legacy'
 real               :: gN2O5                 = 0.1
 real               :: gNO2                  = 1e-4
 real               :: gSO2                  = 0.
+real               :: gSO2_rh50             = 0.  !specify gamma_so2 for rh<50%
+real               :: gSO2_rh100            = 0.  !specify maximum gamma_so2 (ramps between 50->100%)
 real               :: gSO2_dust             = 0.
 real               :: gHPMTF                = 0.
 real               :: gNH3                  = 0.05
@@ -241,7 +242,7 @@ logical            :: cloud_ho2_h2o2        = .true.
 real               :: gNO3                  = 0.1
 real               :: gHO2                  = 1.
 
-logical            :: het_chem_bug1         = .true. !index error in surface area calculation. affects surface area of organic carbon
+logical            :: het_chem_bug1         = .false. !index error in surface area calculation. affects surface area of organic carbon. TRUE reproduces bug in ESM4p1
 real               :: rh_het_max            = 9999. !maximum rh used to calculate surface area.
 
 character(len=128) :: sim_data_filename = 'sim.dat'      ! Input file for chemistry pre-processor
@@ -281,7 +282,7 @@ namelist /tropchem_driver_nml/    &
                                file_emis3d_1, &
                                file_emis3d_2, &
                                file_emis2dbb_1, &
-                               file_emis2dbb_2, & 
+                               file_emis2dbb_2, &
                                file_ub, &
                                inv_list, &
                                file_aircraft,&
@@ -324,6 +325,7 @@ namelist /tropchem_driver_nml/    &
                                aerosol_thermo_method, &
                                het_chem_type, &
                                gn2o5,gno2,gno3,gso2,gnh3,ghno3_dust,gh2so4_dust,gho2,ghno3_dust_dynamic,gso2_dust,gn2o5_dust,gno3_dust, &
+                               gso2_rh50,gso2_rh100, &
                                do_h2so4_nucleation, &
                                check_convergence, &
                                cloud_chem_pH_solver, &
@@ -770,7 +772,7 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
                  emis2dbb_field_names(n)%field_names, &
                  diurnal_emis2dbb(n), coszen, half_day, lon, &
                  is, js, has_xactive_emis(n),emis2dbb_field_names(n)%scale_emis)
- 
+
          do k=1, size(emis3dbb,3)
            emis3dbb(:,:,k) = emis2dbb(:,:) * fbbs(:,:,k)
            emis_source(:,:,k,n) = emis_source(:,:,k,n) &
@@ -1221,7 +1223,7 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
             if(id_lb(n)>0) then
                used = send_data(id_lb(n), r_lb(n), Time_next)
             end if
-            scale_dry_lbc = 1.            
+            scale_dry_lbc = 1.
             do k=1,size(chem_dt,3)
                if (lbc_dry(n)) then
                   scale_dry_lbc = (1.-r_temp(:,:,k,sphum_ndx))
@@ -1230,18 +1232,18 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
                where (pfull(:,:,k) > lb_pres)
                   chem_dt(:,:,k,indices(n)) = (r_lb(n)*scale_dry_lbc - r(:,:,k,indices(n))) / relaxed_dt_lbc
                end where
-            end do                        
+            end do
          else
             if (fixed_lbc_time(n)) then
                lbc_Time = lbc_entry(n)
             else
                lbc_Time = Time
             end if
-                        
+
             call interpolator(lbc_interp(n), lbc_time, r_lb_2d, trim(lbc_names(n)), is,js)
             r_lb_2d = r_lb_2d*lbc_factor(n)
             if (id_lb(n)>0) then
-               used = send_data(id_lb(n), r_lb_2d, Time_next, is_in=is, js_in=js)   
+               used = send_data(id_lb(n), r_lb_2d, Time_next, is_in=is, js_in=js)
             end if
             scale_dry_lbc = 1.
             do k=1,size(chem_dt,3)
@@ -1253,9 +1255,9 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
                   chem_dt(:,:,k,indices(n)) = (r_lb_2d*scale_dry_lbc - r(:,:,k,indices(n))) / relaxed_dt_lbc
                end where
             end do
-            
+
          end if
-         
+
       end if
 
    end do
@@ -1369,7 +1371,7 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
 
 
    if (id_aerosol_pH>0) then
-      used = send_data(id_aerosol_pH,trop_diag_array(:,:,:,trop_diag%ind_aerosol_pH),Time_next,is_in=is,js_in=js, mask = & 
+      used = send_data(id_aerosol_pH,trop_diag_array(:,:,:,trop_diag%ind_aerosol_pH),Time_next,is_in=is,js_in=js, mask = &
            ( trop_diag_array(:,:,:,trop_diag%ind_aerosol_pH) .gt. (missing_value + tiny(missing_value))))
    end if
    if (id_cloud_pH>0) then
@@ -1517,7 +1519,7 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
    if (brcl_ndx>0) then
       bry(:,:,:) = bry(:,:,:) + r_temp(:,:,:,brcl_ndx)
    end if
-   
+
 !++van
    noy(:,:,:) = 0.
 ! Loop over total number of atmospheric tracers (nt), not just solver tracers (pcnstm1)
@@ -1526,7 +1528,7 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
       if ( nb_N_Ox(n) .gt. 0.) then
         call get_tracer_names (MODEL_ATMOS, n, tracer_name)
         if (tracer_name .eq. 'brono2') then
-            noytracer = 'BrONO2' 
+            noytracer = 'BrONO2'
         else if (tracer_name .eq. 'clono2') then
             noytracer = 'ClONO2'
         else
@@ -1889,16 +1891,39 @@ trop_option%time_varying_solarflux = time_varying_solarflux
 trop_option%gSO2                     = gSO2
 if(mpp_pe() == mpp_root_pe()) write(*,*) 'gSO2: ',trop_option%gSO2
 if (trim(gso2_dynamic).eq.'none') then
-   trop_option%gSO2_dynamic             = -1
+   trop_option%gSO2_rh50   = -999
+   trop_option%gSO2_rh100  = -999
+   trop_option%gSO2_dynamic = -1
+   !The following approaches all use the same basic approach
+   !gamma_so2 = gamma_so2_rh50 below 50% RH, and weighted mean between gamma_so2_rh100 and gamma_so2_rh50 above 50% RH
 else if (trim(gso2_dynamic).eq.'wang2014') then
-   trop_option%gSO2_dynamic             = GSO2_WANG2014   
-   !http://onlinelibrary.wiley.com/doi/10.1002/2013JD021426/full  
+   !trop_option%gSO2_dynamic             = GSO2_WANG2014
+   !http://onlinelibrary.wiley.com/doi/10.1002/2013JD021426/full
+   trop_option%gSO2_rh50   = 1.e-3
+   trop_option%gSO2_rh100  = 1.e-2
+   trop_option%gSO2_dynamic = GSO2_ZHENG2015
 else if (trim(gso2_dynamic).eq.'zheng2015') then
-   trop_option%gSO2_dynamic             = GSO2_ZHENG2015
-!   http://www.atmos-chem-phys.net/15/2031/2015/
+!  trop_option%gSO2_dynamic             = GSO2_ZHENG2015
+   !   http://www.atmos-chem-phys.net/15/2031/2015/
+   trop_option%gSO2_rh50   = 2.e-5
+   trop_option%gSO2_rh100  = 5.e-5
+   trop_option%gSO2_dynamic = GSO2_ZHENG2015
 else if (trim(gso2_dynamic).eq.'zheng2015_low') then
-   trop_option%gSO2_dynamic             = GSO2_ZHENG2015_LOW
-!   http://www.atmos-chem-phys.net/15/2031/2015/
+   !  trop_option%gSO2_dynamic             = GSO2_ZHENG2015_LOW
+   !  http://www.atmos-chem-phys.net/15/2031/2015/
+   trop_option%gSO2_rh50   = 1.e-5
+   trop_option%gSO2_rh100  = 2.e-5
+   trop_option%gSO2_dynamic = GSO2_ZHENG2015
+else if (trim(gso2_dynamic).eq.'esm4p5') then
+   trop_option%gSO2_rh50   = gSO2_rh50
+   trop_option%gSO2_rh100  = gSO2_rh100
+   trop_option%gSO2_dynamic = GSO2_ZHENG2015
+end if
+
+if (trop_option%gSO2_dynamic.eq.GSO2_ZHENG2015) then
+   if (trop_option%gSO2_rh50.lt.0 .or. trop_option%gSO2_rh100.lt.0) then
+      call error_mesg ('tropchem_driver_init', 'gSO2_rh50 and gSO2_rh100 need to be >0', FATAL )
+   end if
 end if
 
 trop_option%NO2_SO2_max = NO2_SO2_max
@@ -2050,7 +2075,7 @@ end if
 !----------------------------------------
 
     call get_number_tracers(MODEL_ATMOS, num_tracers=nt)
-    allocate(nb_N_Ox(nt)) 
+    allocate(nb_N_Ox(nt))
     if(mpp_pe() == mpp_root_pe()) then
        write (*,*) 'NOTE: tropchem_driver_init, nt = ', nt
        write (*,*) 'NOy is composed of :'
@@ -2062,7 +2087,7 @@ end if
         if(mpp_pe() == mpp_root_pe()) write (*,'(2a,g14.6)') trim(tracer_name),', nb_N_ox=',nb_N_ox(n)
       end if
     end do
-!--van    
+!--van
 
 !-----------------------------------------------------------------------
 !     ... Setup upper boundary condition data
@@ -2159,11 +2184,11 @@ end if
 
             flag_spec = parse(control,'dry',specname)
             if (flag_spec>0) lbc_dry(i) = .true.
-            
+
             flag_file = parse(control, 'file', filename)
             flag_spec = parse(control, 'factor', scale_factor)
             flag_fixed = parse(control, 'fixed_year', fixed_year)
-            
+
             if( flag_file > 0 ) then
                lb_files(i) = 'INPUT/' // trim(filename)
                if( file_exists(lb_files(i)) ) then
@@ -2193,7 +2218,7 @@ end if
                      diy = days_in_year (Year_t)
                      extra_seconds = (fixed_year - year)*diy*SECONDS_PER_DAY
                      lbc_entry(i) = Year_t + set_time(NINT(extra_seconds), 0)
-                  end if                  
+                  end if
                else
                   call error_mesg ('tropchem_driver_init', &
                                    'Failed to find input file '//trim(lb_files(i)), FATAL)
@@ -2209,15 +2234,15 @@ end if
                      has_lbc_2d(i) = .True.
 
                      flag_spec = parse(control, 'factor',scale_factor)
-                     
+
                      if(flag_spec > 0) then
                         lbc_factor(i) = scale_factor
                      else
                         lbc_factor(i) = 1.
                      end if
-                     
+
                      flag_spec = parse(control, 'name',specname)
-                     
+
                      if(flag_spec > 0) then
                         lbc_names(i) = trim(specname)
                      else
@@ -2226,8 +2251,8 @@ end if
 
                      flag_fixed = parse(control, 'fixed_year', fixed_year)
                      if (mpp_root_pe().eq.mpp_pe()) write(*,*) 'fixed_year',flag_fixed,fixed_year
-                     
-                     if( flag_fixed > 0 ) then                        
+
+                     if( flag_fixed > 0 ) then
                         fixed_lbc_time(i) = .true.
                         year = INT(fixed_year)
                         Year_t = set_date(year,1,1,0,0,0)
@@ -2235,7 +2260,7 @@ end if
                         extra_seconds = (fixed_year - year)*diy*SECONDS_PER_DAY
                         lbc_entry(i) = Year_t + set_time(NINT(extra_seconds), 0)
                      end if
-                     
+
                   else
                      call error_mesg ('tropchem_driver_init', &
                           'Failed to find input file '//trim(lb_files(i))//' '//trim(control)//' '//tracnam(i), FATAL)
@@ -2339,7 +2364,7 @@ end if
             extra_seconds = (input_time - year)*diy*SECONDS_PER_DAY
             co2_t%gas_time(n) = Year_t + set_time(NINT(extra_seconds), 0)
          end do
-         close(flb)         
+         close(flb)
          if (co2_scale_factor .gt. 0) then
             co2_t%gas_value = co2_t%gas_value * co2_scale_factor
          end if
@@ -2540,13 +2565,13 @@ end if
       if (dust_tracers(i)%is_hno3d) then
          n_hno3d = n_hno3d+1
          id_phno3_d(n_hno3d)    = register_diag_field( module_name, 'P'//trim(dust_tracers(i)%name),axes(1:3), &
-              Time,  'P'//trim(dust_tracers(i)%name),'mole/m2/s')         
+              Time,  'P'//trim(dust_tracers(i)%name),'mole/m2/s')
 
          write(fld,'(A6,I1.1,9X)') 'hno3_d',n_hno3d
          usr_hno3_dust(n_hno3d) = get_rxt_ndx(trim(fld)) - phtcnt
          id_rx_hno3_dust(n_hno3d) = register_diag_field( module_name, 'rx_'//TRIM(fld), axes(1:3), Time, 'rx_'//TRIM(fld),'1/s')
 
-         write(fld,'(A6,I1.1,9X)') 'n2o5_d',n_hno3d 
+         write(fld,'(A6,I1.1,9X)') 'n2o5_d',n_hno3d
          usr_n2o5_dust(n_hno3d) = get_rxt_ndx(trim(fld)) - phtcnt
          id_rx_n2o5_dust(n_hno3d) = register_diag_field( module_name, 'rx_'//TRIM(fld), axes(1:3), Time, 'rx_'//TRIM(fld),'1/s')
 
@@ -2558,7 +2583,7 @@ end if
       if (dust_tracers(i)%is_so4d) then
          n_so4d = n_so4d+1
          id_pso4_d(n_so4d)    = register_diag_field( module_name, 'P'//trim(dust_tracers(i)%name),axes(1:3), &
-              Time,  'P'//trim(dust_tracers(i)%name),'mole/m2/s')         
+              Time,  'P'//trim(dust_tracers(i)%name),'mole/m2/s')
 
          write(fld,'(A5,I1.1,10X)') 'so4_d',n_so4d
          usr_so4_dust(n_so4d) = get_rxt_ndx(trim(fld)) - phtcnt
@@ -2579,7 +2604,7 @@ end if
       write(*,*) 'usr_no3_dust  (rxn, diag_ids)', usr_no3_dust,id_rx_no3_dust
    end if
 
-   
+
 
    id_phno3_g_d    = register_diag_field( module_name, 'PHNO3_G_D',axes(1:3), &
         Time, 'PHNO3_G_D','mole/m2/s')
@@ -2689,7 +2714,7 @@ end if
          end if
          if (has_lbc_2d(i)) then
             id_lb(i) = register_diag_field( module_name, trim(tracnam(i))//'_lbc', axes(1:2), &
-                 Time, trim(tracnam(i))//'_lbc','VMR'//trim(fld) )            
+                 Time, trim(tracnam(i))//'_lbc','VMR'//trim(fld) )
          else
             id_lb(i) = register_diag_field( module_name, trim(tracnam(i))//'_lbc', &
                  Time, trim(tracnam(i))//'_lbc','VMR'//trim(fld) )
@@ -2856,7 +2881,7 @@ subroutine tropchem_driver_time_vary (Time)
           call obtain_interpolator_time_slices (inter_emis3d(n), Time)
         endif
       end do
-      
+
       do n=1, size(inter_emis2dbb,1)
         if (has_emis2dbb(n)) then
           if (atmos_fire_do_bb_emis_diurnal()) then
@@ -2892,11 +2917,11 @@ subroutine tropchem_driver_time_vary (Time)
                lbc_Time = lbc_entry(n)
             else
                lbc_Time = Time
-            end if            
+            end if
             call obtain_interpolator_time_slices (lbc_interp(n), lbc_time)
          end if
       end do
-     
+
 
       call strat_chem_dcly_dt_time_vary (Time)
 
@@ -2979,11 +3004,11 @@ subroutine tropchem_driver_end
 !-----------------------------------------------------------------------
 !     ... initialize mpp clock id
 !-----------------------------------------------------------------------
-   
+
    deallocate(nb_N_Ox)
    module_is_initialized = .false.
-   
-    
+
+
 !-----------------------------------------------------------------------
 
 end subroutine tropchem_driver_end
@@ -3026,7 +3051,7 @@ subroutine read_2D_emis_data( emis_type, emis, Time, Time_next, &
    real :: diurnal_scale_factor, gmt, iso_on, iso_off, dayfrac
    real :: local_angle, factor_tmp
    integer :: n
-   
+
    emis(:,:) = 0.
    temp_data(:,:) = 0.
    do k = 1,size(field_names)
@@ -3034,7 +3059,7 @@ subroutine read_2D_emis_data( emis_type, emis, Time, Time_next, &
           temp_data(:,:) = 0.
       else
          if (present(skip_field) .and. trim(field_names(k)).eq.trim(skip_field)) then
-            temp_data(:,:) = 0.                      
+            temp_data(:,:) = 0.
          else
             call interpolator(emis_type,Time,temp_data,field_names(k),is,js)
          end if
@@ -3271,7 +3296,7 @@ subroutine init_emis_data( emis_type, model, method_type, pos, file_name, &
                                  vert_interp=(/INTERP_WEIGHTED_P/) )
          call query_interpolator(emis_type,nfields=nfields)
          allocate(field_type%field_names(nfields))
-         allocate(field_type%scale_emis(nfields))         
+         allocate(field_type%scale_emis(nfields))
          call query_interpolator(emis_type,field_names=field_type%field_names)
          do n=1,nfields
             field_type%scale_emis(n) = 1.
@@ -3289,8 +3314,8 @@ subroutine init_emis_data( emis_type, model, method_type, pos, file_name, &
 
             if (mpp_root_pe().eq.mpp_pe()) write(*,40) field_type%field_names(n), &
                  field_type%scale_emis(n)
-            
-         end do         
+
+         end do
       end if
       if ( present(land_does_emis) )  land_does_emis  = (index(lowercase(name),'land:lm3')>0)
    end if
