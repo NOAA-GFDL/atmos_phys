@@ -105,7 +105,7 @@ subroutine strat_chem_utilities_init( lonb, latb, age_factor_in, dclydt_factor_i
 ! local variables
    real :: chlb_dummy(nlat_input,nspecies_lbc), &
            ozb_dummy(nlon_input, nlat_input, 12)
-   integer :: funit, nc, n, year, outunit
+   integer :: funit, nc, n, year, outunit, ns, years(ntime_tropc)
    type(time_type) :: Model_init_time
    
    if (module_is_initialized) return
@@ -127,12 +127,23 @@ subroutine strat_chem_utilities_init( lonb, latb, age_factor_in, dclydt_factor_i
    open(file='INPUT/' // TRIM(cfc_lbc_filename), form='formatted',action='read', newunit=funit)
    outunit= stdout()
    if (mpp_pe() == mpp_root_pe()) WRITE(outunit,*) 'reading: INPUT/' // TRIM(cfc_lbc_filename)
-   do nc = 1,15                                           
-     read(funit,'(6E13.6)') chlb_dummy(:,nc)
-   end do
-   read(funit,'(6E13.6)') ozb_dummy
-   read(funit,'(6e13.6)') tropc
-   close(funit)
+
+   if (cfc_lbc_filename == 'chemlbf') then
+     do nc = 1,15
+       read(funit,'(6E13.6)') chlb_dummy(:,nc)
+     end do
+     read(funit,'(6E13.6)') ozb_dummy
+     read(funit,'(6e13.6)') tropc
+!    write(outunit,*), 'reading tropc chemlbf ', tropc
+   else
+!++van
+     read(funit,*)  ! skip first line of the file as it is a header
+     do n = 1,ntime_tropc
+        read(funit,'(i4,9e13.6)') years(n), (tropc(n,ns),ns=1,nspecies_tropc)
+     end do
+!    write(outunit,*), 'reading tropc chemlbf_formatted', tropc
+   end if
+!--van
 
 !++lwh
 !---------------------------------------------------------------------
