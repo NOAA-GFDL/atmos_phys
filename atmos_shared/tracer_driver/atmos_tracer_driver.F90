@@ -914,8 +914,12 @@ logical :: ocn_does_deposition
                                                Time_next, is_in=is, js_in=js)
       endif
 
-      if (gex_atm2lnd_drybc > 0 .and. nbcphilic > 0 .and. nbcphobic > 0) then
-          gex_atm2lnd(:,:,gex_atm2lnd_drybc) = pwt(:,:,kd)*(dsinku_lnd(:,:,nbcphilic) + dsinku_lnd(:,:,nbcphobic))
+      ! Provide the data for the dry deposition that passed directly to the surface
+      if (gex_atm2lnd_drybc > 0) then
+         gex_atm2lnd(:,:,gex_atm2lnd_drybc) = 0.0
+         if (nbcphilic > 0) gex_atm2lnd(:,:,gex_atm2lnd_drybc) = gex_atm2lnd(:,:,gex_atm2lnd_drybc) + dsinku_lnd(:,:,nbcphilic)
+         if (nbcphobic > 0) gex_atm2lnd(:,:,gex_atm2lnd_drybc) = gex_atm2lnd(:,:,gex_atm2lnd_drybc) + dsinku_lnd(:,:,nbcphobic)
+         gex_atm2lnd(:,:,gex_atm2lnd_drybc) = pwt(:,:,kd)*gex_atm2lnd(:,:,gex_atm2lnd_drybc)
       endif
 
       if (id_drypoa > 0 .and. nomphilic > 0 .and. nomphobic > 0) then
@@ -930,16 +934,21 @@ logical :: ocn_does_deposition
             used  = send_data (id_dryoa,  &
               pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic) + dsinku(:,:,nSOA)),  &
                                        Time_next, is_in=is, js_in=js)
-          if (gex_atm2lnd_dryoa > 0) &
-            gex_atm2lnd(:,:,gex_atm2lnd_dryoa) = pwt(:,:,kd)*(dsinku_lnd(:,:,nomphilic) + dsinku_lnd(:,:,nomphobic) + dsinku_lnd(:,:,nSOA))
         else
           if (id_dryoa > 0) &
             used  = send_data (id_dryoa,  &
               pwt(:,:,kd)*(dsinku(:,:,nomphilic) + dsinku(:,:,nomphobic)),  &
                                        Time_next, is_in=is, js_in=js)
-          if (gex_atm2lnd_dryoa > 0) &
-            gex_atm2lnd(:,:,gex_atm2lnd_dryoa) = pwt(:,:,kd)*(dsinku_lnd(:,:,nomphilic) + dsinku_lnd(:,:,nomphobic))
         endif
+      endif
+
+      ! Provide the data for the dry deposition that passed directly to the surface
+      if (gex_atm2lnd_dryoa > 0) then
+         gex_atm2lnd(:,:,gex_atm2lnd_dryoa) = 0.0
+         if (nomphilic > 0) gex_atm2lnd(:,:,gex_atm2lnd_dryoa) = gex_atm2lnd(:,:,gex_atm2lnd_dryoa) + dsinku_lnd(:,:,nomphilic)
+         if (nomphobic > 0) gex_atm2lnd(:,:,gex_atm2lnd_dryoa) = gex_atm2lnd(:,:,gex_atm2lnd_dryoa) + dsinku_lnd(:,:,nomphobic)
+         if (nSOA      > 0) gex_atm2lnd(:,:,gex_atm2lnd_dryoa) = gex_atm2lnd(:,:,gex_atm2lnd_dryoa) + dsinku_lnd(:,:,nSOA)
+         gex_atm2lnd(:,:,gex_atm2lnd_dryoa) = pwt(:,:,kd)*gex_atm2lnd(:,:,gex_atm2lnd_dryoa)
       endif
 
       if (do_cmip6_bug_diag) then
