@@ -2,7 +2,7 @@ MODULE UW_CONV_MOD
 #include <fms_platform.h>
 
   use           mpp_mod, only : mpp_pe, mpp_root_pe, stdlog
-  use      Constants_Mod, ONLY: tfreeze,HLv,HLf,HLs,CP_AIR,GRAV,Kappa,rdgas,rvgas
+  use      Constants_Mod, ONLY: tfreeze,HLv,HLf,HLs,CP_AIR,GRAV,Kappa,rdgas,rvgas,wtmair
   use   Diag_Manager_Mod, ONLY: register_diag_field, send_data
   use   Time_Manager_Mod, ONLY: time_type, get_time
   use           mpp_mod, only : input_nml_file
@@ -67,6 +67,10 @@ MODULE UW_CONV_MOD
 
   real, parameter :: aday = 1.
   real, parameter :: mv = -999.
+
+  real, parameter   :: mw_so4 = 96./1000.     ! Convert from [g/mole] to [kg/mole]
+  real, parameter   :: mw_air = WTMAIR/1000.  ! Convert from [g/mole] to [kg/mole]
+
   logical         :: module_is_initialized = .false.
 
   character(len=7) :: mod_name = 'uw_conv'
@@ -152,6 +156,7 @@ MODULE UW_CONV_MOD
   real    :: cgust_max = 10.
   real    :: sigma0 = 0.5
   real    :: tmax0  = 363.15
+  logical :: so2_so4_reevap = .false.
 
   character(len=32) :: aerosol_reevap = 'none'
   character(len=32) :: gas_reevap = 'none'
@@ -179,7 +184,7 @@ MODULE UW_CONV_MOD
        zero_out_conv_area, tracer_check_type, use_turb_tke, use_lcl_only, do_new_pevap, plev_for, stop_at_let, &
        use_pblhttke_avg, use_hlqtsrc_avg, use_capecin_avg, reproduce_old_version, do_plev_umf, plev_umf, shallow_umf_thresh, &
        do_eis_limit, do_eis_limitn, do_lts_limit, do_lts_limitn, treat_nitrate_as_sulfate, &
-       aerosol_reevap, gas_reevap
+       aerosol_reevap, gas_reevap, so2_so4_reevap
 
   !namelist parameters for UW convective plume
   real    :: rle      = 0.10   ! for critical stopping distance for entrainment
@@ -367,6 +372,7 @@ MODULE UW_CONV_MOD
                           id_tracerdtwet_uwc(:), id_tracerdtwet_uwc_col(:), &
                           id_tracerdt_uwc_nc(:), id_tracerdt_uwc_col_nc(:), id_rn(:)
   integer, allocatable :: id_trevp_uwc(:), id_trevp_uwd(:)
+  integer :: id_so2_reevap_uw = -1
 
 !========Option for deep convection=======================================
   integer :: id_tdt_uwd, id_qdt_uwd, id_qtdt_uwd, id_prec_uwd, id_snow_uwd,   &
@@ -396,6 +402,10 @@ MODULE UW_CONV_MOD
   logical :: use_sub_seasalt
   real    :: sea_salt_scale
   real    :: om_to_oc
+
+  integer :: nso2  = NO_TRACER
+  integer :: nh2o2 = NO_TRACER
+  integer :: nso4  = NO_TRACER
 
 contains
 
@@ -498,6 +508,31 @@ contains
           endif
        end do
     endif
+
+!-----------------------------------------------------------------------
+!    obtain indices for tracers no2 and no4.
+!-----------------------------------------------------------------------
+    nso2      = get_tracer_index(MODEL_ATMOS,'simpleSO2')
+    if (nso2 == NO_TRACER) then
+      nso2      = get_tracer_index(MODEL_ATMOS,'so2')
+    endif
+
+    nso4      = get_tracer_index(MODEL_ATMOS,'simpleSO4')
+    if (nso4 == NO_TRACER) then
+      nso4      = get_tracer_index(MODEL_ATMOS,'so4')
+    endif
+
+    nh2o2      = get_tracer_index(MODEL_ATMOS,'simpleH2O2')
+    if (nh2o2 == NO_TRACER) then
+      nh2o2      = get_tracer_index(MODEL_ATMOS,'H2O2')
+    endif
+
+    if (so2_so4_reevap) then
+          if (nso2.eq.NO_TRACER .or. nh2o2 .eq. NO_TRACER .or. nso4 .eq. NO_TRACER ) then
+               call error_mesg('uw_conv','so2_reevap requires so2, so4, h2o2 to all be defined',FATAL)
+          end if
+     end if
+
 
     id_xpsrc_uwc  = register_diag_field (mod_name,'xpsrc_uwc', axes(1:2), Time, &
          'xpsrc', 'hPa' )
@@ -1019,6 +1054,7 @@ contains
 !========Option for deep convection=======================================
 
 
+
     if ( ntracers>0 ) then
       allocate(id_tracerdt_uwc(ntracers), id_tracerdt_uwc_col(ntracers) )
       allocate(id_tracerdt_uwc_nc(ntracers), id_tracerdt_uwc_col_nc(ntracers))
@@ -1075,6 +1111,13 @@ contains
                                   trim(tracer_units(nn))//'/s', missing_value=mv)
         end do
      end if
+
+     id_so2_reevap_uw = &
+          register_diag_field (mod_name, 'pso4_aq_so2_reevap_uw', &
+                         axes(1:3), Time, &
+                         'Sulfate aerosol production by SO2 re-evaporation by lscale clouds', 'kg m-2 s-1', &
+                         missing_value=mv )
+
 
     select case (tracer_check_type)
        case(1)
@@ -1251,6 +1294,8 @@ contains
     !f1p
     real, dimension(size(tracers,1), size(tracers,2), size(tracers,3), size(tracers,4)) :: trtend_nc, rn_diag
 
+    real, dimension(size(tracers,1), size(tracers,2), size(tracers,3)) :: so2_reevap
+
 !========Option for deep convection=======================================
     real, dimension(size(tb,1),size(tb,2),size(tb,3)) :: uten_d, vten_d, tten_d,    &
          qvten_d, qlten_d, qiten_d, qaten_d, qnten_d, buo_d, qtten_d,               &
@@ -1260,6 +1305,8 @@ contains
     real, dimension(size(tb,1),size(tb,2)) :: dcapedm_d, dcwfndm_d, denth_d, dting_d, dqtmp_d, cbmf_d
     real, dimension(size(tracers,1),size(tracers,2),size(tracers,3),size(tracers,4)) :: trevp_d, trevp_s
     real, dimension(size(tracers,3),size(tracers,4)) :: trtend_t, trwet_t
+    real, dimension(size(tracers,3)) :: so2_reevap_t
+
 !f1p
     real, dimension(size(tracers,3),size(tracers,4)) :: trtend_t_nc, trwet_t_nc, rn
 !
@@ -1514,6 +1561,7 @@ contains
     dcapeo=0.; dcino=0.; xpsrc=0.; xhlsrc=0.; xqtsrc=0.; feq_s=0.; feq_d=0.; feq_c=0; rkm_s=0.;
     trtend=0.; trwet=0.; crho=0.; hmo=0.; hms=0.; abu=0.; dbuodp_s=0.; dbuodp_d=0.;
     pblht_avg=0.; omg_avg=0.; hlsrc_avg=0.; qtsrc_avg=0.; cape_avg=0.; cin_avg=0.;
+    so2_so4_reevap=0.
     qldet_s=0.; qidet_s=0.; qadet_s=0.; qndet_s=0.;
     qldet_d=0.; qidet_d=0.; qadet_d=0.; qndet_d=0.;
     dting = 0.; cush_s=-1.;
@@ -2047,6 +2095,12 @@ contains
 ! make sure the predicted tracer tendencies do not produce negative
 ! tracers due to convective tendencies. if necessary, adjust the
 ! tendencies.
+
+          if (so2_so4_reevap) then
+               !correction to so2/h2o2 reevap
+               so2_reevap_t   = min(ct%trevp(:,nso2),ct%trevp(:,nh2o2))
+          end if
+
           if (do_deep) then
             trtend_t = ct%trten
             trwet_t  = ct%trwet
@@ -2061,6 +2115,20 @@ contains
                 nk = kmax+1-k
                 trtend(i,j,nk,n) = ct%trten(k,n) + ct%trwet(k,n)
                 trwet(i,j,nk,n)  = ct%trwet(k,n)
+
+               !Change tracer tendency but not wet deposition tendency since it's used to calculate the total deposition
+                if (n.eq.nso2) then
+                   trtend(i,j,nk,n) = trtend(i,j,nk,n) - so2_reevap_t(k)
+                end if
+                if (n.eq.nh2o2) then
+                   trtend(i,j,nk,n) = trtend(i,j,nk,n) - so2_reevap_t(k)
+                end if
+                if (n.eq.nso4) then
+                   trtend(i,j,nk,n) = trtend(i,j,nk,n) + so2_reevap_t(k)
+                end if
+
+                so2_reevap(i,j,nk) = so2_reevap_t(nk)
+
                 rn_diag(i,j,nk,n) = rn(k,n)
               enddo
             enddo
@@ -2205,8 +2273,14 @@ contains
              pcb_d   (i,j)  = cp1%prel
              pct_d   (i,j)  = cp1%ptop
 
+             if (so2_so4_reevap) then
+               !correction to so2/h2o2 reevap
+               so2_reevap_t   = so2_reevap_t + min(ct1%trevp(:,nso2),ct1%trevp(:,nh2o2))
+             end if
+
              trtend_t = trtend_t+ct1%trten
              trwet_t  = trwet_t +ct1%trwet
+
 !<f1p
              trtend_t_nc = trtend_t
              trwet_t_nc  = trwet_t
@@ -2222,6 +2296,20 @@ contains
 
                    trtend(i,j,nk,n) = trtend_t(k,n) + trwet_t(k,n)
                    trwet(i,j,nk,n)  = trwet_t(k,n)
+
+                   !Change tracer tendency but not wet deposition tendency since it's used to calculate the total deposition
+                   if (n.eq.nso2) then
+                    trtend(i,j,nk,n) = trtend(i,j,nk,n) - so2_reevap_t(k)
+                  end if
+                  if (n.eq.nh2o2) then
+                    trtend(i,j,nk,n) = trtend(i,j,nk,n) - so2_reevap_t(k)
+                  end if
+                  if (n.eq.nso4) then
+                    trtend(i,j,nk,n) = trtend(i,j,nk,n) + so2_reevap_t(k)
+                  end if
+
+                  so2_reevap(i,j,nk) = so2_reevap_t(nk)
+
 !f1p
                    trtend_nc(i,j,nk,n) = trtend_t_nc(k,n) + trwet_t_nc(k,n)
                    rn_diag(i,j,nk,n) = rn(k,n)
@@ -2787,6 +2875,13 @@ contains
           end if
        end do
     end if
+
+    if (id_so2_reevap_uw.gt.0) then
+          used = send_data (id_so2_reevap_uw,  &
+                so2_reevap * pmass * mw_so4/mw_air, &
+                Time, is, js, 1)
+    end if
+
 !f1p
     if ( allocated(id_tracerdt_uwc_col_nc) ) then
        do n = 1,size(id_tracerdt_uwc_col_nc)
