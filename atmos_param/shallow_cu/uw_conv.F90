@@ -32,7 +32,10 @@ MODULE UW_CONV_MOD
                                    findt_end_k, &
                                    check_tracer_realizability, &
                                    qt_parcel_k, qt_parcel_deep_k, &
-                                   adicloud, sounding, uw_params
+                                   adicloud, sounding, uw_params, &
+                                   TRACER_REEVAP_LINEAR, &
+                                   TRACER_REEVAP_NONE, &
+                                   TRACER_REEVAP_STEP
 
   use  conv_plumes_k_mod,only    : cp_init_k, cp_end_k, cp_clear_k, &
                                    ct_init_k, ct_end_k, ct_clear_k, &
@@ -150,6 +153,9 @@ MODULE UW_CONV_MOD
   real    :: sigma0 = 0.5
   real    :: tmax0  = 363.15
 
+  character(len=32) :: aerosol_reevap = 'none'
+  character(len=32) :: gas_reevap = 'none'
+
 
   integer :: tracer_check_type = -999 !legacy
   !< select realizability checks to be applied to tracers
@@ -172,7 +178,8 @@ MODULE UW_CONV_MOD
        duration, do_subcloud_flx, do_new_subflx, src_choice, gqt_choice,   &
        zero_out_conv_area, tracer_check_type, use_turb_tke, use_lcl_only, do_new_pevap, plev_for, stop_at_let, &
        use_pblhttke_avg, use_hlqtsrc_avg, use_capecin_avg, reproduce_old_version, do_plev_umf, plev_umf, shallow_umf_thresh, &
-       do_eis_limit, do_eis_limitn, do_lts_limit, do_lts_limitn, treat_nitrate_as_sulfate
+       do_eis_limit, do_eis_limitn, do_lts_limit, do_lts_limitn, treat_nitrate_as_sulfate, &
+       aerosol_reevap, gas_reevap
 
   !namelist parameters for UW convective plume
   real    :: rle      = 0.10   ! for critical stopping distance for entrainment
@@ -1750,6 +1757,26 @@ contains
 
           sd%numx      = numx
 
+          if (trim(aerosol_reevap).eq.'none') then
+            sd%aerosol_reevap = TRACER_REEVAP_NONE
+          elseif (trim(aerosol_reevap).eq.'linear') then
+            sd%aerosol_reevap = TRACER_REEVAP_LINEAR
+          elseif (trim(aerosol_reevap).eq.'step') then
+            sd%aerosol_reevap = TRACER_REEVAP_STEP
+          else
+            call error_mesg('uw_conv','Unknown aerosol_reevap option',FATAL)
+          end if
+
+          if (trim(gas_reevap).eq.'none') then
+            sd%gas_reevap = TRACER_REEVAP_NONE
+          elseif (trim(gas_reevap).eq.'linear') then
+            sd%gas_reevap = TRACER_REEVAP_LINEAR
+          elseif (trim(gas_reevap).eq.'step') then
+            sd%gas_reevap = TRACER_REEVAP_STEP
+          else
+            call error_mesg('uw_conv','Unknown gas_reevap option',FATAL)
+          end if
+
           if (use_turb_tke ) sd%tke = tkep(i,j)   !h1g, 2015-08-11
 
           call extend_sd_k(sd, pblht(i,j), do_ice, Uw_p)
@@ -1924,7 +1951,7 @@ contains
           if (do_lts_limitn) then
              if (sd%lts .gt. eis_max) then
                ocode(i,j)=10; cbmf_shallow=0.;
-               goto 200  
+               goto 200
              end if
           end if
 

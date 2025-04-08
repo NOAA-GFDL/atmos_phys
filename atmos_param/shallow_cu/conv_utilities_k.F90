@@ -24,7 +24,8 @@ MODULE CONV_UTILITIES_k_MOD
      qt_parcel_deep_k, qt_parcel_cgust, erfccc
 
 
-
+ integer, parameter :: TRACER_REEVAP_NONE = 1, TRACER_REEVAP_LINEAR = 2, TRACER_REEVAP_STEP = 3
+ public :: TRACER_REEVAP_NONE, TRACER_REEVAP_LINEAR, TRACER_REEVAP_STEP
 
  public sounding
  type sounding
@@ -35,6 +36,7 @@ MODULE CONV_UTILITIES_k_MOD
     real     :: tke, cgust, cgust0, cgust_max, sigma0, lat, lon, p_minmse, plev_omg
     real     :: dpsum, hmint, hmint0
     real     :: pblht_avg, hlsrc_avg, qtsrc_avg, cape_avg, cin_avg, numx
+    integer  :: gas_reevap, aerosol_reevap
     real, _ALLOCATABLE :: t     (:)_NULL, qv   (:)_NULL, u     (:)_NULL
     real, _ALLOCATABLE :: v     (:)_NULL, ql   (:)_NULL, qi    (:)_NULL
     real, _ALLOCATABLE :: qa    (:)_NULL, thc  (:)_NULL, qct   (:)_NULL
@@ -60,7 +62,7 @@ MODULE CONV_UTILITIES_k_MOD
     real, _ALLOCATABLE :: omega_up(:)_NULL, omega_dn(:)_NULL
     real, _ALLOCATABLE :: hf0   (:)_NULL, ddp_dyn(:)_NULL, hdp_dyn(:)_NULL
     real, _ALLOCATABLE :: hfint(:)_NULL, hfintn(:)_NULL, dpint(:)_NULL
-!++++yim     
+!++++yim
     real, _ALLOCATABLE :: tr    (:,:)_NULL, sstr(:,:)_NULL
  end type sounding
 
@@ -138,8 +140,8 @@ contains
     Uw_p%epsilo = epsilo
     Uw_p%zvir   = zvir
     Uw_p%tkmin  = tkmin
-    Uw_p%tkmax  = tkmax 
-    Uw_p%tice0  = tice0 
+    Uw_p%tkmax  = tkmax
+    Uw_p%tice0  = tice0
     Uw_p%me     = me
     Uw_p%master = (me == root_pe)
 
@@ -195,6 +197,8 @@ contains
     sd%dpsum    = 0.0
     sd%hmint    = 0.0
     sd%hmint0   = 0.0
+    sd%gas_reevap     = -1
+    sd%aerosol_reevap = -1
     allocate ( sd%t     (1:kd)); sd%t     =0.;
     allocate ( sd%qv    (1:kd)); sd%qv    =0.;
     allocate ( sd%u     (1:kd)); sd%u     =0.;
@@ -314,8 +318,8 @@ contains
     sd1%t     = sd%t;    sd1%qv    =sd%qv;
     sd1%u     = sd%u;    sd1%v     =sd%v;
     sd1%ql    = sd%ql;   sd1%qi    =sd%qi;
-    sd1%qa    = sd%qa;   sd1%qn    =sd%qn;    
-    sd1%am1   = sd%am1;  sd1%am2   =sd%am2; 
+    sd1%qa    = sd%qa;   sd1%qn    =sd%qn;
+    sd1%am1   = sd%am1;  sd1%am2   =sd%am2;
     sd1%am3   = sd%am3;  sd1%am4   =sd%am4;
     sd1%amx1  = sd%amx1; sd1%amx2  =sd%amx2;
     sd1%amx3  = sd%amx3; sd1%amx4  =sd%amx4;
@@ -324,6 +328,9 @@ contains
     sd1%omg   = sd%omg;  sd1%hf0   = sd%hf0;
 !++++yim
     sd1%tr  =sd%tr
+
+    sd1%gas_reevap = sd%gas_reevap
+    sd1%aerosol_reevap = sd%aerosol_reevap
   end subroutine sd_copy_k
 
 !#####################################################################
@@ -423,7 +430,7 @@ contains
     real, intent(in), dimension(:)   :: amx1, amx2, amx3, amx4        ! aerosal species
     real, intent(in), dimension(:)   :: tdt_rad, tdt_dyn, qvdt_dyn, qidt_dyn, dgz_dyn, ddp_dyn, dgz_phy
     real, intent(in), dimension(:)   :: tdt_dif, qvdt_dif, qidt_dif
-    real, intent(in), dimension(:,:) :: tracers        !env. tracers    
+    real, intent(in), dimension(:,:) :: tracers        !env. tracers
     type(sounding), intent(inout)    :: sd
     type(uw_params), intent(inout)    :: Uw_p
 
@@ -710,7 +717,7 @@ contains
     t0(:)  = sd%t(:) -(sd%tdt_dyn (:) + sd%tdt_dif (:) +sd%tdt_rad(:))*sd%delt
     qv0(:) = sd%qv(:)-(sd%qvdt_dyn(:) + sd%qvdt_dif(:))*sd%delt
     qi0(:) = sd%qi(:)-(sd%qidt_dyn(:) + sd%qidt_dif(:))*sd%delt
-    gz0(:) = Uw_p%grav*sd%z(:) - (sd%dgz_dyn(:)+sd%dgz_phy)*sd%delt 
+    gz0(:) = Uw_p%grav*sd%z(:) - (sd%dgz_dyn(:)+sd%dgz_phy)*sd%delt
     sd%hf0(:) = Uw_p%cp_air*t0(:)+gz0(:)+Uw_p%hlv*qv0(:)-Uw_p%hlf*qi0(:)
 
     do k=1, sd%kmax !MSE change due to mass change
@@ -787,7 +794,7 @@ contains
     zlcl=sd%zs(1);
     do k=1,sd % ktopconv-1
        if(sd%ps(k).le.plcl) then
-          klcl=k; 
+          klcl=k;
           zlcl=sd%zs(k)-(plcl-sd%ps(k))/sd%dp(k)*sd%dz(k);
           exit
        end if
@@ -796,7 +803,7 @@ contains
     p700  =70000.
     p850  =85000.
     thc700=sd%thc(1); t700=sd%t(1); z700=sd%z(1);
-    thc850=sd%thc(1); t850=sd%t(1); 
+    thc850=sd%thc(1); t850=sd%t(1);
     k850  =1
 
     plev0=p850

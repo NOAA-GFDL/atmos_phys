@@ -156,6 +156,10 @@ module atmos_tracer_utilities_mod
   real, parameter :: mw_so4 = 96./1000.     ! Convert from [g/mole] to [kg/mole]
   real, parameter :: twopi = 2*PI
 
+  integer :: aerosol_reevap_param = -1
+  integer :: gas_reevap_param = -1
+
+  integer, parameter :: TRACER_REEVAP_NONE = 1, TRACER_REEVAP_LINEAR = 2, TRACER_REEVAP_STEP = 3
 
 
   type chem_param_type
@@ -208,8 +212,12 @@ module atmos_tracer_utilities_mod
   real :: kbs_val   = 50. ! surface conductance of rough sea (m/s)
   logical :: use_albedo_for_drydep = .false.
   real :: snow_albedo_thr = 0.45
+  character*32 :: gas_reevap = 'linear'
+  character*32 :: aerosol_reevap = 'step'
+
   namelist /atmos_tracer_utilities_nml/  scale_aerosol_wetdep,  scale_aerosol_wetdep_snow, file_dry, drydep_exp, T_snow_dep, &
-                         kbs_val, use_albedo_for_drydep, snow_albedo_thr
+                         kbs_val, use_albedo_for_drydep, snow_albedo_thr, &
+                         gas_reevap,aerosol_reevap
   ! <---h1g,
 contains
 
@@ -332,6 +340,30 @@ contains
        !-----------------------------------------------------------------------
        read (input_nml_file, nml=atmos_tracer_utilities_nml, iostat=io)
        ierr = check_nml_error(io,'atmos_tracer_utilities_nml')
+
+   if (trim(gas_reevap) == 'linear') then
+      gas_reevap_param = TRACER_REEVAP_LINEAR
+   elseif (trim(gas_reevap) == 'step') then
+      gas_reevap_param = TRACER_REEVAP_STEP
+   elseif (trim(gas_reevap) == 'none') then
+      gas_reevap_param = TRACER_REEVAP_NONE
+   else
+      call error_mesg('atmos_tracer_utilities_init',&
+      'gas_reevap not recognized',&
+      FATAL)
+   end if
+
+   if (trim(aerosol_reevap) == 'linear') then
+      aerosol_reevap_param = TRACER_REEVAP_LINEAR
+   elseif (trim(aerosol_reevap) == 'step') then
+      aerosol_reevap_param = TRACER_REEVAP_STEP
+   elseif (trim(aerosol_reevap) == 'none') then
+      aerosol_reevap_param = TRACER_REEVAP_NONE
+   else
+      call error_mesg('atmos_tracer_utilities_init',&
+      'aerosol_reevap not recognized',&
+      FATAL)
+   end if
 
     call read_chem_param(n,tracer_prop(n))
 
@@ -794,7 +826,7 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
  snowr=Drydep(n)%snowr
  landr=Drydep(n)%landr
  sear=Drydep(n)%sear
- 
+
  select case(lowercase(scheme))
 
  case ('williams_wind_driven')
@@ -806,7 +838,7 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
           landr2=landr
        endwhere
     else
-       where(albedo.gt.snow_albedo_thr) 
+       where(albedo.gt.snow_albedo_thr)
           landr2=snowr
        elsewhere
           landr2=landr
@@ -843,7 +875,7 @@ subroutine dry_deposition( n, is, js, u, v, T, pwt, pfull, dz, &
 
     A = km*ka+(1.-alpha)*ka*alpha*(ka+kbs)
     B = km*((1.-alpha)*(ka+kss)+alpha*(ka+kbs))+(1.-alpha)*(ka+kss)*alpha*(ka+kbs)
-    
+
     vd_ocean = A/B*((1.-alpha)*kss &
          + km * alpha * kbs/(km + alpha*(ka+kbs)) &
          + alpha * kbs * alpha * ka / (km+alpha*(ka+kbs)))
@@ -1267,9 +1299,9 @@ subroutine wet_deposition( n, T, pfull, phalf, zfull, zhalf, &
  real :: frac_in_cloud, frac_in_cloud_snow, frac_in_cloud_snow_homogeneous, frac_int, ph
  real , parameter :: &
       R_r = 0.001, &               ! radius of cloud-droplets for rain
-      R_s = 0.001, &               ! radius of cloud-droplets for snow
-      frac_int_gas = 1.0,   &
-      frac_int_aerosol= 0.5
+      R_s = 0.001                  ! radius of cloud-droplets for snow
+
+ real :: frac_int_gas, frac_int_aerosol
 
  real :: alpha_r, alpha_s
 
@@ -1299,6 +1331,29 @@ subroutine wet_deposition( n, T, pfull, phalf, zfull, zhalf, &
  jd = size(T,2)
  kd = size(T,3)
 
+if (gas_reevap_param.eq.TRACER_REEVAP_LINEAR) then
+   frac_int_gas = 1.
+elseif (gas_reevap_param.eq.TRACER_REEVAP_STEP) then
+   frac_int_gas = 0.5
+elseif (gas_reevap_param.eq.TRACER_REEVAP_NONE) then
+   frac_int_gas = 0.
+else
+   call error_mesg('wet_deposition', &
+         'Invalid gas_reevap_param in wet deposition', FATAL)
+end if
+
+if (aerosol_reevap_param.eq.TRACER_REEVAP_LINEAR) then
+   frac_int_aerosol = 1.
+elseif (aerosol_reevap_param.eq.TRACER_REEVAP_STEP) then
+   frac_int_aerosol = 0.5
+elseif (aerosol_reevap_param.eq.TRACER_REEVAP_NONE) then
+   frac_int_aerosol = 0.
+else
+   call error_mesg('wet_deposition', &
+         'Invalid aerosol_reevap_param in wet deposition', FATAL)
+endif
+
+
  call get_tracer_names(MODEL_ATMOS,n,tracer_name, units = units)
  if ( .not. Wetdep(n)%Lwetdep) return
  text_in_scheme = Wetdep(n)%text_in_scheme
@@ -1315,7 +1370,7 @@ subroutine wet_deposition( n, T, pfull, phalf, zfull, zhalf, &
  Lgas    = Wetdep(n)%Lgas
  Laerosol = Wetdep(n)%Laerosol
  Lice    = Wetdep(n)%Lice
- 
+
  rho_air(:,:,:) = pfull(:,:,:) / ( T(:,:,:)*RDGAS ) ! kg/m3
  !   Lice = .not. (scheme=='henry_noice' .or. scheme=='henry_below_noice' .or. &
  !                 scheme=='aerosol_noice' .or. scheme=='aerosol_below_noice' )
@@ -1842,7 +1897,7 @@ subroutine get_drydep_param(text_in_scheme,text_in_param,scheme,land_does_drydep
  snowr=500.
  landr=500.
  sear=500.
- 
+
  if(lowercase(trim(text_in_scheme(1:4))).eq.'wind') then
     scheme                  = 'Wind_driven'
  endif
@@ -1850,7 +1905,7 @@ subroutine get_drydep_param(text_in_scheme,text_in_param,scheme,land_does_drydep
     scheme                  = 'williams_wind_driven'
  endif
 
- flag=parse(text_in_param,'surfr',surfr)    
+ flag=parse(text_in_param,'surfr',surfr)
  flag=parse(text_in_param,'sear',sear)
  if(flag == 0) sear=surfr
  flag=parse(text_in_param,'landr',landr)
@@ -2004,8 +2059,8 @@ subroutine get_wetdep_param(text_in_scheme,text_in_param,scheme,&
     if (flag == 0) then
        frac_in_cloud_snow = frac_in_cloud
     end if
-    
-    if (present(frac_in_cloud_snow_homogeneous)) then    
+
+    if (present(frac_in_cloud_snow_homogeneous)) then
        flag=parse(text_in_param,'frac_incloud_snowh',frac_in_cloud_snow_homogeneous)
        if (flag == 0) then
           frac_in_cloud_snow_homogeneous = frac_in_cloud
@@ -2166,7 +2221,7 @@ subroutine read_chem_param (n, tprop)
     tprop%frac_pm1 =0.
     tprop%frac_pm10=0.
     tprop%frac_pm25=0.
- end if 
+ end if
 
  if ((trim(tunits).eq.'vmr') .or. (trim(tunits).eq.'mol/mol') .or. (trim(tunits).eq.'mole/mole')) then
     tprop%is_vmr = .TRUE.
