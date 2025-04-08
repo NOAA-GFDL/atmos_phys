@@ -1115,7 +1115,7 @@ contains
      id_so2_reevap_uw = &
           register_diag_field (mod_name, 'pso4_aq_so2_reevap_uw', &
                          axes(1:3), Time, &
-                         'Sulfate aerosol production by SO2 re-evaporation by lscale clouds', 'kg m-2 s-1', &
+                         'Sulfate aerosol production by SO2 re-evaporation by uw_conv', 'kg m-2 s-1', &
                          missing_value=mv )
 
 
