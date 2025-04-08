@@ -156,7 +156,7 @@ MODULE UW_CONV_MOD
   real    :: cgust_max = 10.
   real    :: sigma0 = 0.5
   real    :: tmax0  = 363.15
-  logical :: so2_so4_reevap = .false.
+  logical :: so2_so4_reevaporation = .false.
 
   character(len=32) :: aerosol_reevap = 'none'
   character(len=32) :: gas_reevap = 'none'
@@ -184,7 +184,7 @@ MODULE UW_CONV_MOD
        zero_out_conv_area, tracer_check_type, use_turb_tke, use_lcl_only, do_new_pevap, plev_for, stop_at_let, &
        use_pblhttke_avg, use_hlqtsrc_avg, use_capecin_avg, reproduce_old_version, do_plev_umf, plev_umf, shallow_umf_thresh, &
        do_eis_limit, do_eis_limitn, do_lts_limit, do_lts_limitn, treat_nitrate_as_sulfate, &
-       aerosol_reevap, gas_reevap, so2_so4_reevap
+       aerosol_reevap, gas_reevap, so2_so4_reevaporation
 
   !namelist parameters for UW convective plume
   real    :: rle      = 0.10   ! for critical stopping distance for entrainment
@@ -527,7 +527,7 @@ contains
       nh2o2      = get_tracer_index(MODEL_ATMOS,'H2O2')
     endif
 
-    if (so2_so4_reevap) then
+    if (so2_so4_reevaporation) then
           if (nso2.eq.NO_TRACER .or. nh2o2 .eq. NO_TRACER .or. nso4 .eq. NO_TRACER ) then
                call error_mesg('uw_conv','so2_reevap requires so2, so4, h2o2 to all be defined',FATAL)
           end if
@@ -1561,7 +1561,7 @@ contains
     dcapeo=0.; dcino=0.; xpsrc=0.; xhlsrc=0.; xqtsrc=0.; feq_s=0.; feq_d=0.; feq_c=0; rkm_s=0.;
     trtend=0.; trwet=0.; crho=0.; hmo=0.; hms=0.; abu=0.; dbuodp_s=0.; dbuodp_d=0.;
     pblht_avg=0.; omg_avg=0.; hlsrc_avg=0.; qtsrc_avg=0.; cape_avg=0.; cin_avg=0.;
-    so2_so4_reevap=0.
+    so2_reevap=0.
     qldet_s=0.; qidet_s=0.; qadet_s=0.; qndet_s=0.;
     qldet_d=0.; qidet_d=0.; qadet_d=0.; qndet_d=0.;
     dting = 0.; cush_s=-1.;
@@ -2096,7 +2096,7 @@ contains
 ! tracers due to convective tendencies. if necessary, adjust the
 ! tendencies.
 
-          if (so2_so4_reevap) then
+          if (so2_so4_reevaporation) then
                !correction to so2/h2o2 reevap
                so2_reevap_t   = min(ct%trevp(:,nso2),ct%trevp(:,nh2o2))
           end if
@@ -2273,7 +2273,7 @@ contains
              pcb_d   (i,j)  = cp1%prel
              pct_d   (i,j)  = cp1%ptop
 
-             if (so2_so4_reevap) then
+             if (so2_so4_reevaporation) then
                !correction to so2/h2o2 reevap
                so2_reevap_t   = so2_reevap_t + min(ct1%trevp(:,nso2),ct1%trevp(:,nh2o2))
              end if
