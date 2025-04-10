@@ -2127,7 +2127,7 @@ contains
                    trtend(i,j,nk,n) = trtend(i,j,nk,n) + so2_reevap_t(k)
                 end if
 
-                so2_reevap(i,j,nk) = so2_reevap_t(nk)
+                so2_reevap(i,j,nk) = so2_reevap_t(k)
 
                 rn_diag(i,j,nk,n) = rn(k,n)
               enddo
@@ -2308,7 +2308,7 @@ contains
                     trtend(i,j,nk,n) = trtend(i,j,nk,n) + so2_reevap_t(k)
                   end if
 
-                  so2_reevap(i,j,nk) = so2_reevap_t(nk)
+                  so2_reevap(i,j,nk) = so2_reevap_t(k)
 
 !f1p
                    trtend_nc(i,j,nk,n) = trtend_t_nc(k,n) + trwet_t_nc(k,n)
