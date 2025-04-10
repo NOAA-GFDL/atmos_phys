@@ -75,6 +75,8 @@ MODULE UW_CONV_MOD
 
   character(len=7) :: mod_name = 'uw_conv'
 
+  integer :: aerosol_reevap_param, gas_reevap_param
+
   !namelist parameters for UW convection scheme
   integer :: iclosure = 0      ! 0: Bretherton UWShCu orginal / -CIN/TKE based
                                ! 1: Emanuel-Rayment: quasiequilibrium PBL
@@ -1131,6 +1133,38 @@ contains
 
     module_is_initialized = .true.
 
+    if (trim(aerosol_reevap).eq.'none') then
+     aerosol_reevap_param = TRACER_REEVAP_NONE
+     call error_mesg('uw_conv_init',&
+     'aerosol reevap (uw): NONE',NOTE)
+   elseif (trim(aerosol_reevap).eq.'linear') then
+     aerosol_reevap_param = TRACER_REEVAP_LINEAR
+     call error_mesg('uw_conv_init',&
+     'aerosol reevap (uw): LINEAR',NOTE)
+   elseif (trim(aerosol_reevap).eq.'step') then
+     aerosol_reevap_param = TRACER_REEVAP_STEP
+     call error_mesg('uw_conv_init',&
+     'aerosol reevap (uw): STEP',NOTE)
+   else
+     call error_mesg('uw_conv','Unknown aerosol_reevap option',FATAL)
+   end if
+
+   if (trim(gas_reevap).eq.'none') then
+     gas_reevap_param = TRACER_REEVAP_NONE
+     call error_mesg('uw_conv_init',&
+     'gas reevap (uw): NONE',NOTE)
+   elseif (trim(gas_reevap).eq.'linear') then
+     gas_reevap_param = TRACER_REEVAP_LINEAR
+     call error_mesg('uw_conv_init',&
+     'gas reevap (uw): LINEAR',NOTE)
+   elseif (trim(gas_reevap).eq.'step') then
+     gas_reevap_param = TRACER_REEVAP_STEP
+     call error_mesg('uw_conv_init',&
+     'gas reevap (uw): STEP',NOTE)
+   else
+     call error_mesg('uw_conv','Unknown gas_reevap option',FATAL)
+   end if
+
 
   end SUBROUTINE UW_CONV_INIT
 
@@ -1802,28 +1836,10 @@ contains
           sd%tke       = tkeo(i,j)
           sd%lat       = lat(i,j)*180/3.1415926
           sd%lon       = lon(i,j)*180/3.1415926
+          sd%aerosol_reevap = aerosol_reevap_param
+          sd%gas_reevap     = gas_reevap_param
 
           sd%numx      = numx
-
-          if (trim(aerosol_reevap).eq.'none') then
-            sd%aerosol_reevap = TRACER_REEVAP_NONE
-          elseif (trim(aerosol_reevap).eq.'linear') then
-            sd%aerosol_reevap = TRACER_REEVAP_LINEAR
-          elseif (trim(aerosol_reevap).eq.'step') then
-            sd%aerosol_reevap = TRACER_REEVAP_STEP
-          else
-            call error_mesg('uw_conv','Unknown aerosol_reevap option',FATAL)
-          end if
-
-          if (trim(gas_reevap).eq.'none') then
-            sd%gas_reevap = TRACER_REEVAP_NONE
-          elseif (trim(gas_reevap).eq.'linear') then
-            sd%gas_reevap = TRACER_REEVAP_LINEAR
-          elseif (trim(gas_reevap).eq.'step') then
-            sd%gas_reevap = TRACER_REEVAP_STEP
-          else
-            call error_mesg('uw_conv','Unknown gas_reevap option',FATAL)
-          end if
 
           if (use_turb_tke ) sd%tke = tkep(i,j)   !h1g, 2015-08-11
 
@@ -2117,17 +2133,19 @@ contains
                 trwet(i,j,nk,n)  = ct%trwet(k,n)
 
                !Change tracer tendency but not wet deposition tendency since it's used to calculate the total deposition
-                if (n.eq.nso2) then
-                   trtend(i,j,nk,n) = trtend(i,j,nk,n) - so2_reevap_t(k)
-                end if
-                if (n.eq.nh2o2) then
-                   trtend(i,j,nk,n) = trtend(i,j,nk,n) - so2_reevap_t(k)
-                end if
-                if (n.eq.nso4) then
-                   trtend(i,j,nk,n) = trtend(i,j,nk,n) + so2_reevap_t(k)
-                end if
+                if (so2_so4_reevaporation) then
+                    if (n.eq.nso2) then
+                    trtend(i,j,nk,n) = trtend(i,j,nk,n) - so2_reevap_t(k)
+                    end if
+                    if (n.eq.nh2o2) then
+                    trtend(i,j,nk,n) = trtend(i,j,nk,n) - so2_reevap_t(k)
+                    end if
+                    if (n.eq.nso4) then
+                    trtend(i,j,nk,n) = trtend(i,j,nk,n) + so2_reevap_t(k)
+                    end if
 
-                so2_reevap(i,j,nk) = so2_reevap_t(k)
+                    so2_reevap(i,j,nk) = so2_reevap_t(k)
+                end if
 
                 rn_diag(i,j,nk,n) = rn(k,n)
               enddo
@@ -2298,17 +2316,18 @@ contains
                    trwet(i,j,nk,n)  = trwet_t(k,n)
 
                    !Change tracer tendency but not wet deposition tendency since it's used to calculate the total deposition
-                   if (n.eq.nso2) then
-                    trtend(i,j,nk,n) = trtend(i,j,nk,n) - so2_reevap_t(k)
-                  end if
-                  if (n.eq.nh2o2) then
-                    trtend(i,j,nk,n) = trtend(i,j,nk,n) - so2_reevap_t(k)
-                  end if
-                  if (n.eq.nso4) then
-                    trtend(i,j,nk,n) = trtend(i,j,nk,n) + so2_reevap_t(k)
-                  end if
-
-                  so2_reevap(i,j,nk) = so2_reevap_t(k)
+                   if (so2_so4_reevaporation) then
+                     if (n.eq.nso2) then
+                         trtend(i,j,nk,n) = trtend(i,j,nk,n) - so2_reevap_t(k)
+                     end if
+                     if (n.eq.nh2o2) then
+                         trtend(i,j,nk,n) = trtend(i,j,nk,n) - so2_reevap_t(k)
+                     end if
+                    if (n.eq.nso4) then
+                         trtend(i,j,nk,n) = trtend(i,j,nk,n) + so2_reevap_t(k)
+                    end if
+                    so2_reevap(i,j,nk) = so2_reevap_t(k)
+                   end if
 
 !f1p
                    trtend_nc(i,j,nk,n) = trtend_t_nc(k,n) + trwet_t_nc(k,n)

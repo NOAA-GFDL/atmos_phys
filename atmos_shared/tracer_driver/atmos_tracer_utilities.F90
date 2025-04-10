@@ -341,30 +341,6 @@ contains
        read (input_nml_file, nml=atmos_tracer_utilities_nml, iostat=io)
        ierr = check_nml_error(io,'atmos_tracer_utilities_nml')
 
-   if (trim(gas_reevap) == 'linear') then
-      gas_reevap_param = TRACER_REEVAP_LINEAR
-   elseif (trim(gas_reevap) == 'step') then
-      gas_reevap_param = TRACER_REEVAP_STEP
-   elseif (trim(gas_reevap) == 'none') then
-      gas_reevap_param = TRACER_REEVAP_NONE
-   else
-      call error_mesg('atmos_tracer_utilities_init',&
-      'gas_reevap not recognized',&
-      FATAL)
-   end if
-
-   if (trim(aerosol_reevap) == 'linear') then
-      aerosol_reevap_param = TRACER_REEVAP_LINEAR
-   elseif (trim(aerosol_reevap) == 'step') then
-      aerosol_reevap_param = TRACER_REEVAP_STEP
-   elseif (trim(aerosol_reevap) == 'none') then
-      aerosol_reevap_param = TRACER_REEVAP_NONE
-   else
-      call error_mesg('atmos_tracer_utilities_init',&
-      'aerosol_reevap not recognized',&
-      FATAL)
-   end if
-
     call read_chem_param(n,tracer_prop(n))
 
     flag = query_method ('wet_deposition',MODEL_ATMOS,n, &
@@ -494,6 +470,41 @@ contains
          trim(tracer_longnames(n))//' re-evap by conv precip',         &
          trim(units), missing_value=-999.    )
  enddo
+
+ if (trim(gas_reevap) == 'linear') then
+   gas_reevap_param = TRACER_REEVAP_LINEAR
+   call error_mesg('atmos_tracer_utilities_init',&
+   'gas reevap (ls): LINEAR',NOTE)
+ elseif (trim(gas_reevap) == 'step') then
+   gas_reevap_param = TRACER_REEVAP_STEP
+   call error_mesg('atmos_tracer_utilities_init',&
+   'gas reevap (ls): STEP',NOTE)
+ elseif (trim(gas_reevap) == 'none') then
+   gas_reevap_param = TRACER_REEVAP_NONE
+   call error_mesg('atmos_tracer_utilities_init',&
+   'gas reevap (ls): NONE',NOTE)
+ else
+   call error_mesg('atmos_tracer_utilities_init',&
+   'gas_reevap not recognized',FATAL)
+ end if
+
+ if (trim(aerosol_reevap) == 'linear') then
+   aerosol_reevap_param = TRACER_REEVAP_LINEAR
+   call error_mesg('atmos_tracer_utilities_init',&
+   'aerosol reevap (ls): LINEAR',NOTE)
+ elseif (trim(aerosol_reevap) == 'step') then
+   aerosol_reevap_param = TRACER_REEVAP_STEP
+   call error_mesg('atmos_tracer_utilities_init',&
+   'aerosol reevap (ls): STEP',NOTE)
+ elseif (trim(aerosol_reevap) == 'none') then
+   aerosol_reevap_param = TRACER_REEVAP_NONE
+   call error_mesg('atmos_tracer_utilities_init',&
+   'aerosol reevap (ls): NONE',NOTE)
+ else
+   call error_mesg('atmos_tracer_utilities_init',&
+   'aerosol_reevap not recognized', FATAL)
+ end if
+
 
  ! Register scaling factor to calculate wind speed at 10 meters
  id_delm   = register_diag_field ( mod_name,                &
@@ -1337,9 +1348,6 @@ elseif (gas_reevap_param.eq.TRACER_REEVAP_STEP) then
    frac_int_gas = 0.5
 elseif (gas_reevap_param.eq.TRACER_REEVAP_NONE) then
    frac_int_gas = 0.
-else
-   call error_mesg('wet_deposition', &
-         'Invalid gas_reevap_param in wet deposition', FATAL)
 end if
 
 if (aerosol_reevap_param.eq.TRACER_REEVAP_LINEAR) then
@@ -1348,9 +1356,6 @@ elseif (aerosol_reevap_param.eq.TRACER_REEVAP_STEP) then
    frac_int_aerosol = 0.5
 elseif (aerosol_reevap_param.eq.TRACER_REEVAP_NONE) then
    frac_int_aerosol = 0.
-else
-   call error_mesg('wet_deposition', &
-         'Invalid aerosol_reevap_param in wet deposition', FATAL)
 endif
 
 

@@ -7,6 +7,11 @@ MODULE CONV_PLUMES_k_MOD
 
   use conv_utilities_k_Mod, only: TRACER_REEVAP_LINEAR, TRACER_REEVAP_NONE, TRACER_REEVAP_STEP
 
+  use           fms_mod, only : write_version_number, check_nml_error,&
+                                ERROR_MESG,  &
+                                lowercase, &
+                                FATAL, NOTE
+
 !---------------------------------------------------------------------
   implicit none
   private
@@ -2126,7 +2131,8 @@ contains
               ct%qvten(:)=ct%qvten(:)+ct%qevap(:)
               ct%qctten(:)=ct%qctten(:)+ct%qevap (:)
               ct%pflx  (:)=ct%pflx  (:)-ct%pflx_e(:)
-              ct%trwet(:,:)=ct%trwet(:,:)+ct%trevp(:,:)
+              if (sd%gas_reevap.ne.TRACER_REEVAP_NONE .and. sd%aerosol_reevap.ne.TRACER_REEVAP_NONE) &
+                   ct%trwet(:,:)=ct%trwet(:,:)+ct%trevp(:,:)
               ct%rain  = ct%rain - dpevap
            end if
         else
@@ -2136,7 +2142,8 @@ contains
           ct%qvten(:)=ct%qvten(:)+ct%qevap(:)
           ct%qctten(:)=ct%qctten(:)+ct%qevap (:)
           ct%pflx  (:)=ct%pflx  (:)-ct%pflx_e(:)
-          ct%trwet(:,:)=ct%trwet(:,:)+ct%trevp(:,:)
+          if (sd%gas_reevap.ne.TRACER_REEVAP_NONE .and. sd%aerosol_reevap.ne.TRACER_REEVAP_NONE) &
+               ct%trwet(:,:)=ct%trwet(:,:)+ct%trevp(:,:)
           if (sd%coldT) then
              ct%snow  = ct%snow - dpevap
           else
@@ -2390,30 +2397,36 @@ contains
        temp_new(k) = sd%t (k) - (def * HL/Uw_p%Cp_Air)
        pflx    (k) = prec
        do n=1,size(cp%tru,2)
-         if (cpn%wetdep(n)%Laerosol) then
-            reevap_param = sd%aerosol_reevap
-         elseif (cpn%wetdep(n)%Lgas) then
-            reevap_param = sd%gas_reevap
-         else
-            reevap_param = TRACER_REEVAP_LINEAR
-         end if
+         if (cpn%wetdep(n)%Lwetdep) then
+            if (cpn%wetdep(n)%Laerosol) then
+               reevap_param = sd%aerosol_reevap
+            elseif (cpn%wetdep(n)%Lgas) then
+               reevap_param = sd%gas_reevap
+            else
+               reevap_param = -1
+            end if
 
-         if (prec > 0.0) then
-           if (reevap_param .eq. TRACER_REEVAP_NONE) then
-               trflx_evap(k,n) = 0.
-           else
-               trflx_evap(k,n) = (pflx_evap(k)/prec) * trwflx(n)
-               if (reevap_param .eq. TRACER_REEVAP_STEP) then
-                  if (pflx_evap(k)/prec.lt.1) then
-                     trflx_evap(k,n) = trflx_evap(k,n) * 0.5 !this emulated ls treatment
+            if (reevap_param.lt.0) then
+               call error_mesg ('conv_plumes_k','reevaporation scheme unknown', FATAL)
+            end if
+
+            if (prec > 0.0) then
+            if (reevap_param .eq. TRACER_REEVAP_NONE) then
+                  trflx_evap(k,n) = 0.
+            else
+                  trflx_evap(k,n) = (pflx_evap(k)/prec) * trwflx(n)
+                  if (reevap_param .eq. TRACER_REEVAP_STEP) then
+                     if (pflx_evap(k)/prec.lt.1) then
+                        trflx_evap(k,n) = trflx_evap(k,n) * 0.5 !this emulated ls treatment
+                     end if
                   end if
                end if
+            else
+               trflx_evap(k,n) = 0.0
             end if
-          else
-            trflx_evap(k,n) = 0.0
-          end if
-          trevap(n)  = trevap(n)  + trflx_evap(k,n)
-          trnew(k,n) = sd%tr(k,n) + trflx_evap(k,n)/mass(k)
+            trevap(n)  = trevap(n)  + trflx_evap(k,n)
+            trnew(k,n) = sd%tr(k,n) + trflx_evap(k,n)/mass(k)
+         end if
        enddo
     end do
     dpevap      = min(dpevap, dpcu) / sd%delt
@@ -2421,8 +2434,10 @@ contains
     ct%qevap(:) = (qvap_new(:) - sd%qv(:))/sd%delt
     ct%pflx_e(1:sd%kmax)= pflx_evap(:) / sd%delt
     do n=1,size(cp%tru,2)
-      trevap(n)     = min(trevap(n), dptr(n))  / sd%delt
-      ct%trevp(:,n) = (trnew(:,n) - sd%tr(:,n))/ sd%delt
+      if (cpn%wetdep(n)%Lwetdep) then
+         trevap(n)     = min(trevap(n), dptr(n))  / sd%delt
+         ct%trevp(:,n) = (trnew(:,n) - sd%tr(:,n))/ sd%delt
+      end if
     enddo
 
   end SUBROUTINE PRECIP_EVAP
