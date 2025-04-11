@@ -2079,7 +2079,7 @@ end subroutine pack_sd_lsm_k
 
 !++lwh
 subroutine check_tracer_realizability(kmax, ntr, dt, &
-               tracers, trten, trwet, dpi, tracer_check_type, rn )
+               tracers, trten, trwet, trevp, dpi, tracer_check_type, rn, trevp1 )
 !---------------------------------------------------------------------
 !  Check for tracer realizability. If convective tendencies would
 !  produce negative tracer mixing ratios, scale down tracer tendency
@@ -2094,8 +2094,10 @@ integer,                 intent(in)     :: kmax, ntr
 real,                    intent(in)     :: dt
 real, dimension(kmax,ntr), &
                          intent(in)     :: tracers
-real,dimension(kmax,ntr),intent(inout)  :: trten, trwet
+real,dimension(kmax,ntr),intent(inout)  :: trten, trwet, trevp
 real,dimension(kmax,ntr),intent(inout)  :: rn
+
+real, dimension(kmax,ntr), intent(inout), optional :: trevp1
 
 !<f1p
 real,    dimension(kmax),   intent(in)     :: dpi
@@ -2219,6 +2221,10 @@ integer                   , intent(in)     :: tracer_check_type
           if (ratio /= 1.) then
              trten(:,n) =  trten(:,n)*ratio
              trwet(:,n) =  trwet(:,n)*ratio
+             trevp(:,n) =  trevp(:,n)*ratio
+             if (present(trevp1)) then
+                trevp1(:,n) =  trevp1(:,n)*ratio
+             end if
           end if
 
           trtendw = trwet(:,n) + trten(:,n)
@@ -2258,6 +2264,10 @@ integer                   , intent(in)     :: tracer_check_type
           if (ratio /= 1.) then
              trten(:,n) =  trten(:,n)*ratio
              trwet(:,n) =  trwet(:,n)*ratio
+             trevp(:,n) =  trevp(:,n)*ratio
+             if (present(trevp1)) then
+                trevp1(:,n) =  trevp1(:,n)*ratio
+             end if
           end if
 
           rn(:,n) =  ratio

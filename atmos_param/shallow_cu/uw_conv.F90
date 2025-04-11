@@ -1337,8 +1337,8 @@ contains
     real, dimension(size(tb,1),size(tb,2),size(tb,3)+1) :: hlflx_d, qtflx_d, pflx_d, nqtflx_d
     real, dimension(size(tb,1),size(tb,2)) :: rain_d, snow_d, cwfn_d
     real, dimension(size(tb,1),size(tb,2)) :: dcapedm_d, dcwfndm_d, denth_d, dting_d, dqtmp_d, cbmf_d
-    real, dimension(size(tracers,1),size(tracers,2),size(tracers,3),size(tracers,4)) :: trevp_d, trevp_s
-    real, dimension(size(tracers,3),size(tracers,4)) :: trtend_t, trwet_t
+    real, dimension(size(tracers,1),size(tracers,2),size(tracers,3),size(tracers,4)) :: trevp_d, trevp_s, trevp_tot
+    real, dimension(size(tracers,3),size(tracers,4)) :: trtend_t, trwet_t, trevp_t
     real, dimension(size(tracers,3)) :: so2_reevap_t
 
 !f1p
@@ -1610,7 +1610,7 @@ contains
 !========Option for deep convection=======================================
     tten_d=0.; qvten_d=0.; qlten_d=0.; qiten_d=0.; qaten_d=0.; qnten_d=0.;
     uten_d=0.; vten_d =0.; rain_d =0.; snow_d =0.; qtten_d=0.; cfq_d=0.;
-    trevp_d=0.; trevp_s=0.; cush_d=-1.;
+    trevp_d=0.; trevp_s=0.; trevp_tot=0.;cush_d=-1.;
     cqa_d=0.; cql_d=0.; cqi_d=0.; cqn_d=0.;
     hlflx_d=0.; qtflx_d=0.; nqtflx_d=0.; pflx_d=0.;
     wuo_d=0.; fero_d=0.; fdro_d=0.; fdrso_d=0.;
@@ -1785,7 +1785,7 @@ contains
     do j = 1, jmax
        do i=1, imax
 
-         trtend_t=0.; trwet_t=0.;
+         trtend_t=0.; trwet_t=0.; trevp_t = 0.
          cbmf_shallow=0. ! Set cbmf_shallow to avoid usage before assignment.
          if (skip_calculation(i,j)) then
            ocode(i,j) = 6
@@ -2090,13 +2090,6 @@ contains
              fdrso_s(i,j,nk)= cp%fdrsat(k)*cp%fdr(k)!*cp%umf(k)
           enddo
 
-          do n = 1, size(trtend,4)
-            do k = 1,cp%ltop
-              nk = kmax+1-k
-              trevp_s(i,j,nk,n) = ct%trevp(k,n)
-            enddo
-          enddo
-
           cush_s(i,j)  = cp%cush
           snow  (i,j)  = ct%snow
           rain  (i,j)  = ct%rain
@@ -2112,25 +2105,33 @@ contains
 ! tracers due to convective tendencies. if necessary, adjust the
 ! tendencies.
 
-          if (so2_so4_reevaporation) then
-               !correction to so2/h2o2 reevap
-               so2_reevap_t   = min(ct%trevp(:,nso2),ct%trevp(:,nh2o2))
-          end if
-
           if (do_deep) then
             trtend_t = ct%trten
             trwet_t  = ct%trwet
+            trevp_t  = ct%trevp
           else
 !f1p
 !            call check_tracer_realizability (kmax, size(trtend,4), delt, &
 !                                           cp%tr, ct%trten, ct%trwet)
              call check_tracer_realizability (kmax, size(trtend,4), delt, &
-                                           cp%tr, ct%trten, ct%trwet, pmass(i,j,:), tracer_check_type, rn = rn )
+                                           cp%tr, ct%trten, ct%trwet, ct%trevp, &
+                                           pmass(i,j,:), tracer_check_type, rn = rn )
+
+
+             if (so2_so4_reevaporation) then
+                !correction to so2/h2o2 reevap
+                so2_reevap_t   = min(ct%trevp(:,nso2),ct%trevp(:,nh2o2))
+                if (mpp_root_pe().eq.mpp_pe()) write(*,*) 'so2_reevap_t (shallow)',minval(so2_reevap_t),maxval(so2_reevap_t)
+             end if
+
+
             do n = 1, size(trtend,4)
               do k = 1,cp%ltop
                 nk = kmax+1-k
                 trtend(i,j,nk,n) = ct%trten(k,n) + ct%trwet(k,n)
                 trwet(i,j,nk,n)  = ct%trwet(k,n)
+                trevp_s(i,j,nk,n) = ct%trevp(k,n)
+                trevp_tot(i,j,nk,n) = ct%trevp(k,n)
 
                !Change tracer tendency but not wet deposition tendency since it's used to calculate the total deposition
                 if (so2_so4_reevaporation) then
@@ -2272,13 +2273,6 @@ contains
                 fdrso_d (i,j,nk) = cp1%fdrsat(k)*cp1%fdr(k)!*cp1%umf(k)
              enddo
 
-             do n = 1, size(trtend,4)
-                do k = 1,kmax !cp1%ltop
-                   nk = kmax+1-k
-                   trevp_d(i,j,nk,n) = ct1%trevp(k,n)
-                enddo
-             enddo
-
              snow_d  (i,j)  = ct1%snow
              rain_d  (i,j)  = ct1%rain
              cbmf_d  (i,j)  = cbmf_deep
@@ -2291,29 +2285,34 @@ contains
              pcb_d   (i,j)  = cp1%prel
              pct_d   (i,j)  = cp1%ptop
 
-             if (so2_so4_reevaporation) then
-               !correction to so2/h2o2 reevap
-               so2_reevap_t   = so2_reevap_t + min(ct1%trevp(:,nso2),ct1%trevp(:,nh2o2))
-             end if
-
              trtend_t = trtend_t+ct1%trten
              trwet_t  = trwet_t +ct1%trwet
 
+             trevp_t  = trevp_t+ct1%trevp
 !<f1p
              trtend_t_nc = trtend_t
              trwet_t_nc  = trwet_t
-!>
 !
 !             call check_tracer_realizability (kmax, size(trtend,4), delt, &
 !                                              cp1%tr, trtend_t, trwet_t)
              call check_tracer_realizability (kmax, size(trtend,4), delt, &
-                                              cp1%tr, trtend_t, trwet_t, pmass(i,j,:), tracer_check_type, rn = rn    )
+                                              cp1%tr, trtend_t, trwet_t, trevp_t, pmass(i,j,:), tracer_check_type, rn = rn, &
+                                              trevp1 = ct1%trevp    )
+
+
+             if (so2_so4_reevaporation) then
+               !correction to so2/h2o2 reevap
+                    so2_reevap_t   = min(trevp_t(:,nso2),trevp_t(:,nh2o2))
+             end if
+
              do n = 1, size(trtend,4)
                 do k = 1,kmax !cp1%ltop
                    nk = kmax+1-k
 
                    trtend(i,j,nk,n) = trtend_t(k,n) + trwet_t(k,n)
                    trwet(i,j,nk,n)  = trwet_t(k,n)
+                   trevp_d(i,j,nk,n) = ct1%trevp(k,n)
+                   trevp_tot(i,j,nk,n) = trevp_t(k,n)
 
                    !Change tracer tendency but not wet deposition tendency since it's used to calculate the total deposition
                    if (so2_so4_reevaporation) then
@@ -2960,7 +2959,7 @@ contains
 
     if ( allocated(id_trevp_uwc) ) then
        do n = 1,size(id_trevp_uwc)
-          used = send_data( id_trevp_uwc(n), trevp_s(:,:,:,n)+trevp_d(:,:,:,n), Time, is, js, 1)
+          used = send_data( id_trevp_uwc(n), trevp_tot(:,:,:,n), Time, is, js, 1)
        end do
     end if
 
