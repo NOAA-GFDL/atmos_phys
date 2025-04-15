@@ -24,6 +24,7 @@ use fms_mod,               only: error_mesg, FATAL, NOTE,        &
                                  check_nml_error,    &
                                  write_version_number,           &
                                  stdout, &
+                                 lowercase, &
                                  mpp_pe, mpp_root_pe, stdlog,    &
                                  mpp_clock_id, mpp_clock_begin,  &
                                  mpp_clock_end, CLOCK_MODULE,    &
@@ -822,15 +823,16 @@ real, dimension(:),      intent(in)     :: pref
 !-------------------------------------------------------------------------
 
       so2_so4_reevap_id = -1
-      if (trim(so2_so4_reevaporation) .eq. 'no_limit') then
+      so2_so4_reevaporation = trim(lowercase(so2_so4_reevaporation))
+      if (so2_so4_reevaporation .eq. 'no_limit') then
          so2_so4_reevap_id   =  SO2_SO4_REEVAP_NO_LIM
          if (mpp_root_pe().eq.mpp_pe()) write(stdout(),*) &
             'so2 reevaporation produces so4 and is not limited by h2o2 availability'
-      elseif (trim(so2_so4_reevaporation) .eq. 'h2o2_limit') then
+      elseif (so2_so4_reevaporation .eq. 'h2o2_limit') then
          so2_so4_reevap_id =  SO2_SO4_REEVAP_H2O2_LIM
          if (mpp_root_pe().eq.mpp_pe()) write(stdout(),*) &
             'so2 reevaporation produces so4 and is limited by h2o2 availability'
-      elseif (trim(so2_so4_reevaporation) .eq. 'none') then
+      elseif (so2_so4_reevaporation .eq. 'none') then
          so2_so4_reevap_id   =  NO_SO2_SO4_REEVAP
          if (mpp_root_pe().eq.mpp_pe()) write(stdout(),*) &
             'so2 reevaporation does not produce so4'

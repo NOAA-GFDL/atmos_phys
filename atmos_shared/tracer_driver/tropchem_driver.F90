@@ -1890,34 +1890,38 @@ trop_option%time_varying_solarflux = time_varying_solarflux
 
 trop_option%gSO2                     = gSO2
 if(mpp_pe() == mpp_root_pe()) write(*,*) 'gSO2: ',trop_option%gSO2
-if (trim(gso2_dynamic).eq.'none') then
+
+gso2_dynamic = trim(lowercase(gso2_dynamic))
+if (gso2_dynamic.eq.'none') then
    trop_option%gSO2_rh50   = -999
    trop_option%gSO2_rh100  = -999
    trop_option%gSO2_dynamic = -1
    !The following approaches all use the same basic approach
    !gamma_so2 = gamma_so2_rh50 below 50% RH, and weighted mean between gamma_so2_rh100 and gamma_so2_rh50 above 50% RH
-else if (trim(gso2_dynamic).eq.'wang2014') then
+else if (gso2_dynamic.eq.'wang2014') then
    !trop_option%gSO2_dynamic             = GSO2_WANG2014
    !http://onlinelibrary.wiley.com/doi/10.1002/2013JD021426/full
    trop_option%gSO2_rh50   = 1.e-3
    trop_option%gSO2_rh100  = 1.e-2
    trop_option%gSO2_dynamic = GSO2_ZHENG2015
-else if (trim(gso2_dynamic).eq.'zheng2015') then
+else if (gso2_dynamic.eq.'zheng2015') then
 !  trop_option%gSO2_dynamic             = GSO2_ZHENG2015
    !   http://www.atmos-chem-phys.net/15/2031/2015/
    trop_option%gSO2_rh50   = 2.e-5
    trop_option%gSO2_rh100  = 5.e-5
    trop_option%gSO2_dynamic = GSO2_ZHENG2015
-else if (trim(gso2_dynamic).eq.'zheng2015_low') then
+else if (gso2_dynamic.eq.'zheng2015_low') then
    !  trop_option%gSO2_dynamic             = GSO2_ZHENG2015_LOW
    !  http://www.atmos-chem-phys.net/15/2031/2015/
    trop_option%gSO2_rh50   = 1.e-5
    trop_option%gSO2_rh100  = 2.e-5
    trop_option%gSO2_dynamic = GSO2_ZHENG2015
-else if (trim(gso2_dynamic).eq.'esm4p5') then
+else if (gso2_dynamic.eq.'esm4p5') then
    trop_option%gSO2_rh50   = gSO2_rh50
    trop_option%gSO2_rh100  = gSO2_rh100
    trop_option%gSO2_dynamic = GSO2_ZHENG2015
+else
+   call error_mesg ('tropchem_driver_init', 'gSO2_dynamic not recognized', FATAL )
 end if
 
 if (trop_option%gSO2_dynamic.eq.GSO2_ZHENG2015) then
@@ -1930,10 +1934,12 @@ trop_option%NO2_SO2_max = NO2_SO2_max
 
 if(mpp_pe() == mpp_root_pe()) write(*,*) 'gso2_dynamic case:',trop_option%gSO2_dynamic
 
-if (trim(ghno3_dust_dynamic).eq.'none') then
+if (trim(lowercase(ghno3_dust_dynamic)).eq.'none') then
    trop_option%ghno3_dust_dynamic = -1
-elseif (trim(ghno3_dust_dynamic).eq.'dynamic') then
+elseif (trim(lowercase(ghno3_dust_dynamic)).eq.'dynamic') then
    trop_option%ghno3_dust_dynamic = 1
+else
+   call error_mesg ('tropchem_driver_init', 'ghno3_dust_dynamic not recognized', FATAL )
 end if
 
 
