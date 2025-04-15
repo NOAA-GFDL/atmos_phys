@@ -509,24 +509,26 @@ contains
              nn = nn + 1
           endif
        end do
-    endif
 
 !-----------------------------------------------------------------------
 !    obtain indices for tracers no2 and no4.
 !-----------------------------------------------------------------------
-    nso2      = get_tracer_index(MODEL_ATMOS,'simpleSO2')
-    if (nso2 == NO_TRACER) then
-      nso2      = get_tracer_index(MODEL_ATMOS,'so2')
-    endif
+       do nn=1,ntracers
+          if (trim(tracername(nn)) == 'simpleso2') then
+               nso2 = nn
+          elseif (trim(tracername(nn)) == 'so2') then
+               nso2 = nn
+          elseif (trim(tracername(nn)) == 'simpleso4') then
+               nso4 = nn
+          elseif (trim(tracername(nn)) == 'so4') then
+               nso4 = nn
+          elseif (trim(tracername(nn)) == 'simpleh2o2') then
+               nh2o2 = nn
+          elseif (trim(tracername(nn)) == 'h2o2') then
+               nh2o2 = nn
+          endif
+       end do
 
-    nso4      = get_tracer_index(MODEL_ATMOS,'simpleSO4')
-    if (nso4 == NO_TRACER) then
-      nso4      = get_tracer_index(MODEL_ATMOS,'so4')
-    endif
-
-    nh2o2      = get_tracer_index(MODEL_ATMOS,'simpleH2O2')
-    if (nh2o2 == NO_TRACER) then
-      nh2o2      = get_tracer_index(MODEL_ATMOS,'H2O2')
     endif
 
     if (so2_so4_reevaporation) then
@@ -2121,7 +2123,6 @@ contains
              if (so2_so4_reevaporation) then
                 !correction to so2/h2o2 reevap
                 so2_reevap_t   = min(ct%trevp(:,nso2),ct%trevp(:,nh2o2))
-                if (mpp_root_pe().eq.mpp_pe()) write(*,*) 'so2_reevap_t (shallow)',minval(so2_reevap_t),maxval(so2_reevap_t)
              end if
 
 
@@ -2137,6 +2138,7 @@ contains
                 if (so2_so4_reevaporation) then
                     if (n.eq.nso2) then
                     trtend(i,j,nk,n) = trtend(i,j,nk,n) - so2_reevap_t(k)
+                    so2_reevap(i,j,nk) = so2_reevap_t(k)
                     end if
                     if (n.eq.nh2o2) then
                     trtend(i,j,nk,n) = trtend(i,j,nk,n) - so2_reevap_t(k)
@@ -2145,7 +2147,6 @@ contains
                     trtend(i,j,nk,n) = trtend(i,j,nk,n) + so2_reevap_t(k)
                     end if
 
-                    so2_reevap(i,j,nk) = so2_reevap_t(k)
                 end if
 
                 rn_diag(i,j,nk,n) = rn(k,n)
@@ -2318,6 +2319,7 @@ contains
                    if (so2_so4_reevaporation) then
                      if (n.eq.nso2) then
                          trtend(i,j,nk,n) = trtend(i,j,nk,n) - so2_reevap_t(k)
+                         so2_reevap(i,j,nk) = so2_reevap_t(k)
                      end if
                      if (n.eq.nh2o2) then
                          trtend(i,j,nk,n) = trtend(i,j,nk,n) - so2_reevap_t(k)
@@ -2325,7 +2327,6 @@ contains
                     if (n.eq.nso4) then
                          trtend(i,j,nk,n) = trtend(i,j,nk,n) + so2_reevap_t(k)
                     end if
-                    so2_reevap(i,j,nk) = so2_reevap_t(k)
                    end if
 
 !f1p
