@@ -579,6 +579,8 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
                             z_half, z_full, q, tsurf, albedo, coszen, rrsun,   &
                             area, w10m, half_day,                              &
                             fbbs,                                              &   !!! armanp
+                            fire_emis_flux,                                    &   !!! armanp
+                            fire_emis_ind,                                     &   !!! armanp                            
                             Time_next, rdiag, do_nh3_atm_ocean_exchange, kbot )
 
 !-----------------------------------------------------------------------
@@ -605,7 +607,9 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
    real, intent(inout), dimension(:,:,:,:)        :: rdiag   ! diagnostic tracer concentrations
    logical, intent(in)                            :: do_nh3_atm_ocean_exchange
    integer, intent(in),  dimension(:,:), optional :: kbot
-   real, intent(in),  dimension(:,:,:) :: fbbs !!!armanp
+   real, intent(in),  dimension(:,:,:)            :: fbbs !!!armanp
+   real, intent(in),  dimension(:,:,:)            :: fire_emis_flux !!! armanp
+   integer, intent(in),  dimension(:)             :: fire_emis_ind !!!armanp
 !-----------------------------------------------------------------------
    real, dimension(size(r,1),size(r,2),size(r,3)) :: sulfate_data
 !  real, dimension(size(r,1),size(r,2),size(r,3)) :: ub_temp,rno
@@ -768,11 +772,14 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
 !     ... read in the 2-D biomass burning emissions, using interpolator
 !-----------------------------------------------------------------------
       if (has_emis2dbb(n)) then
-         call read_2D_emis_data( inter_emis2dbb(n), emis2dbb, Time, Time_next, &
+         if (land_does_emission(n)) then
+            emis2dbb(:,:) = fire_emis_flux(:,:,fire_emis_ind(n))
+         else
+            call read_2D_emis_data( inter_emis2dbb(n), emis2dbb, Time, Time_next, &
                  emis2dbb_field_names(n)%field_names, &
                  diurnal_emis2dbb(n), coszen, half_day, lon, &
                  is, js, has_xactive_emis(n),emis2dbb_field_names(n)%scale_emis)
-
+         end if
          do k=1, size(emis3dbb,3)
            emis3dbb(:,:,k) = emis2dbb(:,:) * fbbs(:,:,k)
            emis_source(:,:,k,n) = emis_source(:,:,k,n) &
@@ -2120,6 +2127,10 @@ end if
                            has_emis(i), diurnal_emis(i), axes, Time, land_does_emission(i) )
       if( has_emis(i) ) emis_files(i) = trim(nc_file)
 
+      if(mpp_pe() == mpp_root_pe()) then
+         write (*,*) 'For tracer  = ', trim(tracnam(i))
+         write (*,*) 'Fire emis done in land', land_does_emission(i)
+      end if
 !-----------------------------------------------------------------------
 !     ... Vertically-distributed emissions
 !-----------------------------------------------------------------------
@@ -2394,15 +2405,20 @@ end if
          else
             write(logunit,*) 'This is a diagnostic tracer.'
          end if
-         if(has_emis(i)) then
-            write(logunit,*)'Emissions from file: ',trim(emis_files(i))
+         ! if(has_emis(i)) then
+         !    write(logunit,*)'Emissions from file: ',trim(emis_files(i))
+         !    if ( land_does_emission(i) ) then
+         !       if (get_tracer_index(MODEL_LAND,trim(tracnam(i)))<=0) then
+         !          call error_mesg('atmos_tracer_utilities_init', &
+         !               'Emission of atmospheric tracer //"'//trim(tracnam(i))//&
+         !               '" is done on land side, but corresponding land tracer is not defined in the field table.', FATAL)
+         !          write(logunit,*) 'Emissions done in land'
+         !       endif
+         !    end if
+         ! end if
+         if(has_emis2dbb(i)) then
             if ( land_does_emission(i) ) then
-               if (get_tracer_index(MODEL_LAND,trim(tracnam(i)))<=0) then
-                  call error_mesg('atmos_tracer_utilities_init', &
-                       'Emission of atmospheric tracer //"'//trim(tracnam(i))//&
-                       '" is done on land side, but corresponding land tracer is not defined in the field table.', FATAL)
-                  write(logunit,*) 'Emissions done in land'
-               endif
+                  write(logunit,*) 'fire emissions done in land'
             end if
          end if
          if(has_emis3d(i)) then
@@ -3259,7 +3275,7 @@ subroutine init_emis_data( emis_type, model, method_type, pos, file_name, &
    integer        , intent(in)  :: axes(4)
    type(time_type), intent(in)  :: Time
 
-   character(len=128) :: name, control
+   character(len=500) :: name, control   !!!armanp
    integer :: nfields
    integer :: flag_name, flag_file, flag_diurnal, flag_scale
    character(len=64) :: emis_name, emis_file, control_diurnal

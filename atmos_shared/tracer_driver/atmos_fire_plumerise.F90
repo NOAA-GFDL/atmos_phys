@@ -185,7 +185,7 @@ subroutine atmos_fire_plumerise_init(lonb, latb, axes, Time, do_bb_plumerise_out
                     'Plume top height for injection of fire emissions', 'm' )
      id_FRP = register_diag_field ( mod_name,             &
                     'fire_FRP', axes(1:2), Time,              &
-                    'Fire radiative power used for plume height calculation', 'MW/m2' )
+                    'Fire radiative power used for plume height calculation', 'MW' )
      id_bvf2 = register_diag_field ( mod_name,             &
                     'bvf2_zpblx2', axes(1:2), Time,              &
                     'Brunt-Vaisala frequency (squared) at a height of twice the PBL', '1/sec2' )
@@ -362,13 +362,13 @@ subroutine atmos_fire_plumerise_init(lonb, latb, axes, Time, do_bb_plumerise_out
            frp_value_name(n)(:)=trim(frp_input_name(n)(:))
            end do
          endif
-     end select
      call interpolator_init (frp_value_interp,             &
                              trim(frp_filename),           &
                              lonb, latb,                        &
                              data_out_of_bounds=  (/CONSTANT/), &
                              data_names = frp_value_name(1:num_percentiles),        &
                              vert_interp=(/INTERP_WEIGHTED_P/)  )
+     end select
    endif
 
    do_bb_plumerise_out = do_bb_plumerise
@@ -409,7 +409,8 @@ subroutine atmos_fire_plumerise_time_vary (model_time)
  
 
    if ( trim(frp_source).ne.' ') then
-
+     select case (trim(frp_source))
+     case ('MODIS')
 !--------------------------------------------------------------------
 !    define the time in the frp data set from which data is to be 
 !    taken. if frp is not time-varying, it is simply model_time.
@@ -451,6 +452,7 @@ subroutine atmos_fire_plumerise_time_vary (model_time)
 
      call obtain_interpolator_time_slices   &
                        (frp_value_interp, frp_time)
+   end select
    endif
 
 
@@ -794,18 +796,21 @@ end function
 !<SUBROUTINE NAME="fire_emiss">
 subroutine atmos_fire_plumerise_driver(fbb,pfull_pt,temp_pt, &
                       z_half_pt,z_pbl_pt,z_full_pt, &
-                      tr, diag_time, is, ie, js, je, local_hour_2d)
+                      tr, diag_time, & 
+                      fire_frp, &
+                      is, ie, js, je, local_hour_2d)
    real, intent(in), dimension(:,:,:)    :: pfull_pt
    real, intent(in), dimension(:,:,:)    :: temp_pt
    real, intent(in), dimension(:,:,:)    :: z_half_pt
    real, intent(in), dimension(:,:,:)    :: z_full_pt
    real, intent(in), dimension(:,:)      :: z_pbl_pt
+   real, intent(in), dimension(:,:)      :: fire_frp
    real, intent(out), dimension(:,:,:) :: fbb
    integer, intent(in)                    :: is, ie, js, je
    real, intent(in),  dimension(:,:,:) :: tr
    type(time_type), intent(in)            :: diag_time
    real, intent(in), dimension(:,:)    :: local_hour_2d   
-!  real, dimension(size(tr,1),size(tr,2),size(tr,3)) :: fbb_norm
+   real, dimension(size(tr,1),size(tr,2),size(tr,3)) :: fbb_norm
    character(len=80)     :: f_scheme
    integer :: lf, n, np, j, i, k, id, jd, kd, npercentiles
    real, dimension(num_percentiles,size(tr,1),size(tr,2)) :: fire_intensity_perc
@@ -841,6 +846,10 @@ subroutine atmos_fire_plumerise_driver(fbb,pfull_pt,temp_pt, &
            call interpolator(frp_value_interp, frp_time, fire_intensity_perc(lf,:,:), &
                              trim(frp_value_name(lf)), is, js)
          end do
+      case ('lm4')
+            npercentiles = 1
+            fire_intensity_perc(1,:,:) = fire_frp / 1000 !!! from kW unit (land) to MW unit (atmos)
+            perc_share(1) = 1.0
      end select
    !!! percentiles
 
@@ -920,7 +929,7 @@ subroutine atmos_fire_plumerise_driver(fbb,pfull_pt,temp_pt, &
      
 
 !!! fire_emis_diunal
-! fbb_norm = fbb
+  fbb_norm = fbb
    if (do_bb_emis_diurnal) then
      call atmos_fire_emis_diurnal(diurnal_scale_factor, tr,  &
                         local_hour_2d, id, jd, diag_time)
@@ -930,17 +939,17 @@ subroutine atmos_fire_plumerise_driver(fbb,pfull_pt,temp_pt, &
    endif 
 
 
-!     if (do_bb_emis_diurnal) then
-!       if (id_fbb > 0) then
-!             used = send_data(id_fbb,fbb_norm, diag_time, &
-!             is_in=is,js_in=js,ks_in=1)
-!       endif
-!     else
+      if (do_bb_emis_diurnal) then
+        if (id_fbb > 0) then
+              used = send_data(id_fbb,fbb_norm, diag_time, &
+              is_in=is,js_in=js,ks_in=1)
+        endif
+      else
         if (id_fbb > 0) then
               used = send_data(id_fbb,fbb, diag_time, &
               is_in=is,js_in=js,ks_in=1)
         endif              
-!     endif
+      endif
       do n = 1,npercentiles
          if (id_fbb_perc(n) > 0) then
             used = send_data ( id_fbb_perc(n), fbb_perc(:,:,:,n), diag_time, &
@@ -990,12 +999,10 @@ subroutine atmos_fire_plumerise_driver(fbb,pfull_pt,temp_pt, &
                fbb_FT(i,j) = 0.0
                fbb_NFT(i,j) = 0.0
                do k = 1, kd
-                  if (z_half_pt(i,j,k) > z_pbl_pt(i,j)) then
-!                    fbb_FT(i,j) = fbb_FT(i,j) + fbb_norm(i,j,k)
-                     fbb_FT(i,j) = fbb_FT(i,j) + fbb(i,j,k)
+                  if (z_half_pt(i,j,k) < z_pbl_pt(i,j)) then
+                     fbb_FT(i,j) = fbb_FT(i,j) + fbb_norm(i,j,k)
                   else
-!                    fbb_NFT(i,j) = fbb_NFT(i,j) + fbb_norm(i,j,k)
-                     fbb_NFT(i,j) = fbb_NFT(i,j) + fbb(i,j,k)
+                     fbb_NFT(i,j) = fbb_NFT(i,j) + fbb_norm(i,j,k)
                   endif
                enddo
             enddo

@@ -361,6 +361,8 @@ subroutine atmos_carbon_aerosol_driver(lon, lat, ocn_flx_fraction,  &
                                oh_conc,&
                                moa_emis, &
                                fbbs, &   !!! armanp
+                               fire_emis_flux, &   !!! armanp
+                               fire_emis_ind, &   !!! armanp
                                diag_time, is, ie, js, je )
 
 !-----------------------------------------------------------------------
@@ -375,6 +377,8 @@ subroutine atmos_carbon_aerosol_driver(lon, lat, ocn_flx_fraction,  &
    real, intent(in),  dimension(:,:,:) :: oh_conc
    real, intent(in),  dimension(:,:)   :: moa_emis
    real, intent(in),  dimension(:,:,:) :: fbbs   !!! armanp
+   real, intent(in),  dimension(:,:,:) :: fire_emis_flux   !!! armanp
+   integer, intent(in),  dimension(:)  :: fire_emis_ind   !!! armanp
    real, intent(out), dimension(:,:,:) :: bcphob_dt,bcphil_dt
    real, intent(out), dimension(:,:,:) :: omphob_dt,omphil_dt
 type(time_type), intent(in)            :: diag_time
@@ -478,6 +482,11 @@ real, parameter                            :: yield_soa = 0.1
    endif
 
    nlevel_fire=0
+   if ( fire_emis_ind(nbcphobic) > 0) then
+    ! interactive fire emissions from land model              
+        nlevel_fire = 1
+        bcemisbb(:,:,1) = fire_emis_flux(:,:,fire_emis_ind(nbcphobic))
+   end if
 
    if ( trim(bcbb_source).ne.' ') then
     nlevel_fire = 1
@@ -542,8 +551,12 @@ real, parameter                            :: yield_soa = 0.1
      call interpolator(omff_aerosol_interp, omff_time, omemisff_l1, &
                       trim(omff_emission_name(1)), is, js)
    endif
+   if ( fire_emis_ind(nomphobic) > 0) then
+    ! interactive fire emissions from land model              
+        nlevel_fire = 1
+        omemisbb(:,:,1) = fire_emis_flux(:,:,fire_emis_ind(nomphobic))
+   end if
    if ( trim(ombb_source).ne. ' ') then
-    omemisbb(:,:,:) = 0.0
     nlevel_fire = 1
     alt_fire_min(:) = 0.0
     alt_fire_max(:) = 0.0
@@ -1752,6 +1765,9 @@ integer ::  ierr, io, logunit
          call interpolator_init (bcbb_aerosol_interp,           &
            trim(bcbb_filename), lonb, latb, data_out_of_bounds=(/CONSTANT/), &
            data_names=bcbb_emission_name(1:1),vert_interp=(/INTERP_WEIGHTED_P/))   
+       case ('lm4')
+        call error_mesg ('atmos_carbon_aerosol_mod', &
+           'bcbb is done through land model', NOTE) 
      end select
    endif
    if ( trim(bcsh_source) .ne. ' ') then
@@ -2238,6 +2254,9 @@ integer ::  ierr, io, logunit
          call interpolator_init (ombb_aerosol_interp,           &
            trim(ombb_filename), lonb, latb, data_out_of_bounds=(/CONSTANT/), &
            data_names=ombb_emission_name(1:1),vert_interp=(/INTERP_WEIGHTED_P/))   
+       case ('lm4')
+        call error_mesg ('atmos_carbon_aerosol_mod', &
+           'ombb is done through land model', NOTE)
      end select
    endif
    if ( trim(ombf_source) .ne. ' ') then
@@ -2723,10 +2742,10 @@ type(time_type), intent(in) :: model_time
      endif
      do_bb_emis_diurnal = atmos_fire_do_bb_emis_diurnal() 
      if (do_bb_emis_diurnal) then
-!            call get_date (model_time, mo_yr, mo, dy, hr, mn, sc)
-!            bcbb_time = set_date(mo_yr, mo, dy, 0, 0, 1)
-             call get_date (bcbb_time, yr, mo, dy, hr, mn, sc)
-             bcbb_time = set_date(yr, mo, dy, 0, 0, 1)
+             call get_date (model_time, mo_yr, mo, dy, hr, mn, sc)
+             bcbb_time = set_date(mo_yr, mo, dy, 0, 0, 1)
+     else
+             bcbb_time = bcbb_time
      endif
      call obtain_interpolator_time_slices   &
                        (bcbb_aerosol_interp, bcbb_time)
