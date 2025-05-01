@@ -282,7 +282,7 @@ data co2_quenchfac_height /67304.,68310.,69303.,70288.,71267.,72245.,&
 integer, parameter :: NSOLWG = 1
 real, dimension(NSOLWG) :: gausswt
 logical        :: module_is_initialized = .false.
-logical        :: do_esfsw_band_diagnostics = .false.
+logical        :: do_esfsw_band_diagnostics = .true.
 
 
 !---------------------------------------------------------------------
@@ -422,6 +422,11 @@ subroutine esfsw_driver_init
       call esfsw_utilities_init
       call esfsw_parameters_init (nbands, nfrqpts, &
                                   nh2obands, nstreams, tot_wvnums)
+      if (do_esfsw_band_diagnostics .and. nbands .ne. 18) then
+        call error_mesg ('esfsw_driver_mod', &
+          'esfsw_band_diagnostics only available for 18 bands', NOTE)
+        do_esfsw_band_diagnostics = .false.
+      endif
 
 !-----------------------------------------------------------------------
 !    read namelist.
@@ -1867,8 +1872,8 @@ type(sw_output_type),          intent(inout) :: Sw_output
             do k = KSRAD,KERAD+1
               do j=JSRAD,JERAD
                 do i=ISRAD,IERAD
-                  dfswband(i,j,k) = sumtr(i,j,k)* solarflux_p(i,j) 
-                  ufswband(i,j,k) = sumre(i,j,k)* solarflux_p(i,j)
+                  Sw_output%dfswband(i,j,k,nband) = sumtr(i,j,k) * solarflux_p(i,j)
+                  Sw_output%ufswband(i,j,k,nband) = sumre(i,j,k) * solarflux_p(i,j)
                 end do
               end do
             end do
@@ -2000,10 +2005,10 @@ type(sw_output_type),          intent(inout) :: Sw_output
                 do k = KSRAD,KERAD+1
                   do j=JSRAD,JERAD
                     do i=ISRAD,IERAD
-                      dfswbandclr(i,j,k) =     &
-                                 sumtrclr(i,j,k)*solarflux_p(i,j)
-                      ufswbandclr(i,j,k) =    &
-                                 sumreclr(i,j,k)*solarflux_p(i,j)
+                      Sw_output%dfswbandcf(i,j,k,nband) =   &
+                            sumtrclr(i,j,k)*solarflux_p(i,j)
+                      Sw_output%ufswbandcf(i,j,k,nband) =   &
+                            sumreclr(i,j,k)*solarflux_p(i,j)
                     end do
                   end do
                 end do

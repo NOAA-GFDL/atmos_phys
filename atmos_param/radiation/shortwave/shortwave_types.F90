@@ -49,6 +49,10 @@ type sw_output_type
                                        ufsw_vis_sfc_dif=>NULL()
       real, dimension(:,:,:), pointer :: bdy_flx=>NULL()
       real, dimension(:,:,:), pointer :: bdy_flx_clr=>NULL()
+      real, dimension(:,:,:,:), pointer :: dfswband=>NULL(), &
+                                           ufswband=>NULL()
+      real, dimension(:,:,:,:), pointer :: dfswbandcf=>NULL(), &
+                                           ufswbandcf=>NULL()
 
       contains
          procedure :: alloc => shortwave_output_alloc
@@ -91,6 +95,8 @@ subroutine sw_output_type_eq(sw_output_out,sw_output_in)
    sw_output_out%dfsw_vis_sfc_dif = sw_output_in%dfsw_vis_sfc_dif
    sw_output_out%ufsw_vis_sfc_dif = sw_output_in%ufsw_vis_sfc_dif
    sw_output_out%bdy_flx          = sw_output_in%bdy_flx
+   sw_output_out%dfswband         = sw_output_in%dfswband
+   sw_output_out%ufswband         = sw_output_in%ufswband
    if (ASSOCIATED(sw_output_in%fswcf))then
        sw_output_out%fswcf            = sw_output_in%fswcf
        sw_output_out%dfswcf           = sw_output_in%dfswcf
@@ -100,6 +106,8 @@ subroutine sw_output_type_eq(sw_output_out,sw_output_in)
        sw_output_out%dfsw_dif_sfc_clr = sw_output_in%dfsw_dif_sfc_clr
        sw_output_out%dfsw_vis_sfc_clr = sw_output_in%dfsw_vis_sfc_clr
        sw_output_out%bdy_flx_clr      = sw_output_in%bdy_flx_clr
+       sw_output_out%dfswbandcf       = sw_output_in%dfswbandcf
+       sw_output_out%ufswbandcf       = sw_output_in%ufswbandcf
    endif
 
 end subroutine sw_output_type_eq
@@ -181,6 +189,8 @@ logical,              intent(in)     ::  do_totcld_forcing
       allocate (Sw_output%dfsw_vis_sfc_dif (ix, jx  ) )
       allocate (Sw_output%ufsw_vis_sfc_dif (ix, jx  ) )
       allocate (Sw_output%bdy_flx          (ix, jx, 4) )
+      allocate (Sw_output%dfswband       (ix, jx, kx+1, 18) )
+      allocate (Sw_output%ufswband       (ix, jx, kx+1, 18) )
 
       Sw_output%fsw   (:,:,:) = 0.0
       Sw_output%dfsw  (:,:,:) = 0.0
@@ -196,7 +206,9 @@ logical,              intent(in)     ::  do_totcld_forcing
       Sw_output%ufsw_vis_sfc_dir = 0.
       Sw_output%dfsw_vis_sfc_dif = 0.
       Sw_output%ufsw_vis_sfc_dif = 0.
-      Sw_output%bdy_flx(:,:,:) = 0.0       
+      Sw_output%bdy_flx(:,:,:) = 0.0    
+      Sw_output%dfswband(:,:,:,:) = 0.0
+      Sw_output%ufswband(:,:,:,:) = 0.0   
 
 !---------------------------------------------------------------------
 !    if the cloud-free values are desired, allocate and initialize 
@@ -211,6 +223,8 @@ logical,              intent(in)     ::  do_totcld_forcing
         allocate (Sw_output%dfsw_dif_sfc_clr (ix, jx) )
         allocate (Sw_output%dfsw_vis_sfc_clr (ix, jx  ) )
         allocate (Sw_output%bdy_flx_clr      (ix, jx, 4) )
+        allocate (Sw_output%dfswbandcf       (ix, jx, kx+1, 18) )
+        allocate (Sw_output%ufswbandcf       (ix, jx, kx+1, 18) )
 
         Sw_output%fswcf (:,:,:) = 0.0
         Sw_output%dfswcf(:,:,:) = 0.0
@@ -220,6 +234,8 @@ logical,              intent(in)     ::  do_totcld_forcing
         Sw_output%dfsw_dif_sfc_clr  = 0.0
         Sw_output%dfsw_vis_sfc_clr = 0.
         Sw_output%bdy_flx_clr (:,:,:) = 0.0
+        Sw_output%dfswbandcf(:,:,:,:) = 0.0
+        Sw_output%ufswbandcf(:,:,:,:) = 0.0
       endif
 
 !--------------------------------------------------------------------
@@ -282,6 +298,8 @@ class(sw_output_type), intent(inout)  ::  Sw_output
       deallocate (Sw_output%dfsw_vis_sfc_dif)
       deallocate (Sw_output%ufsw_vis_sfc_dif)
       deallocate (Sw_output%bdy_flx)
+      deallocate (Sw_output%dfswband)
+      deallocate (Sw_output%ufswband)
 !---------------------------------------------------------------------
 !    if the cloud-free values are desired, allocate and initialize 
 !    arrays for the fluxes and heating rate in the absence of clouds.
@@ -295,6 +313,8 @@ class(sw_output_type), intent(inout)  ::  Sw_output
         deallocate (Sw_output%dfsw_dif_sfc_clr)
         deallocate (Sw_output%dfsw_vis_sfc_clr)
         deallocate (Sw_output%bdy_flx_clr)
+        deallocate (Sw_output%dfswbandcf)
+        deallocate (Sw_output%ufswbandcf)
       endif
 
 !--------------------------------------------------------------------

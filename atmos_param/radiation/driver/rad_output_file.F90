@@ -173,6 +173,12 @@ integer                            :: id_radswp, id_radp, id_temp, &
                                       id_phalfm, id_pfluxm, &
                                       id_dphalf, id_dpflux, &
                                       id_ptop
+integer, dimension(18)             :: id_ufsw_band, id_dfsw_band, &
+                                      id_ufswcf_band, id_dfswcf_band, &
+                                      id_swup_toa_band, id_swdn_toa_band, &
+                                      id_swup_sfc_band, id_swdn_sfc_band, &
+                                      id_swup_toa_clr_band, id_swdn_toa_clr_band, &
+                                      id_swup_sfc_clr_band, id_swdn_sfc_clr_band
 
 type(cmip_diag_id_type)  :: ID_o3, ID_ec550aer, ID_concso4, ID_concsoa, ID_concno3
 integer                  :: id_loadso4, id_sconcso4, id_loadsoa, id_sconcsoa, id_loadno3, id_sconcno3, &
@@ -1335,7 +1341,33 @@ type(aerosolrad_diag_type),   intent(in), optional  ::  Aerosolrad_diags
                             Time_diag, is,js)
         endif
      end do
-
+     do n=1, 18
+        if (id_ufsw_band(n) > 0 ) then
+          used = send_data (id_ufsw_band(n) , Sw_output%ufswband(:,:,:,n), &
+                            Time_diag, is, js, 1)
+        endif
+        if (id_dfsw_band(n) > 0 ) then
+          used = send_data (id_dfsw_band(n) , Sw_output%dfswband(:,:,:,n), &
+                            Time_diag, is, js, 1)
+        endif
+        if (id_swup_toa_band(n) > 0 ) then
+          used = send_data (id_swup_toa_band(n) , Sw_output%ufswband(:,:,1,n), &
+                            Time_diag, is, js)
+        endif
+        if (id_swdn_toa_band(n) > 0 ) then
+          used = send_data (id_swdn_toa_band(n) , Sw_output%dfswband(:,:,1,n), &
+                            Time_diag, is, js)
+        endif
+        if (id_swup_sfc_band(n) > 0 ) then
+          used = send_data (id_swup_sfc_band(n) , Sw_output%ufswband(:,:,kerad+1,n), &
+                            Time_diag, is, js)
+        endif
+        if (id_swdn_sfc_band(n) > 0 ) then
+          used = send_data (id_swdn_sfc_band(n) , Sw_output%dfswband(:,:,kerad+1,n), &
+                            Time_diag, is, js)
+        endif
+     end do
+     
         if (Rad_control%do_totcld_forcing) then
      do n=1, 4
         if (id_sw_bdyflx_clr(n) > 0 ) then
@@ -1350,6 +1382,33 @@ type(aerosolrad_diag_type),   intent(in), optional  ::  Aerosolrad_diags
           used = send_data (id_lw_bdyflx_clr(n) ,   &
                             Lw_output%bdy_flx_clr(:,:,n),&
                             Time_diag, is,js)
+        endif
+     end do
+
+      do n=1, 18
+        if (id_ufswcf_band(n) > 0 ) then
+          used = send_data (id_ufswcf_band(n) , Sw_output%ufswbandcf(:,:,:,n), &
+                            Time_diag, is, js, 1)
+        endif
+        if (id_dfswcf_band(n) > 0 ) then
+          used = send_data (id_dfswcf_band(n) , Sw_output%dfswbandcf(:,:,:,n), &
+                            Time_diag, is, js, 1)
+        endif
+        if (id_swup_toa_clr_band(n) > 0 ) then
+          used = send_data (id_swup_toa_clr_band(n) , Sw_output%ufswbandcf(:,:,1,n), &
+                            Time_diag, is, js)
+        endif
+        if (id_swdn_toa_clr_band(n) > 0 ) then
+          used = send_data (id_swdn_toa_clr_band(n) , Sw_output%dfswbandcf(:,:,1,n), &
+                            Time_diag, is, js)
+        endif
+        if (id_swup_sfc_clr_band(n) > 0 ) then
+          used = send_data (id_swup_sfc_clr_band(n) , Sw_output%ufswbandcf(:,:,kerad+1,n), &
+                            Time_diag, is, js)
+        endif
+        if (id_swdn_sfc_clr_band(n) > 0 ) then
+          used = send_data (id_swdn_sfc_clr_band(n) , Sw_output%dfswbandcf(:,:,kerad+1,n), &
+                            Time_diag, is, js)
         endif
      end do
 
@@ -1514,6 +1573,8 @@ logical,                        intent(in) :: volcanic_sw_aerosols
       integer                  :: nfamilies
       real                     :: trange(2)
       integer                  :: ncmip
+      character(len=32) :: field_name
+      character(len=128) :: field_desc
 
 !---------------------------------------------------------------------
 !   local variables:
@@ -2229,24 +2290,41 @@ logical,                        intent(in) :: volcanic_sw_aerosols
                        'sw up flx in vis band at toa', &
                       'W/m**2', missing_value=missing_value)
 
-       id_sw_bdyflx(2) = &
-         register_diag_field (mod_name, 'swup_toa_1p6', axes(1:2),  &
-                       Time, &
-                       'sw up flx in 1.6 micron band at toa', &
-                      'W/m**2', missing_value=missing_value)
-
-       id_sw_bdyflx(3) = &
-         register_diag_field (mod_name, 'swnt_sfc_vis', axes(1:2),  &
-                       Time, &
-                       'net sw flx in vis band at sfc', &
-                      'W/m**2', missing_value=missing_value)
-
-       id_sw_bdyflx(4) = &
-         register_diag_field (mod_name, 'swnt_sfc_1p6', axes(1:2),  &
-                       Time, &
-                       'net sw flx in 1.6 micron band at sfc', &
-                      'W/m**2', missing_value=missing_value)
-
+      do n = 1, 18
+        write(field_name, '(A,I2.2)') 'swup_band_', n
+        write(field_desc, '(A,I2.2)') 'upward shortwave flux in band ', n
+        id_ufsw_band(n) = &
+           register_diag_field (mod_name, TRIM(field_name), bxes(1:3), Time, &
+                                TRIM(field_desc), 'W/m**2', missing_value=missing_value)
+        write(field_name, '(A,I2.2)') 'swdn_band_', n
+        write(field_desc, '(A,I2.2)') 'downward shortwave flux in band ', n
+        id_dfsw_band(n) = &
+           register_diag_field (mod_name, TRIM(field_name), bxes(1:3), Time, &
+                                TRIM(field_desc), 'W/m**2', missing_value=missing_value)
+        write(field_name, '(A,I2.2)') 'swup_toa_band_', n
+        write(field_desc, '(A,I2.2)') 'upward shortwave flux at top of atmosphere in band ', n
+        id_swup_toa_band(n) = &
+           register_diag_field (mod_name, TRIM(field_name), axes(1:2), Time, &
+                                TRIM(field_desc), 'W/m**2', missing_value=missing_value)
+        write(field_name, '(A,I2.2)') 'swdn_toa_band_', n
+        write(field_desc, '(A,I2.2)') 'downward shortwave flux at top of atmosphere in band ', n
+        id_swdn_toa_band(n) = &
+            register_diag_field (mod_name, TRIM(field_name), axes(1:2), Time, &
+                                TRIM(field_desc), 'W/m**2', missing_value=missing_value)
+        write(field_name, '(A,I2.2)') 'swup_sfc_band_', n
+        write(field_desc, '(A,I2.2)') 'upward shortwave flux at surface in band ', n
+        id_swup_sfc_band(n) = &
+            register_diag_field (mod_name, TRIM(field_name), axes(1:2), Time, &
+                                TRIM(field_desc), 'W/m**2', missing_value=missing_value)
+        write(field_name, '(A,I2.2)') 'swdn_sfc_band_', n
+        write(field_desc, '(A,I2.2)') 'downward shortwave flux at surface in band ', n
+        id_swdn_sfc_band(n) = &
+            register_diag_field (mod_name, TRIM(field_name), axes(1:2), Time, &
+                                TRIM(field_desc), 'W/m**2', missing_value=missing_value)
+      enddo
+         
+		      
+		      
 !-------------------------------------------------------------------
 
       if (do_totcld_forcing) then
@@ -2355,6 +2433,39 @@ logical,                        intent(in) :: volcanic_sw_aerosols
                        Time, &
                        'clr sky net sw flx in 1.6 micron band at sfc', &
                       'W/m**2', missing_value=missing_value)
+
+        do n = 1, 18
+          write(field_name, '(A,I2.2)') 'swup_clr_band_', n
+          write(field_desc, '(A,I2.2)') 'clear-sky upward shortwave flux in band ', n
+          id_ufswcf_band(n) = &
+              register_diag_field (mod_name, TRIM(field_name), bxes(1:3), Time, &
+                                  TRIM(field_desc), 'W/m**2', missing_value=missing_value)
+          write(field_name, '(A,I2.2)') 'swdn_clr_band_', n
+          write(field_desc, '(A,I2.2)') 'clear-sky downward shortwave flux in band ', n
+          id_dfswcf_band(n) = &
+              register_diag_field (mod_name, TRIM(field_name), bxes(1:3), Time, &
+                                  TRIM(field_desc), 'W/m**2', missing_value=missing_value)
+          write(field_name, '(A,I2.2)') 'swup_toa_clr_band_', n
+          write(field_desc, '(A,I2.2)') 'clear-sky upward shortwave flux at top of atmosphere in band ', n
+          id_swup_toa_clr_band(n) = &
+              register_diag_field (mod_name, TRIM(field_name), axes(1:2), Time, &
+                                  TRIM(field_desc), 'W/m**2', missing_value=missing_value)
+          write(field_name, '(A,I2.2)') 'swdn_toa_clr_band_', n
+          write(field_desc, '(A,I2.2)') 'clear-sky downward shortwave flux at top of atmosphere in band ', n
+          id_swdn_toa_clr_band(n) = &
+              register_diag_field (mod_name, TRIM(field_name), axes(1:2), Time, &
+                                  TRIM(field_desc), 'W/m**2', missing_value=missing_value)
+          write(field_name, '(A,I2.2)') 'swup_sfc_clr_band_', n
+          write(field_desc, '(A,I2.2)') 'clear-sky upward shortwave flux at surface in band ', n
+          id_swup_sfc_clr_band(n) = &
+              register_diag_field (mod_name, TRIM(field_name), axes(1:2), Time, &
+                                  TRIM(field_desc), 'W/m**2', missing_value=missing_value)
+          write(field_name, '(A,I2.2)') 'swdn_sfc_clr_band_', n
+          write(field_desc, '(A,I2.2)') 'clear-sky downward shortwave flux at surface in band ', n
+          id_swdn_sfc_clr_band(n) = &
+              register_diag_field (mod_name, TRIM(field_name), axes(1:2), Time, &
+                                  TRIM(field_desc), 'W/m**2', missing_value=missing_value)
+        enddo
 
       endif
 
