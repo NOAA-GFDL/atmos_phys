@@ -3,7 +3,7 @@
       use diag_manager_mod, only : register_diag_field, send_data
       use atmos_cmip_diag_mod, only : register_cmip_diag_field_2d
       use time_manager_mod, only : time_type
-      use constants_mod,    only : PI
+      use constants_mod,    only : PI, EPSLN
       use fms_mod, only : mpp_root_pe, mpp_pe
 
       implicit none
@@ -22,7 +22,7 @@
       real :: min_land_frac = -999.          ! minimum land fraction for flash frequency calculation (default=-999)
       real, parameter :: AREA_PER_STORM = 1.e10 ! m2 (100km x 100km)
       real :: vdist(16,3)                    ! vertical distribution of lightning
-      integer :: id_prod_no_col, id_flash_freq, id_prod_no_col_lght, id_eminox_lght
+      integer :: id_prod_no_col, id_flash_freq, id_prod_no_col_lght, id_eminox_lght, id_ground_flash_freq
       real :: lat25
       real, parameter :: MW_N = 14.00674, &                 ! molecular weight of nirogen (AMU)
                          ONE_OVER_AVO = 1.65979e-24         ! reciprocal of Avogadros number (mole)
@@ -94,6 +94,8 @@ logical                       :: module_is_initialized = .false.
                                            'prod_no_col','molec cm-2 s-1')
       id_flash_freq  = register_diag_field('tracers','flash_freq',axes(1:2),Time, &
                                            'flash_freq','cm-2 s-1')
+      id_ground_flash_freq  = register_diag_field('tracers','ground_flash_freq',axes(1:2),Time, &
+                                           'cloud-ground lightning flash frequency','cm-2 s-1')
       id_eminox_lght = register_cmip_diag_field_2d ( 'tracers', 'eminox_lght', Time, &
                               'Total Emission Rate of NOx from lightning', 'kg m-2 s-1', &
                 standard_name='tendency_of_atmosphere_mass_content_of_nox_expressed_as_nitrogen_due_to_emission')
@@ -150,7 +152,8 @@ logical                       :: module_is_initialized = .false.
                  flash_energy, &    ! Energy of flashes per second
                  glob_prod_no_col   ! Global NO production rate for diagnostics
       real :: prod_no_col(size(prod_no,1),size(prod_no,2)) ! production of NOx (molec cm^-2 s^-1)
-      real :: flash_freq(size(prod_no,1),size(prod_no,2))  
+      real :: flash_freq(size(prod_no,1),size(prod_no,2))
+      real :: ground_flash_freq(size(prod_no,1),size(prod_no,2))
       real :: local_area(size(area,1),size(area,2)) ! storm area (cm^2)
       logical :: used
       integer :: platl, plonl, plev
@@ -168,6 +171,7 @@ logical                       :: module_is_initialized = .false.
 !        Lightning NO production : Initialize ...
 !----------------------------------------------------------------------
       flash_freq(:,:) = 0.
+      ground_flash_freq(:,:) = 0.
       cldhgt(:,:)     = 0.
       dchgzone(:,:)   = 0.
       cgic(:,:)       = 0.
@@ -242,6 +246,7 @@ logical                       :: module_is_initialized = .false.
 !--------------------------------------------------------------------------------
 !       ... Compute CG/IC ratio
 !           cgic = proportion of CG flashes (=PG from PPP paper)
+!           CG fraction = 1/(1+1/cgic))
 !--------------------------------------------------------------------------------
                   cgic(i,j) = 1./((((ca*dchgzone(i,j) + cb)*dchgzone(i,j) + cc) &
                                       *dchgzone(i,j) + cd)*dchgzone(i,j) + ce)
@@ -251,6 +256,8 @@ logical                       :: module_is_initialized = .false.
                   if( dchgzone(i,j) > 14. ) then
                      cgic(i,j) = .02
                   end if
+                  ground_flash_freq(i,j) = flash_freq(i,j) &
+                                             *  1./(1.+1./MAX(cgic(i,j),EPSLN))
 !--------------------------------------------------------------------------------
 !       ... Compute flash energy (CG*6.7e9 + IC*6.7e8)
 !           and convert to total energy per second
@@ -289,6 +296,8 @@ logical                       :: module_is_initialized = .false.
             used=send_data(id_eminox_lght,prod_no_col*MW_N*ONE_OVER_AVO*10.,Time,is_in=is,js_in=js)
          if(id_flash_freq >0) &
             used=send_data(id_flash_freq,flash_freq/60./local_area,Time,is_in=is,js_in=js)
+         if(id_ground_flash_freq >0) &
+            used=send_data(id_ground_flash_freq,ground_flash_freq/60./local_area,Time,is_in=is,js_in=js)
 
 
 !--------------------------------------------------------------------------------
