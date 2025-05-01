@@ -358,6 +358,7 @@ logical, dimension(pcnstm1) :: has_emis = .false., &      ! does tracer have sur
                                has_emis3d = .false., &    ! does tracer have 3-D emissions?
                                has_emis2dbb = .false., &    ! does tracer have 2-D biomass burning emissions?
                                land_does_emission = .false., &    ! surface emission in land
+                               land_does_emis2dbb = .false., &    ! biomass burning emission in land
                                has_xactive_emis = .false., & ! does tracer have interactive emissions?
                                diurnal_emis = .false., &   ! diurnally varying emissions?
                                diurnal_emis3d = .false., &    ! diurnally varying 3-D emissions?
@@ -579,6 +580,8 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
                             z_half, z_full, q, tsurf, albedo, coszen, rrsun,   &
                             area, w10m, half_day,                              &
                             fbbs,                                              &   !!! armanp
+                            fire_emis_flux,                                    &   !!! armanp
+                            fire_emis_ind,                                     &   !!! armanp                            
                             Time_next, rdiag, do_nh3_atm_ocean_exchange, kbot )
 
 !-----------------------------------------------------------------------
@@ -605,7 +608,9 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
    real, intent(inout), dimension(:,:,:,:)        :: rdiag   ! diagnostic tracer concentrations
    logical, intent(in)                            :: do_nh3_atm_ocean_exchange
    integer, intent(in),  dimension(:,:), optional :: kbot
-   real, intent(in),  dimension(:,:,:) :: fbbs !!!armanp
+   real, intent(in),  dimension(:,:,:)            :: fbbs !!!armanp
+   real, intent(in),  dimension(:,:,:)            :: fire_emis_flux !!! armanp
+   integer, intent(in),  dimension(:)             :: fire_emis_ind !!!armanp
 !-----------------------------------------------------------------------
    real, dimension(size(r,1),size(r,2),size(r,3)) :: sulfate_data
 !  real, dimension(size(r,1),size(r,2),size(r,3)) :: ub_temp,rno
@@ -768,11 +773,14 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
 !     ... read in the 2-D biomass burning emissions, using interpolator
 !-----------------------------------------------------------------------
       if (has_emis2dbb(n)) then
-         call read_2D_emis_data( inter_emis2dbb(n), emis2dbb, Time, Time_next, &
+         if (land_does_emis2dbb(n)) then
+            emis2dbb(:,:) = fire_emis_flux(:,:,fire_emis_ind(n))
+         else
+            call read_2D_emis_data( inter_emis2dbb(n), emis2dbb, Time, Time_next, &
                  emis2dbb_field_names(n)%field_names, &
                  diurnal_emis2dbb(n), coszen, half_day, lon, &
                  is, js, has_xactive_emis(n),emis2dbb_field_names(n)%scale_emis)
-
+         end if
          do k=1, size(emis3dbb,3)
            emis3dbb(:,:,k) = emis2dbb(:,:) * fbbs(:,:,k)
            emis_source(:,:,k,n) = emis_source(:,:,k,n) &
@@ -2126,6 +2134,10 @@ end if
                            has_emis(i), diurnal_emis(i), axes, Time, land_does_emission(i) )
       if( has_emis(i) ) emis_files(i) = trim(nc_file)
 
+      if(mpp_pe() == mpp_root_pe()) then
+         write (*,*) 'For tracer  = ', trim(tracnam(i))
+         write (*,*) 'Fire emis done in land', land_does_emission(i)
+      end if
 !-----------------------------------------------------------------------
 !     ... Vertically-distributed emissions
 !-----------------------------------------------------------------------
@@ -2141,9 +2153,8 @@ end if
       nc_file = trim(file_emis2dbb_1)//lowercase(trim(tracnam(i)))//trim(file_emis2dbb_2)
       call init_emis_data( inter_emis2dbb(i), MODEL_ATMOS, 'emissions2dbb', indices(i), nc_file, &
                            lonb_mod, latb_mod, emis2dbb_field_names(i), &
-                           has_emis2dbb(i), diurnal_emis2dbb(i), axes, Time )
+                           has_emis2dbb(i), diurnal_emis2dbb(i), axes, Time, land_does_emis2dbb(i) )
       if( has_emis2dbb(i) ) emis2dbb_files(i) = trim(nc_file)
-
 
 !-----------------------------------------------------------------------
 !     ... Interactive emissions
@@ -2407,7 +2418,7 @@ end if
                   call error_mesg('atmos_tracer_utilities_init', &
                        'Emission of atmospheric tracer //"'//trim(tracnam(i))//&
                        '" is done on land side, but corresponding land tracer is not defined in the field table.', FATAL)
-                  write(logunit,*) 'Emissions done in land'
+                  write(logunit,*) 'Surface emissions done in land'
                endif
             end if
          end if
@@ -2415,7 +2426,11 @@ end if
             write(logunit,*)'3-D Emissions from file: ',trim(emis3d_files(i))
          end if
          if(has_emis2dbb(i)) then
-            write(logunit,*)'2-D Biomass Burning Emissions from file: ',trim(emis2dbb_files(i))
+            if ( land_does_emis2dbb(i) ) then
+               write(logunit,*) 'Fire emissions done in land'
+            else
+               write(logunit,*)'2-D Biomass Burning Emissions from file: ',trim(emis2dbb_files(i))
+            end if
          end if
          if(has_ubc(i)) then
             write(logunit,*)'Upper BC from file: ',trim(ub_files(i)), &
@@ -3265,7 +3280,7 @@ subroutine init_emis_data( emis_type, model, method_type, pos, file_name, &
    integer        , intent(in)  :: axes(4)
    type(time_type), intent(in)  :: Time
 
-   character(len=128) :: name, control
+   character(len=500) :: name, control   !!!armanp
    integer :: nfields
    integer :: flag_name, flag_file, flag_diurnal, flag_scale
    character(len=64) :: emis_name, emis_file, control_diurnal
@@ -3323,7 +3338,7 @@ subroutine init_emis_data( emis_type, model, method_type, pos, file_name, &
 
          end do
       end if
-      if ( present(land_does_emis) )  land_does_emis  = (index(lowercase(name),'land:lm3')>0)
+      if ( present(land_does_emis) )  land_does_emis  = (index(lowercase(name),'land:')>0)
    end if
 
 40 format (A,F5.3)

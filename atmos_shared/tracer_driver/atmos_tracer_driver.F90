@@ -233,6 +233,11 @@ use atmos_fire_plumerise_mod,only : atmos_fire_plumerise_time_vary,    &
                                     atmos_fire_plumerise_endts, &
                                     atmos_fire_plumerise_init, &
                                     atmos_fire_plumerise_driver
+use atmos_fire_emis_mod,only :      atmos_fire_emis_init, &
+                                    atmos_fire_emis_end, &
+                                    atmos_fire_emis, &
+                                    get_num_fire_tr, &
+                                    fire_emis_type                                    
 
 use coupler_types_mod, only: coupler_2d_bc_type, ind_pcair, ind_deposition
 use gex_mod,           only: gex_get_index, gex_get_n_ex, gex_name, gex_units, gex_get_property
@@ -342,6 +347,8 @@ integer :: nISOP     =0
 integer, dimension(5) :: tr_nbr_sulfate=0
 logical, dimension(5) :: do_tracer_sulfate=.false.
 logical :: do_bb_plumerise = .false. !!!armanp
+integer, allocatable :: fire_emis_ind(:)   !!!armanp
+type(fire_emis_type), allocatable, target :: frdata(:) ! fire emissions data
 
 real    :: ozon(11,48),cosp(14),cosphc(48),photo(132,14,11,48),   &
            solardata(1801),chlb(90,15),ozb(144,90,12),tropc(151,9),  &
@@ -354,6 +361,7 @@ integer, dimension(:), pointer :: nconvect
 integer :: nt     ! number of activated tracers
 integer :: ntp    ! number of activated prognostic tracers
 integer :: nxactive   ! number of tracers with interactive (MEGAN) emissions (JLS)
+integer :: n_fire_tr  ! number of fire emission tracers
 
 logical :: use_tau=.false.
 
@@ -571,10 +579,10 @@ real, intent(in), dimension(:,:),    optional :: con_atm
 ! Local variables
 !-----------------------------------------------------------------------
 !!!armanp start
-real,    dimension(size(r,1),size(r,2),size(r,3))     :: fire_emis   !!! dsward_cpl
-character(fm_field_name_len),    dimension(10)        :: fire_tr_name  !!! dsward_cpl
-real,    dimension(size(r,1),size(r,2))               :: fire_intensity   !!! dsward_cpl
-real,    dimension(size(r,1),size(r,2),size(r,3))     :: fbb
+real,    dimension(size(r,1),size(r,2),size(r,3))   :: fbb
+real,    dimension(size(r,1),size(r,2),n_fire_tr)   :: fire_emis_flux
+real,    dimension(size(r,1),size(r,2),n_fire_tr)   :: fire_emis
+real,    dimension(size(r,1),size(r,2))             :: fire_frp
 !!!armanp end
 real, dimension(size(r,1),size(r,2),size(r,3)) :: rtnd, pwt, ozone, o3_prod, &
                                                   aerosol, rho
@@ -612,7 +620,7 @@ real, dimension(size(r,1),size(r,2),size(r,3)+1) :: lphalf
 real, dimension(size(r,1),size(r,2)) :: moa_emis !marine organic emissions !kg/m2/s
 real, dimension(size(r,1),size(r,2),size(r,3)) :: mw_air_amb   !ambient mw_air (at the surface)
 
-integer :: isulf, ixact, i, j, k, id, jd, kd, ntcheck
+integer :: isulf, ixact, i, j, k, id, jd, kd, ntcheck, tr, m
 integer :: nqq  ! index of specific humidity
 integer :: nql  ! index of cloud liquid specific humidity
 integer :: nqi  ! index of cloud ice water specific humidity
@@ -634,6 +642,8 @@ logical :: ocn_does_deposition
 !-----------------------------------------------------------------------
     !!! armanp
     fbb(:,:,:) = 0.0
+    fire_emis(:,:,:) = 0.0
+    fire_frp(:,:) = 0.0
 !   <ERROR MSG="tracer_driver_init must be called first." STATUS="FATAL">
 !     Tracer_driver_init needs to be called before tracer_driver.
 !   </ERROR>
@@ -1461,11 +1471,35 @@ logical :: ocn_does_deposition
 !------------------------------------------------------------------------
 !!! armanp
    if (do_bb_plumerise) then
+      m = gex_get_index(MODEL_LAND,MODEL_ATMOS,'frp')
+      if (m > 0) then
+        fire_frp(:,:) = gex_lnd2atm(:,:,m)
+      end if
       call atmos_fire_plumerise_driver(fbb,pfull,T, &
                       z_half,z_pbl,z_full, &
                       tracer(:,:,:,nomphobic), Time_next, &
+                      fire_frp, &
                       is, ie, js, je, local_hour_2d)
    endif
+!------------------------------------------------------------------------
+!   interactive biomass burning emission from land model
+!------------------------------------------------------------------------
+   if (n_fire_tr > 0) then
+    if (.not. allocated(frdata)) then
+      if (mpp_pe() == mpp_root_pe()) &
+      call error_mesg('Tracer_driver', &
+      'frdata not allocated in atmos_fire_emis_init',FATAL)
+    endif
+    do tr=1,n_fire_tr
+      m = gex_get_index(MODEL_LAND,MODEL_ATMOS,'fire_emis_'//trim(frdata(tr)%name))
+      fire_emis(:,:,tr) = gex_lnd2atm(:,:,m)
+    end do
+   endif
+
+   if (n_fire_tr > 0) then
+    call atmos_fire_emis(fire_emis, fire_emis_flux, frdata, Time_next, is, js)
+   endif
+
 
 !------------------------------------------------------------------------
 ! Tropospheric chemistry
@@ -1492,6 +1526,8 @@ logical :: ocn_does_deposition
                             z_half, z_full, q, t_surf_rad, albedo, coszen, rrsun, &
                             area, w10m_ocean, half_day, &
                             fbb,                  &   !!! armanp
+                            fire_emis_flux(:,:,:), &   !!! armanp
+                            fire_emis_ind(:),     &   !!! armanp                            
                             Time_next, tracer(:,:,:,MIN(ntp+1,nt):nt), &
                             do_nh3_atm_ocean_exchange, kbot )
       rdt(:,:,:,:) = rdt(:,:,:,:) + chem_tend(:,:,:,:)
@@ -1568,6 +1604,8 @@ logical :: ocn_does_deposition
                                       tracer(:,:,:,nOH),    &
                                       moa_emis,             &
                                       fbb,                  &   !!! armanp
+                                      fire_emis_flux(:,:,:), &   !!! armanp
+                                      fire_emis_ind(:), &   !!! armanp                                      
                                       Time_next,is,ie,js,je)
       rdt(:,:,:,nbcphobic)=rdt(:,:,:,nbcphobic)+rtndbcphob(:,:,:)
       rdt(:,:,:,nbcphilic)=rdt(:,:,:,nbcphilic)+rtndbcphil(:,:,:)
@@ -1669,6 +1707,8 @@ logical :: ocn_does_deposition
       call atmos_SOx_emission(lon, lat, area, land, &
                z_pbl, z_half, phalf, pwt, rtndso2, rtndso4, &
                fbb,  &  !!! armanp
+               fire_emis_flux(:,:,:), &   !!! armanp
+               fire_emis_ind(:), &   !!! armanp
                Time, Time_next, is,ie,js,je,kbot)
       rdt(:,:,:,nSO4) = rdt(:,:,:,nSO4) + rtndso4(:,:,:)
       rdt(:,:,:,nSO2) = rdt(:,:,:,nSO2) + rtndso2(:,:,:)
@@ -1926,6 +1966,7 @@ type(time_type), intent(in)                                :: Time
 !>
 
       logical :: do_interactive_bvoc_emis_for_soa
+      
 !-----------------------------------------------------------------------
 !
 !  When initializing additional tracers, the user needs to make changes
@@ -2079,7 +2120,14 @@ type(time_type), intent(in)                                :: Time
 
 !!! armanp
       call atmos_fire_plumerise_init(lonb, latb, axes, Time, do_bb_plumerise)
-
+      allocate( fire_emis_ind(nt) )
+      fire_emis_ind(:) = 0
+      call atmos_fire_emis_init(axes, Time, fire_emis_ind, frdata)
+      n_fire_tr = get_num_fire_tr()
+      do n = 1, n_fire_tr
+        if (mpp_pe() == mpp_root_pe()) &
+        write(*,*) 'atmos_tracer_driver_init: frdata(', n, '), name=', frdata(n)%name
+      enddo
 ! initialize the tracers
 !carbonaceous aerosols
       if (nbcphobic > 0 .or. nbcphilic >0 .or.  &
@@ -2670,6 +2718,7 @@ type(time_type), intent(in)                                :: Time
                                                        trim(gex_get_property(MODEL_LAND,MODEL_ATMOS,n,gex_units)))
       end do
 
+
       module_is_initialized = .TRUE.
 
  end subroutine atmos_tracer_driver_init
@@ -2865,6 +2914,8 @@ integer :: logunit
       write (logunit,'(/,(a))') 'Exiting tracer_driver, have a nice day ...'
 
       call atmos_fire_plumerise_end   !!!armanp
+      call atmos_fire_emis_end   !!!armanp
+      deallocate(fire_emis_ind)   !!!armanp
       call atmos_radon_end
       call atmos_sulfur_hex_end
       call atmos_convection_tracer_end

@@ -316,7 +316,7 @@ integer :: cloud_chem_type
 character(len=128) :: version = '$Id$'
 character(len=128) :: tagname = '$Name$'
 !-----------------------------------------------------------------------
-
+integer :: nSO2=0
 contains
 
 
@@ -339,6 +339,7 @@ integer,          intent(in)                        :: axes(4)
 real, intent(in), dimension(:,:,:), optional        :: mask
 character(len=7), parameter :: mod_name = 'tracers'
 integer :: n, m, nsulfate
+
 character(len=80) :: simpleSO2_biobur_emis_name, description
 !
 !----------------------------------------------------------------------
@@ -421,6 +422,7 @@ character(len=80) :: simpleSO2_biobur_emis_name, description
          number_SOx_tracers = number_SOx_tracers + 1
          call set_tracer_atts(MODEL_ATMOS,SOx_tracer(m),SOx_tracer(m),'vmr')
          if (m .eq. 4) do_MSA=.true.
+         if (m .eq. 2) nSO2 = n
          if (nsulfate > 0 .and. mpp_pe() == mpp_root_pe()) &
                  write (logunit,30) SOx_tracer(m),nsulfate
        endif
@@ -1211,7 +1213,8 @@ type(time_type), intent(in) :: model_time
             endif
           endif
           if (atmos_fire_do_bb_emis_diurnal()) then
-                  call get_date (model_time, mo_yr, mo, dy, hr, mn, sc)
+!                 call get_date (model_time, mo_yr, mo, dy, hr, mn, sc)
+                  call get_date (biobur_time, mo_yr, mo, dy, hr, mn, sc)
                   biobur_time = set_date(mo_yr, mo, dy, 0, 0, 1)
           endif
           call obtain_interpolator_time_slices &
@@ -1735,7 +1738,11 @@ end subroutine atmos_CH3SH_emission
 !      (nlon, nlat, nlev, ntime)
 !   </IN>
 subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
-       z_pbl, zhalf, phalf, pwt, SO2_dt, SO4_dt, fbbs, model_time, diag_time, is,ie,js,je,kbot)  !!!armanp added fbbs
+       z_pbl, zhalf, phalf, pwt, SO2_dt, SO4_dt, &
+       fbbs, &   !!!armanp 
+       fire_emis_flux, &   !!! armanp
+       fire_emis_ind, &   !!! armanp
+       model_time, diag_time, is,ie,js,je,kbot)  
 !
 ! This subroutine calculates the tendencies of SO2 and SO4 due to
 ! their emissions.
@@ -1752,12 +1759,15 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
       real, intent(in),    dimension(:,:,:)         :: pwt
       real, intent(out),   dimension(:,:,:)         :: SO2_dt, SO4_dt
       real, intent(in),    dimension(:,:,:)         :: fbbs   !!!armanp
+      real, intent(in),  dimension(:,:,:) :: fire_emis_flux   !!! armanp
+      integer, intent(in),  dimension(:)  :: fire_emis_ind   !!! armanp
       type(time_type), intent(in)                   :: model_time, diag_time
       integer, intent(in)                           :: is, ie, js, je
       integer, intent(in), dimension(:,:), optional :: kbot
 !-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
-      integer, parameter :: nlevel_fire = 6
+      integer, parameter :: nlevel_fire_aerocom = 6
+      integer :: nlevel_fire
       real, dimension(size(SO4_dt,1),size(SO4_dt,2),size(SO4_dt,3)) :: SO4_emis
       real, dimension(size(SO2_dt,1),size(SO2_dt,2),size(SO2_dt,3)) :: SO2_emis
       real, dimension(size(SO2_dt,1),size(SO2_dt,2),size(SO2_dt,3)) :: &
@@ -1777,18 +1787,18 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
       real, dimension(size(SO2_dt,1),size(SO2_dt,2),num_volc_levels) :: &
              SO2_cont_volc,                             &
              SO2_expl_volc
-      real, dimension(size(SO2_dt,1),size(SO2_dt,2),nlevel_fire) :: &
+      real, dimension(size(SO2_dt,1),size(SO2_dt,2),nlevel_fire_aerocom) :: &
              SO2_biobur
 ! Factors of vertical distribution of emissions
       real, dimension(size(SO2_dt,1),size(SO2_dt,2),size(SO2_dt,3)) :: fbb, fa1, fa2
       real                            :: fv, ff
 ! Lower altitude of injection of SO2 from wild fires 
 ! These values correspond to the AEROCOM input data (cf. Dentener, ACPD, 2006)
-      real, dimension(nlevel_fire) :: &
+      real, dimension(nlevel_fire_aerocom) :: &
              alt_fire_min=(/0.,100.,500.,1000.,2000.,3000./)
 ! Upper altitude of injection of SO2 from wild fires 
 ! These values correspond to the AEROCOM input data (cf. Dentener, ACPD, 2006)
-      real, dimension(nlevel_fire) :: &
+      real, dimension(nlevel_fire_aerocom) :: &
              alt_fire_max=(/100.,500.,1000.,2000.,3000.,6000./)
 ! Altitude of injection of surafce anthropogenic emissions
       real :: ze1
@@ -1839,6 +1849,13 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
       so2_emis_off_road(:,:,:)=0.0
       so2_emis_ff(:,:,:)=0.0
 !
+
+      if ( fire_emis_ind(nSO2) > 0) then
+        ! interactive fire emissions from land model              
+            nlevel_fire = 1
+            SO2_biobur(:,:,1) = fire_emis_flux(:,:,fire_emis_ind(nSO2))
+      end if
+
       select case ( trim(runtype))
         case ('gocart')
           if (trim(anthro_source) .eq. 'do_anthro') then
@@ -1873,7 +1890,7 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
           if (trim(biobur_source) .eq. 'do_biobur') then
 ! Wildfire emissions at 6 levels from 0 to 6 km
 ! (cf. AEROCOM web site or Dentener et al., ACPD, 2006)
-            do il=1,nlevel_fire
+            do il=1,nlevel_fire_aerocom
               call interpolator(aerocom_emission_interp, model_time, &
                          SO2_biobur(:,:,il), &
                          trim(aerocom_emission_name(12+il)), is, js)
@@ -2073,7 +2090,7 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
           case ('aerocom')
             if (use_bb_plumerise) then
 
-              do lf=1,nlevel_fire
+              do lf=1,nlevel_fire_aerocom
                 do j = 1, jd
                   do i = 1, id
                     so2_emis_biobur(i,j,:) = so2_emis_biobur(i,j,:) + &
@@ -2084,7 +2101,7 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
 
             else
 
-              do lf=1,nlevel_fire
+              do lf=1,nlevel_fire_aerocom
                 del=alt_fire_max(lf)-alt_fire_min(lf)
                 do l = kd,2,-1
                   do j = 1, jd
