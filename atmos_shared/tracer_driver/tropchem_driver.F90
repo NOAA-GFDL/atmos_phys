@@ -2134,10 +2134,6 @@ end if
                            has_emis(i), diurnal_emis(i), axes, Time, land_does_emission(i) )
       if( has_emis(i) ) emis_files(i) = trim(nc_file)
 
-      if(mpp_pe() == mpp_root_pe()) then
-         write (*,*) 'For tracer  = ', trim(tracnam(i))
-         write (*,*) 'Fire emis done in land', land_does_emission(i)
-      end if
 !-----------------------------------------------------------------------
 !     ... Vertically-distributed emissions
 !-----------------------------------------------------------------------

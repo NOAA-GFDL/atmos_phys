@@ -80,7 +80,7 @@ subroutine atmos_fire_emis_init(axes, Time, fire_emis_ind, frdata)
  real    :: value ! temporary storage for parsing input
 
 ! get number of atmos_tracers
- call get_number_tracers (MODEL_ATMOS, num_tracers=nt_atmos)
+  call get_number_tracers (MODEL_ATMOS, num_tracers=nt_atmos)
  
   n_fire_tr = 0
 ! see if any of the atmos_tracers have bb_emis is lm4
@@ -88,20 +88,20 @@ subroutine atmos_fire_emis_init(axes, Time, fire_emis_ind, frdata)
      call get_tracer_names (MODEL_ATMOS, tr, name = name)
      trind = get_tracer_index(MODEL_ATMOS,name)
      if(query_method('emissions2dbb', MODEL_ATMOS, trind, method, parameters)) then
-        if (trim(method)=='lm4') then
+        if (trim(method)=='land:lm4') then
         n_fire_tr=n_fire_tr+1
         endif
      endif
   enddo 
 
-   if (n_fire_tr > 0) then
-      allocate(frdata(1:n_fire_tr))
-      if (mpp_pe() == mpp_root_pe()) &
-      write(*,*) 'Allocated frdata with size:', size(frdata)
-   else
-      if (mpp_pe() == mpp_root_pe()) &
-      call mpp_error(WARNING, 'n_fire_tr is zero; cannot allocate frdata')
-   endif
+  if (n_fire_tr > 0) then
+     allocate(frdata(1:n_fire_tr))
+     if (mpp_pe() == mpp_root_pe()) &
+     write(*,*) 'Allocated frdata with size:', size(frdata)
+  else
+     if (mpp_pe() == mpp_root_pe()) &
+     call mpp_error(WARNING, 'n_fire_tr is zero; cannot allocate frdata')
+  endif
 
   i = 0
 ! register the frdata info
@@ -133,7 +133,7 @@ subroutine atmos_fire_emis_init(axes, Time, fire_emis_ind, frdata)
      endif
   enddo 
 
- if (n_fire_tr .gt. MAX_FR_TR) call mpp_error(FATAL, 'Number of fire emission tracers defined exceeds the maximum of MAX_FR_TR -please increase MAX_FR_TR in vegn_data.F90')
+  if (n_fire_tr .gt. MAX_FR_TR) call mpp_error(FATAL, 'Number of fire emission tracers defined exceeds the maximum of MAX_FR_TR -please increase MAX_FR_TR in vegn_data.F90')
 
 
   do i = 1,n_fire_tr
