@@ -2150,7 +2150,7 @@ end if
       call init_emis_data( inter_emis2dbb(i), MODEL_ATMOS, 'emissions2dbb', indices(i), nc_file, &
                            lonb_mod, latb_mod, emis2dbb_field_names(i), &
                            has_emis2dbb(i), diurnal_emis2dbb(i), axes, Time, land_does_emis2dbb(i) )
-      if( has_emis2dbb(i) ) emis2dbb_files(i) = trim(nc_file)
+      if( has_emis2dbb(i) .and. .not. land_does_emis2dbb(i) ) emis2dbb_files(i) = trim(nc_file)
 
 !-----------------------------------------------------------------------
 !     ... Interactive emissions
@@ -2900,7 +2900,7 @@ subroutine tropchem_driver_time_vary (Time)
       end do
 
       do n=1, size(inter_emis2dbb,1)
-        if (has_emis2dbb(n)) then
+        if (has_emis2dbb(n) .and. .not. land_does_emis2dbb(n)) then
           if (atmos_fire_do_bb_emis_diurnal()) then
             call get_date (Time, mo_yr, mo, dy, hr, mn, sc)
             emis2dbb_time = set_date(mo_yr, mo, dy, 0, 0, 0)
@@ -3333,6 +3333,8 @@ subroutine init_emis_data( emis_type, model, method_type, pos, file_name, &
                  field_type%scale_emis(n)
 
          end do
+      elseif( index(lowercase(name),'land:')>0 ) then
+         flag = .true.
       end if
       if ( present(land_does_emis) )  land_does_emis  = (index(lowercase(name),'land:')>0)
    end if
