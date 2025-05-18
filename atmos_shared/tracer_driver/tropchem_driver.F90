@@ -774,7 +774,7 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
 !-----------------------------------------------------------------------
       if (has_emis2dbb(n)) then
          if (land_does_emis2dbb(n)) then
-            emis2dbb(:,:) = fire_emis_flux(:,:,fire_emis_ind(n))
+            emis2dbb(:,:) = fire_emis_flux(:,:,fire_emis_ind(indices(n)))
          else
             call read_2D_emis_data( inter_emis2dbb(n), emis2dbb, Time, Time_next, &
                  emis2dbb_field_names(n)%field_names, &

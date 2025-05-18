@@ -70,7 +70,7 @@ subroutine atmos_fire_emis_init(axes, Time, fire_emis_ind, frdata)
  type(fire_emis_type), allocatable, intent(inout) :: frdata(:)
 
  integer :: i, j, k, m, n, o, p, nsp, tr
- integer :: trind
+!integer :: trind
  character(fm_field_name_len) :: name ! name of the vegn tracer
  character(fm_type_name_len)  :: typ  ! type of the vegn tracer
  integer :: nt_atmos
@@ -80,14 +80,14 @@ subroutine atmos_fire_emis_init(axes, Time, fire_emis_ind, frdata)
  real    :: value ! temporary storage for parsing input
 
 ! get number of atmos_tracers
-  call get_number_tracers (MODEL_ATMOS, num_tracers=nt_atmos)
+  call get_number_tracers (MODEL_ATMOS, num_prog=nt_atmos)
  
   n_fire_tr = 0
 ! see if any of the atmos_tracers have bb_emis is lm4
   do tr = 1, nt_atmos
      call get_tracer_names (MODEL_ATMOS, tr, name = name)
-     trind = get_tracer_index(MODEL_ATMOS,name)
-     if(query_method('emissions2dbb', MODEL_ATMOS, trind, method, parameters)) then
+!    trind = get_tracer_index(MODEL_ATMOS,name)
+     if(query_method('emissions2dbb', MODEL_ATMOS, tr, method, parameters)) then
         if (trim(method)=='land:lm4') then
         n_fire_tr=n_fire_tr+1
         endif
@@ -107,14 +107,15 @@ subroutine atmos_fire_emis_init(axes, Time, fire_emis_ind, frdata)
 ! register the frdata info
   do tr = 1, nt_atmos
      call get_tracer_names (MODEL_ATMOS, tr, name = name)
-     trind = get_tracer_index(MODEL_ATMOS,name)
      method = ''; parameters = ''
-     if(query_method('emissions2dbb', MODEL_ATMOS, trind, method, parameters)) then
+     if(query_method('emissions2dbb', MODEL_ATMOS, tr, method, parameters)) then
         if (trim(method)=='land:lm4') then
             i = i + 1
             fire_emis_ind(tr) = i
             frdata(i)%name = trim(name)
-            frdata(i)%tr_atm = get_tracer_index(MODEL_ATMOS,name)
+            frdata(i)%tr_atm = tr ! get_tracer_index(MODEL_ATMOS,name)
+            if (mpp_pe() == mpp_root_pe())  &
+               write(*,*) 'atmos_fire_emis_init: emis2dbb tracer=', TRIM(name),tr,fire_emis_ind(tr),frdata(i)%tr_atm
             if ( parse(parameters, 'mw', value) > 0 ) then
                  frdata(i)%fire_mw = value
             endif
@@ -122,7 +123,7 @@ subroutine atmos_fire_emis_init(axes, Time, fire_emis_ind, frdata)
                  frdata(i)%scale_factor = value
             endif
             method = ''; parameters = ''
-            if(query_method('units', MODEL_ATMOS, trind, method, parameters)) then
+            if(query_method('units', MODEL_ATMOS, tr, method, parameters)) then
                if (lowercase(trim(method))=='mmr') then
                   frdata(i)%do_conversion = .true.
                else

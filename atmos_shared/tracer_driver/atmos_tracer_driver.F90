@@ -2120,13 +2120,15 @@ type(time_type), intent(in)                                :: Time
 
 !!! armanp
       call atmos_fire_plumerise_init(lonb, latb, axes, Time, do_bb_plumerise)
-      allocate( fire_emis_ind(nt) )
+      allocate( fire_emis_ind(ntp) )
       fire_emis_ind(:) = 0
       call atmos_fire_emis_init(axes, Time, fire_emis_ind, frdata)
+      if (mpp_pe() == mpp_root_pe()) &
+        write(*,*) 'atmos_tracer_driver_init: fire_emis_ind=',fire_emis_ind(:)
       n_fire_tr = get_num_fire_tr()
       do n = 1, n_fire_tr
         if (mpp_pe() == mpp_root_pe()) &
-        write(*,*) 'atmos_tracer_driver_init: frdata(', n, '), name=', frdata(n)%name
+        write(*,*) 'atmos_tracer_driver_init: frdata(', n, '), name=', TRIM(frdata(n)%name)
       enddo
 ! initialize the tracers
 !carbonaceous aerosols
