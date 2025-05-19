@@ -347,8 +347,10 @@ integer :: nISOP     =0
 integer, dimension(5) :: tr_nbr_sulfate=0
 logical, dimension(5) :: do_tracer_sulfate=.false.
 logical :: do_bb_plumerise = .false. !!!armanp
-integer, allocatable :: fire_emis_ind(:)   !!!armanp
+integer, allocatable  :: fire_emis_ind(:)   !!!armanp
 type(fire_emis_type), allocatable, target :: frdata(:) ! fire emissions data
+integer               :: frp_gex_ind        ! GEX index for FRP
+integer, allocatable  :: fire_gex_ind(:)    ! GEX index for tracer fire emissions
 
 real    :: ozon(11,48),cosp(14),cosphc(48),photo(132,14,11,48),   &
            solardata(1801),chlb(90,15),ozb(144,90,12),tropc(151,9),  &
@@ -1471,9 +1473,8 @@ logical :: ocn_does_deposition
 !------------------------------------------------------------------------
 !!! armanp
    if (do_bb_plumerise) then
-      m = gex_get_index(MODEL_LAND,MODEL_ATMOS,'frp')
-      if (m > 0) then
-        fire_frp(:,:) = gex_lnd2atm(:,:,m)
+      if (frp_gex_ind > 0) then
+        fire_frp(:,:) = gex_lnd2atm(:,:,frp_gex_ind)
       end if
       call atmos_fire_plumerise_driver(fbb,pfull,T, &
                       z_half,z_pbl,z_full, &
@@ -1491,8 +1492,7 @@ logical :: ocn_does_deposition
       'frdata not allocated in atmos_fire_emis_init',FATAL)
     endif
     do tr=1,n_fire_tr
-      m = gex_get_index(MODEL_LAND,MODEL_ATMOS,'fire_emis_'//trim(frdata(tr)%name))
-      fire_emis(:,:,tr) = gex_lnd2atm(:,:,m)
+      fire_emis(:,:,tr) = gex_lnd2atm(:,:,fire_gex_ind(tr))
     end do
    endif
 
@@ -2126,10 +2126,14 @@ type(time_type), intent(in)                                :: Time
       if (mpp_pe() == mpp_root_pe()) &
         write(*,*) 'atmos_tracer_driver_init: fire_emis_ind=',fire_emis_ind(:)
       n_fire_tr = get_num_fire_tr()
+      allocate(fire_gex_ind(n_fire_tr))
       do n = 1, n_fire_tr
+        fire_gex_ind(n) = gex_get_index(MODEL_LAND,MODEL_ATMOS,'fire_emis_'//trim(frdata(n)%name))
         if (mpp_pe() == mpp_root_pe()) &
         write(*,*) 'atmos_tracer_driver_init: frdata(', n, '), name=', TRIM(frdata(n)%name)
       enddo
+      frp_gex_ind = gex_get_index(MODEL_LAND,MODEL_ATMOS,'frp')
+
 ! initialize the tracers
 !carbonaceous aerosols
       if (nbcphobic > 0 .or. nbcphilic >0 .or.  &
@@ -2915,9 +2919,11 @@ integer :: logunit
       logunit=stdlog()
       write (logunit,'(/,(a))') 'Exiting tracer_driver, have a nice day ...'
 
-      call atmos_fire_plumerise_end   !!!armanp
-      call atmos_fire_emis_end   !!!armanp
-      deallocate(fire_emis_ind)   !!!armanp
+      call atmos_fire_plumerise_end   !armanp
+      call atmos_fire_emis_end        !armanp
+      deallocate(fire_emis_ind)       !armanp
+      deallocate(fire_gex_ind)
+
       call atmos_radon_end
       call atmos_sulfur_hex_end
       call atmos_convection_tracer_end

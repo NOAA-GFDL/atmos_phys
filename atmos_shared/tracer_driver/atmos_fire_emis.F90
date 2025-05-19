@@ -42,11 +42,10 @@ character(len=*), parameter :: module_name = 'atmos_fire_emis'
 logical :: used
 
 logical         :: module_is_initialized =.FALSE.
-integer, parameter :: MAX_FR_TR = 99
 real            :: delta_time
 real            :: dt_fast_yr      ! fast time step in years
-integer :: id_fire_emis(MAX_FR_TR)
-integer :: n_fire_tr  ! number of fire emission tracers
+integer, allocatable :: id_fire_emis(:)
+integer         :: n_fire_tr  ! number of fire emission tracers
 
 !--- Fire emissions type
 type fire_emis_type
@@ -70,7 +69,6 @@ subroutine atmos_fire_emis_init(axes, Time, fire_emis_ind, frdata)
  type(fire_emis_type), allocatable, intent(inout) :: frdata(:)
 
  integer :: i, j, k, m, n, o, p, nsp, tr
-!integer :: trind
  character(fm_field_name_len) :: name ! name of the vegn tracer
  character(fm_type_name_len)  :: typ  ! type of the vegn tracer
  integer :: nt_atmos
@@ -83,10 +81,9 @@ subroutine atmos_fire_emis_init(axes, Time, fire_emis_ind, frdata)
   call get_number_tracers (MODEL_ATMOS, num_prog=nt_atmos)
  
   n_fire_tr = 0
-! see if any of the atmos_tracers have bb_emis is lm4
+! see if any of the atmos_tracers have bb_emis from land
   do tr = 1, nt_atmos
      call get_tracer_names (MODEL_ATMOS, tr, name = name)
-!    trind = get_tracer_index(MODEL_ATMOS,name)
      if(query_method('emissions2dbb', MODEL_ATMOS, tr, method, parameters)) then
         if (trim(method)=='land:lm4') then
         n_fire_tr=n_fire_tr+1
@@ -95,7 +92,8 @@ subroutine atmos_fire_emis_init(axes, Time, fire_emis_ind, frdata)
   enddo 
 
   if (n_fire_tr > 0) then
-     allocate(frdata(1:n_fire_tr))
+     allocate(frdata(n_fire_tr))
+     allocate(id_fire_emis(n_fire_tr))
      if (mpp_pe() == mpp_root_pe()) &
      write(*,*) 'Allocated frdata with size:', size(frdata)
   else
@@ -113,7 +111,7 @@ subroutine atmos_fire_emis_init(axes, Time, fire_emis_ind, frdata)
             i = i + 1
             fire_emis_ind(tr) = i
             frdata(i)%name = trim(name)
-            frdata(i)%tr_atm = tr ! get_tracer_index(MODEL_ATMOS,name)
+            frdata(i)%tr_atm = tr
             if (mpp_pe() == mpp_root_pe())  &
                write(*,*) 'atmos_fire_emis_init: emis2dbb tracer=', TRIM(name),tr,fire_emis_ind(tr),frdata(i)%tr_atm
             if ( parse(parameters, 'mw', value) > 0 ) then
@@ -133,9 +131,6 @@ subroutine atmos_fire_emis_init(axes, Time, fire_emis_ind, frdata)
         endif
      endif
   enddo 
-
-  if (n_fire_tr .gt. MAX_FR_TR) call mpp_error(FATAL, 'Number of fire emission tracers defined exceeds the maximum of MAX_FR_TR -please increase MAX_FR_TR in vegn_data.F90')
-
 
   do i = 1,n_fire_tr
 
@@ -160,6 +155,7 @@ subroutine atmos_fire_emis_end
          if (mpp_pe() == mpp_root_pe()) &
          call mpp_error(WARNING, 'frdata is not allocated; cannot deallocate')
       endif
+      if (allocated(id_fire_emis)) deallocate(id_fire_emis)
 end subroutine atmos_fire_emis_end
 
 ! ============================================================================
