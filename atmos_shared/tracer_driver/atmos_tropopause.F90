@@ -43,9 +43,15 @@ character(len=48), parameter :: module_name = 'tracers'
 logical :: module_is_initialized = .FALSE.
 integer :: logunit
 
-real, parameter    :: ztrop_low = 5.e3   ! lowest tropopause level allowed (m)
-real, parameter    :: ztrop_high = 20.e3 ! highest tropopause level allowed (m)
+real, parameter    :: ztrop_low  = 5.e3   ! lowest tropopause level allowed (m)
+real, parameter    :: ztrop_high = 20.e3  ! highest tropopause level allowed (m)
 real, parameter    :: max_dtdz   = 2.e-3  ! max dt/dz for tropopause level (K/m)
+real, parameter    :: ptrop_low  = 450.e2 ! lowest tropopause level allowed (Pa)
+real, parameter    :: ptrop_high = 85.e2  ! highest tropopause level allowed (Pa)
+real, parameter    :: deltaz     = 2.e3   ! depth to check lapse rate (m)
+
+integer            :: tropopause_scheme_code
+integer, parameter :: ESM41_TROP=1, WMO_TROP=2
 
 !-----------------------------------------------------------------------
 !     ... identification numbers for diagnostic fields
@@ -57,9 +63,10 @@ integer :: id_ptp, id_tatp, id_ztp
 !-----------------------------------------------------------------------
 
 logical  :: do_tropopause_diagnostics = .false.
+character(len=64)  :: tropopause_scheme = 'ESM41'
 
 namelist /atmos_tropopause_nml/  &
-          do_tropopause_diagnostics
+          do_tropopause_diagnostics, tropopause_scheme
 
 !---- version number -----
 character(len=128) :: version = '$$'
@@ -119,10 +126,9 @@ subroutine atmos_tropopause(is, ie, js, je, Time, Time_next, t, pfull, z_full, &
 !-----------------------------------------------------------------------
 !
 
-integer   :: i,j,k,id,jd,kd
+integer   :: i,j,k,id,jd,kd,kk
 real      :: dtemp
-logical   :: sent
-logical   :: used
+logical   :: used, found
 
 real, dimension(size(t,1),size(t,2)) :: ptp, tatp, ztp
 
@@ -133,8 +139,12 @@ real, dimension(size(t,1),size(t,2)) :: ptp, tatp, ztp
 
     id=size(t,1); jd=size(t,2); kd=size(t,3)
 
-    do j=1,jd
-    do i=1,id
+    select case (tropopause_scheme_code)
+! scheme used in ESM4.1
+     case (ESM41_TROP)
+
+       do j=1,jd
+       do i=1,id
 
        do k = kd-1,2,-1
           if (z_full(i,j,k) < ztrop_low ) then
@@ -154,8 +164,54 @@ real, dimension(size(t,1),size(t,2)) :: ptp, tatp, ztp
        tatp(i,j) = t(i,j,tropopause_ind(i,j))
        ztp(i,j) = z_full(i,j,tropopause_ind(i,j))
 
-    enddo
-    enddo
+       end do
+       end do
+
+     case (WMO_TROP)
+! WMO scheme (International Meteorological Vocabulary, WMO, 182, 1992)
+! defined as the lowest level at which the lapse rate
+! decreases to 2degC km-1 or less, provided that the average
+! lapse rate between this level and all higher levels within
+! 2 km does not exceed 2degC km-1.
+       do j=1,jd
+       do i=1,id
+
+       found = .false.
+       do k = kd-1,2,-1
+          if (pfull(i,j,k) > ptrop_low ) then
+              cycle
+          else if( pfull(i,j,k) < ptrop_high ) then
+              tropopause_ind(i,j)    = k
+              exit
+          end if
+          dtemp = t(i,j,k) - t(i,j,k-1)
+          if( dtemp < max_dtdz*(z_full(i,j,k-1) - z_full(i,j,k)) ) then
+! check that lapse rate LT 2K/km within 2km above
+             do kk = k-2,1,-1
+                if (z_full(i,j,kk)-z_full(i,j,k) > deltaz) then
+                   tropopause_ind(i,j) = k
+                   found = .true.
+                   exit
+                end if
+                dtemp = t(i,j,k) - t(i,j,kk)
+                if( dtemp > max_dtdz*(z_full(i,j,kk) - z_full(i,j,k)) ) then
+                   exit ! search for another tropopause candidate
+                end if
+             end do
+             if (found) exit
+          end if
+       end do
+
+       ptp(i,j)  = pfull(i,j,tropopause_ind(i,j))
+       tatp(i,j) = t(i,j,tropopause_ind(i,j))
+       ztp(i,j)  = z_full(i,j,tropopause_ind(i,j))
+
+       enddo
+       enddo
+
+     case default
+       call error_mesg ('atmos_tropopause_init', 'undefined tropopause scheme ', FATAL )
+    end select
 
     if (id_ptp > 0) &
        used = send_data (id_ptp, ptp, Time_next, is_in=is,js_in=js)
@@ -220,6 +276,15 @@ integer :: ierr, io
     logunit=stdlog()
     if (mpp_pe() == mpp_root_pe() ) &
               write (logunit, nml=atmos_tropopause_nml)
+
+    if ( TRIM(tropopause_scheme) == 'ESM41') then
+       tropopause_scheme_code = ESM41_TROP
+    else if ( TRIM(tropopause_scheme) == 'WMO') then
+       tropopause_scheme_code = WMO_TROP
+    else
+       call error_mesg ('atmos_tropopause_init', 'undefined tropopause scheme '// &
+                        TRIM(tropopause_scheme), FATAL )
+    end if
 
     id_ptp  = register_cmip_diag_field_2d ( module_name, 'ptp', Time, &
                 long_name='Tropopause Air Pressure', units='Pa', &
