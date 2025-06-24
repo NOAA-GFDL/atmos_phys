@@ -118,9 +118,14 @@ logical            :: use_sj_sedimentation_solver = .FALSE.
 logical            :: dust_debug = .false.
 logical            :: do_esm_dust_flux = .false. !If set to .true. a dust flux will be prepared for exchange with Ocean
 integer            :: logunit
+!frac_sol = frac_fe_dust * fe_sol_coef / [dust]^fe_sol_pow
+!the default values are from ESM4p1 and were derived from Baker and Croot (2010) 
+real               :: frac_fe_dust = 0.035
+real               :: fe_sol_coef  = 0.031
+real               :: fe_sol_pow   = 0.26
 
 namelist /dust_nml/  dust_source_filename, dust_source_name, uthresh, coef_emis, use_sj_sedimentation_solver, &
-                     dust_debug, do_esm_dust_flux
+                     dust_debug, do_esm_dust_flux, frac_fe_dust, fe_sol_coef, fe_sol_pow
 
 !---- version number -----
 character(len=128) :: version = '$Id$'
@@ -943,7 +948,7 @@ subroutine atmos_dust_solFe_frac_set(array, is,ie,js,je)
   !So, the final flux of soluble iron to the ocean is:
   !flux_iron = frac_fe_dust*frac_sol_fe*flux_dust
 
-  atmos_dust_solFe_frac(is:ie,js:je) = 0.035 * 0.031 / (max(array(is:ie,js:je)*1.E9,epsilon))**0.26
+  atmos_dust_solFe_frac(is:ie,js:je) = frac_fe_dust * fe_sol_coef / (max(array(is:ie,js:je)*1.E9,epsilon))**fe_sol_pow
 end subroutine atmos_dust_solFe_frac_set
 
 subroutine atmos_dust_solP_frac_set(array, is,ie,js,je)
