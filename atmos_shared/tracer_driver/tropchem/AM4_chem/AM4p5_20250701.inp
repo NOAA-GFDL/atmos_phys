@@ -1,10 +1,10 @@
 BEGSIM
 output_unit_number = 7
-output_file        = AM4p5_20250107.doc
+output_file        = AM4p5_20250701.doc
 procout_path       = ../output/
 src_path           = ../bkend/
 sim_dat_path       = ../output/
-sim_dat_filename   = sim.AM4p5_20250107.dat
+sim_dat_filename   = sim.AM4p5_20250701.dat
 
 Comments
      "This is a mozart2 chemical solver with :"
@@ -29,6 +29,7 @@ Comments
      " (18) add minor glyoxal photolysis pathways
      " (19) add CH3SH chemistry (https://acp.copernicus.org/articles/22/6309/2022/acp-22-6309-2022-supplement.pdf)
      "      assumes SO3->SO4"
+     " (20) add condensed schemes for MEK and RCHO"
 End Comments
 
       SPECIES
@@ -51,15 +52,16 @@ End Comments
  SO2, SO4, DMS -> CH3SCH3, NH3, NH4NO3, NH4
  HCl, HOCl, ClONO2, Cl, ClO, Cl2O2, Cl2, HOBr, HBr, BrONO2, Br, BrO, BrCl
  LCH4 -> CH4, H, H2O
- ROH->C3H7OH,RCHO->C2H5CHO
+ ROH->C3H7OH, RCHO->C2H5CHO, RCO3
  ISOPNB->HOCH2C(CH3)=CHCH2ONO2 
  ISOPNBO2, MACRN->HC(O)C(CH3)=CHCOOH 
  MVKN->HC(O)C(CH3)=CHCOOH, R4N2
- MEK,R4N1, IEPOX,IEPOXOO,GLYX
+ MEK->C2H5COCH3, MEKO2, MEKOOH
+ R4N1, IEPOX,IEPOXOO,GLYX
  MGLY -> CH3COCHO
  MVKO2, MVKOOH, MACRNO2
  MAO3, MAOP, MAOPO2, ATO2
- ATOOH,INO2, INPN, ISNOOA, ISN1,O3S -> O3, O3S_E90 -> O3
+ ATOOH, INO2, INPN, ISNOOA, ISN1,O3S -> O3, O3S_E90 -> O3
  CH3SH, CH3S, CH3SO, CH3SOO, CH3SO2, CH3SO3, MSA
  MTMP, HPMTF
       End Solution
@@ -95,10 +97,11 @@ End Comments
        SO2, SO4, DMS, NH3, NH4NO3, NH4
        HCl, HOCl, ClONO2, Cl, ClO, Cl2O2, Cl2
        HOBr, HBr, BrONO2, Br, BrO, BrCl, H
-       ROH,RCHO
+       ROH, RCHO, RCO3
        ISOPNB
        ISOPNBO2, MACRN, MVKN, R4N2
-       MEK,R4N1, IEPOX,IEPOXOO,GLYX
+       MEK, MEKO2, MEKOOH
+       R4N1, IEPOX,IEPOXOO,GLYX
        MGLY
        MVKO2, MVKOOH,MACRNO2
        MAO3,MAOP, MAOPO2, ATO2
@@ -148,6 +151,9 @@ End Comments
  [jmacrn] MACRN + hv -> NO2 + HYAC + MGLY + .5*CH2O + HO2 + .5*CO 
  [jmvkn] MVKN + hv -> GLYALD + NO2 + CH3CO3 
  [jr4n2] R4N2 + hv ->  NO2 + .32*CH3COCH3 + .19*MEK + .18*CH3O2 + .27*HO2 + .32*CH3CHO + .13*RCHO 
+ [jmek] MEK + hv -> CH3CO3 + C2H5O2
+ [jmekooh] MEKOOH + hv -> CH3CO3 + CH3CHO + OH
+ [jrcho] RCHO + hv -> C2H5O2 + CO + HO2
  [jclono2] ClONO2 + hv -> Cl + NO3
  [jhocl] HOCl + hv -> OH + Cl
  [jcl2o2] Cl2O2 + hv -> 2*Cl + O2
@@ -352,6 +358,15 @@ End Comments
          C10H16 + OH -> 1.64 * ISOPO2 + 0.1 * CH3COCH3  ; 1.2e-11, 440
 [ol_c10h16] C10H16 + O3 ->1.122 * MACR + .442*MVK + .765*O + 1.156*OH ; 5.3e-16, -530   
          C10H16 + NO3 -> 1.7 * ISOPO2 + NO2                 ; 1.2e-12, 490
+ [uoh_mek] MEK + OH -> MEKO2 + H2O                          ; 2.3e-12, -170
+[op_meko2] MEKO2 + NO -> NO2 + CH3CO3 + CH3CHO	            ; 4.2e-12, 180
+         MEKO2 + HO2 -> .2*CH3CO3 + .2*OH + .2*CH3CO3 + .8*MEKOOH ; 7.5e-13, 700
+         MEKOOH + OH -> MEKO2 + H2O				  ; 3.8e-12, 200
+ [uoh_rcho] RCHO + OH -> RCO3 + H2O                               ; 1.5e-12, -90
+         RCHO + NO3 -> RCO3 + HNO3                                ; 6.5e-15
+ [op_rco3]  RCO3 + NO -> NO2 + C2H5O2 + CO2                       ; 6.7e-12, 340
+         RCO3 + HO2 -> .41*CH3COOOH + .41*CO + .59*C2H5O2         ; 5.2e-13, 980
+                       + .59*OH + .59*CO2
 	 CH3SH + OH -> CH3S + H2O                                 ; 9.9e-12, 360
 	 CH3SH + NO3 -> CH3S + HNO3                               ; 9.2e-13
 	 CH3S + NO2 -> CH3SO + NO                                 ; 6.0e-11, 240
@@ -452,8 +467,6 @@ End Comments
  [strat80] BrONO2 + H2O -> HOBr + HNO3
            LCH4 -> ; 1.16e-5
 	   ROH ->  ; 1.16e-5
-	   RCHO -> ; 1.16e-5
-	   MEK ->  ; 1.16e-5	   	   
    End Reactions
 
    Heterogeneous

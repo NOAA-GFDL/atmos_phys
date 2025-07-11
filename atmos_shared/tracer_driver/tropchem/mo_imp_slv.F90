@@ -34,11 +34,13 @@
                  eo2_ndx, isopnbo2_ndx, iepoxoo_ndx, &
                  mobaoo_ndx, ino2_ndx, mvko2_ndx,&
                  macrno2_ndx, mao3_ndx, maopo2_ndx, ato2_ndx,&
-                 isopnb_ndx, macr_ndx, moba_ndx
+                 isopnb_ndx, macr_ndx, moba_ndx, &
+                 meko2_ndx, rco3_ndx
       integer :: op_ho2_ndx, op_mo2_ndx, op_ch3co3_ndx, op_po2_ndx, op_c2h5o2_ndx, &
                  op_isopo2_ndx, op_macro2_ndx, op_mco3_ndx, op_c3h7o2_ndx, op_ro2_ndx, &
                  op_xo2_ndx, op_isopnbo2_ndx, op_iepoxo2_ndx, op_ino2_ndx, op_mvko2_ndx,&
-                 op_macrno2_ndx, op_mao3_ndx, op_maopo2_ndx, op_ato2_ndx, op_eo2_ndx
+                 op_macrno2_ndx, op_mao3_ndx, op_maopo2_ndx, op_ato2_ndx, op_eo2_ndx, &
+                 op_meko2_ndx, op_rco3_ndx
       integer :: ol_o1d_ndx, ol_oh_ndx, ol_ho2_ndx, ol_c3h6_ndx, ol_isop_ndx, &
                  ol_c2h4_ndx, ol_mvk_ndx, ol_macr_ndx, ol_c10h16_ndx, uoh_no2_ndx, &
                  n2o5h_ndx, no3h_ndx, no2h_ndx, ol_isopnb_ndx
@@ -199,11 +201,14 @@ logical                       :: module_is_initialized = .false.
          op_mao3_ndx = get_rxt_ndx( 'op_mao3' )
          op_maopo2_ndx = get_rxt_ndx( 'op_maopo2' )
          op_ato2_ndx = get_rxt_ndx( 'op_ato2' )
-         wrk(1:17) = (/ op_ho2_ndx, op_mo2_ndx, op_eo2_ndx, op_po2_ndx, op_ch3co3_ndx, &
+         op_meko2_ndx = get_rxt_ndx( 'op_meko2' )
+         op_rco3_ndx = get_rxt_ndx( 'op_rco3' )
+         wrk(1:19) = (/ op_ho2_ndx, op_mo2_ndx, op_eo2_ndx, op_po2_ndx, op_ch3co3_ndx, &
                         op_c2h5o2_ndx, op_c3h7o2_ndx, op_isopo2_ndx, op_isopnbo2_ndx, op_iepoxo2_ndx, &
                         op_ino2_ndx, op_mvko2_ndx, op_macro2_ndx, &
-                        op_macrno2_ndx, op_mao3_ndx, op_maopo2_ndx, op_ato2_ndx /)
-         if( any( wrk(1:17) < 1 ) ) then
+                        op_macrno2_ndx, op_mao3_ndx, op_maopo2_ndx, op_ato2_ndx, &
+                        op_meko2_ndx, op_rco3_ndx /)
+         if( any( wrk(1:19) < 1 ) ) then
             do_ox_pl = .false.
          end if
          if( do_ox_pl ) then
@@ -249,6 +254,8 @@ logical                       :: module_is_initialized = .false.
             mao3_ndx = get_spc_ndx( 'MAO3' )
             maopo2_ndx = get_spc_ndx( 'MAOPO2' )
             ato2_ndx = get_spc_ndx( 'ATO2' )
+            meko2_ndx = get_spc_ndx( 'MEKO2' )
+            rco3_ndx = get_spc_ndx( 'RCO3' )
             no_ndx = get_spc_ndx( 'NO' )
             no2_ndx = get_spc_ndx( 'NO2' )
             no3_ndx = get_spc_ndx( 'NO3' )
@@ -261,14 +268,15 @@ logical                       :: module_is_initialized = .false.
             macr_ndx = get_spc_ndx( 'MACR' )
 ! Here I removed terpenes to test the code (jmao, 05/29/2013)
             c10h16_ndx = get_spc_ndx( 'C10H16' )
-            wrk(1:29) = (/ oh_ndx, ho2_ndx, ch3o2_ndx, eo2_ndx, po2_ndx, ch3co3_ndx, &
+            wrk(1:31) = (/ oh_ndx, ho2_ndx, ch3o2_ndx, eo2_ndx, po2_ndx, ch3co3_ndx, &
                            c2h5o2_ndx, c3h7o2_ndx, isopo2_ndx, isopnbo2_ndx,&
                            iepoxoo_ndx, &
                            ino2_ndx, mvko2_ndx, macro2_ndx, macrno2_ndx, mao3_ndx, maopo2_ndx, ato2_ndx,& 
+                           meko2_ndx, rco3_ndx, &
                            no_ndx, no2_ndx, no3_ndx, n2o5_ndx, &
                            c2h4_ndx, c3h6_ndx, isop_ndx, isopnb_ndx, mvk_ndx, macr_ndx, &
                            c10h16_ndx /)
-            if( any( wrk(1:29) < 1 ) ) then
+            if( any( wrk(1:31) < 1 ) ) then
                do_ox_pl = .false.
             end if
          end if
@@ -750,7 +758,9 @@ iter_loop : &
            + 1.85*reaction_rates(indx,op_macrno2_ndx) *base_sol(indx,macrno2_ndx) &
            + reaction_rates(indx,op_mao3_ndx) *base_sol(indx,mao3_ndx) &
            + reaction_rates(indx,op_maopo2_ndx) *base_sol(indx,maopo2_ndx) &
-           + .96*reaction_rates(indx,op_ato2_ndx) *base_sol(indx,ato2_ndx) ) * base_sol(indx,no_ndx)
+           + .96*reaction_rates(indx,op_ato2_ndx) *base_sol(indx,ato2_ndx) &
+           + reaction_rates(indx,op_meko2_ndx) *base_sol(indx,meko2_ndx) &
+           + reaction_rates(indx,op_rco3_ndx) *base_sol(indx,rco3_ndx)) * base_sol(indx,no_ndx)
 
           !-----------------------------------------------------------------------
           !         ... ozone destruction (only valid for the troposphere!)
