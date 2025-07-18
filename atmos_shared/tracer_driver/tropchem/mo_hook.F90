@@ -4,7 +4,8 @@
       use atmos_cmip_diag_mod, only : register_cmip_diag_field_2d
       use time_manager_mod, only : time_type
       use constants_mod,    only : PI, EPSLN
-      use fms_mod, only : mpp_root_pe, mpp_pe
+      use fms_mod, only : mpp_root_pe, mpp_pe, error_mesg, NOTE
+      use field_manager_mod, only : MODEL_ATMOS, MODEL_LAND
       use gex_mod, only : gex_get_index
 
       implicit none
