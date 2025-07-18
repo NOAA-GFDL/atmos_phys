@@ -5,6 +5,7 @@
       use time_manager_mod, only : time_type
       use constants_mod,    only : PI, EPSLN
       use fms_mod, only : mpp_root_pe, mpp_pe
+      use gex_mod, only : gex_get_index
 
       implicit none
 
@@ -26,6 +27,7 @@
       real :: lat25
       real, parameter :: MW_N = 14.00674, &                 ! molecular weight of nirogen (AMU)
                          ONE_OVER_AVO = 1.65979e-24         ! reciprocal of Avogadros number (mole)
+      integer :: gex_atm2lnd_groundflash = 0
       
 character(len=128), parameter :: version     = '$Id$'
 character(len=128), parameter :: tagname     = '$Name$'
@@ -88,6 +90,11 @@ logical                       :: module_is_initialized = .false.
                       16.5,14.1,13.7,12.8,12.5, 2.8, 0.9, 0.3 /)
       vdist(:,3) = (/  8.2, 1.9, 2.1, 1.6, 1.1, 1.6, 3.0, 5.8, &       ! trop cont
                        7.6, 9.6,10.5,12.3,11.8,12.5, 8.1, 2.3 /)
+
+!Check for possible gex exchange
+      gex_atm2lnd_groundflash = gex_get_index(MODEL_ATMOS,MODEL_LAND,'groundflash',record=.TRUE.)
+      if (gex_atm2lnd_groundflash .gt. 0) call error_mesg('moz_hook','gex/atm2lnd groundflash found',NOTE)
+
       id_prod_no_col = register_diag_field('tracers','prod_no_col',axes(1:2),Time, &
                                            'prod_no_col','TgN/y')
       id_prod_no_col_lght = register_diag_field('tracers','prod_no_col_lght',axes(1:2),Time, &
@@ -105,7 +112,7 @@ logical                       :: module_is_initialized = .false.
 
 
       subroutine moz_hook( cldtop, cldbot, oro, zm, zint, t, &
-                           prod_no, area, lat, &
+                           prod_no, gex_atm2lnd, area, lat, &
                            Time,is,js )
 !----------------------------------------------------------------------
 !        ... General purpose chemistry "hook" routine.
@@ -126,9 +133,10 @@ logical                       :: module_is_initialized = .false.
       real, intent(in) :: zint(:,:,:)                ! geopot height above surface at interfaces (m)
       real, intent(in) :: t(:,:,:)                   ! temperature
       
-      real, intent(out) :: prod_no(:,:,:)            ! production of NOx (molec cm^-3 s^-1)
-      real, intent(in)  :: area(:,:)                 ! area (m^2)
-      real, intent(in) :: lat(:,:)                   ! latitude
+      real, intent(out)   :: prod_no(:,:,:)          ! production of NOx (molec cm^-3 s^-1)
+      real, intent(inout) :: gex_atm2lnd(:,:,:)      ! array to pass atm values to lnd component
+      real, intent(in)    :: area(:,:)               ! area (m^2)
+      real, intent(in)    :: lat(:,:)                ! latitude
       type(time_type), intent(in) :: Time            ! time
       integer, intent(in) :: is, js                  ! lon,lat indices
 
@@ -152,8 +160,8 @@ logical                       :: module_is_initialized = .false.
                  flash_energy, &    ! Energy of flashes per second
                  glob_prod_no_col   ! Global NO production rate for diagnostics
       real :: prod_no_col(size(prod_no,1),size(prod_no,2)) ! production of NOx (molec cm^-2 s^-1)
-      real :: flash_freq(size(prod_no,1),size(prod_no,2))
-      real :: ground_flash_freq(size(prod_no,1),size(prod_no,2))
+      real :: flash_freq(size(prod_no,1),size(prod_no,2))  ! flash frequency (min^-1)
+      real :: ground_flash_freq(size(prod_no,1),size(prod_no,2)) ! cloud-ground flash frequency (min^-1)
       real :: local_area(size(area,1),size(area,2)) ! storm area (cm^2)
       logical :: used
       integer :: platl, plonl, plev
@@ -299,6 +307,10 @@ logical                       :: module_is_initialized = .false.
          if(id_ground_flash_freq >0) &
             used=send_data(id_ground_flash_freq,ground_flash_freq/60./local_area,Time,is_in=is,js_in=js)
 
+! Provide the data for the dry deposition that passed directly to the surface
+         if (gex_atm2lnd_groundflash > 0) then
+            gex_atm2lnd(:,:,gex_atm2lnd_groundflash) = ground_flash_freq(:,:)/60./local_area * 1.e4 ! m^-2 s^-1
+         endif
 
 !--------------------------------------------------------------------------------
 !        ... distribute production up to cloud top [Pickering et al., 1998 (JGR)]

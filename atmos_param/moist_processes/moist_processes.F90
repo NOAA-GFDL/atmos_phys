@@ -708,7 +708,8 @@ type(aerosol_type),intent(in), optional :: Aerosol
         call convection_driver    &
                    (is, ie, js, je, Surf_diff, Phys_mp_exch, &
                        Moist_clouds_block, Input_mp, Tend_mp, C2ls_mp, &
-                                  Output_mp, Removal_mp,  Aerosol=Aerosol)
+                                  Output_mp, Removal_mp, gex_atm2lnd, &
+                                  Aerosol=Aerosol)
         call lscloud_driver    &
                     (is, ie, js, je, Time, dt, lon, lat, Input_mp, & 
                      Physics_tendency_block%qdiag, Tend_mp, C2ls_mp, &

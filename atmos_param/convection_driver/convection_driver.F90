@@ -945,7 +945,7 @@ end subroutine convection_driver_time_vary
 subroutine convection_driver   &
                    (is, ie, js, je, Surf_diff, Phys_mp_exch, &
                        Moist_clouds_block, Input_mp, Tend_mp, C2ls_mp, &
-                                          Output_mp, Removal_mp, Aerosol)
+                       Output_mp, Removal_mp, gex_atm2lnd, Aerosol)
 
 !------------------------------------------------------------------------
 !    subroutine convection_driver saves needed variables on input for
@@ -965,6 +965,7 @@ type(mp_tendency_type), intent(inout)        :: Tend_mp
 type(mp_conv2ls_type),  intent(inout)        :: C2ls_mp
 type(mp_output_type),   intent(inout)        :: Output_mp
 type(mp_removal_type),  intent(inout)        :: Removal_mp
+real, intent(inout), dimension(:,:,:)        :: gex_atm2lnd
 type(aerosol_type),     intent(in), optional :: Aerosol
 
 !-----------------------------------------------------------------------
@@ -1284,7 +1285,8 @@ type(aerosol_type),     intent(in), optional :: Aerosol
 !    the more appropriate time.
 !------------------------------------------------------------------------
       call define_total_convective_output (is, js, nt, C2ls_mp,  &
-                          Conv_results, Input_mp, Output_mp, Phys_mp_exch) 
+                          Conv_results, Input_mp, Output_mp, Phys_mp_exch, &
+                          gex_atm2lnd) 
 
 !------------------------------------------------------------------------
 !    call convective_diagnostics to produce and output desired diagnostics
@@ -2500,7 +2502,7 @@ end subroutine convection_driver_alloc
 
 subroutine define_total_convective_output    &
               (is, js, nt, C2ls_mp, Conv_results, Input_mp, Output_mp,   &
-                                                             Phys_mp_exch)
+                           Phys_mp_exch, gex_atm2lnd)
 
 !----------------------------------------------------------------------
 !    subroutine define_total_convective_output: a) defines total cloud 
@@ -2521,6 +2523,7 @@ type(conv_results_type),  intent(inout) :: Conv_results
 type(mp_input_type),      intent(inout) :: Input_mp
 type(mp_output_type),     intent(inout) :: Output_mp
 type(phys_mp_exch_type),  intent(inout) :: Phys_mp_exch
+real, dimension(:,:,:),   intent(inout) :: gex_atm2lnd
 !-----------------------------------------------------------------------
 
 !----------------------------------------------------------------------
@@ -2617,7 +2620,8 @@ type(phys_mp_exch_type),  intent(inout) :: Phys_mp_exch
         call moz_hook       &
               (Conv_results%cldtop, Conv_results%cldbot, Input_mp%land, &
                Input_mp%zfull, Input_mp%zhalf, Input_mp%t,   &
-               Conv_results%prod_no, Input_mp%area, Input_mp%lat,   &
+               Conv_results%prod_no, gex_atm2lnd, &
+               Input_mp%area, Input_mp%lat,   &
                Time, is, js)
 
         Output_mp%rdt(:,:,:,get_tracer_index(MODEL_ATMOS,'no')) =  &
