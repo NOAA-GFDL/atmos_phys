@@ -22,12 +22,14 @@
       logical :: normalize_by_area = .false. ! normalize lightning NOx production by grid cell area
       logical :: allow_small_storms = .false. ! modify area normalization for high-res grids
       real :: min_land_frac = -999.          ! minimum land fraction for flash frequency calculation (default=-999)
+      logical :: groundflash_bug = .false.   ! use buggy calculation of flash energy & cgic
       real, parameter :: AREA_PER_STORM = 1.e10 ! m2 (100km x 100km)
       real :: vdist(16,3)                    ! vertical distribution of lightning
       integer :: id_prod_no_col, id_flash_freq, id_prod_no_col_lght, id_eminox_lght, id_ground_flash_freq
       real :: lat25
       real, parameter :: MW_N = 14.00674, &                 ! molecular weight of nirogen (AMU)
                          ONE_OVER_AVO = 1.65979e-24         ! reciprocal of Avogadros number (mole)
+      real :: cgic55 = 1.                                   ! cg/ic ratio at 5.5km dchgzone
       integer :: gex_atm2lnd_groundflash = 0
       
 character(len=128), parameter :: version     = '$Id$'
@@ -38,6 +40,7 @@ logical                       :: module_is_initialized = .false.
 
       subroutine moz_hook_init( lght_no_prd_factor, normalize_lght_no_prd_area, &
                                 allow_small_storms_lght_no_prd, min_land_frac_lght, &
+                                do_groundflash_bug, &
                                 Time, axes, verbose )
 !----------------------------------------------------------------------
 !       ... Initialize the chemistry "hook" routine
@@ -54,6 +57,7 @@ logical                       :: module_is_initialized = .false.
       logical,         intent(in) :: normalize_lght_no_prd_area ! normalize lightning NOx production by grid cell area
       logical,         intent(in) :: allow_small_storms_lght_no_prd ! modify area normalization for high-res grids
       real,            intent(in) :: min_land_frac_lght         ! minimum land fraction for flash frequency calculation (default=-999)
+      logical,         intent(in) :: do_groundflash_bug         ! use buggy calculation of flash energy & cgic
       integer,         intent(in) :: verbose
 
 !----------------------------------------------------------------------
@@ -66,6 +70,7 @@ logical                       :: module_is_initialized = .false.
       normalize_by_area = normalize_lght_no_prd_area
       allow_small_storms = allow_small_storms_lght_no_prd
       min_land_frac = min_land_frac_lght
+      groundflash_bug = do_groundflash_bug
       if (verbose >= 2) then
          if (mpp_root_pe().eq.mpp_pe()) then
             write(*,*) 'MOZ_HOOK_INIT: Lightning NO production scaling factor = ',factor
@@ -80,6 +85,11 @@ logical                       :: module_is_initialized = .false.
       end if
 
       lat25 = 25. * PI/180.
+      if (groundflash_bug) then
+         cgic55 = 0.
+      else
+         cgic55 = 1.
+      end if
 
 !----------------------------------------------------------------------
 !       ... vdist(kk,itype) = % of lightning NOx between (kk-1) and (kk)
@@ -260,7 +270,7 @@ logical                       :: module_is_initialized = .false.
                   cgic(i,j) = 1./((((ca*dchgzone(i,j) + cb)*dchgzone(i,j) + cc) &
                                       *dchgzone(i,j) + cd)*dchgzone(i,j) + ce)
                   if( dchgzone(i,j) < 5.5 ) then
-                     cgic(i,j) = 0.
+                     cgic(i,j) = cgic55
                   end if
                   if( dchgzone(i,j) > 14. ) then
                      cgic(i,j) = .02
@@ -271,8 +281,14 @@ logical                       :: module_is_initialized = .false.
 !       ... Compute flash energy (CG*6.7e9 + IC*6.7e8)
 !           and convert to total energy per second
 !--------------------------------------------------------------------------------
-                  flash_energy(i,j) = cgic(i,j)*6.7e9 + (1. - cgic(i,j))*6.7e8
-                  flash_energy(i,j) = flash_energy(i,j)*flash_freq(i,j)/60.
+                  if (groundflash_bug) then
+                     flash_energy(i,j) = cgic(i,j)*6.7e9 + (1. - cgic(i,j))*6.7e8
+                     flash_energy(i,j) = flash_energy(i,j)*flash_freq(i,j)/60.
+                  else
+                     flash_energy(i,j) = ground_flash_freq(i,j)*6.7e9 + &
+                        (flash_freq(i,j)-ground_flash_freq(i,j))*6.7e8
+                     flash_energy(i,j) = flash_energy(i,j)/60.
+                  end if
 
 !--------------------------------------------------------------------------------
 !         ... Compute number of N atoms produced per second

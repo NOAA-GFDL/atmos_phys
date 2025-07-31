@@ -174,6 +174,7 @@ real               :: lght_no_prd_factor = 1.           ! lightning NOx scale fa
 logical            :: normalize_lght_no_prd_area = .false. ! normalize lightning NOx production by grid cell area
 logical            :: allow_small_storms_lght_no_prd = .false. ! modify area normalization for high-res grids
 real               :: min_land_frac_lght = -999.        ! minimum land fraction for lightning NOx calculation
+logical            :: do_groundflash_bug = .false.      ! use buggy calculation of flash energy & cg/ic ratio
 real               :: strat_chem_age_factor = 1.        ! scale factor for age of air
 real               :: strat_chem_dclydt_factor = 1.     ! scale factor for dcly/dt
 logical            :: do_tropchem = .false.             ! Do tropospheric chemistry?
@@ -2475,6 +2476,7 @@ end if
 !-----------------------------------------------------------------------
    call moz_hook_init( lght_no_prd_factor, normalize_lght_no_prd_area, &
                        allow_small_storms_lght_no_prd, min_land_frac_lght, &
+                       do_groundflash_bug, &
                        Time, axes, verbose )
 
 !-----------------------------------------------------------------------
