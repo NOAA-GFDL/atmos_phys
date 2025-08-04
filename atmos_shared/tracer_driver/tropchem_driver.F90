@@ -292,6 +292,7 @@ namelist /tropchem_driver_nml/    &
                                normalize_lght_no_prd_area, &
                                allow_small_storms_lght_no_prd, &
                                min_land_frac_lght, &
+                               do_groundflash_bug, &
                                strat_chem_age_factor, &
                                strat_chem_dclydt_factor, &
                                do_tropchem, &
