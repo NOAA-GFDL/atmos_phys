@@ -195,8 +195,6 @@ integer, save    :: aircraft_time_serie_type
 real             :: critical_sea_fraction = 0.5 ! DMS flux from sea occurs
                                 ! in grid cells with ocn_flx_fraction .gt.
                                 !  this value
-logical            :: use_fixed_pH_cloud_value
-real               :: pH_cloud_value
 
 character(len=80)  :: runtype = 'default'
 
@@ -2029,6 +2027,8 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
       end do   ! end l loop
 !
 
+      ze1=100.
+      ze2=500.
       fbb(:,:,:) = 0.
       if (.not. no_biobur_if_no_pbl) fbb(:,:,kd) = 1.
       do j = 1, jd
