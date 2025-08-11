@@ -952,7 +952,7 @@ character(len=80) :: simpleSO2_biobur_emis_name, description
    id_O3           = register_diag_field ( mod_name,                         &
                    'O3_simple_sulfate',axes(1:3),Time,                       &
                    'O3 in simple-sulfate',                                   &
-                   'none')
+                   'vmr')
    id_SO2_aircraft = register_diag_field ( mod_name,                         &
                    'simpleSO2_aircraft_emis',axes(1:3),Time,                 &
                    'simpleSO2 emission by aircraft',                         &
@@ -2339,7 +2339,7 @@ end subroutine atmos_SOx_emission
              H2O2,SO2_dt,SO4_dt,DMS_dt,MSA_dt,H2O2_dt
 !!! Input fields from interpolator
       real, dimension(size(pfull,1),size(pfull,2),size(pfull,3)) :: pH
-      real, dimension(size(pfull,1),size(pfull,2),size(pfull,3)) :: O3_mmr
+      real, dimension(size(pfull,1),size(pfull,2),size(pfull,3)) :: O3_vmr
       real, dimension(size(pfull,1),size(pfull,2),size(pfull,3)) :: no3_conc
       real, dimension(size(pfull,1),size(pfull,2),size(pfull,3)) :: oh_conc
       real, dimension(size(pfull,1),size(pfull,2),size(pfull,3)) :: jh2o2
@@ -2420,10 +2420,9 @@ end subroutine atmos_SOx_emission
       call interpolator(gas_conc_interp, gas_conc_time, phalf, NO3_conc, &
                        trim(gas_conc_name(3)), is, js)
 
-      O3_mmr(:,:,:)=0  ! Ozone mass mixing ratio
-      call interpolator(gas_conc_interp, gas_conc_time, phalf, O3_mmr, &
+      O3_vmr(:,:,:)=0  ! Ozone mass mixing ratio
+      call interpolator(gas_conc_interp, gas_conc_time, phalf, O3_vmr, &
                        trim(gas_conc_name(4)), is, js)
-      O3_mmr(:,:,:)=O3_mmr(:,:,:)*WTM_O3/WTMAIR
 
       jH2O2(:,:,:)=1.e-6 ! s-1
       call interpolator(gas_conc_interp, gas_conc_time, phalf, jH2O2, &
@@ -2517,7 +2516,7 @@ end subroutine atmos_SOx_emission
        xho2  = max(0.         , HO2_conc(i,j,k) *fac_HO2(i,j))
        xjh2o2= max(0.         , jH2O2(i,j,k)    *fac_OH(i,j))
        xno3  = max(0.         , NO3_conc(i,j,k) *fac_NO3(i,j))
-       xo3   = max(small_value, O3_mmr(i,j,k))
+       xo3   = max(small_value, O3_vmr(i,j,k))
        oh_diurnal(i,j,k)=xoh
        oh_vmr(i,j,k)=xoh/xhnm
        no3_diurnal(i,j,k)=xno3
@@ -2825,7 +2824,7 @@ end subroutine atmos_SOx_emission
                            diag_time,is_in=is,js_in=js,ks_in=1)
       endif
       if (id_o3 > 0) then
-        used = send_data ( id_o3, o3_mmr, &
+        used = send_data ( id_o3, o3_vmr, &
                            diag_time,is_in=is,js_in=js,ks_in=1)
       endif
 
