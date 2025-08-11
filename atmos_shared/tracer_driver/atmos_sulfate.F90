@@ -298,7 +298,7 @@ namelist /simple_sulfate_nml/  &
       aircraft_source, aircraft_emission_name, aircraft_filename, &
         aircraft_time_dependency_type, aircraft_dataset_entry, so2_aircraft_EI,&
       cont_volc_source, expl_volc_source, cloud_chem_solver, pH_cloud, &
-      pH_cloud_type, no_biobur_if_no_pbl, anthro_emis_at_surf, &
+      no_biobur_if_no_pbl, anthro_emis_at_surf, &
       use_bb_plumerise, &
       scale_ch3sh_emis
 
