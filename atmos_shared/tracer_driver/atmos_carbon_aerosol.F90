@@ -273,6 +273,7 @@ logical               :: no_biobur_if_no_pbl = .true.  ! true by default in orde
 !logical               :: do_biobur_pbl_bug = .false.   ! if T, bug causing double-counting of BMB emissions is present
 logical               :: do_biobur_pbl_bug = .true.    ! TER 08/30/2016 This is set to true to reproduce answers.  Can be changed for a city release
 logical               :: do_dynamic_bc = .false.
+logical               :: anthro_emis_at_surf = .false. ! logical flag to decide if anthro emissions are at surface or distributed vertically
 real                  :: bcage = 1.0
 real                  :: bcageslow = 25.
 logical               :: do_dynamic_om = .false.
@@ -320,7 +321,8 @@ namelist /carbon_aerosol_nml/ &
  soa_source, gas_conc_name,soa_filename, &
  soa_time_dependency_type, soa_dataset_entry, &
  no_biobur_if_no_pbl, do_biobur_pbl_bug, use_bb_plumerise, &
- Dp_crit, frac_om_philic_ocean, gantt_param,gantt_param_wind
+ Dp_crit, frac_om_philic_ocean, gantt_param, gantt_param_wind, &
+ anthro_emis_at_surf
 
 character(len=6), parameter :: module_name = 'tracer'
 
@@ -658,6 +660,10 @@ real, parameter                            :: yield_soa = 0.1
 !
     fa1(:,:,:) = 0.
     fa2(:,:,:) = 0.
+    if (anthro_emis_at_surf) then  !as along as anthro emissions represent a combination of all sectors, they should be emitted at surface only 
+      fa1(:,:,kd) = 1.
+      fa2(:,:,kd) = 1.
+    else
     do j = 1, jd
       do i = 1, id
 
@@ -701,6 +707,7 @@ real, parameter                            :: yield_soa = 0.1
         enddo
       enddo
     enddo
+    endif ! end for anthro_emis_at_surf
 
 !
 ! Calculate fraction of emission at every level for open fires

@@ -195,7 +195,9 @@ integer, save    :: aircraft_time_serie_type
 real             :: critical_sea_fraction = 0.5 ! DMS flux from sea occurs
                                 ! in grid cells with ocn_flx_fraction .gt.
                                 !  this value
-                             
+logical            :: use_fixed_pH_cloud_value
+real               :: pH_cloud_value
+
 character(len=80)  :: runtype = 'default'
 
 character(len=80)  :: gocart_emission_filename = 'gocart_emission.nc'
@@ -249,6 +251,7 @@ character(len=80), dimension(2) :: anthro_emission_name
 data anthro_emission_name/'so2_anthro','so4_anthro'/
 character(len=80)     :: anthro_time_dependency_type = 'constant'
 integer, dimension(6) :: anthro_dataset_entry  = (/ 1, 1, 1, 0, 0, 0 /)
+logical           :: anthro_emis_at_surf = .false. ! logical flag to decide if anthro emissions are at surface or distributed vertically 
 
 character(len=80)  :: biobur_source   = ' '
 character(len=80)  :: biobur_filename = 'aero_biobur_emission_1979_2006.nc'
@@ -294,7 +297,8 @@ namelist /simple_sulfate_nml/  &
         ship_time_dependency_type, ship_dataset_entry, &
       aircraft_source, aircraft_emission_name, aircraft_filename, &
         aircraft_time_dependency_type, aircraft_dataset_entry, so2_aircraft_EI,&
-      cont_volc_source, expl_volc_source, cloud_chem_solver, pH_cloud, no_biobur_if_no_pbl, &
+      cont_volc_source, expl_volc_source, cloud_chem_solver, pH_cloud, &
+      pH_cloud_type, no_biobur_if_no_pbl, anthro_emis_at_surf, &
       use_bb_plumerise, &
       scale_ch3sh_emis
 
@@ -2025,65 +2029,72 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
       end do   ! end l loop
 !
 
-      ze1=100.
-      ze2=500.
       fbb(:,:,:) = 0.
-      fa1(:,:,:) = 0.
-      fa2(:,:,:) = 0.
       if (.not. no_biobur_if_no_pbl) fbb(:,:,kd) = 1.
-
       do j = 1, jd
-      do i = 1, id
+        do i = 1, id
 
 ! --- Assuming biomass burning emission within the PBL -------
-        do l = kd,1,-1
-          z1=zhalf(i,j,l+1)-zhalf(i,j,kd+1)
-          z2=zhalf(i,j,l)-zhalf(i,j,kd+1)
-          if (z_pbl(i,j).lt.z1) exit
-          if (z_pbl(i,j).ge.z2) fbb(i,j,l)=(z2-z1)/z_pbl(i,j)
-          if (z_pbl(i,j).gt.z1.and.z_pbl(i,j).lt.z2) fbb(i,j,l) = (z_pbl(i,j)-z1)/z_pbl(i,j)
-        enddo
+          do l = kd,1,-1
+            z1=zhalf(i,j,l+1)-zhalf(i,j,kd+1)
+            z2=zhalf(i,j,l)-zhalf(i,j,kd+1)
+            if (z_pbl(i,j).lt.z1) exit
+            if (z_pbl(i,j).ge.z2) fbb(i,j,l)=(z2-z1)/z_pbl(i,j)
+            if (z_pbl(i,j).gt.z1.and.z_pbl(i,j).lt.z2) fbb(i,j,l) = (z_pbl(i,j)-z1)/z_pbl(i,j)
+          enddo
+	end do
+      end do
+	
 ! --- For fossil fuel emissions, calculate the fraction of emission for
 ! --- each vertical levels
-        do l = kd,2,-1
-          Z1 = zhalf(i,j,l+1)-zhalf(i,j,kd+1)
-          Z2 = zhalf(i,j,l)-zhalf(i,j,kd+1)
-          if (Z1.gt.Ze2) exit
-          if (Z2.ge.0.and.Z1.lt.ze1) then
-            if (Z1.gt.0) then
-              if (Z2.lt.ze1) then
-                fa1(i,j,l)=(Z2-Z1)/ze1
-              else
-                fa1(i,j,l)=(ze1-Z1)/ze1
-              endif
-            else
-              if (Z2.le.ze1) then
-                fa1(i,j,l)=Z2/ze1
-              else
-                fa1(i,j,l)=1.
-              endif
-            endif
-          endif
+       fa1(:,:,:) = 0.
+       fa2(:,:,:) = 0.
+       if (anthro_emis_at_surf) then
+         fa1(:,:,kd) = 1.
+         fa2(:,:,kd) = 1.
+       else
+         do j = 1, jd
+           do i = 1, id
+	     do l = kd,2,-1
+               Z1 = zhalf(i,j,l+1)-zhalf(i,j,kd+1)
+               Z2 = zhalf(i,j,l)-zhalf(i,j,kd+1)
+               if (Z1.gt.Ze2) exit
+               if (Z2.ge.0.and.Z1.lt.ze1) then
+                 if (Z1.gt.0) then
+                   if (Z2.lt.ze1) then
+                     fa1(i,j,l)=(Z2-Z1)/ze1
+                   else
+                     fa1(i,j,l)=(ze1-Z1)/ze1
+                   endif
+                 else
+                   if (Z2.le.ze1) then
+                     fa1(i,j,l)=Z2/ze1
+                   else
+                     fa1(i,j,l)=1.
+                   endif
+                 endif
+               endif
 
-          if (Z2.ge.ze1.and.z1.lt.ze2) then
-            if (Z1.gt.Ze1) then
-              if (Z2.lt.ze2) then
-                fa2(i,j,l)=(z2-z1)/(ze2-ze1)
-              else
-                fa2(i,j,l)=(ze2-z1)/(ze2-ze1)
-              endif
-            else
-              if (Z2.le.ze2) then
-                fa2(i,j,l)=(z2-ze1)/(ze2-ze1)
-              else
-                fa2(i,j,l)=1.
-              endif
-            endif
-          endif
-        enddo
-
-      end do   ! end i loop
-      end do   ! end j loop
+              if (Z2.ge.ze1.and.z1.lt.ze2) then
+                 if (Z1.gt.Ze1) then
+                    if (Z2.lt.ze2) then
+                       fa2(i,j,l)=(z2-z1)/(ze2-ze1)
+                    else
+                       fa2(i,j,l)=(ze2-z1)/(ze2-ze1)
+                    endif
+                 else
+                    if (Z2.le.ze2) then
+                      fa2(i,j,l)=(z2-ze1)/(ze2-ze1)
+                    else
+                      fa2(i,j,l)=1.
+                    endif
+                 endif
+               endif
+             end do ! end k loop
+           end do   ! end i loop
+         end do   ! end j loop
+	end if ! end anthro_emis_at_surf condition
+	 
 ! --- Assuming anthropogenic source L1 emitted below Ze1, and L2
 !     emitted between Ze1 and Ze2.
         select case (trim(runtype))
@@ -2157,8 +2168,8 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
                 end do   ! end i loop
               end do   ! end j loop
             end do   ! end l loop
+
           case ('gocart')
-!
 ! GOCART assumes continent based emission index for sulfate:
 !    Anthropogenic SOx emission from GEIA 1985.
 !    Assuming:   Europe:      5.0% SOx emission is SO4;
@@ -2194,6 +2205,7 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
                 end do   ! end i loop
               end do   ! end j loop
             end do   ! end l loop
+
           case default
             if (use_bb_plumerise) then
               do l = 1, kd
@@ -2212,6 +2224,9 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
                 end do   ! end j loop
               end do   ! end l loop
             endif
+
+! CMIP anthropogenic emissions are used for the standard default settings in simple_sulfate_nml 
+! Globally, 2% of SO2 is assumed to be emitted as SO4 in the emissions files itself          
             do l = 1, kd
               do j = 1, jd
                 do i = 1, id
