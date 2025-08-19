@@ -809,6 +809,12 @@
                                     tmp_jglyxlc(:,:) 
       end if       
 
+      if( jglyald_ndx > 0 ) then
+         photos(:,:,jglyald_ndx) = photos(:,:,jglyald_ndx) + & 
+                                   tmp_jglyaldb(:,:)       + &
+                                   tmp_jglyaldc(:,:)
+      end if
+
       if( jmek_ndx > 0 ) then
         photos(:,:,jmek_ndx) = photos(:,:,jmek_ndx) +  &
                                 tmp_jmek_b(:,:)
