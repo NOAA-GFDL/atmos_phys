@@ -245,30 +245,27 @@ integer, dimension(6) :: gas_conc_dataset_entry  = (/ 1, 1, 1, 0, 0, 0 /)
 
 character(len=80)  :: anthro_source   = ' '
 character(len=80)  :: anthro_filename = 'aero_anthro_emission_1979_2006.nc'
-character(len=80), dimension(2) :: anthro_emission_name
-data anthro_emission_name/'so2_anthro','so4_anthro'/
+character(len=80)  :: anthro_emission_name = 'so2_anthro'
 character(len=80)     :: anthro_time_dependency_type = 'constant'
 integer, dimension(6) :: anthro_dataset_entry  = (/ 1, 1, 1, 0, 0, 0 /)
 logical           :: anthro_emis_at_surf = .false. ! logical flag to decide if anthro emissions are at surface or distributed vertically 
+real              :: so2toso4_frac = 0.0 ! fraction to convert anthro/ship SO2 emissions to SO4
 
 character(len=80)  :: biobur_source   = ' '
 character(len=80)  :: biobur_filename = 'aero_biobur_emission_1979_2006.nc'
-character(len=80), dimension(2) :: biobur_emission_name
-data biobur_emission_name/'so2_biobur','so4_biobur'/
+character(len=80)  :: biobur_emission_name = 'so2_biobur'
 character(len=80)     :: biobur_time_dependency_type  = 'constant'
 integer, dimension(6) :: biobur_dataset_entry  = (/ 1, 1, 1, 0, 0, 0 /)
 
 character(len=80)  :: ship_source   = ' '
 character(len=80)  :: ship_filename = 'aero_ship_emission_1979_2006.nc'
-character(len=80), dimension(2) :: ship_emission_name
-data ship_emission_name/'so2_ship','so4_ship'/
+character(len=80)  :: ship_emission_name = 'so2_ship'
 character(len=80)     :: ship_time_dependency_type = 'constant'
 integer, dimension(6) :: ship_dataset_entry  = (/ 1, 1, 1, 0, 0, 0 /)
 
 character(len=80)  :: aircraft_source = ' '
 character(len=80)  :: aircraft_filename = 'aircraft_emission.nc'
-character(len=80)  :: aircraft_emission_name(1)
-data aircraft_emission_name/'fuel'/
+character(len=80)  :: aircraft_emission_name = 'aircraft'
 character(len=80)     :: aircraft_time_dependency_type = 'constant'
 integer, dimension(6) :: aircraft_dataset_entry  = (/ 1, 1, 1, 0, 0, 0 /)
 real :: so2_aircraft_EI = 1.e-3  ! kg of SO2/kg of fuel
@@ -298,7 +295,8 @@ namelist /simple_sulfate_nml/  &
       cont_volc_source, expl_volc_source, cloud_chem_solver, pH_cloud, &
       no_biobur_if_no_pbl, anthro_emis_at_surf, &
       use_bb_plumerise, &
-      scale_ch3sh_emis
+      scale_ch3sh_emis, &
+      so2toso4_frac
 
 type(time_type) :: anthro_time, biobur_time, ship_time, aircraft_time
 type(time_type)        :: gas_conc_time
@@ -635,7 +633,7 @@ character(len=80) :: simpleSO2_biobur_emis_name, description
                              trim(anthro_filename),           &
                              lonb, latb,                        &
                              data_out_of_bounds=  (/CONSTANT/), &
-                             data_names = anthro_emission_name,        &
+                             data_names = (/anthro_emission_name/),        &
                              vert_interp=(/INTERP_WEIGHTED_P/)  )
      endif ! end do_anthro
 
@@ -714,7 +712,7 @@ character(len=80) :: simpleSO2_biobur_emis_name, description
                              trim(biobur_filename),           &
                              lonb, latb,                        &
                              data_out_of_bounds=  (/CONSTANT/), &
-                             data_names = biobur_emission_name,        &
+                             data_names = (/biobur_emission_name/),        &
                              vert_interp=(/INTERP_WEIGHTED_P/)  )
      endif
 
@@ -793,7 +791,7 @@ character(len=80) :: simpleSO2_biobur_emis_name, description
                              trim(ship_filename),           &
                              lonb, latb,                        &
                              data_out_of_bounds=  (/CONSTANT/), &
-                             data_names = ship_emission_name,        &
+                             data_names = (/ship_emission_name/),        &
                              vert_interp=(/INTERP_WEIGHTED_P/)  )
     endif
 
@@ -873,7 +871,7 @@ character(len=80) :: simpleSO2_biobur_emis_name, description
                              trim(aircraft_filename),  &
                              lonb, latb,&
                              data_out_of_bounds=  (/CONSTANT/), &
-                             data_names = aircraft_emission_name, &
+                             data_names = (/aircraft_emission_name/), &
                              vert_interp=(/INTERP_WEIGHTED_P/) )
    endif
 
@@ -1901,19 +1899,15 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
         case default
           if (trim(anthro_source) .eq. 'do_anthro') then
             call interpolator(anthro_emission_interp, anthro_time, SO2_ff1(:,:), &
-                     trim(anthro_emission_name(1)), is, js)
-            call interpolator(anthro_emission_interp, anthro_time, SO4_ff1(:,:), &
-                     trim(anthro_emission_name(2)), is, js)
+                     trim(anthro_emission_name), is, js)
           endif
           if (trim(biobur_source) .eq. 'do_biobur') then
             call interpolator(biobur_emission_interp, biobur_time, SO2_biobur(:,:,1), &
-                     trim(biobur_emission_name(1)), is, js)
+                     trim(biobur_emission_name), is, js)
           endif
           if (trim(ship_source) .eq. 'do_ship') then
             call interpolator(ship_emission_interp, ship_time, SO2_ship(:,:), &
-                     trim(ship_emission_name(1)), is, js)
-            call interpolator(ship_emission_interp, ship_time, SO4_ship(:,:), &
-                     trim(ship_emission_name(2)), is, js)
+                     trim(ship_emission_name), is, js)
           endif
 
       end select
@@ -1922,7 +1916,7 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
       if (trim(aircraft_source) .eq. 'do_aircraft') then
         call interpolator(aircraft_emission_interp, aircraft_time, &
                      phalf, SO2_aircraft, &
-                     trim(aircraft_emission_name(1)), is, js)
+                     trim(aircraft_emission_name), is, js)
       endif
 !
 ! Continuous volcanoes
@@ -2227,18 +2221,28 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
 
 ! CMIP anthropogenic emissions are used for the standard default settings in simple_sulfate_nml 
 ! Globally, 2% of SO2 is assumed to be emitted as SO4 in the emissions files itself          
+! van: code is updated to emit SO4 based value of so2toso4_frac
+! remember not to include SO4 emissions in the input SO2 emissions file. 
+! Kg(SO2)/m2/s --> Kg(SO4)/m2/s requires scaling emissions by molwt(SO4)/molwt(SO2)
             do l = 1, kd
               do j = 1, jd
                 do i = 1, id
-                  so2_emis_ff(i,j,l)=fa1(i,j,l) * SO2_ff1(i,j) + fa2(i,j,l) * SO2_ff2(i,j)
-                  so2_emis_ship(i,j,l)     = fa1(i,j,l) * SO2_ship(i,j)
+                  so2_emis_ff(i,j,l) = fa1(i,j,l) * SO2_ff1(i,j)
+                  so2_emis_biobur(i,j,l) = fbb(i,j,l) * SO2_biobur(i,j,1)
+                  so2_emis_ship(i,j,l) = fa1(i,j,l) * SO2_ship(i,j)
+!++van
+                  SO4_emis(i,j,l) = so2toso4_frac * (so2_emis_ff(i,j,l) + so2_emis_ship(i,j,l)) * WTM_SO4/WTM_SO2
+                  so2_emis_ff(i,j,l) = max(1.0-so2toso4_frac,0.0) * so2_emis_ff(i,j,l)
+                  so2_emis_ship(i,j,l) = max(1.0-so2toso4_frac,0.0) * so2_emis_ship(i,j,l)
+!--van                  
+
                   SO2_emis(i,j,l) = SO2_emis(i,j,l) &
                      + so2_emis_biobur(i,j,l)       &
 !++lwh
                      + so2_emis_ship(i,j,l)         &
 !--lwh
                      + so2_emis_ff(i,j,l)
-                  SO4_emis(i,j,l) = fa1(i,j,l)*(SO4_ff1(i,j)+SO4_ship(i,j))
+
                 end do   ! end i loop
               end do   ! end j loop
             end do   ! end l loop
@@ -2435,7 +2439,7 @@ end subroutine atmos_SOx_emission
       call interpolator(gas_conc_interp, gas_conc_time, phalf, NO3_conc, &
                        trim(gas_conc_name(3)), is, js)
 
-      O3_vmr(:,:,:)=0  ! Ozone mass mixing ratio
+      O3_vmr(:,:,:)=0  ! Ozone volume  mixing ratio
       call interpolator(gas_conc_interp, gas_conc_time, phalf, O3_vmr, &
                        trim(gas_conc_name(4)), is, js)
 
