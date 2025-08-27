@@ -137,7 +137,7 @@ contains
                                 .and. trim(tracer_units) == "kg/kg")) then
         conv_moist_dry = 1.0
       elseif (trim(tracer_units) == "vmr") then
-        conv_moist_dry = WTMH2O/WTMAIR  
+        conv_moist_dry = WTMAIR/WTMH2O  
       else 
        write(*,*) trim(tracer_name), ' tracer units =',trim(tracer_units), &
         'it should be either mmr or vmr for non-co2 tracers or kg/kg for co2!'
@@ -176,7 +176,7 @@ contains
 !  is a moist mass mixing ratio. convert to dry mass mixing ratio by
 !  dividing by (1 - qh2o).
 !++VAN if the tracer is in moist volume mixing ratio (all chemistry tracers
-!  except co2 are), divide by (1-mwh2o/mwair * q) to convert to 
+!  except co2 are), divide by (1 - mwair/mwh2o * q) to convert to 
 !  dry mixing ratio
 !---------------------------------------------------------------------
             qp = 0.0
