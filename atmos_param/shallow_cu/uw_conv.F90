@@ -1116,11 +1116,11 @@ contains
         end do
      end if
 
-     id_so2_reevap_uw = &
-          register_diag_field (mod_name, 'pso4_aq_so2_reevap_uw', &
-                         axes(1:3), Time, &
-                         'Sulfate aerosol production by SO2 re-evaporation by uw_conv', 'kg m-2 s-1', &
-                         missing_value=mv )
+
+     ID_so2_reevap_uw = register_cmip_diag_field_3d ( 'tracers',               &
+          'pso4_aq_so2_reevap_ls', Time, 'Sulfate aerosol production by SO2 re-evaporation by uw convection', 'kg m-2 s-1', &
+          standard_name='tendency_of_atmosphere_mass_content_of_sulfate_dry_aerosol_particles_due_to_sulfur_dioxide_reevaporation (uw)')
+     
 
 
     select case (tracer_check_type)
@@ -2895,10 +2895,11 @@ contains
        end do
     end if
 
-    if (id_so2_reevap_uw.gt.0) then
-          used = send_data (id_so2_reevap_uw,  &
+!f1p    
+    if (query_cmip_diag(id_so2_reevap_uw)) then
+          used = send_cmip_data_3d (ID_so2_reevap_uw,  &
                 so2_reevap * pmass * mw_so4/mw_air, &
-                Time, is, js, 1)
+                Time, is_in=is, js_in=js, ks_in=1)
     end if
 
 !f1p
