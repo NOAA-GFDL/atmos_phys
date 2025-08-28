@@ -143,7 +143,7 @@ contains
         'it should be either mmr or vmr for non-co2 tracers or kg/kg for co2!'
         call error_mesg('compute_g_avg', 'Unsupported tracer units, units must' // &
             'be either VMR or MMR for non-co2 tracers or kg/kg for co2 to ' // &
-	    'calculate global mean avg for radiation' //  &
+            'calculate global mean avg for radiation' //  &
             'calculation', FATAL )
       endif
     endif
@@ -159,7 +159,7 @@ contains
 
       npz = Atm_block%npz
       qp_sum = 0.
-!$OMP parallel do default(shared) private(ibs, ibe, jbs, jbe, i, j, qp)
+!$OMP parallel do default(shared) private(ibs, ibe, jbs, jbe, i, j, k, qp, jb, ib)
       do nb = 1, Atm_block%nblks
         ibs = Atm_block%ibs(nb) - Atm_block%isc + 1
         ibe = Atm_block%ibe(nb) - Atm_block%isc + 1
