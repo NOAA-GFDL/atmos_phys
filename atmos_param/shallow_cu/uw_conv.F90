@@ -16,7 +16,8 @@ MODULE UW_CONV_MOD
   use atmos_cmip_diag_mod, only: register_cmip_diag_field_2d, &
                                  register_cmip_diag_field_3d, &
                                  send_cmip_data_3d, &
-                                 cmip_diag_id_type
+                                 cmip_diag_id_type, &
+                                 query_cmip_diag_id
   use  sat_vapor_pres_mod,only : sat_vapor_pres_init
   use atmos_tracer_utilities_mod, only : get_wetdep_param
   use moist_proc_utils_mod, only : mp_nml_type
@@ -374,7 +375,6 @@ MODULE UW_CONV_MOD
                           id_tracerdtwet_uwc(:), id_tracerdtwet_uwc_col(:), &
                           id_tracerdt_uwc_nc(:), id_tracerdt_uwc_col_nc(:), id_rn(:)
   integer, allocatable :: id_trevp_uwc(:), id_trevp_uwd(:)
-  integer :: id_so2_reevap_uw = -1
 
 !========Option for deep convection=======================================
   integer :: id_tdt_uwd, id_qdt_uwd, id_qtdt_uwd, id_prec_uwd, id_snow_uwd,   &
@@ -393,7 +393,7 @@ MODULE UW_CONV_MOD
 
   ! 3d cmip diagnostics
   type(cmip_diag_id_type) :: ID_clc_uwc, ID_clwc_uwc, ID_clic_uwc, ID_smc_uwc, &
-                             ID_dmc_uwc
+                             ID_dmc_uwc, ID_so2_reevap_uw
 
   type(cwetdep_type), dimension(:), allocatable :: wetdep
   type(uw_params),  save  :: Uw_p
@@ -2896,7 +2896,7 @@ contains
     end if
 
 !f1p    
-    if (query_cmip_diag(id_so2_reevap_uw)) then
+    if (query_cmip_diag_id(ID_so2_reevap_uw)) then
           used = send_cmip_data_3d (ID_so2_reevap_uw,  &
                 so2_reevap * pmass * mw_so4/mw_air, &
                 Time, is_in=is, js_in=js, ks_in=1)
