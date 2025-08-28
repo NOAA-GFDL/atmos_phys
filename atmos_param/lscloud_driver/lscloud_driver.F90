@@ -1707,7 +1707,7 @@ type(time_type),         intent(in) :: Time
   ! Register in-cloud SO2 re-evaporation by large scale clouds (CMIP6) - no module=tracers to keep compatibile with cmip6 diag table
   ID_so2_reevap_ls = register_cmip_diag_field_3d ( 'tracers',               &
                     'pso4_aq_so2_reevap_ls', Time, 'Sulfate aerosol production by SO2 re-evaporation by lscale clouds', 'kg m-2 s-1', &
-                    standard_name='tendency_of_atmosphere_mass_content_of_sulfate_dry_aerosol_particles_due_to_sulfur_dioxide_reevaporation')
+                    standard_name='tendency_of_atmosphere_mass_content_of_sulfate_dry_aerosol_particles_due_to_sulfur_dioxide_reevaporation (ls)')
 
 
 end subroutine diag_field_init
