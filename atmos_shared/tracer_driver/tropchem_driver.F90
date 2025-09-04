@@ -434,7 +434,7 @@ integer :: id_so2_emis_cmip, id_nh3_emis_cmip
 integer :: id_co_emis_cmip, id_no_emis_cmip
 integer :: id_co_emis_cmip2, id_no_emis_cmip2
 integer :: id_so2_emis_cmip2, id_nh3_emis_cmip2
-integer :: id_emico, id_emiso2, id_eminh3
+integer :: id_emico, id_emiso2, id_eminh3, id_emihno3, id_emipan
 integer :: id_eminox_woL, id_emiisop_woB
 logical :: has_ts_avg = .true.   ! currently reading in from monthly mean files.
 integer, dimension(phtcnt)  :: id_jval
@@ -2560,6 +2560,12 @@ end if
    id_eminox_woL = register_cmip_diag_field_2d ( module_name, 'eminox_woL', Time, &
                               'Total Emission Rate of NOx without lightning NOx', 'kg m-2 s-1', &
                 standard_name='tendency_of_atmosphere_mass_content_of_nox_expressed_as_nitrogen_due_to_emission')
+   id_emihno3 = register_cmip_diag_field_2d ( module_name, 'emihno3', Time, &
+                              'Total Emission Rate of HNO3', 'kg m-2 s-1', &
+                standard_name='tendency_of_atmosphere_mass_content_of_nitric_acid_expressed_as_nitrogen_due_to_emission')
+   id_emipan  = register_cmip_diag_field_2d ( module_name, 'emipan', Time, &
+                              'Total Emission Rate of PAN', 'kg m-2 s-1', &
+                standard_name='tendency_of_atmosphere_mass_content_of_peroxyacetyl_nitrate_expressed_as_nitrogen_due_to_emission')
    id_emiisop_woB = register_cmip_diag_field_2d ( module_name, 'emiisop_woB', Time, &
                               'Total Emission Rate of Isoprene without biogenic', 'kg m-2 s-1', &
                 standard_name='tendency_of_atmosphere_mass_content_of_isoprene_due_to_emission')
