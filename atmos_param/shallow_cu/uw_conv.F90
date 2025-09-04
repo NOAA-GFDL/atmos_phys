@@ -1117,7 +1117,7 @@ contains
      end if
 
 
-     ID_so2_reevap_uw = register_cmip_diag_field_3d ( 'tracers',               &
+     ID_so2_reevap_uw = register_cmip_diag_field_3d ( mod_name,               &
           'pso4_aq_so2_reevap_uw', Time, 'Sulfate aerosol production by SO2 re-evaporation by uw convection', 'kg m-2 s-1', &
           standard_name='tendency_of_atmosphere_mass_content_of_sulfate_dry_aerosol_particles_due_to_sulfur_dioxide_reevaporation (uw)')
      
