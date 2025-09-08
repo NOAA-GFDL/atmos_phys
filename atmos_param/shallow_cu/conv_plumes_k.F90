@@ -3,7 +3,9 @@ MODULE CONV_PLUMES_k_MOD
     use  aer_ccn_act_k_mod,   only: aer_ccn_act_k
     use  conv_utilities_k_mod,only: findt_k, exn_k, qsat_k, adicloud, sounding, uw_params
     use Sat_Vapor_Pres_k_Mod, ONLY: compute_qs_k
-    use matrix_gfdl,       only: query_matrix_info
+    use matrix_gfdl,       only: query_matrix_info, query_tracer_in_pop
+    use wet_dep_0D_mod, only: wet_deposition_0D
+    use fms_mod,  only: error_mesg, FATAL, mpp_pe, mpp_root_pe
     !---------------------------------------------------------------------
     implicit none
     private
@@ -31,7 +33,8 @@ MODULE CONV_PLUMES_k_MOD
         real :: frac_in_cloud_snow
         real :: alpha_r
         real :: alpha_s
-        logical :: Lwetdep, Lgas, Laerosol, Lice
+        integer :: n !XL: original index in tracers
+        logical :: Lwetdep, Lgas, Laerosol, Lice, Ldep_dynamic
     end type cwetdep_type
 
     public cpnlist
@@ -162,7 +165,7 @@ contains
         integer :: npop, NSPCS
 
         call query_matrix_info(npop, NSPCS)
-        npop = max(0, npop)
+        npop = max(1, npop)
         allocate ( cp%hlu   (0:kd)); cp%hlu   =0.;
         allocate ( cp%thcu  (0:kd)); cp%thcu  =0.;
         allocate ( cp%qctu  (0:kd)); cp%qctu  =0.;
@@ -497,7 +500,7 @@ contains
         integer                       :: tpop, tspcs
         real                          :: drop_diag
         real, dimension(size(sd%matrix_sigma)) :: drop_pop, drop_pop_mass, drop_pop_diag, drop_pop_mass_diag
-
+        
         integer :: k, klm, km1, krel, let, ltop
         real    :: thv0rel, wtw, wtwtop
         real    :: thj, qvj, qlj, qij, qse, rhos0j, rho0j
@@ -513,6 +516,13 @@ contains
         real    :: qn_act_diag, qn_act_debug !XL
         integer :: n, nnn
         logical :: kbelowlet
+        integer :: ipop_active_index, ipop_abs, ipop_flag
+#if defined(_OPENMP)
+    INTEGER :: omp_get_thread_num !< OMP function
+#endif
+        ipop_active_index = -1
+        ipop_abs=-1
+        ipop_flag=-1
         tpop = size((sd%matrix_sigma))
         tspcs = size((sd%matrix_MSPCS),3)
         ier = 0
@@ -617,7 +627,7 @@ contains
             !call aer_ccn_act_k(thj*exn_k(prel,Uw_p), prel, wrel2, totalmass, &
             !                   tym, drop, ier, ermesg)
             !debug version: only use sulf mass as input to yim's code
-            call aer_ccn_act_k( thj*exn_k(prel,Uw_p), prel, wrel2, totalmass_debug, tym, drop_debug, ier, ermesg)
+            !call aer_ccn_act_k( thj*exn_k(prel,Uw_p), prel, wrel2, totalmass_debug, tym, drop_debug, ier, ermesg)
             call aer_ccn_act_k( thj*exn_k(prel,Uw_p), prel, wrel2, totalmass, tym, drop, ier, ermesg, &
                 tpop, tspcs, drop_diag,  &
                 drop_pop, drop_pop_mass, &
@@ -1100,21 +1110,77 @@ contains
         total_rain = qrj * air_density ! kg/m3
         total_snow = qsj * air_density ! kg/m3
 
+      !  if (total_rain+total_snow > 0.) then
+      !  if (k == krel) then
+      !          do n=1,size(cp%tru,2)
+      !          write(*,*) mpp_pe(), n, cpn%wetdep(n)%n, cpn%wetdep(n)%Ldep_dynamic, cpn%tracername(n)
+      !          enddo
+      !  endif
+      !  endif
+
         if (total_rain+total_snow > 0.) then
             do n=1,size(cp%tru,2)
             if (cpn%wetdep(n)%Lwetdep) then
-                call wet_deposition_0D( cpn%wetdep(n)%Henry_constant, &
-                    cpn%wetdep(n)%Henry_variable, &
-                    cpn%wetdep(n)%frac_in_cloud, &
-                    cpn%wetdep(n)%alpha_r, &
-                    cpn%wetdep(n)%alpha_s, &
-                    t_mid, cp%ps(km1), cp%ps(k), &
-                    air_density, &
-                    total_condensate, total_rain, total_snow, &
-                    cp%tru(k,n), &
-                    cpn%wetdep(n)%Lgas, cpn%wetdep(n)%Laerosol, cpn%wetdep(n)%Lice, &
-                    delta_tracer )
-                !miz:below multiply umf so that tru_dwet in massflux unit,also change sign to be positive consistent with pptr ppti
+                if (cpn%wetdep(n)%Ldep_dynamic) then
+                    if (cpn%wetdep(n)%n < 0) then
+                        write(*,*) 'before_crashing case: n, cpn%wetdep(n)%n, cpn%wetdep(n)%name', mpp_pe(),omp_get_thread_num(),  n, cpn%wetdep(n)%n, cpn%tracername(n)
+                    endif
+                    call query_tracer_in_pop(cpn%wetdep(n)%n, ipop_active_index, ipop_abs, ipop_flag)
+                    if (ipop_flag > 0) then !successfully query
+                        call wet_deposition_0D( cpn%wetdep(n)%Henry_constant, &
+                            cpn%wetdep(n)%Henry_variable, &
+                            cpn%wetdep(n)%frac_in_cloud, &
+                            cpn%wetdep(n)%alpha_r, &
+                            cpn%wetdep(n)%alpha_s, &
+                            t_mid, cp%ps(km1), cp%ps(k), &
+                            air_density, &
+                            total_condensate, total_rain, total_snow, &
+                            cp%tru(k,n), &
+                            cpn%wetdep(n)%Lgas, cpn%wetdep(n)%Laerosol, cpn%wetdep(n)%Lice, &
+                            cpn%wetdep(n)%Ldep_dynamic, cpn%wetdep(n)%n, & !XL
+                            delta_tracer, sd%matrix_MSPCS(k,ipop_active_index, :) ) !the last dimension of matrix_MSPCS should be 5
+
+                        ! if (mpp_pe() .eq.  mpp_root_pe()) then
+                        !     write(*, '(A)') 'DEBUG:: n     ipop_active  ipop_abs  ipop_flag     k     sd%kappa(k, ipop_active_index)'
+                        !     write(*, '(A,I6,I14,I10,I11,I6,F10.4)') '       ', cpn%wetdep(n)%n, ipop_active_index, ipop_abs, ipop_flag, &
+                        !                          k, sd%matrix_kappa(k, ipop_active_index)
+                        ! end if
+                        !                  !test options
+                        !                   call wet_deposition_0D( cpn%wetdep(n)%Henry_constant, &
+                        !                            cpn%wetdep(n)%Henry_variable, &
+                        !                            cpn%wetdep(n)%frac_in_cloud, &
+                        !                            cpn%wetdep(n)%alpha_r, &
+                        !                            cpn%wetdep(n)%alpha_s, &
+                        !                            t_mid, cp%ps(km1), cp%ps(k), &
+                        !                            air_density, &
+                        !                            total_condensate, total_rain, total_snow, &
+                        !                            cp%tru(k,n), &
+                        !                            cpn%wetdep(n)%Lgas, cpn%wetdep(n)%Laerosol, cpn%wetdep(n)%Lice, &
+                        !                            cpn%wetdep(n)%Ldep_dynamic, cpn%wetdep(n)%n, & !XL
+                        !                            delta_tracer, 0.3)
+                        !
+
+                    !else
+                    !    write(*,*) 'crashing case: n, cpn%wetdep(n)%n, cpn%wetdep(n)%name', n, cpn%wetdep(n)%n, cpn%tracername(n)
+                    !    call error_mesg ('shallow_cu','ipop_index not exist', FATAL)
+                    endif
+                else
+                    call wet_deposition_0D( cpn%wetdep(n)%Henry_constant, &
+                        cpn%wetdep(n)%Henry_variable, &
+                        cpn%wetdep(n)%frac_in_cloud, &
+                        cpn%wetdep(n)%alpha_r, &
+                        cpn%wetdep(n)%alpha_s, &
+                        t_mid, cp%ps(km1), cp%ps(k), &
+                        air_density, &
+                        total_condensate, total_rain, total_snow, &
+                        cp%tru(k,n), &
+                        cpn%wetdep(n)%Lgas, cpn%wetdep(n)%Laerosol, cpn%wetdep(n)%Lice, &
+                        cpn%wetdep(n)%Ldep_dynamic, cpn%wetdep(n)%n, & !XL
+                        delta_tracer) !matrix_kappa is population based, but n is tracer-based, hence we
+                    !need to figure out which population this tracer belongs to 
+
+                    !miz:below multiply umf so that tru_dwet in massflux unit,also change sign to be positive consistent with pptr ppti
+                endif
                 cp%tru_dwet(k,n) = delta_tracer * cp%umf(k) ! tracer source from wet deposition (negative=sink)
                 cp%tru(k,n) = cp%tru(k,n) - delta_tracer ! adjust in-cloud concentration for wet dep
             end if

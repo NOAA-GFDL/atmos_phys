@@ -88,6 +88,7 @@ use atmos_cmip_diag_mod,   only: register_cmip_diag_field_2d, &
                                  query_cmip_diag_id
 
 use  constants_mod, only     : AVOGNO
+use matrix_gfdl, only : matrix_init
 implicit none
 private
 
@@ -390,7 +391,7 @@ type (exchange_control_type), intent(inout) :: Exch_ctrl
       call diag_integral_field_init ('prec', 'f6.3')
       allocate (prec_intgl(id,jd))
 
-
+      call matrix_init(phalf, axes, Time)
 !----------------------------------------------------------------------
 !    define indices for the various potentially-available tracers.
 !----------------------------------------------------------------------

@@ -50,6 +50,7 @@ MODULE CONV_UTILITIES_k_MOD
     real, allocatable :: amx4  (:) !x5lnote: sd%amx1-amx4 unit: kg/kg
     real, allocatable :: matrix_N(:,:) !XL unit:
     real, allocatable :: matrix_Dg_dry(:,:) !XL unit:
+    real, allocatable :: matrix_kappa(:,:)
     real, allocatable :: matrix_MSPCS(:,:,:) !XL unit:
     real, allocatable :: matrix_sigma(:) !XL unit:
     real, allocatable :: tdt_rad(:)
@@ -237,6 +238,7 @@ contains
     allocate ( sd%am4   (1:kd)); sd%am4   =0.;
     allocate ( sd%matrix_N(1:kd,npop));              sd%matrix_N =0.;!XL matrix
     allocate ( sd%matrix_Dg_dry(1:kd,npop));         sd%matrix_Dg_dry =0.; !XL matrix
+    allocate ( sd%matrix_kappa(1:kd,npop));          sd%matrix_kappa = 0.; !XL matrix
     allocate ( sd%matrix_MSPCS(1:kd,npop,NSPCS));    sd%matrix_MSPCS =0.; !XL matrix
     allocate ( sd%matrix_sigma(npop));               sd%matrix_sigma =0.;!XL matrix
     allocate ( sd%amx1  (1:kd)); sd%amx1  =0.;
@@ -314,6 +316,7 @@ contains
     sd1% omg_avg   = sd % omg_avg
     sd1%matrix_N = sd%matrix_N;!XL matrix
     sd1%matrix_Dg_dry = sd%matrix_Dg_dry; !XL matrix
+    sd1%matrix_kappa = sd%matrix_kappa; !XL matrix
     sd1%matrix_MSPCS = sd%matrix_MSPCS; !XL matrix
     sd1%matrix_sigma = sd%matrix_sigma;!XL matrix
     sd1% do_gust_qt= sd % do_gust_qt
@@ -349,7 +352,7 @@ contains
          sd%exner, sd%ps, sd%exners, sd%zs, sd%ssthc, sd%ssqct, sd%dudp,      &
          sd%dvdp, sd%thvbot, sd%thvtop, sd%qn, sd%am1, sd%am2, sd%am3, sd%am4,&
          sd%amx1, sd%amx2, sd%amx3, sd%amx4,                                  &
-         sd%matrix_N, sd%matrix_Dg_dry, sd%matrix_MSPCS, sd%matrix_sigma, & !XL, matrix variable
+         sd%matrix_N, sd%matrix_Dg_dry, sd%matrix_kappa, sd%matrix_MSPCS, sd%matrix_sigma, & !XL, matrix variable
          sd%qs, sd%hl, sd%hm, sd%hf0, sd%hms, sd%sshl, sd%tr, sd%sstr,        &
          sd%omg, sd%qtflx_up, sd%qtflx_dn, sd%omega_up, sd%omega_dn,          &
          sd%hdt_vadv, sd%hdt_forc )
@@ -421,7 +424,7 @@ contains
   subroutine pack_sd_k (land, coldT, delt, pmid, pint, zmid, zint,      &
               u, v, omg, t, qv, ql, qi, qa, qn, am1, am2, am3, am4,     &
               amx1, amx2, amx3, amx4,                                   &
-              matrix_N,   matrix_Dg_dry,                                & !matrix input
+              matrix_N,   matrix_Dg_dry, matrix_kappa,                  & !matrix input
               matrix_MSPCS, matrix_sigma,                            & !matrix input
               tracers, src_choice, tdt_rad, tdt_dyn, qvdt_dyn, qidt_dyn,&
               dgz_dyn, ddp_dyn, tdt_dif, dgz_phy, qvdt_dif, qidt_dif, sd, Uw_p)
@@ -430,7 +433,7 @@ contains
     logical, intent(in)              :: coldT
     real,    intent(in)              :: delt
     integer, intent(in)              :: src_choice
-    real, intent(in), dimension(:,:) :: matrix_N, matrix_Dg_dry !matrix info: matrix_N(i,j,:,:), matrix_Dg_dry(i,j,:,:)
+    real, intent(in), dimension(:,:) :: matrix_N, matrix_Dg_dry, matrix_kappa !matrix info: matrix_N(i,j,:,:), matrix_Dg_dry(i,j,:,:)
     real, intent(in), dimension(:)   :: matrix_sigma !this only has relation with pop, matrix_sigma(:)
     real, intent(in), dimension(:,:,:) :: matrix_MSPCS !matrix info: matrix_MSPCS(i,j, :,:,:) [k, npop, nspcs]
     real, intent(in), dimension(:)   :: pmid, zmid !pressure&height@mid level
@@ -495,6 +498,7 @@ contains
        !XL's matrxi info
        sd % matrix_N(k,:) = matrix_N(nk,:) !matrix
        sd % matrix_Dg_dry(k,:) = matrix_Dg_dry(nk,:) !matrix
+       sd % matrix_kappa(k,:) = matrix_kappa(nk, :) ! matrix
        sd % matrix_MSPCS(k,:,:) = matrix_MSPCS(nk, :,:) !matrix
        sd % tdt_rad (k) = tdt_rad(nk)
        sd % tdt_dyn (k) = tdt_dyn(nk)

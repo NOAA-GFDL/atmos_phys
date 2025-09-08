@@ -151,7 +151,7 @@ contains
 ! this subroutine calculates tendencies for all seasalt tracers, and reports
 ! total fields, like total seasalt emission and settling
 subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
-       zhalf, pfull, w10m, t, t_surf, rh, tracer, dsinku, rdt, all_moa_fine_emis, dt, Time, is,ie,js,je, kbot)
+       zhalf, pfull, w10m, t, t_surf, rh, tracer, dsinku, rdt, all_moa_fine_emis, dt, Time, time_next, is,ie,js,je, kbot)
 
   real, intent(in) :: lon(:,:), lat(:,:) ! geographical coordinates, units?
   real, intent(in) :: ocn_flx_fraction(:,:) ! fraction of land in the grid cell
@@ -167,7 +167,7 @@ subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
   real, intent(inout) :: rdt(:,:,:,:) ! tendency of tracers, to be updated for seasalt tracers
   real, intent(out) :: all_moa_fine_emis(:,:) ! dynamic moa emissions
   real, intent(in) :: dt ! time step
-  type(time_type), intent(in) :: Time ! current model time
+  type(time_type), intent(in) :: Time, Time_next ! current model time
   integer, intent(in) :: is, ie, js, je ! boundaries of physical window
   integer, intent(in), optional :: kbot(:,:) ! index of bottom level
   ! NOTE that operations are done on physics window; in particular the sizes
@@ -190,14 +190,15 @@ subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
   integer :: kd    ! vertical size of our arrays
   integer :: nseasalt ! atmos tracer number that corresponds to the current seasalt tracer
   logical :: used
-  
+  real, dimension(size(tracer,1),size(tracer,2)) :: seasalt_emis_acc, seasalt_emis_coars
   kd = size(tracer,3)
   
   ! initialize accumulated deposition and emission fields
   all_seasalt_emis(:,:) = 0.0
   all_seasalt_setl(:,:) = 0.0
   all_moa_fine_emis(:,:)     = 0.0
-
+  seasalt_emis_acc(:,:) = 0.0 !XL
+  seasalt_emis_coars(:,:) = 0.0 !XL
   call get_moa_modulator(time,is,js,moa_modulator)  
 
   do i = 1,n_seasalt_tracers
@@ -212,7 +213,12 @@ subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
         is,ie,js,je, kbot,scale_sst_emis,moa_modulator)
      ! update seasalt tendencies
      rdt(:,:,:,nseasalt)=rdt(:,:,:,nseasalt)+seasalt_dt(:,:,:)
-     
+     !XL
+     if (i .le. 2) then 
+        seasalt_emis_acc = seasalt_emis_acc + seasalt_emis
+     else
+        seasalt_emis_coars = seasalt_emis_coars + seasalt_emis
+     endif
      ! Send the emission data to the diag_manager for output.
      if (seasalt_tracers(i)%id_seasalt_emis > 0 ) then
        used = send_data ( seasalt_tracers(i)%id_seasalt_emis, seasalt_emis, Time, is_in=is,js_in=js )
@@ -236,8 +242,10 @@ subroutine atmos_sea_salt_sourcesink ( lon, lat, ocn_flx_fraction, pwt, &
      all_moa_fine_emis(:,:) = all_moa_fine_emis(:,:) + moa_fine_emis(:,:)
   enddo
  !hook to matrix source
- ! call set_matrix_source(MATRIX_SOURCE_TYPE%E_SS,all_seasalt_emis, MATRIX_SOURCE_TYPE%U_KG_M2_S, pwt,zhalf) !unit: Kg/m2/s  
-  if (id_seasalt_ddep > 0) then
+ call set_matrix_source(MATRIX_SOURCE_TYPE%E_SS_acc,seasalt_emis_acc, MATRIX_SOURCE_TYPE%U_KG_M2_S, pwt,zhalf, time, time_next, is, js) !unit: Kg/m2/s  
+ call set_matrix_source(MATRIX_SOURCE_TYPE%E_SS_coars,seasalt_emis_coars, MATRIX_SOURCE_TYPE%U_KG_M2_S, pwt,zhalf, time, time_next, is, js) !unit: Kg/m2/s
+
+ if (id_seasalt_ddep > 0) then
      used = send_data (id_seasalt_ddep, all_seasalt_setl(:,:), Time, is_in=is, js_in=js)
   endif
   if (id_seasalt_emis > 0) then

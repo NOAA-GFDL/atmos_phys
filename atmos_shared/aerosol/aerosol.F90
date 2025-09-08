@@ -48,7 +48,8 @@ use interpolator_mod,  only: interpolate_type, interpolator_init, &
                              CONSTANT, INTERP_WEIGHTED_P
 use constants_mod,     only: constants_init, RADIAN, GRAV
 use data_override_mod, only: data_override
-use matrix_gfdl,       only: query_matrix_info, query_pop_number, query_pop_Dg_dry, query_pop_MSPCS, query_pop_SIGMA
+use matrix_gfdl,       only: query_matrix_info, query_pop_number, query_pop_Dg_dry, query_pop_MSPCS, query_pop_SIGMA, &
+                                query_pop_kappa
 !  shared radiation package modules:
 
 use aerosol_types_mod, only: aerosol_type, &
@@ -1190,13 +1191,17 @@ logical, optional,            intent(in)    :: override_aerosols
       !allocate and define matrix related information for activation calculation
 !-----------------------Preliminery thought--------------------------------------
 !-------------------------XL: allocate new info in aerosol ---------------------
-      call query_matrix_info(npop, NSPCS) 
+      call query_matrix_info(npop, NSPCS)
+      !write(*,*) 'DEBUG: aerosol type allocation test: NPOP, NSPCS:', npop, NSPCS  
       if (npop > 0) then  
         allocate(I_POP(npop)) !absolute number of index
         allocate (Aerosol%matrix_N(size(p_half,1),  &
              size(p_half,2), &
              size(p_half,3) - 1, npop))
         allocate (Aerosol%matrix_Dg_dry(size(p_half,1),  &
+             size(p_half,2), &
+             size(p_half,3) - 1, npop))
+        allocate (Aerosol%matrix_kappa(size(p_half,1),  &
              size(p_half,2), &
              size(p_half,3) - 1, npop))
         allocate (Aerosol%matrix_MSPCS(size(p_half,1),  &
@@ -1211,6 +1216,9 @@ logical, optional,            intent(in)    :: override_aerosols
         allocate (Aerosol%matrix_Dg_dry(size(p_half,1),  &
              size(p_half,2), &
              size(p_half,3) - 1, 1))
+        allocate (Aerosol%matrix_kappa(size(p_half,1),  &
+             size(p_half,2), &
+             size(p_half,3) - 1, 1))
         allocate (Aerosol%matrix_MSPCS(size(p_half,1),  &
              size(p_half,2), &
              size(p_half,3) - 1, 1, NSPCS))
@@ -1218,6 +1226,7 @@ logical, optional,            intent(in)    :: override_aerosols
       endif
       Aerosol%matrix_N = 0.
       Aerosol%matrix_Dg_dry = 0.
+      Aerosol%matrix_kappa = 0.
       Aerosol%matrix_MSPCS = 0.
       Aerosol%matrix_sigma = 0.
       I_POP = 0.
@@ -1425,12 +1434,14 @@ logical, optional,            intent(in)    :: override_aerosols
                  !i is the index of active population
                       call query_pop_number(is, ie, js, je, i, I_POP(i), Aerosol%matrix_N(:,:,:,i)) ![#/m3]
                       call query_pop_Dg_dry(is, ie, js, je, i, I_POP(i), Aerosol%matrix_Dg_dry(:,:,:,i)) ![m]
+                      call query_pop_kappa(is, ie, js, je, i, I_POP(i), Aerosol%matrix_kappa(:,:,:,i))
                       call query_pop_MSPCS(is, ie, js, je, nspcs, i, I_POP(i), Aerosol%matrix_MSPCS(:,:,:,i,:)) ![ug/m3]
                       call query_pop_SIGMA(i, I_POP(i), Aerosol%matrix_sigma(i)) ![]
                  enddo
          else
                  Aerosol%matrix_N = 0.
                  Aerosol%matrix_Dg_dry = 0.
+                 Aerosol%matrix_kappa = 0.
                  Aerosol%matrix_MSPCS = 0.
                  Aerosol%matrix_sigma = 0.
                  I_POP = 0.
@@ -1606,6 +1617,7 @@ type(aerosol_type), intent(inout) :: Aerosol
       !XL for matrix
       if (ASSOCIATED(Aerosol%matrix_N))        deallocate (Aerosol%matrix_N)
       if (ASSOCIATED(Aerosol%matrix_Dg_dry))   deallocate (Aerosol%matrix_Dg_dry)
+      if (ASSOCIATED(Aerosol%matrix_kappa))    deallocate (Aerosol%matrix_kappa)
       if (ASSOCIATED(Aerosol%matrix_MSPCS))    deallocate (Aerosol%matrix_MSPCS)
       if (ASSOCIATED(Aerosol%matrix_sigma))    deallocate (Aerosol%matrix_sigma)
  

@@ -465,8 +465,22 @@ contains
       allocate ( tracer_units (ntracers) )
       allocate ( wetdep       (ntracers) )
       nn = 1
+
+!   ! Print table header
+!  
+!   write(*,'(A)') ' ----------------------------------DEBUG-------------------------------------------------------'
+!   write(*,'(A)') '| ntracers |  n  | nn |     tracername     |     flag     |  Lwet | Ldyn | Laer | frac_in_cloud |'
+!   write(*,'(A)') ' ---------------------------------------------------------------------------------------------'
+
+
       do n=1,size(tracers_in_uw(:))
+      !ntracers = size(tracers_in_uw(:))
          if (tracers_in_uw(n)) then
+                !xl initialization
+                wetdep(nn)%n = -99
+                wetdep(nn)%Lwetdep = .false.
+                wetdep(nn)%Ldep_dynamic = .false.
+                wetdep(nn)%Laerosol = .false.
              call get_tracer_names (MODEL_ATMOS, n,  &
                                     name = tracername(nn), &
                                     units = tracer_units(nn))
@@ -483,11 +497,23 @@ contains
                                     wetdep(nn)%Lgas, &
                                     wetdep(nn)%Laerosol, &
                                     wetdep(nn)%Lice, &
+                                    wetdep(nn)%Ldep_dynamic, & !XL:flag
                                     frac_in_cloud_uw=wetdep(nn)%frac_in_cloud )
+             wetdep(nn)%n = n !XL:record original tracer index
+             !wetdep(nn)%name = tracername(nn) !XL: record tracer names
              wetdep(nn)%scheme = lowercase( wetdep(nn)%scheme )
+
+!         ! Print formatted debug table row
+!         write(*,'("|",I9,"|",I9," |",I4,"|",I3,"|",A13,"|",I6,"|",1X,L1,"   |",1X,L1,"   |",1X,L1,"   |",1X,F20.5," |")')  &
+!              ntracers, size(tracers_in_uw(:)), n, nn, trim(tracername(nn)), wetdep(nn)%n, &
+!              wetdep(nn)%Lwetdep, wetdep(nn)%Ldep_dynamic, wetdep(nn)%Laerosol, wetdep(nn)%frac_in_cloud
+!
+
+
              nn = nn + 1
           endif
-       end do
+       
+      end do
     endif
 
     id_xpsrc_uwc  = register_diag_field (mod_name,'xpsrc_uwc', axes(1:2), Time, &
@@ -1420,6 +1446,8 @@ contains
       cpn%wetdep(:)%Lwetdep = wetdep(:)%Lwetdep
       cpn%wetdep(:)%Lgas = wetdep(:)%Lgas
       cpn%wetdep(:)%Laerosol = wetdep(:)%Laerosol
+      cpn%wetdep(:)%Ldep_dynamic = wetdep(:)%Ldep_dynamic !XL
+      cpn%wetdep(:)%n = wetdep(:)%n !XL
       cpn%wetdep(:)%Lice = wetdep(:)%Lice
       allocate ( dpn%tracername   (ntracers) )
       allocate ( dpn%tracer_units (ntracers) )
@@ -1435,6 +1463,8 @@ contains
       dpn%wetdep(:)%Lwetdep = wetdep(:)%Lwetdep
       dpn%wetdep(:)%Lgas = wetdep(:)%Lgas
       dpn%wetdep(:)%Laerosol = wetdep(:)%Laerosol
+      dpn%wetdep(:)%Ldep_dynamic = wetdep(:)%Ldep_dynamic !XL
+      dpn%wetdep(:)%n = wetdep(:)%n !XL
       dpn%wetdep(:)%Lice = wetdep(:)%Lice
     endif
     call cpn_copy(cpn, dpn)
@@ -1750,6 +1780,7 @@ contains
           am1(i,j,:),  am2(i,j,:),  am3(i,j,:),  am4(i,j,:),                       &
           amx1(i,j,:), amx2(i,j,:), amx3(i,j,:), amx4(i,j,:),                      &
           asol%matrix_N(i,j,:,:),   asol%matrix_Dg_dry(i,j,:,:),                   & !matrix input
+          asol%matrix_kappa(i,j, :,:), &
           asol%matrix_MSPCS(i,j,:,:,:), asol%matrix_sigma(:),                      & !matrix input
           tracers(i,j,:,:), src_choice,                                            &
           tdt_rad(i,j,:), tdt_dyn(i,j,:), qvdt_dyn(i,j,:), qidt_dyn(i,j,:),        &

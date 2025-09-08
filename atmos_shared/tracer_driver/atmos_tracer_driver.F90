@@ -1444,7 +1444,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
       call atmos_sea_salt_sourcesink(lon,lat,ocn_flx_fraction,pwt, &
               z_half, pfull, w10m_ocean, t, t_surf_rad, rh, &
               tracer(:,:,:,:), dsinku(:,:,:), rdt(:,:,:,:), moa_emis, dt, &
-              Time, is,ie,js,je, kbot)
+              Time, time_next, is,ie,js,je, kbot)
    endif
    call mpp_clock_end (seasalt_clock)
 
@@ -1467,7 +1467,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
                                       tracer(:,:,:,nomphilic), rtndomphil, &
                                       tracer(:,:,:,nOH),    &
                                       moa_emis,             &
-                                      Time_next,is,ie,js,je)
+                                      time, Time_next,is,ie,js,je) !XL manually adding time here
       rdt(:,:,:,nbcphobic)=rdt(:,:,:,nbcphobic)+rtndbcphob(:,:,:)
       rdt(:,:,:,nbcphilic)=rdt(:,:,:,nbcphilic)+rtndbcphil(:,:,:)
       rdt(:,:,:,nomphobic)=rdt(:,:,:,nomphobic)+rtndomphob(:,:,:)
@@ -1486,7 +1486,7 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
               z_half, pfull, w10m_land, t, rh, &
               tracer(:,:,:,:), dsinku(:,:,:), rdt(:,:,:,:), &
               hno3d_setl(:,:), all_so4d_setl(:,:), &
-              Time, is,ie,js,je, kbot)
+              Time, Time_next, is,ie,js,je, kbot)
    endif
    call mpp_clock_end (dust_clock)
 
@@ -1625,12 +1625,15 @@ logical :: mask_local_hour(size(r,1),size(r,2),size(r,3))
    !IMPORTNT note: rdt_matrix has the same dimension with tracer, instead of r
    !XL TEST
    call mpp_clock_begin(matrix_clock)
-   call matrix_run(tracer, pfull, rh, t, dt, pwt, z_half, rdt_matrix, Time,is,ie,js,je)
+   !call matrix_run(tracer, pfull, rh, t, dt, pwt, z_half, rdt_matrix, Time,Time_next, is,ie,js,je, kbot)
+   call matrix_run(tracer, pfull, rh, t, dt, pwt, z_half, rdt_matrix, Time,Time_next, is,ie,js,je, lon, lat, kbot)
    !rdt has the same dimension as r
-
+   call mpp_clock_end(matrix_clock)
+   !if (maxval(rdt_matrix) > 0) &
+   !        write(*,*) "rdt_matrix not zero: max=", maxval(rdt_matrix)
+   
    rdt = rdt + rdt_matrix(:,:,:,1:size(r,4))
    !XL TEST
-   call mpp_clock_end(matrix_clock)
    
 !------------------------------------------------------------------------
 ! Sulfur hexafluoride (SF6)
@@ -1858,12 +1861,19 @@ type(time_type), intent(in)                                :: Time
 !---------------------------------------------------------------------
       call astronomy_init
 
-!If we wish to automatically register diagnostics for wet and dry
-! deposition, do it now.
+      !! -- initialize matrix -- (MOVE DOWN LATER)
+      call matrix_init(phalf, axes, time)
+      !!call matrix_init(r, axes, time, pfull, rh, t, pwt, zhalf)
+      !!XL TEST
+      !matrix_clock = mpp_clock_id( 'Tracer: Matrix', grain=CLOCK_MODULE )
+
+      !If we wish to automatically register diagnostics for wet and dry
+      ! deposition, do it now.
       call atmos_tracer_utilities_init(lonb, latb, axes, Time)
 
+
       ! -- initialize matrix -- (MOVE DOWN LATER)
-      call matrix_init(r, axes, time)
+      !call matrix_init(phalf, axes, time)
       !call matrix_init(r, axes, time, pfull, rh, t, pwt, zhalf)
       !XL TEST
       matrix_clock = mpp_clock_id( 'Tracer: Matrix', grain=CLOCK_MODULE )

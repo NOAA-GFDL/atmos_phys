@@ -30,7 +30,7 @@ use                    fms_mod, only : write_version_number,    &
                                        lowercase !f1p
 use                fms2_io_mod, only : file_exists
 use           time_manager_mod, only : time_type, &
-                                       days_in_month, days_in_year, &
+                                       days_in_month,day_of_year,days_in_year, &
                                        set_date, set_time, get_date_julian, &
                                        print_date, get_date, &
                                        operator(>), operator(+), operator(-)
@@ -56,9 +56,7 @@ use           interpolator_mod, only : interpolate_type, interpolator_init, &
 use              constants_mod, only : PI, GRAV, RDGAS, WTMAIR, PSTD_MKS
 
 !f1p
-use cloud_chem, only : cloud_so2_chem, CLOUD_CHEM_LEGACY, CLOUD_CHEM_F1P, &
-     CLOUD_CHEM_F1P_BUG, CLOUD_CHEM_F1P_BUG2    ! h1g, 2016-09-07
-
+use cloud_chem, only : cloud_so2_chem, CLOUD_CHEM_F1P
 use matrix_gfdl, only : set_matrix_source, matrix_source_type
 
 implicit none
@@ -93,7 +91,7 @@ integer ::   id_HO2                 = 0
 integer ::   id_NO3                 = 0
 integer ::   id_jH2O2               = 0
 integer ::   id_O3                  = 0
-integer ::   id_pH                  = 0
+integer ::   id_H_cloud             = 0
 
 integer ::   id_DMSo                = 0
 integer ::   id_DMS_emis            = 0
@@ -178,6 +176,9 @@ integer, save    :: aircraft_time_serie_type
 real             :: critical_sea_fraction = 0.5 ! DMS flux from sea occurs
                                 ! in grid cells with ocn_flx_fraction .gt.
                                 !  this value
+
+logical            :: use_fixed_pH_cloud_value
+real               :: pH_cloud_value 
                              
 character(len=80)  :: runtype = 'default'
 
@@ -254,10 +255,10 @@ data aircraft_emission_name/'fuel'/
 character(len=80)     :: aircraft_time_dependency_type = 'constant'
 integer, dimension(6) :: aircraft_dataset_entry  = (/ 1, 1, 1, 0, 0, 0 /)
 real :: so2_aircraft_EI = 1.e-3  ! kg of SO2/kg of fuel
-character(len=80)  :: cloud_chem_solver = 'legacy' !f1p
-real               :: pH_cloud = -999. !f1p
-real               :: H_cloud
-
+character(len=80)  :: cloud_chem_solver = 'f1p'
+real               :: pH_cloud = -999.
+real               :: pH_cloud_default = 4.5   ! default pH value if using fixed pH value
+character(len=80)  :: pH_cloud_type = 'file'   ! pH of cloud droplet is by default read from file
 logical            :: no_biobur_if_no_pbl = .true.
 namelist /simple_sulfate_nml/  &
        critical_sea_fraction,     &
@@ -274,7 +275,8 @@ namelist /simple_sulfate_nml/  &
         ship_time_dependency_type, ship_dataset_entry, &
       aircraft_source, aircraft_emission_name, aircraft_filename, &
         aircraft_time_dependency_type, aircraft_dataset_entry, so2_aircraft_EI,&
-      cont_volc_source, expl_volc_source, cloud_chem_solver, pH_cloud, no_biobur_if_no_pbl
+      cont_volc_source, expl_volc_source, cloud_chem_solver, pH_cloud, &
+       pH_cloud_type, no_biobur_if_no_pbl
 
 type(time_type) :: anthro_time, biobur_time, ship_time, aircraft_time
 type(time_type)        :: gas_conc_time
@@ -674,7 +676,17 @@ integer :: n, m, nsulfate
                              data_names = biobur_emission_name,        &
                              vert_interp=(/INTERP_WEIGHTED_P/)  )
      endif
-
+     if (trim(pH_cloud_type) .eq. 'file') then
+       use_fixed_pH_cloud_value=.false.   ! Use cloudd pH value from file
+       pH_cloud_value = pH_cloud_default
+     else
+       use_fixed_pH_cloud_value=.true.
+       if (pH_cloud .gt. -999.) then
+         pH_cloud_value = pH_cloud
+       else
+         pH_cloud_value = pH_cloud_default
+       endif
+     endif
      if (trim(ship_source) .eq. 'do_ship') then
 !---------------------------------------------------------------------
 !    Set time for input file base on selected time dependency.
@@ -835,24 +847,11 @@ integer :: n, m, nsulfate
    endif
 
 !cloud chemistry
-   if ( lowercase(trim(cloud_chem_solver)) .eq. "legacy" ) then
-      cloud_chem_type = CLOUD_CHEM_LEGACY
-   elseif ( lowercase(trim(cloud_chem_solver)) .eq. "f1p" ) then
+   if ( lowercase(trim(cloud_chem_solver)) .eq. "f1p" ) then
       cloud_chem_type = CLOUD_CHEM_F1P
-   elseif ( lowercase(trim(cloud_chem_solver)) .eq. "f1p_bug" ) then
-      cloud_chem_type = CLOUD_CHEM_F1P_BUG
-   elseif ( lowercase(trim(cloud_chem_solver)) .eq. "f1p_bug2" ) then
-      cloud_chem_type = CLOUD_CHEM_F1P_BUG2
-
    else
       call error_mesg ('atmos_sulfate_mod', &
            'unknown cloud chem solver', FATAL)
-   end if
-
-   if ( pH_cloud .gt. 0. ) then
-      H_cloud = 10.**(-pH_cloud)
-   else
-      H_cloud = -999.
    end if
 
 ! Register diagnostic fields
@@ -886,10 +885,10 @@ integer :: n, m, nsulfate
                    'simpleSO4_emis', axes(1:3),Time,                         &
                    'simpleSO4_emis', 'kgS/m2/s',                             &
                     missing_value=-999.  )
-   id_ph          = register_diag_field ( mod_name,                          &
+   id_H_cloud     = register_diag_field ( mod_name,                          &
                    'pH_simple_sulfate',axes(1:3),Time,                       &
-                   'pH in simple-sulfate',                                   &
-                   'none')
+                   '[H+] ions in simple-sulfate',                           &
+                   'mol/L')
    id_O3           = register_diag_field ( mod_name,                         &
                    'O3_simple_sulfate',axes(1:3),Time,                       &
                    'O3 in simple-sulfate',                                   &
@@ -1890,7 +1889,7 @@ subroutine atmos_SOx_emission (lon, lat, area, frac_land, &
       SO2_dt(:,:,:)= SO2_emis(:,:,:)/pwt(:,:,:)*WTMAIR/WTM_SO2
       SO4_dt(:,:,:)= SO4_emis(:,:,:)/pwt(:,:,:)*WTMAIR/WTM_SO4 ! SO4_emis unit:kgSO4/m2/s, pwt: kg air/m2 = rho*h
       !hook to matrix
-      call set_matrix_source(MATRIX_SOURCE_TYPE%E_SO4,SO4_dt,MATRIX_SOURCE_TYPE%U_VMR_S,pwt,zhalf,diag_time, is,js) !unit of SO4_dt(:,:,:): #SO4 / #humid_air / s 
+      call set_matrix_source(MATRIX_SOURCE_TYPE%E_SO4,SO4_dt,MATRIX_SOURCE_TYPE%U_VMR_S,pwt,zhalf,model_time, diag_time, is,js) !unit of SO4_dt(:,:,:): #SO4 / #humid_air / s 
 !------------------------------------------------------------------
 ! DIAGNOSTICS:      SO2 and SO4 emission in kg/timestep
 !--------------------------------------------------------------------
@@ -1998,8 +1997,8 @@ end subroutine atmos_SOx_emission
              H2O2,SO2_dt,SO4_dt,DMS_dt,MSA_dt,H2O2_dt, H2SO4, H2SO4_dt
      !real, dimension(size(pfull,1),size(pfull,2),size(pfull,3)) :: H2SO4, H2SO4_dt !XL
 !!! Input fields from interpolator
-      real, dimension(size(pfull,1),size(pfull,2),size(pfull,3)) :: pH
-      real, dimension(size(pfull,1),size(pfull,2),size(pfull,3)) :: O3_mmr
+      real, dimension(size(pfull,1),size(pfull,2),size(pfull,3)) :: H_cloud ! [H+] in mol/L
+      real, dimension(size(pfull,1),size(pfull,2),size(pfull,3)) :: O3_vmr
       real, dimension(size(pfull,1),size(pfull,2),size(pfull,3)) :: no3_conc
       real, dimension(size(pfull,1),size(pfull,2),size(pfull,3)) :: oh_conc
       real, dimension(size(pfull,1),size(pfull,2),size(pfull,3)) :: jh2o2
@@ -2029,7 +2028,7 @@ end subroutine atmos_SOx_emission
       real :: SO2_0,SO4_0,MSA_0,DMS_0,H2O2_0    ! initial concentrations
       real :: xSO2,xSO4,xMSA,xDMS,xH2O2,xno3,xo3,xoh,xho2,xjh2o2 ! update conc.
       real :: rk0, rk1, rk2, rk3  ! kinetic rates
-      real :: work1, xk, xe, x2, xph
+      real :: work1, xk, xe, x2, xH
       real :: heh2o2, h2o2g, rah2o2, px, heso2, so2g, heo3, o3g, rao3
       real :: pso4a, pso4b
       real :: xlwc, xhnm, ccc1, ccc2
@@ -2086,23 +2085,23 @@ end subroutine atmos_SOx_emission
       call interpolator(gas_conc_interp, gas_conc_time, phalf, NO3_conc, &
                        trim(gas_conc_name(3)), is, js)
 
-      O3_mmr(:,:,:)=0  ! Ozone mass mixing ratio
-      call interpolator(gas_conc_interp, gas_conc_time, phalf, O3_mmr, &
+      O3_vmr(:,:,:)=0  ! Ozone mass mixing ratio
+      call interpolator(gas_conc_interp, gas_conc_time, phalf, O3_vmr, &
                        trim(gas_conc_name(4)), is, js)
-      O3_mmr(:,:,:)=O3_mmr(:,:,:)*WTM_O3/WTMAIR
 
       jH2O2(:,:,:)=1.e-6 ! s-1
       call interpolator(gas_conc_interp, gas_conc_time, phalf, jH2O2, &
                        trim(gas_conc_name(5)), is, js)
-      if ( H_cloud .lt. 0. ) then
-         pH(:,:,:)=1.e-5
-         call interpolator(gas_conc_interp, gas_conc_time, phalf, pH, &
+
+      H_cloud(:,:,:) = 0.  ! [H+] in mol/L
+      if ( .not. use_fixed_pH_cloud_value) then
+         call interpolator(gas_conc_interp, gas_conc_time, phalf, H_cloud, &
               trim(gas_conc_name(6)), is, js)
       else
-         pH(:,:,:) = H_cloud
+         H_cloud(:,:,:) = 10**(-pH_cloud_value)
       end if
 
-      x = 2. *pi *float(jday-1)/365.
+      x = 2. *pi *(day_of_year(model_time)-1)/days_in_year(model_time)
       decl = A0 - A1*cos(  X) + B1*sin(  X) - A2*cos(2.*X) + B2*sin(2.*X) &
            - A3*cos(3.*X) + B3*sin(3.*X)
       xu(:,:) = -tan(lat(:,:))*tan(decl)
@@ -2161,12 +2160,8 @@ end subroutine atmos_SOx_emission
        xhnm  = rho_air * f
        O2    = xhnm * 0.21
 !f1p
-       if ( cloud_chem_type .eq. CLOUD_CHEM_LEGACY ) then
-          xlwc  = lwc(i,j,k)*rho_air *1.e-3 !L(water)/L(air)
-       elseif ( cloud_chem_type .eq. CLOUD_CHEM_F1P .or. &
-                cloud_chem_type .eq. CLOUD_CHEM_F1P_BUG .or. &  ! h1g, 2016-09-07
-                cloud_chem_type .eq. CLOUD_CHEM_F1P_BUG2 ) then ! h1g, 2016-09-07
-          xlwc  = lwc(i,j,k)*min(max(fliq(i,j,k),0.),1.)*rho_air *1.e-3 !only liquid water
+       if ( cloud_chem_type .eq. CLOUD_CHEM_F1P ) then
+           xlwc  = lwc(i,j,k)*min(max(fliq(i,j,k),0.),1.)*rho_air *1.e-3 !only liquid water
        end if
        DMS_0 = max(0.,DMS(i,j,k))
        MSA_0 = max(0.,MSA(i,j,k))
@@ -2180,12 +2175,12 @@ end subroutine atmos_SOx_emission
        xDMS  = DMS_0
        xMSA  = MSA_0
        xH2SO4 = H2SO4_0 !XL
-       xph   = max(1.e-7,       pH(i,j,k))
+       xH   =  max(0.,       H_cloud(i,j,k))
        xoh   = max(0.         , OH_conc(i,j,k)  *fac_OH(i,j))
        xho2  = max(0.         , HO2_conc(i,j,k) *fac_HO2(i,j))
        xjh2o2= max(0.         , jH2O2(i,j,k)    *fac_OH(i,j))
        xno3  = max(0.         , NO3_conc(i,j,k) *fac_NO3(i,j))
-       xo3   = max(small_value, O3_mmr(i,j,k))
+       xo3   = max(small_value, O3_vmr(i,j,k))
        oh_diurnal(i,j,k)=xoh
        oh_vmr(i,j,k)=xoh/xhnm
        no3_diurnal(i,j,k)=xno3
@@ -2225,12 +2220,12 @@ end subroutine atmos_SOx_emission
 ! ****************************************************************************
 ! *  Update MSA concentration after gas phase chemistry                      *
 ! ****************************************************************************
-       PMSA = RK1*0.25 * xDMS
+       PMSA = RK1*0.25 * DMS_0
        xMSA = MSA_0 + PMSA * dt
 ! ****************************************************************************
 ! *  SO2 oxydation by OH
 ! ****************************************************************************
-       PSO2 = ( RK1*0.75 + RK2 + RK3 ) * xDMS
+       PSO2 = ( RK1*0.75 + RK2 + RK3 ) * DMS_0
        rk0 = 3.0E-31 * (300./TK)**3.3
        rk1 = rk0 * xhnm / 1.5e-12
        f1 = ( 1.+ ( log10(rk1) )**2 )**(-1)
@@ -2252,125 +2247,8 @@ end subroutine atmos_SOx_emission
        !   xso4   = SO4_0
        end if
 !f1p
-       if ( cloud_chem_type .eq. CLOUD_CHEM_LEGACY ) then
+       if ( cloud_chem_type .eq. CLOUD_CHEM_F1P ) then
 
-! ****************************************************************************
-! < Cloud chemistry (above 258K): >
-       work1 = (t0 - tk)/(tk*t0)
-!-----------------------------------------------------------------------
-!         ... h2o2
-!-----------------------------------------------------------------------
-       xk = 7.4e4   *exp( 6621.* work1 )
-       xe = 2.2e-12 *exp(-3730.* work1 )
-       heh2o2  = xk*(1. + xe/xph)
-       px = heh2o2 * Ra * tk * xlwc
-       h2o2g = xh2o2 /(1.+px) 
-!-----------------------------------------------------------------------
-!         ... so2
-!-----------------------------------------------------------------------
-       xk = 1.23   * exp(3120. * work1 )
-       xe = 1.7e-2 * exp(2090. * work1 ) 
-       x2 = 6.0e-8 * exp(1120. * work1 )
-       heso2 = xk*(1. + xe/xph *(1. + x2/xph) ) 
-!       heso2 = 1.e2 ! xk*(1. + xe/xph *(1. + x2/xph) )
-       px = heso2 * Ra * tk * xlwc
-       so2g = xso2/(1.+px)
-!-----------------------------------------------------------------------
-!         ... o3
-!-----------------------------------------------------------------------
-       xk = 1.15e-2 * exp( 2560. * work1 )
-       heo3 = xk
-       px = heo3 * Ra * tk *xlwc
-       o3g = xo3 / (1.+px) 
-!-----------------------------------------------
-!       ... Aqueous phase reaction rates
-!           SO2 + H2O2 -> SO4
-!           SO2 + O3   -> SO4
-!-----------------------------------------------
-
-!------------------------------------------------------------------------
-!       ... S(IV) (HSO3) + H2O2
-!------------------------------------------------------------------------
-            rah2o2 = 8.e4 * EXP( -3650.*work1 )  / (.1 + xph)
-
-!------------------------------------------------------------------------
-!        ... S(IV)+ O3
-!------------------------------------------------------------------------
-            rao3   = 4.39e11 * EXP(-4131./tk)  &
-                  + 2.56e3  * EXP(-996. /tk) /xph
-
-!-----------------------------------------------------------------
-!       ... Prediction after aqueous phase
-!       so4
-!       When Cloud is present
-!
-!       S(IV) + H2O2 = S(VI)
-!       S(IV) + O3   = S(VI)
-!
-!       reference:
-!           (1) Seinfeld
-!           (2) Benkovitz
-!-----------------------------------------------------------------
-
-!-----------------------------------------------------------------
-!       ... S(IV) + H2O2 = S(VI)
-!-----------------------------------------------------------------
-       ccc1=0.
-       ccc2=0.
-       if( xlwc >= 1.e-8 ) then                    ! when cloud is present
-               pso4a = rah2o2 * heh2o2*h2o2g  &
-                             * heso2 *so2g            ! [M/s]
-               pso4a = pso4a       &                    ! [M/s] =  [mole/L(w)/s]
-                    * xlwc       &                    ! [mole/L(a)/s]
-                    / const0     &                    ! [/L(a)/s]
-                    / xhnm                            ! [mixing ratio/s]
-
-          ccc1 = pso4a*dt
-          ccc1 = max(min(ccc1,xso2,xh2o2), 0.)
-          xso4 = xso4 + ccc1
-          xh2o2 = max(xh2o2 - ccc1, small_value)
-          xso2 =  max(xso2  - ccc1, small_value)
-!          ccc1 = max(ccc1, 0.)
-!          if( xh2o2 > xso2 ) then
-!              if( ccc1 > xso2 ) then
-!                  xso4  = xso4 + xso2
-!                  xso2  = small_value
-!                  xh2o2 = xh2o2 - xso2
-!              else
-!                  xso4  = xso4  + ccc1
-!                  xh2o2 = xh2o2 - ccc1
-!                  xso2  = xso2  - ccc1
-!              end if
-!          else
-!               if( ccc1 > xh2o2 ) then
-!                   xso4  = xso4 + xh2o2
-!                   xso2  = xso2 - xh2o2
-!                   xh2o2 = small_value
-!               else
-!                   xso4  = xso4  + ccc1
-!                   xh2o2 = xh2o2 - ccc1
-!                   xso2  = xso2  - ccc1
-!               end if
-!          end if
-
-
-!-----------------------------------------------
-!       ... S(IV) + O3 = S(VI)
-!-----------------------------------------------
-           pso4b = rao3 * heo3*o3g * heso2*so2g       ! [M/s]
-           pso4b = pso4b        &        ! [M/s] =  [mole/L(w)/s]
-                * xlwc        &        ! [mole/L(a)/s]
-                / const0      &        ! [/L(a)/s]
-                / xhnm                 ! [mixing ratio/s]
- 
-           ccc2 = pso4b*dt
-            ccc2 = max(min(ccc2, xso2), 0.)               ! mozart2
-            xso4 = xso4 + ccc2                           ! mozart2
-            xso2 = max(xso2 - ccc2, small_value)         ! mozart2
-       end if
-       elseif ( cloud_chem_type .eq. CLOUD_CHEM_F1P .or. &
-                cloud_chem_type .eq. CLOUD_CHEM_F1P_BUG  .or. &
-                cloud_chem_type .eq. CLOUD_CHEM_F1P_BUG2 ) then   ! h1g, 2016-09-07
 !f1p cloud chem
        !calculate in cloud-production   
           !first calculate in-cloud liquid
@@ -2379,58 +2257,31 @@ end subroutine atmos_SOx_emission
           if ( xlwc .gt. 1.e-10) then
           if ( cldfr(i,j,k) .gt. 1.e-10 )  xlwc = xlwc/cldfr(i,j,k)
 
-          if ( cloud_chem_type .eq. CLOUD_CHEM_F1P_BUG ) then
-             call cloud_so2_chem(pfull(i,j,k)/PSTD_MKS, xpH, tk, xlwc, rso2_h2o2, rso2_o3, &
-                                 do_am3_bug=.true.)
-             rso2_h2o2 = rso2_h2o2 * xlwc / const0 / xhnm
-             rso2_o3   = rso2_o3   * xlwc / const0 / xhnm
-          else
-             call cloud_so2_chem(pfull(i,j,k)/PSTD_MKS, xpH, tk, xlwc, rso2_h2o2, rso2_o3)
-          end if
+          call cloud_so2_chem(pfull(i,j,k)/PSTD_MKS, xH, tk, xlwc, rso2_h2o2, rso2_o3)
 
           !production via H2O2
           exp_factor = rso2_h2o2 * (xso2 - xh2o2) * dt
 
-
-          if ( cloud_chem_type .eq. CLOUD_CHEM_F1P_BUG2 ) then  ! h1g, 2016-09-07
-
-            if ( abs(exp_factor) .lt. 600. .and. abs(exp_factor) .gt. 0.) then
-               EF          = exp( exp_factor )
-               pso4_h2o2   = max(xso2 * xh2o2 * ( 1. - EF ) / ( xh2o2 - xso2 * EF ),0.)                    
-            else
-               pso4_h2o2   = min(xso2,xh2o2)
-            end if
-      
-          else !cloud_chem_type .eq. CLOUD_CHEM_F1P  ! h1g, 2016-09-07
-            if ( exp_factor .lt. 600. .and. abs(exp_factor) .gt. small_value ) then
-               EF          = exp( exp_factor )
-               pso4_h2o2   = max(xso2 * xh2o2 * ( 1. - EF ) / ( xh2o2 - xso2 * EF ),0.)                    
-            elseif (abs(exp_factor) .le. small_value ) then
-               pso4_h2o2   = rso2_h2o2 * xso2**2 * dt / (1 + rso2_h2o2*dt*xso2)
-            else
-               pso4_h2o2   = min(xso2,xh2o2)
-            end if
-          endif
+          if ( exp_factor .lt. 600. .and. abs(exp_factor) .gt. small_value ) then
+            EF          = exp( exp_factor )
+            pso4_h2o2   = max(xso2 * xh2o2 * ( 1. - EF ) / ( xh2o2 - xso2 * EF ),0.)                    
+          elseif (abs(exp_factor) .le. small_value ) then
+            pso4_h2o2   = rso2_h2o2 * xso2**2 * dt / (1 + rso2_h2o2*dt*xso2)
+          else
+            pso4_h2o2   = min(xso2,xh2o2)
+          end if
 
 
           exp_factor = rso2_o3 * (xso2 - xo3) * dt
-          if ( cloud_chem_type .eq. CLOUD_CHEM_F1P_BUG2 ) then  ! h1g, 2016-09-07
-            if ( abs(exp_factor) .lt. 600. .and. abs(exp_factor) .gt. 0. ) then
-               EF          = exp( exp_factor )
-               pso4_o3     = max(xso2 * xo3 * ( 1. - EF ) / ( xo3 -  xso2 * EF ),0.)
-            else
-               pso4_o3 = min(xso2,xo3)
-            end if
-          else  !cloud_chem_type .eq. CLOUD_CHEM_F1P  ! h1g, 2016-09-07
-            if ( exp_factor .lt. 600. .and. abs(exp_factor) .gt. small_value ) then
-               EF          = exp( exp_factor )
-               pso4_o3     = max(xso2 * xo3 * ( 1. - EF ) / ( xo3 -  xso2 * EF ),0.)
-            elseif (abs(exp_factor) .le. small_value ) then
-               pso4_o3     = rso2_o3 * xso2**2 * dt / (1 + rso2_o3*dt*xso2)
-            else
-               pso4_o3 = min(xso2,xo3)
-            end if
-          endif
+          !cloud_chem_type .eq. CLOUD_CHEM_F1P  ! h1g, 2016-09-07
+          if ( exp_factor .lt. 600. .and. abs(exp_factor) .gt. small_value ) then
+            EF          = exp( exp_factor )
+            pso4_o3     = max(xso2 * xo3 * ( 1. - EF ) / ( xo3 -  xso2 * EF ),0.)
+          elseif (abs(exp_factor) .le. small_value ) then
+            pso4_o3     = rso2_o3 * xso2**2 * dt / (1 + rso2_o3*dt*xso2)
+          else
+            pso4_o3 = min(xso2,xo3)
+          end if
 
           !>        
 
@@ -2471,9 +2322,9 @@ end subroutine atmos_SOx_emission
 
    !xoh unit: #/cm3; xhnm unit: #/cm3
    !hook to matrix
-   call set_matrix_source(MATRIX_SOURCE_TYPE%P_H2SO4,SO4_oh_prod,MATRIX_SOURCE_TYPE%U_VMR_S, pwt,zhalf,diag_time, is,js)
+   call set_matrix_source(MATRIX_SOURCE_TYPE%P_H2SO4,SO4_oh_prod,MATRIX_SOURCE_TYPE%U_VMR_S, pwt,zhalf,model_time, diag_time, is,js)
    !call set_matrix_source(MATRIX_SOURCE_TYPE%P_H2SO4,H2SO4,MATRIX_SOURCE_TYPE%U_VMR_S, pwt,zhalf,diag_time, is,js)
-   call set_matrix_source(MATRIX_SOURCE_TYPE%P_AQSO4, SO4_o3_prod+SO4_h2o2_prod, MATRIX_SOURCE_TYPE%U_VMR_S, pwt,zhalf,diag_time, is,js) 
+   call set_matrix_source(MATRIX_SOURCE_TYPE%P_AQSO4, SO4_o3_prod+SO4_h2o2_prod, MATRIX_SOURCE_TYPE%U_VMR_S, pwt,zhalf,model_time, diag_time, is,js) 
 
       if (do_tr_sulfate(1)) rt_sulfate(:,:,:,1)=so4_dt(:,:,:)
       if (do_tr_sulfate(2)) rt_sulfate(:,:,:,2)=so2_dt(:,:,:)
@@ -2501,12 +2352,12 @@ end subroutine atmos_SOx_emission
         used = send_data ( id_jH2O2, jH2O2_diurnal, &
                            diag_time, is_in=is, js_in=js,ks_in=1 )
       endif
-      if (id_ph > 0) then
-        used = send_data ( id_ph, ph, &
+      if (id_H_cloud  > 0) then
+        used = send_data ( id_H_cloud, H_cloud, &
                            diag_time,is_in=is,js_in=js,ks_in=1)
       endif
       if (id_o3 > 0) then
-        used = send_data ( id_o3, o3_mmr, &
+        used = send_data ( id_o3, o3_vmr, &
                            diag_time,is_in=is,js_in=js,ks_in=1)
       endif
 

@@ -71,127 +71,127 @@ INTEGER, PARAMETER :: NWEIGHTS = NMODES
       REAL, PARAMETER :: DPMIN_GLOBAL =  0.001D-06   ! [m] -  1 nm
       REAL, PARAMETER :: KIJ_DGMIN = 1.0D+06 * DPMIN_GLOBAL / 2.1D+00           ! [um] If any mode has Sigma>2.0, must modify.
       REAL, PARAMETER :: KIJ_DGMAX =    100.0000                                ! [um]
-      REAL      :: K0IJ_TEMP1PRES1(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
-      REAL      :: K0IJ_TEMP1PRES2(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
-      REAL      :: K0IJ_TEMP1PRES3(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
-      REAL      :: K0IJ_TEMP2PRES1(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
-      REAL      :: K0IJ_TEMP2PRES2(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
-      REAL      :: K0IJ_TEMP2PRES3(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
-      REAL      :: K0IJ_TEMP3PRES1(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
-      REAL      :: K0IJ_TEMP3PRES2(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
-      REAL      :: K0IJ_TEMP3PRES3(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
-      REAL      :: K3IJ_TEMP1PRES1(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
-      REAL      :: K3IJ_TEMP1PRES2(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
-      REAL      :: K3IJ_TEMP1PRES3(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
-      REAL      :: K3IJ_TEMP2PRES1(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
-      REAL      :: K3IJ_TEMP2PRES2(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
-      REAL      :: K3IJ_TEMP2PRES3(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
-      REAL      :: K3IJ_TEMP3PRES1(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
-      REAL      :: K3IJ_TEMP3PRES2(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
-      REAL      :: K3IJ_TEMP3PRES3(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
+      REAL, SAVE      :: K0IJ_TEMP1PRES1(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
+      REAL, SAVE      :: K0IJ_TEMP1PRES2(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
+      REAL, SAVE      :: K0IJ_TEMP1PRES3(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
+      REAL, SAVE      :: K0IJ_TEMP2PRES1(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
+      REAL, SAVE      :: K0IJ_TEMP2PRES2(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
+      REAL, SAVE      :: K0IJ_TEMP2PRES3(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
+      REAL, SAVE      :: K0IJ_TEMP3PRES1(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
+      REAL, SAVE      :: K0IJ_TEMP3PRES2(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
+      REAL, SAVE      :: K0IJ_TEMP3PRES3(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
+      REAL, SAVE      :: K3IJ_TEMP1PRES1(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
+      REAL, SAVE      :: K3IJ_TEMP1PRES2(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
+      REAL, SAVE      :: K3IJ_TEMP1PRES3(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
+      REAL, SAVE      :: K3IJ_TEMP2PRES1(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
+      REAL, SAVE      :: K3IJ_TEMP2PRES2(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
+      REAL, SAVE      :: K3IJ_TEMP2PRES3(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
+      REAL, SAVE      :: K3IJ_TEMP3PRES1(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
+      REAL, SAVE      :: K3IJ_TEMP3PRES2(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
+      REAL, SAVE      :: K3IJ_TEMP3PRES3(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)   ! [m^3/s]
       !-----------------------------------------------------------------------------------------------------------------
       ! KIJ_DIAMETERS contains the values of Dg used in building the lookup tables.
       ! KIJ_SIGMAS    contains the values of Sigmag used in building the lookup tables.
       ! INDEX_SIGG(I) is the index of KIJ_SIGMAS to obtain the Sigmag value for mode I.
       !-----------------------------------------------------------------------------------------------------------------
-      REAL                :: KIJ_DIAMETERS(KIJ_NDGS)                             ! [um]
+      REAL, SAVE                :: KIJ_DIAMETERS(KIJ_NDGS)                             ! [um]
       REAL, DIMENSION(KIJ_NSGS) :: KIJ_SIGMAS = (/ KIJ_SIGM1, KIJ_SIGM2, KIJ_SIGM3 /)  ! [1]
-      INTEGER               :: INDEX_SIGG(NWEIGHTS)                                ! [1]
+      !INTEGER               :: INDEX_SIGG(NWEIGHTS)                                ! [1]
 
      CONTAINS
 
 
-!      SUBROUTINE SETUP_KIJ_DIAMETERS
-!!-----------------------------------------------------------------------------------------------------------------------
-!!     Routine to define the geometric mean diameters Dg of the lookup tables.
-!!-----------------------------------------------------------------------------------------------------------------------
-!      IMPLICIT NONE
-!      INTEGER :: I
-!      REAL :: E, SCALE
-!      E = 1.0 / REAL( KIJ_NDGS - 1 )
-!      SCALE = ( KIJ_DGMAX / KIJ_DGMIN )**E
-!      DO I=1, KIJ_NDGS
-!        KIJ_DIAMETERS(I) = KIJ_DGMIN * SCALE**(I-1)             ! [um]
-!        ! WRITE(*,'(I6,F16.6)') I, KIJ_DIAMETERS(I)
-!      ENDDO
-!      RETURN
-!      END SUBROUTINE SETUP_KIJ_DIAMETERS
-!
-!
-!
-!      SUBROUTINE SETUP_KIJ_TABLES
-!!-----------------------------------------------------------------------------------------------------------------------
-!!     Routine to setup tables of mode-average coagulation coefficients [m^3/s].
-!!     Several temperatures and pressures are currently used. 
-!!-----------------------------------------------------------------------------------------------------------------------
-!      IMPLICIT NONE
-!      INTEGER :: I
-!      REAL :: K0IJ_TABLE(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)        ! [m^3/s]
-!      REAL :: K3IJ_TABLE(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)        ! [m^3/s]
-!
-!      !-------------------------------------------------------------------------
-!      ! Build the table for each choice of temperature and pressure. 
-!      !-------------------------------------------------------------------------
-!      CALL BUILD_KIJ_TABLES(KIJ_TEMP1,KIJ_PRES1,K0IJ_TABLE,K3IJ_TABLE)  ! T1, p1
-!      K0IJ_TEMP1PRES1(:,:,:,:) = K0IJ_TABLE(:,:,:,:)      ! [m^3/s]
-!      K3IJ_TEMP1PRES1(:,:,:,:) = K3IJ_TABLE(:,:,:,:)      ! [m^3/s]
-!      CALL BUILD_KIJ_TABLES(KIJ_TEMP1,KIJ_PRES2,K0IJ_TABLE,K3IJ_TABLE)  ! T1, p2
-!      K0IJ_TEMP1PRES2(:,:,:,:) = K0IJ_TABLE(:,:,:,:)      ! [m^3/s]
-!      K3IJ_TEMP1PRES2(:,:,:,:) = K3IJ_TABLE(:,:,:,:)      ! [m^3/s]
-!      CALL BUILD_KIJ_TABLES(KIJ_TEMP1,KIJ_PRES3,K0IJ_TABLE,K3IJ_TABLE)  ! T1, p3
-!      K0IJ_TEMP1PRES3(:,:,:,:) = K0IJ_TABLE(:,:,:,:)      ! [m^3/s]
-!      K3IJ_TEMP1PRES3(:,:,:,:) = K3IJ_TABLE(:,:,:,:)      ! [m^3/s]
-!      CALL BUILD_KIJ_TABLES(KIJ_TEMP2,KIJ_PRES1,K0IJ_TABLE,K3IJ_TABLE)  ! T2, p1
-!      K0IJ_TEMP2PRES1(:,:,:,:) = K0IJ_TABLE(:,:,:,:)      ! [m^3/s]
-!      K3IJ_TEMP2PRES1(:,:,:,:) = K3IJ_TABLE(:,:,:,:)      ! [m^3/s]
-!      CALL BUILD_KIJ_TABLES(KIJ_TEMP2,KIJ_PRES2,K0IJ_TABLE,K3IJ_TABLE)  ! T2, p2
-!      K0IJ_TEMP2PRES2(:,:,:,:) = K0IJ_TABLE(:,:,:,:)      ! [m^3/s]
-!      K3IJ_TEMP2PRES2(:,:,:,:) = K3IJ_TABLE(:,:,:,:)      ! [m^3/s]
-!      CALL BUILD_KIJ_TABLES(KIJ_TEMP2,KIJ_PRES3,K0IJ_TABLE,K3IJ_TABLE)  ! T2, p3
-!      K0IJ_TEMP2PRES3(:,:,:,:) = K0IJ_TABLE(:,:,:,:)      ! [m^3/s]
-!      K3IJ_TEMP2PRES3(:,:,:,:) = K3IJ_TABLE(:,:,:,:)      ! [m^3/s]
-!      CALL BUILD_KIJ_TABLES(KIJ_TEMP3,KIJ_PRES1,K0IJ_TABLE,K3IJ_TABLE)  ! T3, p1
-!      K0IJ_TEMP3PRES1(:,:,:,:) = K0IJ_TABLE(:,:,:,:)      ! [m^3/s]
-!      K3IJ_TEMP3PRES1(:,:,:,:) = K3IJ_TABLE(:,:,:,:)      ! [m^3/s]
-!      CALL BUILD_KIJ_TABLES(KIJ_TEMP3,KIJ_PRES2,K0IJ_TABLE,K3IJ_TABLE)  ! T3, p2
-!      K0IJ_TEMP3PRES2(:,:,:,:) = K0IJ_TABLE(:,:,:,:)      ! [m^3/s]
-!      K3IJ_TEMP3PRES2(:,:,:,:) = K3IJ_TABLE(:,:,:,:)      ! [m^3/s]
-!      CALL BUILD_KIJ_TABLES(KIJ_TEMP3,KIJ_PRES3,K0IJ_TABLE,K3IJ_TABLE)  ! T3, p3
-!      K0IJ_TEMP3PRES3(:,:,:,:) = K0IJ_TABLE(:,:,:,:)      ! [m^3/s]
-!      K3IJ_TEMP3PRES3(:,:,:,:) = K3IJ_TABLE(:,:,:,:)      ! [m^3/s]
-!
-!      RETURN
-!      END SUBROUTINE SETUP_KIJ_TABLES
-!
-!
-!      SUBROUTINE BUILD_KIJ_TABLES( TEMP, PRES, K0IJ_TABLE, K3IJ_TABLE )
-!!-------------------------------------------------------------------------------------------------------------------------------------
-!!     Routine to setup a table of mode-average coagulation coefficients [m^3/s]
-!!       for a given temperature and pressure.
-!!-------------------------------------------------------------------------------------------------------------------------------------
-!      IMPLICIT NONE
-!      INTEGER :: I, J, K, L
-!      REAL :: TEMP                                             ! [K]
-!      REAL :: PRES                                             ! [Pa]
-!      REAL :: K0IJ_TABLE(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)  ! [m^3/s]
-!      REAL :: K3IJ_TABLE(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)  ! [m^3/s]
-!      REAL :: K0IJ, K3IJ                                       ! [m^3/s]
-!
-!      DO I=1, KIJ_NDGS
-!      DO J=1, KIJ_NDGS
-!      DO K=1, KIJ_NSGS
-!      DO L=1, KIJ_NSGS
-!        CALL GET_KNIJ(TEMP,PRES,KIJ_DIAMETERS(I),KIJ_SIGMAS(K),KIJ_DIAMETERS(J),KIJ_SIGMAS(L),K0IJ,K3IJ)
-!        K0IJ_TABLE(I,K,J,L) = K0IJ    ! [m^3/s]
-!        K3IJ_TABLE(I,K,J,L) = K3IJ    ! [m^3/s]
-!      ENDDO
-!      ENDDO
-!      ENDDO
-!      ENDDO
-!
-!      RETURN
-!      END SUBROUTINE BUILD_KIJ_TABLES
-!
+      SUBROUTINE SETUP_KIJ_DIAMETERS
+!-----------------------------------------------------------------------------------------------------------------------
+!     Routine to define the geometric mean diameters Dg of the lookup tables.
+!-----------------------------------------------------------------------------------------------------------------------
+      IMPLICIT NONE
+      INTEGER :: I
+      REAL :: E, SCALE
+      E = 1.0 / REAL( KIJ_NDGS - 1 )
+      SCALE = ( KIJ_DGMAX / KIJ_DGMIN )**E
+      DO I=1, KIJ_NDGS
+        KIJ_DIAMETERS(I) = KIJ_DGMIN * SCALE**(I-1)             ! [um]
+        ! WRITE(*,'(I6,F16.6)') I, KIJ_DIAMETERS(I)
+      ENDDO
+      RETURN
+      END SUBROUTINE SETUP_KIJ_DIAMETERS
+
+
+
+      SUBROUTINE SETUP_KIJ_TABLES
+!-----------------------------------------------------------------------------------------------------------------------
+!     Routine to setup tables of mode-average coagulation coefficients [m^3/s].
+!     Several temperatures and pressures are currently used. 
+!-----------------------------------------------------------------------------------------------------------------------
+      IMPLICIT NONE
+      INTEGER :: I
+      REAL :: K0IJ_TABLE(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)        ! [m^3/s]
+      REAL :: K3IJ_TABLE(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)        ! [m^3/s]
+
+      !-------------------------------------------------------------------------
+      ! Build the table for each choice of temperature and pressure. 
+      !-------------------------------------------------------------------------
+      CALL BUILD_KIJ_TABLES(KIJ_TEMP1,KIJ_PRES1,K0IJ_TABLE,K3IJ_TABLE)  ! T1, p1
+      K0IJ_TEMP1PRES1(:,:,:,:) = K0IJ_TABLE(:,:,:,:)      ! [m^3/s]
+      K3IJ_TEMP1PRES1(:,:,:,:) = K3IJ_TABLE(:,:,:,:)      ! [m^3/s]
+      CALL BUILD_KIJ_TABLES(KIJ_TEMP1,KIJ_PRES2,K0IJ_TABLE,K3IJ_TABLE)  ! T1, p2
+      K0IJ_TEMP1PRES2(:,:,:,:) = K0IJ_TABLE(:,:,:,:)      ! [m^3/s]
+      K3IJ_TEMP1PRES2(:,:,:,:) = K3IJ_TABLE(:,:,:,:)      ! [m^3/s]
+      CALL BUILD_KIJ_TABLES(KIJ_TEMP1,KIJ_PRES3,K0IJ_TABLE,K3IJ_TABLE)  ! T1, p3
+      K0IJ_TEMP1PRES3(:,:,:,:) = K0IJ_TABLE(:,:,:,:)      ! [m^3/s]
+      K3IJ_TEMP1PRES3(:,:,:,:) = K3IJ_TABLE(:,:,:,:)      ! [m^3/s]
+      CALL BUILD_KIJ_TABLES(KIJ_TEMP2,KIJ_PRES1,K0IJ_TABLE,K3IJ_TABLE)  ! T2, p1
+      K0IJ_TEMP2PRES1(:,:,:,:) = K0IJ_TABLE(:,:,:,:)      ! [m^3/s]
+      K3IJ_TEMP2PRES1(:,:,:,:) = K3IJ_TABLE(:,:,:,:)      ! [m^3/s]
+      CALL BUILD_KIJ_TABLES(KIJ_TEMP2,KIJ_PRES2,K0IJ_TABLE,K3IJ_TABLE)  ! T2, p2
+      K0IJ_TEMP2PRES2(:,:,:,:) = K0IJ_TABLE(:,:,:,:)      ! [m^3/s]
+      K3IJ_TEMP2PRES2(:,:,:,:) = K3IJ_TABLE(:,:,:,:)      ! [m^3/s]
+      CALL BUILD_KIJ_TABLES(KIJ_TEMP2,KIJ_PRES3,K0IJ_TABLE,K3IJ_TABLE)  ! T2, p3
+      K0IJ_TEMP2PRES3(:,:,:,:) = K0IJ_TABLE(:,:,:,:)      ! [m^3/s]
+      K3IJ_TEMP2PRES3(:,:,:,:) = K3IJ_TABLE(:,:,:,:)      ! [m^3/s]
+      CALL BUILD_KIJ_TABLES(KIJ_TEMP3,KIJ_PRES1,K0IJ_TABLE,K3IJ_TABLE)  ! T3, p1
+      K0IJ_TEMP3PRES1(:,:,:,:) = K0IJ_TABLE(:,:,:,:)      ! [m^3/s]
+      K3IJ_TEMP3PRES1(:,:,:,:) = K3IJ_TABLE(:,:,:,:)      ! [m^3/s]
+      CALL BUILD_KIJ_TABLES(KIJ_TEMP3,KIJ_PRES2,K0IJ_TABLE,K3IJ_TABLE)  ! T3, p2
+      K0IJ_TEMP3PRES2(:,:,:,:) = K0IJ_TABLE(:,:,:,:)      ! [m^3/s]
+      K3IJ_TEMP3PRES2(:,:,:,:) = K3IJ_TABLE(:,:,:,:)      ! [m^3/s]
+      CALL BUILD_KIJ_TABLES(KIJ_TEMP3,KIJ_PRES3,K0IJ_TABLE,K3IJ_TABLE)  ! T3, p3
+      K0IJ_TEMP3PRES3(:,:,:,:) = K0IJ_TABLE(:,:,:,:)      ! [m^3/s]
+      K3IJ_TEMP3PRES3(:,:,:,:) = K3IJ_TABLE(:,:,:,:)      ! [m^3/s]
+
+      RETURN
+      END SUBROUTINE SETUP_KIJ_TABLES
+
+
+      SUBROUTINE BUILD_KIJ_TABLES( TEMP, PRES, K0IJ_TABLE, K3IJ_TABLE )
+!-------------------------------------------------------------------------------------------------------------------------------------
+!     Routine to setup a table of mode-average coagulation coefficients [m^3/s]
+!       for a given temperature and pressure.
+!-------------------------------------------------------------------------------------------------------------------------------------
+      IMPLICIT NONE
+      INTEGER :: I, J, K, L
+      REAL :: TEMP                                             ! [K]
+      REAL :: PRES                                             ! [Pa]
+      REAL :: K0IJ_TABLE(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)  ! [m^3/s]
+      REAL :: K3IJ_TABLE(KIJ_NDGS,KIJ_NSGS,KIJ_NDGS,KIJ_NSGS)  ! [m^3/s]
+      REAL :: K0IJ, K3IJ                                       ! [m^3/s]
+
+      DO I=1, KIJ_NDGS
+      DO J=1, KIJ_NDGS
+      DO K=1, KIJ_NSGS
+      DO L=1, KIJ_NSGS
+        CALL GET_KNIJ(TEMP,PRES,KIJ_DIAMETERS(I),KIJ_SIGMAS(K),KIJ_DIAMETERS(J),KIJ_SIGMAS(L),K0IJ,K3IJ)
+        K0IJ_TABLE(I,K,J,L) = K0IJ    ! [m^3/s]
+        K3IJ_TABLE(I,K,J,L) = K3IJ    ! [m^3/s]
+      ENDDO
+      ENDDO
+      ENDDO
+      ENDDO
+
+      RETURN
+      END SUBROUTINE BUILD_KIJ_TABLES
+
 !       !call GET_KNIJ(t(i,j,k), pfull(i,j,k), dg_ip(i,j,k), sig_ip, dg_jp(i,j,k), sig_jp, KBAR0_IJ(ip, jp, i,j,k), &
 !       !                                       KBAR3_IJ(ip, jp, i,j,k))
       SUBROUTINE GET_KNIJ( TEMP, PRES, DGI, SIGGI, DGJ, SIGGJ, K0IJ, K3IJ )
@@ -492,444 +492,456 @@ INTEGER, PARAMETER :: NWEIGHTS = NMODES
      END SUBROUTINE TQLI
 
 
-!      SUBROUTINE GET_KBARNIJ( IUPDATE, TK, PRES, DIAM, KBAR0IJ, KBAR3IJ )
-!!-------------------------------------------------------------------------------------------------------------------------------------
-!!     Routine to setup tables of mode-average coagulation coefficients
-!!     KBAR0IJ and KBAR3IJ [m^3/s] for arbitrary temperature and pressure.
-!!     Modes are assumed to be lognormal, and Sigmag values are set to
-!!     constants for each mode, and Dg values are derived from the current
-!!     value of the diameter of average mass for each mode, before being passed
-!!     to this routine.
-!!-------------------------------------------------------------------------------------------------------------------------------------
-!      USE AERO_SETUP, ONLY: SIG0                        ! [um], [1], default lognormal parameters
-!      IMPLICIT NONE                                     !            for each mode
-!
-!      ! Arguments.
-!
-!      INTEGER :: IUPDATE                                ! [1]  control flag
-!      REAL(8) :: TK                                     ! [K]  ambient temperature
-!      REAL(8) :: PRES                                   ! [Pa] ambient pressure
-!      REAL(8) :: DIAM(NWEIGHTS)                         ! [um] geo. mean diameter for each mode
-!      REAL(8) :: KBAR0IJ(NWEIGHTS,NWEIGHTS)             ! [m^3/s] 0th mode-average coag. coef.
-!      REAL(8) :: KBAR3IJ(NWEIGHTS,NWEIGHTS)             ! [m^3/s] 3th mode-average coag. coef.
-!
-!      ! Local variables.
-!
-!      INTEGER       :: INDEX_DIAMI, INDEX_DIAMJ, INDEX_DIAMIP1, INDEX_DIAMJP1 
-!      INTEGER       :: I, J, ITRANGE, IPRANGE                     
-!      !------------------------------------------------------------------------------------------------------------
-!      ! INDEX_SIGG(I) is the index of KIJ_SIGMAS to obtain Sigmag for mode I.
-!      !------------------------------------------------------------------------------------------------------------
-!      INTEGER, SAVE :: INDEX_SIGG(NWEIGHTS)                               ! [1]
-!      REAL, SAVE :: DELTALNDG                                          ! [1] table spacing in ln(Dg)
-!      REAL       :: KBAR0IJ_LL, KBAR0IJ_LU, KBAR0IJ_UL, KBAR0IJ_UU     ! [m^3/s] for bilinear interpolation
-!      REAL       :: KBAR3IJ_LL, KBAR3IJ_LU, KBAR3IJ_UL, KBAR3IJ_UU     ! [m^3/s] for bilinear interpolation
-!      REAL       :: XINTERPI, XINTERPJ, XINTERPT, XINTERPP             ! [1] for bilinear interpolation
-!      REAL       :: TMP0, TMP3                                         ! [m^3/s] scratch variables
-!      REAL       :: TPINTERP_LL, TPINTERP_LU, TPINTERP_UL, TPINTERP_UU ! [1] scratch variables
-!      REAL       :: TUSE                                               ! [K]  ambient temperature local variable 
-!      REAL       :: PUSE                                               ! [Pa] ambient pressure    local variable 
-!      REAL       :: KBAR0IJ_LL_LL, KBAR0IJ_LU_LL, KBAR0IJ_UL_LL, KBAR0IJ_UU_LL  ! [m^3/s] for bilinear interp.
-!      REAL       :: KBAR3IJ_LL_LL, KBAR3IJ_LU_LL, KBAR3IJ_UL_LL, KBAR3IJ_UU_LL  ! [m^3/s] for bilinear interp.
-!      REAL       :: KBAR0IJ_LL_LU, KBAR0IJ_LU_LU, KBAR0IJ_UL_LU, KBAR0IJ_UU_LU  ! [m^3/s] for bilinear interp.
-!      REAL       :: KBAR3IJ_LL_LU, KBAR3IJ_LU_LU, KBAR3IJ_UL_LU, KBAR3IJ_UU_LU  ! [m^3/s] for bilinear interp.
-!      REAL       :: KBAR0IJ_LL_UL, KBAR0IJ_LU_UL, KBAR0IJ_UL_UL, KBAR0IJ_UU_UL  ! [m^3/s] for bilinear interp.
-!      REAL       :: KBAR3IJ_LL_UL, KBAR3IJ_LU_UL, KBAR3IJ_UL_UL, KBAR3IJ_UU_UL  ! [m^3/s] for bilinear interp.
-!      REAL       :: KBAR0IJ_LL_UU, KBAR0IJ_LU_UU, KBAR0IJ_UL_UU, KBAR0IJ_UU_UU  ! [m^3/s] for bilinear interp.
-!      REAL       :: KBAR3IJ_LL_UU, KBAR3IJ_LU_UU, KBAR3IJ_UL_UU, KBAR3IJ_UU_UU  ! [m^3/s] for bilinear interp.
-!      LOGICAL, SAVE :: FIRSTIME = .TRUE.
-!      LOGICAL       :: FLAG
-!
-!      integer :: arrindex_diam(NWEIGHTS)
-!      real(4) :: arrxinterp(NWEIGHTS)
-!
-!      IF( FIRSTIME ) THEN
-!        FIRSTIME = .FALSE.
-!        !------------------------------------------------------------------------------------------------------------
-!        ! DELTALNG is the table spacing in ln(Dg) and needed for interpolation.
-!        !------------------------------------------------------------------------------------------------------------
-!        DELTALNDG = LOG( KIJ_DGMAX / KIJ_DGMIN ) / REAL( KIJ_NDGS - 1 )  ! to interpolate in Dg
-!        !------------------------------------------------------------------------------------------------------------
-!        ! To efficiently identify the Sigmag value assigned to each mode.
-!        !------------------------------------------------------------------------------------------------------------
-!        INDEX_SIGG(:) = 1
-!        DO I=1, NWEIGHTS 
-!          DO J=1, KIJ_NSGS
-!            IF( ABS( SIG0(I) - DBLE( KIJ_SIGMAS(J) ) ) .LT. 1.0D-03 ) INDEX_SIGG(I) = J
-!          ENDDO
-!          ! WRITE(AUNIT2,'(I6,F12.6,I6,F12.6)') I, SIG0(I), INDEX_SIGG(I), DIAM(I)
-!        ENDDO
-!      ENDIF
-!
-!      !--------------------------------------------------------------------------------------------------------------
-!      ! Temporary code to check the new value of KIJ_DGMIN. 
-!      !--------------------------------------------------------------------------------------------------------------
-!      ! IF( MINVAL( DIAM(:) ) .LT. KIJ_DGMIN ) THEN
-!      !  WRITE(*,*)'MINVAL( DIAM(:) ) .LT. KIJ_DGMIN  in subr. GET_KBARNIJ. :', MINVAL( DIAM(:) ) 
-!      !  STOP
-!      ! ENDIF
-!      !--------------------------------------------------------------------------------------------------------------
-!
-!      ! precompute common elements
-!      DO I=1, NWEIGHTS
-!        !----------------------------------------------------------------------------------------------------------
-!        ! For mode I, get the lower and upper bounding table diameters and the interpolation variable XINTERPI.
-!        !----------------------------------------------------------------------------------------------------------
-!        INDEX_DIAMI = ( log( DIAM(I) / KIJ_DGMIN ) / DELTALNDG ) + 1
-!        INDEX_DIAMI = MIN( MAX( INDEX_DIAMI, 1 ), KIJ_NDGS-1 )
-!        arrindex_diam(I) = INDEX_DIAMI
-!
-!        XINTERPI = log( DIAM(I) / KIJ_DIAMETERS(INDEX_DIAMI) ) / DELTALNDG 
-!        arrxinterp(I) = XINTERPI
-!      END DO
-!      !--------------------------------------------------------------------------------------------------------------
-!      ! IUPDATE .EQ. 0: The mode-average coagulation coefficients are held constant throughout the simulation.
-!      !--------------------------------------------------------------------------------------------------------------
-!      IF( IUPDATE .EQ. 0 ) THEN
-!        FLAG = .FALSE.
-!        DO I=1, NWEIGHTS
-!          !----------------------------------------------------------------------------------------------------------
-!          ! For mode I, get the lower and upper bounding table diameters and the interpolation variable XINTERPI.
-!          !----------------------------------------------------------------------------------------------------------
-!          INDEX_DIAMI = arrindex_diam(I)
-!          INDEX_DIAMIP1 = INDEX_DIAMI+1
-!          IF(DIAM(I) .LT. KIJ_DIAMETERS(INDEX_DIAMI  )) FLAG = .TRUE.
-!          IF(DIAM(I) .GT. KIJ_DIAMETERS(INDEX_DIAMIP1)) FLAG = .TRUE.  
-!
-!          IF( FLAG ) THEN
-!            WRITE(*,*)'Problem in GET_KBARNIJ for IUPDATE = 0'
-!            WRITE(*,'(2I6,8F11.5)')I,KIJ_DIAMETERS(INDEX_DIAMI),DIAM(I),KIJ_DIAMETERS(INDEX_DIAMIP1)
-!            STOP
-!          ENDIF
-!!--------------------------------------------------------------------------------------------------------------------
-!!           The lower and upper table diameters bounding DIAM(I)), and the interpolation variables
-!!           XINTERPI were checked and found correct.
-!!--------------------------------------------------------------------------------------------------------------------
-!!           WRITE(AUNIT2,'(2I6,8F11.5)')I,KIJ_DIAMETERS(INDEX_DIAMI),DIAM(I),KIJ_DIAMETERS(INDEX_DIAMIP1),XINTERPI
-!!--------------------------------------------------------------------------------------------------------------------
-!        END DO
-!
-!        DO I=1, NWEIGHTS
-!          !----------------------------------------------------------------------------------------------------------
-!          ! For mode I, get the lower and upper bounding table diameters and the interpolation variable XINTERPI.
-!          !----------------------------------------------------------------------------------------------------------
-!          INDEX_DIAMI = arrindex_diam(I)
-!          INDEX_DIAMIP1 = INDEX_DIAMI+1
-!          XINTERPI = arrxinterp(I)
-!
-!          DO J=1, NWEIGHTS
-!            !--------------------------------------------------------------------------------------------------------
-!            ! For mode J, get the lower and upper bounding table diameters and the interpolation variable XINTERPJ.
-!            !--------------------------------------------------------------------------------------------------------
-!            INDEX_DIAMJ = arrindex_diam(J)
-!            INDEX_DIAMJP1 = INDEX_DIAMJ+1
-!            XINTERPJ = arrxinterp(J)
-!            !--------------------------------------------------------------------------------------------------------
-!            ! For each of the four points needed for bilinear interpolation, get the mode-average coagulation
-!            ! coefficients at the selected temperature and pressure.
-!            !--------------------------------------------------------------------------------------------------------
-!            KBAR0IJ_LL = K0IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!            KBAR0IJ_LU = K0IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!            KBAR0IJ_UL = K0IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!            KBAR0IJ_UU = K0IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!            KBAR3IJ_LL = K3IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!            KBAR3IJ_LU = K3IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!            KBAR3IJ_UL = K3IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!            KBAR3IJ_UU = K3IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!            !--------------------------------------------------------------------------------------------------------
-!            ! Interpolate in Dg(I) and Dg(J) for modes I and J.
-!            !
-!            ! When DIAM(I) = KIJ_DIAMETERS(INDEX_DIAMI), the lower I-mode Dg value, XINTERPI = 0.0, so
-!            ! KBAR0IJ_LL and KBAR0IJ_LU should be multiplied by (1.0 - XINTERPI ) = 1.0.
-!            !--------------------------------------------------------------------------------------------------------
-!            TMP0         = KBAR0IJ_LL*(1.0-XINTERPI)*(1.0-XINTERPJ)
-!     &                   + KBAR0IJ_LU*(1.0-XINTERPI)*(    XINTERPJ)
-!     &                   + KBAR0IJ_UL*(    XINTERPI)*(1.0-XINTERPJ)
-!     &                   + KBAR0IJ_UU*(    XINTERPI)*(    XINTERPJ)
-!            TMP3         = KBAR3IJ_LL*(1.0-XINTERPI)*(1.0-XINTERPJ)
-!     &                   + KBAR3IJ_LU*(1.0-XINTERPI)*(    XINTERPJ)
-!     &                   + KBAR3IJ_UL*(    XINTERPI)*(1.0-XINTERPJ)
-!     &                   + KBAR3IJ_UU*(    XINTERPI)*(    XINTERPJ)
-!            KBAR0IJ(I,J) = DBLE( TMP0 )
-!            KBAR3IJ(I,J) = DBLE( TMP3 )
-!            !--------------------------------------------------------------------------------------------------------
-!            ! For narrow distributions, KBAR0IJ and KBAR3IJ should be nearly equal, and were found to be so
-!            ! with Sigmag = 1.1 for all modes.
-!            !--------------------------------------------------------------------------------------------------------
-!            ! WRITE(AUNIT2,'(2I6,2E15.5)')I,J,KBAR0IJ(I,J),KBAR3IJ(I,J)
-!            !--------------------------------------------------------------------------------------------------------
-!          ENDDO
-!        ENDDO
-!      !--------------------------------------------------------------------------------------------------------------
-!      ! IUPDATE .EQ. 1: The mode-average coagulation coefficients are updated at each time step.
-!      !--------------------------------------------------------------------------------------------------------------
-!      ELSEIF( IUPDATE .EQ. 1 ) THEN
-!        TUSE = MIN( MAX( REAL(TK),   KIJ_TEMP3 ), KIJ_TEMP1 )   ! Tmin=KIJ_TEMP3, Tmax=KIJ_TEMP1  
-!        PUSE = MIN( MAX( REAL(PRES), KIJ_PRES3 ), KIJ_PRES1 )   ! pmin=KIJ_PRES3, pmax=KIJ_PRES1    
-!        IF( TUSE .GT. KIJ_TEMP2 ) THEN                          ! Tmiddle value=KIJ_TEMP2
-!          ITRANGE = 12                                          ! use temperatures 1 and 2
-!          XINTERPT = ( TUSE - KIJ_TEMP2 ) / ( KIJ_TEMP1 - KIJ_TEMP2 ) 
-!        ELSE
-!          ITRANGE = 23                                          ! use temperatures 2 and 3
-!          XINTERPT = ( TUSE - KIJ_TEMP3 ) / ( KIJ_TEMP2 - KIJ_TEMP3 ) 
-!        ENDIF
-!        IF( PUSE .GT. KIJ_PRES2 ) THEN                          ! pmiddle value=KIJ_PRES2
-!          IPRANGE = 12                                          ! use pressures 1 and 2
-!          XINTERPP = ( PUSE - KIJ_PRES2 ) / ( KIJ_PRES1 - KIJ_PRES2 ) 
-!        ELSE
-!          IPRANGE = 23                                          ! use pressures 2 and 3
-!          XINTERPP = ( PUSE - KIJ_PRES3 ) / ( KIJ_PRES2 - KIJ_PRES3 ) 
-!        ENDIF
-!        TPINTERP_LL = (1.0-XINTERPT)*(1.0-XINTERPP)             ! all weight at T_lower, p_lower
-!        TPINTERP_LU = (1.0-XINTERPT)*(    XINTERPP)             ! all weight at T_lower, p_upper
-!        TPINTERP_UL = (    XINTERPT)*(1.0-XINTERPP)             ! all weight at T_upper, p_lower
-!        TPINTERP_UU = 1.0-TPINTERP_LL-TPINTERP_LU-TPINTERP_UL   ! all weight at T_upper, p_upper
-!!--------------------------------------------------------------------------------------------------------------------
-!!       WRITE(AUNIT2,'(/A/)')'new step'
-!!       WRITE(AUNIT2,'(A40,2F15.6    )')'TUSE, PUSE = ', TUSE, PUSE
-!!       WRITE(AUNIT2,'(A40,2I4,2F13.7)')'ITRANGE, IPRANGE, XINTERPT, XINTERPP = ',
-!!    &                                   ITRANGE, IPRANGE, XINTERPT, XINTERPP
-!!       WRITE(AUNIT2,'(A40,4F12.6    )')'TPINTERP_LL, TPINTERP_LU, TPINTERP_UL, TPINTERP_UU = ', 
-!!    &                                   TPINTERP_LL, TPINTERP_LU, TPINTERP_UL, TPINTERP_UU
-!!--------------------------------------------------------------------------------------------------------------------
-!        DO I=1, NWEIGHTS
-!          !----------------------------------------------------------------------------------------------------------
-!          ! For mode I, get the lower and upper bounding table diameters and the interpolation variable XINTERPI.
-!          !----------------------------------------------------------------------------------------------------------
-!          INDEX_DIAMI = arrindex_diam(I)
-!          INDEX_DIAMIP1 = INDEX_DIAMI+1
-!          XINTERPI = arrxinterp(I)
-!          DO J=1, NWEIGHTS
-!
-!            if (CITABLE(I,J) == 'OFF') then ! Turn off coagulation between selected modes.
-!              KBAR0IJ(I,J) = 1.0D-30
-!              KBAR3IJ(I,J) = 1.0D-30
-!              cycle
-!            end if
-!
-!            !--------------------------------------------------------------------------------------------------------
-!            ! For mode J, get the lower and upper bounding table diameters and the interpolation variable XINTERPJ.
-!            !--------------------------------------------------------------------------------------------------------
-!            INDEX_DIAMJ = arrindex_diam(J)
-!            INDEX_DIAMJP1 = INDEX_DIAMJ+1
-!            XINTERPJ = arrxinterp(J)
-!            !--------------------------------------------------------------------------------------------------------
-!            ! For each of the four points needed for bilinear interpolation in Dg(I) and Dg(J), get the 
-!            ! mode-average coagulation coefficients at each of the four temperature-pressure points.
-!            !
-!            ! In KBAR0IJ_AB_CD, A indicates the upper or lower value of Dg(I)
-!            !                   B indicates the upper or lower value of Dg(J)
-!            !                   C indicates the upper or lower value of temperature: T1 > T2 > T3
-!            !                   D indicates the upper or lower value of pressure:    p1 > p2 > p3
-!            !--------------------------------------------------------------------------------------------------------
-!            IF( ITRANGE .EQ. 12 .AND. IPRANGE .EQ. 12 ) THEN
-!
-!              KBAR0IJ_LL_LL = K0IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_LU_LL = K0IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR0IJ_UL_LL = K0IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_UU_LL = K0IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_LL_LL = K3IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_LU_LL = K3IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_UL_LL = K3IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_UU_LL = K3IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!
-!              KBAR0IJ_LL_LU = K0IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_LU_LU = K0IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR0IJ_UL_LU = K0IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_UU_LU = K0IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_LL_LU = K3IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_LU_LU = K3IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_UL_LU = K3IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_UU_LU = K3IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!
-!              KBAR0IJ_LL_UL = K0IJ_TEMP1PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_LU_UL = K0IJ_TEMP1PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR0IJ_UL_UL = K0IJ_TEMP1PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_UU_UL = K0IJ_TEMP1PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_LL_UL = K3IJ_TEMP1PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_LU_UL = K3IJ_TEMP1PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_UL_UL = K3IJ_TEMP1PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_UU_UL = K3IJ_TEMP1PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!
-!              KBAR0IJ_LL_UU = K0IJ_TEMP1PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_LU_UU = K0IJ_TEMP1PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR0IJ_UL_UU = K0IJ_TEMP1PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_UU_UU = K0IJ_TEMP1PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_LL_UU = K3IJ_TEMP1PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_LU_UU = K3IJ_TEMP1PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_UL_UU = K3IJ_TEMP1PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_UU_UU = K3IJ_TEMP1PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!
-!            ELSEIF( ITRANGE .EQ. 12 .AND. IPRANGE .EQ. 23 ) THEN
-!
-!              KBAR0IJ_LL_LL = K0IJ_TEMP2PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_LU_LL = K0IJ_TEMP2PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR0IJ_UL_LL = K0IJ_TEMP2PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_UU_LL = K0IJ_TEMP2PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_LL_LL = K3IJ_TEMP2PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_LU_LL = K3IJ_TEMP2PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_UL_LL = K3IJ_TEMP2PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_UU_LL = K3IJ_TEMP2PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!
-!              KBAR0IJ_LL_LU = K0IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_LU_LU = K0IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR0IJ_UL_LU = K0IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_UU_LU = K0IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_LL_LU = K3IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_LU_LU = K3IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_UL_LU = K3IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_UU_LU = K3IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!
-!              KBAR0IJ_LL_UL = K0IJ_TEMP1PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_LU_UL = K0IJ_TEMP1PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR0IJ_UL_UL = K0IJ_TEMP1PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_UU_UL = K0IJ_TEMP1PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_LL_UL = K3IJ_TEMP1PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_LU_UL = K3IJ_TEMP1PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_UL_UL = K3IJ_TEMP1PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_UU_UL = K3IJ_TEMP1PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!
-!              KBAR0IJ_LL_UU = K0IJ_TEMP1PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_LU_UU = K0IJ_TEMP1PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR0IJ_UL_UU = K0IJ_TEMP1PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_UU_UU = K0IJ_TEMP1PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_LL_UU = K3IJ_TEMP1PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_LU_UU = K3IJ_TEMP1PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_UL_UU = K3IJ_TEMP1PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_UU_UU = K3IJ_TEMP1PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!
-!            ELSEIF( ITRANGE .EQ. 23 .AND. IPRANGE .EQ. 12 ) THEN
-!
-!              KBAR0IJ_LL_LL = K0IJ_TEMP3PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_LU_LL = K0IJ_TEMP3PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR0IJ_UL_LL = K0IJ_TEMP3PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_UU_LL = K0IJ_TEMP3PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_LL_LL = K3IJ_TEMP3PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_LU_LL = K3IJ_TEMP3PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_UL_LL = K3IJ_TEMP3PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_UU_LL = K3IJ_TEMP3PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!
-!              KBAR0IJ_LL_LU = K0IJ_TEMP3PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_LU_LU = K0IJ_TEMP3PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR0IJ_UL_LU = K0IJ_TEMP3PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_UU_LU = K0IJ_TEMP3PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_LL_LU = K3IJ_TEMP3PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_LU_LU = K3IJ_TEMP3PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_UL_LU = K3IJ_TEMP3PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_UU_LU = K3IJ_TEMP3PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!
-!              KBAR0IJ_LL_UL = K0IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_LU_UL = K0IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR0IJ_UL_UL = K0IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_UU_UL = K0IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_LL_UL = K3IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_LU_UL = K3IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_UL_UL = K3IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_UU_UL = K3IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!
-!              KBAR0IJ_LL_UU = K0IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_LU_UU = K0IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR0IJ_UL_UU = K0IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_UU_UU = K0IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_LL_UU = K3IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_LU_UU = K3IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_UL_UU = K3IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_UU_UU = K3IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!
-!            ELSEIF( ITRANGE .EQ. 23 .AND. IPRANGE .EQ. 23 ) THEN
-!
-!              KBAR0IJ_LL_LL = K0IJ_TEMP3PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_LU_LL = K0IJ_TEMP3PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR0IJ_UL_LL = K0IJ_TEMP3PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_UU_LL = K0IJ_TEMP3PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_LL_LL = K3IJ_TEMP3PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_LU_LL = K3IJ_TEMP3PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_UL_LL = K3IJ_TEMP3PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_UU_LL = K3IJ_TEMP3PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!
-!              KBAR0IJ_LL_LU = K0IJ_TEMP3PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_LU_LU = K0IJ_TEMP3PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR0IJ_UL_LU = K0IJ_TEMP3PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_UU_LU = K0IJ_TEMP3PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_LL_LU = K3IJ_TEMP3PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_LU_LU = K3IJ_TEMP3PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_UL_LU = K3IJ_TEMP3PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_UU_LU = K3IJ_TEMP3PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!
-!              KBAR0IJ_LL_UL = K0IJ_TEMP2PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_LU_UL = K0IJ_TEMP2PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR0IJ_UL_UL = K0IJ_TEMP2PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_UU_UL = K0IJ_TEMP2PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_LL_UL = K3IJ_TEMP2PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_LU_UL = K3IJ_TEMP2PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_UL_UL = K3IJ_TEMP2PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_UU_UL = K3IJ_TEMP2PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!
-!              KBAR0IJ_LL_UU = K0IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_LU_UU = K0IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR0IJ_UL_UU = K0IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR0IJ_UU_UU = K0IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_LL_UU = K3IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_LU_UU = K3IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!              KBAR3IJ_UL_UU = K3IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
-!              KBAR3IJ_UU_UU = K3IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
-!
-!            ELSE
-!
-!              WRITE(*,*)'Error in GET_KBARNIJ: ITRANGE, IPRANGE = ', ITRANGE, IPRANGE
-!              STOP
-!
-!            ENDIF
-!            !--------------------------------------------------------------------------------------------------------
-!            ! Interpolate in T and p for each of the four points needed for the Dg(I) and Dg(J) interpolation.
-!            !--------------------------------------------------------------------------------------------------------
-!            KBAR0IJ_LL = TPINTERP_LL*KBAR0IJ_LL_LL + TPINTERP_LU*KBAR0IJ_LL_LU
-!     &                 + TPINTERP_UL*KBAR0IJ_LL_UL + TPINTERP_UU*KBAR0IJ_LL_UU
-!            KBAR0IJ_LU = TPINTERP_LL*KBAR0IJ_LU_LL + TPINTERP_LU*KBAR0IJ_LU_LU
-!     &                 + TPINTERP_UL*KBAR0IJ_LU_UL + TPINTERP_UU*KBAR0IJ_LU_UU
-!            KBAR0IJ_UL = TPINTERP_LL*KBAR0IJ_UL_LL + TPINTERP_LU*KBAR0IJ_UL_LU
-!     &                 + TPINTERP_UL*KBAR0IJ_UL_UL + TPINTERP_UU*KBAR0IJ_UL_UU
-!            KBAR0IJ_UU = TPINTERP_LL*KBAR0IJ_UU_LL + TPINTERP_LU*KBAR0IJ_UU_LU
-!     &                 + TPINTERP_UL*KBAR0IJ_UU_UL + TPINTERP_UU*KBAR0IJ_UU_UU
-!
-!            KBAR3IJ_LL = TPINTERP_LL*KBAR3IJ_LL_LL + TPINTERP_LU*KBAR3IJ_LL_LU
-!     &                 + TPINTERP_UL*KBAR3IJ_LL_UL + TPINTERP_UU*KBAR3IJ_LL_UU
-!            KBAR3IJ_LU = TPINTERP_LL*KBAR3IJ_LU_LL + TPINTERP_LU*KBAR3IJ_LU_LU
-!     &                 + TPINTERP_UL*KBAR3IJ_LU_UL + TPINTERP_UU*KBAR3IJ_LU_UU
-!            KBAR3IJ_UL = TPINTERP_LL*KBAR3IJ_UL_LL + TPINTERP_LU*KBAR3IJ_UL_LU
-!     &                 + TPINTERP_UL*KBAR3IJ_UL_UL + TPINTERP_UU*KBAR3IJ_UL_UU
-!            KBAR3IJ_UU = TPINTERP_LL*KBAR3IJ_UU_LL + TPINTERP_LU*KBAR3IJ_UU_LU
-!     &                 + TPINTERP_UL*KBAR3IJ_UU_UL + TPINTERP_UU*KBAR3IJ_UU_UU
-!!--------------------------------------------------------------------------------------------------------------------
-!!           WRITE(AUNIT2,'(A40,4E13.5)')'KBAR0IJ_LL, KBAR0IJ_LU, KBAR0IJ_UL, KBAR0IJ_UU = ',
-!!    &                                   KBAR0IJ_LL, KBAR0IJ_LU, KBAR0IJ_UL, KBAR0IJ_UU
-!!           WRITE(AUNIT2,'(A40,4E13.5)')'KBAR3IJ_LL, KBAR3IJ_LU, KBAR3IJ_UL, KBAR3IJ_UU = ',
-!!    &                                   KBAR3IJ_LL, KBAR3IJ_LU, KBAR3IJ_UL, KBAR3IJ_UU
-!!--------------------------------------------------------------------------------------------------------------------
-!            ! Interpolate in Dg(I) and Dg(J) for modes I and J.
-!            !--------------------------------------------------------------------------------------------------------
-!            TMP0         = KBAR0IJ_LL*(1.0-XINTERPI)*(1.0-XINTERPJ)
-!     &                   + KBAR0IJ_LU*(1.0-XINTERPI)*(    XINTERPJ)
-!     &                   + KBAR0IJ_UL*(    XINTERPI)*(1.0-XINTERPJ)
-!     &                   + KBAR0IJ_UU*(    XINTERPI)*(    XINTERPJ)
-!            TMP3         = KBAR3IJ_LL*(1.0-XINTERPI)*(1.0-XINTERPJ)
-!     &                   + KBAR3IJ_LU*(1.0-XINTERPI)*(    XINTERPJ)
-!     &                   + KBAR3IJ_UL*(    XINTERPI)*(1.0-XINTERPJ)
-!     &                   + KBAR3IJ_UU*(    XINTERPI)*(    XINTERPJ)
-!            KBAR0IJ(I,J) = DBLE( TMP0 )
-!            KBAR3IJ(I,J) = DBLE( TMP3 )
-!            !--------------------------------------------------------------------------------------------------------
-!            ! For narrow distributions, KBAR0IJ and KBAR3IJ should be nearly equal, and were found to be so
-!            ! with Sigmag = 1.1 for all modes.
-!            !--------------------------------------------------------------------------------------------------------
-!            ! WRITE(AUNIT2,'(A40,2I6,4E15.5)')'I,J,KBAR0IJ,KBAR3IJ=',I,J,KBAR0IJ(I,J),KBAR3IJ(I,J)
-!            !--------------------------------------------------------------------------------------------------------
-!          ENDDO
-!        ENDDO
-!      ENDIF
-!
-!      RETURN
-!      END SUBROUTINE GET_KBARNIJ
+!     SUBROUTINE GET_KBARNIJ( IUPDATE, TK, PRES, DIAM, KBAR0IJ, KBAR3IJ )
+      SUBROUTINE GET_KBARNIJ(IUPDATE, TK, PRES, NPOP, SIG0, DIAM, KBAR0IJ, KBAR3IJ)
+!-------------------------------------------------------------------------------------------------------------------------------------
+!     Routine to setup tables of mode-average coagulation coefficients
+!     KBAR0IJ and KBAR3IJ [m^3/s] for arbitrary temperature and pressure.
+!     Modes are assumed to be lognormal, and Sigmag values are set to
+!     constants for each mode, and Dg values are derived from the current
+!     value of the diameter of average mass for each mode, before being passed
+!     to this routine.
+!-------------------------------------------------------------------------------------------------------------------------------------
+      !USE AERO_SETUP, ONLY: SIG0                        ! [um], [1], default lognormal parameters
+      IMPLICIT NONE                                     !            for each mode
+
+      ! Arguments.
+
+      INTEGER, intent(in) :: IUPDATE                                ! [1]  control flag
+      REAL(8), intent(in) :: TK                                     ! [K]  ambient temperature
+      REAL(8), intent(in) :: PRES                                   ! [Pa] ambient pressure
+      integer, intent(in) :: NPOP !npop input
+      real(8), intent(in) :: SIG0(NPOP) !sigma values of npop
+      REAL(8), intent(in) :: DIAM(NPOP)                         ! [um] geo. mean diameter for each mode
+      REAL(8), intent(out) :: KBAR0IJ(NPOP,NPOP)             ! [m^3/s] 0th mode-average coag. coef.
+      REAL(8), intent(out) :: KBAR3IJ(NPOP,NPOP)             ! [m^3/s] 3th mode-average coag. coef.
+
+      ! Local variables.
+
+      INTEGER       :: INDEX_DIAMI, INDEX_DIAMJ, INDEX_DIAMIP1, INDEX_DIAMJP1 
+      INTEGER       :: I, J, ITRANGE, IPRANGE                     
+      !------------------------------------------------------------------------------------------------------------
+      ! INDEX_SIGG(I) is the index of KIJ_SIGMAS to obtain Sigmag for mode I.
+      !------------------------------------------------------------------------------------------------------------
+      INTEGER  :: INDEX_SIGG(NPOP)                               ! [1]
+      REAL,SAVE     :: DELTALNDG                                          ! [1] table spacing in ln(Dg)
+      REAL       :: KBAR0IJ_LL, KBAR0IJ_LU, KBAR0IJ_UL, KBAR0IJ_UU     ! [m^3/s] for bilinear interpolation
+      REAL       :: KBAR3IJ_LL, KBAR3IJ_LU, KBAR3IJ_UL, KBAR3IJ_UU     ! [m^3/s] for bilinear interpolation
+      REAL       :: XINTERPI, XINTERPJ, XINTERPT, XINTERPP             ! [1] for bilinear interpolation
+      REAL       :: TMP0, TMP3                                         ! [m^3/s] scratch variables
+      REAL       :: TPINTERP_LL, TPINTERP_LU, TPINTERP_UL, TPINTERP_UU ! [1] scratch variables
+      REAL       :: TUSE                                               ! [K]  ambient temperature local variable 
+      REAL       :: PUSE                                               ! [Pa] ambient pressure    local variable 
+      REAL       :: KBAR0IJ_LL_LL, KBAR0IJ_LU_LL, KBAR0IJ_UL_LL, KBAR0IJ_UU_LL  ! [m^3/s] for bilinear interp.
+      REAL       :: KBAR3IJ_LL_LL, KBAR3IJ_LU_LL, KBAR3IJ_UL_LL, KBAR3IJ_UU_LL  ! [m^3/s] for bilinear interp.
+      REAL       :: KBAR0IJ_LL_LU, KBAR0IJ_LU_LU, KBAR0IJ_UL_LU, KBAR0IJ_UU_LU  ! [m^3/s] for bilinear interp.
+      REAL       :: KBAR3IJ_LL_LU, KBAR3IJ_LU_LU, KBAR3IJ_UL_LU, KBAR3IJ_UU_LU  ! [m^3/s] for bilinear interp.
+      REAL       :: KBAR0IJ_LL_UL, KBAR0IJ_LU_UL, KBAR0IJ_UL_UL, KBAR0IJ_UU_UL  ! [m^3/s] for bilinear interp.
+      REAL       :: KBAR3IJ_LL_UL, KBAR3IJ_LU_UL, KBAR3IJ_UL_UL, KBAR3IJ_UU_UL  ! [m^3/s] for bilinear interp.
+      REAL       :: KBAR0IJ_LL_UU, KBAR0IJ_LU_UU, KBAR0IJ_UL_UU, KBAR0IJ_UU_UU  ! [m^3/s] for bilinear interp.
+      REAL       :: KBAR3IJ_LL_UU, KBAR3IJ_LU_UU, KBAR3IJ_UL_UU, KBAR3IJ_UU_UU  ! [m^3/s] for bilinear interp.
+      LOGICAL, SAVE :: FIRSTIME = .TRUE.
+      LOGICAL       :: FLAG
+
+      integer :: arrindex_diam(NPOP)
+      real(4) :: arrxinterp(NPOP)
+
+      IF( FIRSTIME ) THEN
+        FIRSTIME = .FALSE.
+        !------------------------------------------------------------------------------------------------------------
+        ! DELTALNG is the table spacing in ln(Dg) and needed for interpolation.
+        !------------------------------------------------------------------------------------------------------------
+        DELTALNDG = LOG( KIJ_DGMAX / KIJ_DGMIN ) / REAL( KIJ_NDGS - 1 )  ! to interpolate in Dg
+        !------------------------------------------------------------------------------------------------------------
+        ! To efficiently identify the Sigmag value assigned to each mode.
+        !------------------------------------------------------------------------------------------------------------
+        !INDEX_SIGG(:) = 1
+        !DO I=1, NPOP 
+        !  DO J=1, KIJ_NSGS
+        !    IF( ABS( SIG0(I) - DBLE( KIJ_SIGMAS(J) ) ) .LT. 1.0D-03 ) INDEX_SIGG(I) = J
+        !  ENDDO
+          ! WRITE(AUNIT2,'(I6,F12.6,I6,F12.6)') I, SIG0(I), INDEX_SIGG(I), DIAM(I)
+        !ENDDO
+      ENDIF
+        INDEX_SIGG(:) = 1
+        DO I=1, NPOP
+          DO J=1, KIJ_NSGS
+            IF( ABS( SIG0(I) - DBLE( KIJ_SIGMAS(J) ) ) .LT. 1.0D-03 ) INDEX_SIGG(I) = J
+          ENDDO
+          ! WRITE(AUNIT2,'(I6,F12.6,I6,F12.6)') I, SIG0(I), INDEX_SIGG(I), DIAM(I)
+        ENDDO
+      !--------------------------------------------------------------------------------------------------------------
+      ! Temporary code to check the new value of KIJ_DGMIN. 
+      !--------------------------------------------------------------------------------------------------------------
+      ! IF( MINVAL( DIAM(:) ) .LT. KIJ_DGMIN ) THEN
+      !  WRITE(*,*)'MINVAL( DIAM(:) ) .LT. KIJ_DGMIN  in subr. GET_KBARNIJ. :', MINVAL( DIAM(:) ) 
+      !  STOP
+      ! ENDIF
+      !--------------------------------------------------------------------------------------------------------------
+
+      ! precompute common elements
+      DO I=1, NPOP
+        !----------------------------------------------------------------------------------------------------------
+        ! For mode I, get the lower and upper bounding table diameters and the interpolation variable XINTERPI.
+        !----------------------------------------------------------------------------------------------------------
+        INDEX_DIAMI = ( log( DIAM(I) / KIJ_DGMIN ) / DELTALNDG ) + 1
+        INDEX_DIAMI = MIN( MAX( INDEX_DIAMI, 1 ), KIJ_NDGS-1 )
+        arrindex_diam(I) = INDEX_DIAMI
+
+        XINTERPI = log( DIAM(I) / KIJ_DIAMETERS(INDEX_DIAMI) ) / DELTALNDG 
+        arrxinterp(I) = XINTERPI
+      END DO
+      !--------------------------------------------------------------------------------------------------------------
+      ! IUPDATE .EQ. 0: The mode-average coagulation coefficients are held constant throughout the simulation.
+      !--------------------------------------------------------------------------------------------------------------
+      IF( IUPDATE .EQ. 0 ) THEN
+        FLAG = .FALSE.
+        DO I=1, NPOP
+          !----------------------------------------------------------------------------------------------------------
+          ! For mode I, get the lower and upper bounding table diameters and the interpolation variable XINTERPI.
+          !----------------------------------------------------------------------------------------------------------
+          INDEX_DIAMI = arrindex_diam(I)
+          INDEX_DIAMIP1 = INDEX_DIAMI+1
+          IF(DIAM(I) .LT. KIJ_DIAMETERS(INDEX_DIAMI  )) FLAG = .TRUE.
+          IF(DIAM(I) .GT. KIJ_DIAMETERS(INDEX_DIAMIP1)) FLAG = .TRUE.  
+
+          IF( FLAG ) THEN
+            WRITE(*,*)'Problem in GET_KBARNIJ for IUPDATE = 0'
+            WRITE(*,'(2I6,8F11.5)')I,KIJ_DIAMETERS(INDEX_DIAMI),DIAM(I),KIJ_DIAMETERS(INDEX_DIAMIP1)
+            STOP
+          ENDIF
+!--------------------------------------------------------------------------------------------------------------------
+!           The lower and upper table diameters bounding DIAM(I)), and the interpolation variables
+!           XINTERPI were checked and found correct.
+!--------------------------------------------------------------------------------------------------------------------
+!           WRITE(AUNIT2,'(2I6,8F11.5)')I,KIJ_DIAMETERS(INDEX_DIAMI),DIAM(I),KIJ_DIAMETERS(INDEX_DIAMIP1),XINTERPI
+!--------------------------------------------------------------------------------------------------------------------
+        END DO
+
+        DO I=1, NPOP
+          !----------------------------------------------------------------------------------------------------------
+          ! For mode I, get the lower and upper bounding table diameters and the interpolation variable XINTERPI.
+          !----------------------------------------------------------------------------------------------------------
+          INDEX_DIAMI = arrindex_diam(I)
+          INDEX_DIAMIP1 = INDEX_DIAMI+1
+          XINTERPI = arrxinterp(I)
+
+          DO J=1, NPOP
+            !--------------------------------------------------------------------------------------------------------
+            ! For mode J, get the lower and upper bounding table diameters and the interpolation variable XINTERPJ.
+            !--------------------------------------------------------------------------------------------------------
+            INDEX_DIAMJ = arrindex_diam(J)
+            INDEX_DIAMJP1 = INDEX_DIAMJ+1
+            XINTERPJ = arrxinterp(J)
+            !--------------------------------------------------------------------------------------------------------
+            ! For each of the four points needed for bilinear interpolation, get the mode-average coagulation
+            ! coefficients at the selected temperature and pressure.
+            !--------------------------------------------------------------------------------------------------------
+            KBAR0IJ_LL = K0IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+            KBAR0IJ_LU = K0IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+            KBAR0IJ_UL = K0IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+            KBAR0IJ_UU = K0IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+            KBAR3IJ_LL = K3IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+            KBAR3IJ_LU = K3IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+            KBAR3IJ_UL = K3IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+            KBAR3IJ_UU = K3IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+            !--------------------------------------------------------------------------------------------------------
+            ! Interpolate in Dg(I) and Dg(J) for modes I and J.
+            !
+            ! When DIAM(I) = KIJ_DIAMETERS(INDEX_DIAMI), the lower I-mode Dg value, XINTERPI = 0.0, so
+            ! KBAR0IJ_LL and KBAR0IJ_LU should be multiplied by (1.0 - XINTERPI ) = 1.0.
+            !--------------------------------------------------------------------------------------------------------
+            TMP0         = KBAR0IJ_LL*(1.0-XINTERPI)*(1.0-XINTERPJ) &
+                         + KBAR0IJ_LU*(1.0-XINTERPI)*(    XINTERPJ) &
+                         + KBAR0IJ_UL*(    XINTERPI)*(1.0-XINTERPJ) &
+                         + KBAR0IJ_UU*(    XINTERPI)*(    XINTERPJ)
+            TMP3         = KBAR3IJ_LL*(1.0-XINTERPI)*(1.0-XINTERPJ) &
+                         + KBAR3IJ_LU*(1.0-XINTERPI)*(    XINTERPJ) &
+                         + KBAR3IJ_UL*(    XINTERPI)*(1.0-XINTERPJ) &
+                         + KBAR3IJ_UU*(    XINTERPI)*(    XINTERPJ)
+            KBAR0IJ(I,J) = DBLE( TMP0 )
+            KBAR3IJ(I,J) = DBLE( TMP3 )
+            !--------------------------------------------------------------------------------------------------------
+            ! For narrow distributions, KBAR0IJ and KBAR3IJ should be nearly equal, and were found to be so
+            ! with Sigmag = 1.1 for all modes.
+            !--------------------------------------------------------------------------------------------------------
+            ! WRITE(AUNIT2,'(2I6,2E15.5)')I,J,KBAR0IJ(I,J),KBAR3IJ(I,J)
+            !--------------------------------------------------------------------------------------------------------
+          ENDDO
+        ENDDO
+      !--------------------------------------------------------------------------------------------------------------
+      ! IUPDATE .EQ. 1: The mode-average coagulation coefficients are updated at each time step.
+      !--------------------------------------------------------------------------------------------------------------
+      ELSEIF( IUPDATE .EQ. 1 ) THEN
+        TUSE = MIN( MAX( REAL(TK),   KIJ_TEMP3 ), KIJ_TEMP1 )   ! Tmin=KIJ_TEMP3, Tmax=KIJ_TEMP1  
+        PUSE = MIN( MAX( REAL(PRES), KIJ_PRES3 ), KIJ_PRES1 )   ! pmin=KIJ_PRES3, pmax=KIJ_PRES1    
+        IF( TUSE .GT. KIJ_TEMP2 ) THEN                          ! Tmiddle value=KIJ_TEMP2
+          ITRANGE = 12                                          ! use temperatures 1 and 2
+          XINTERPT = ( TUSE - KIJ_TEMP2 ) / ( KIJ_TEMP1 - KIJ_TEMP2 ) 
+        ELSE
+          ITRANGE = 23                                          ! use temperatures 2 and 3
+          XINTERPT = ( TUSE - KIJ_TEMP3 ) / ( KIJ_TEMP2 - KIJ_TEMP3 ) 
+        ENDIF
+        IF( PUSE .GT. KIJ_PRES2 ) THEN                          ! pmiddle value=KIJ_PRES2
+          IPRANGE = 12                                          ! use pressures 1 and 2
+          XINTERPP = ( PUSE - KIJ_PRES2 ) / ( KIJ_PRES1 - KIJ_PRES2 ) 
+        ELSE
+          IPRANGE = 23                                          ! use pressures 2 and 3
+          XINTERPP = ( PUSE - KIJ_PRES3 ) / ( KIJ_PRES2 - KIJ_PRES3 ) 
+        ENDIF
+        TPINTERP_LL = (1.0-XINTERPT)*(1.0-XINTERPP)             ! all weight at T_lower, p_lower
+        TPINTERP_LU = (1.0-XINTERPT)*(    XINTERPP)             ! all weight at T_lower, p_upper
+        TPINTERP_UL = (    XINTERPT)*(1.0-XINTERPP)             ! all weight at T_upper, p_lower
+        TPINTERP_UU = 1.0-TPINTERP_LL-TPINTERP_LU-TPINTERP_UL   ! all weight at T_upper, p_upper
+!--------------------------------------------------------------------------------------------------------------------
+!       WRITE(AUNIT2,'(/A/)')'new step'
+!       WRITE(AUNIT2,'(A40,2F15.6    )')'TUSE, PUSE = ', TUSE, PUSE
+!       WRITE(AUNIT2,'(A40,2I4,2F13.7)')'ITRANGE, IPRANGE, XINTERPT, XINTERPP = ',
+!    &                                   ITRANGE, IPRANGE, XINTERPT, XINTERPP
+!       WRITE(AUNIT2,'(A40,4F12.6    )')'TPINTERP_LL, TPINTERP_LU, TPINTERP_UL, TPINTERP_UU = ', 
+!    &                                   TPINTERP_LL, TPINTERP_LU, TPINTERP_UL, TPINTERP_UU
+!--------------------------------------------------------------------------------------------------------------------
+        DO I=1, NPOP
+          !----------------------------------------------------------------------------------------------------------
+          ! For mode I, get the lower and upper bounding table diameters and the interpolation variable XINTERPI.
+          !----------------------------------------------------------------------------------------------------------
+          INDEX_DIAMI = arrindex_diam(I)
+          INDEX_DIAMIP1 = INDEX_DIAMI+1
+          XINTERPI = arrxinterp(I)
+          DO J=1, NPOP
+
+            if (CITABLE(I,J) == 'OFF') then ! Turn off coagulation between selected modes.
+              KBAR0IJ(I,J) = 1.0D-30
+              KBAR3IJ(I,J) = 1.0D-30
+              cycle
+            end if
+
+            !--------------------------------------------------------------------------------------------------------
+            ! For mode J, get the lower and upper bounding table diameters and the interpolation variable XINTERPJ.
+            !--------------------------------------------------------------------------------------------------------
+            INDEX_DIAMJ = arrindex_diam(J)
+            INDEX_DIAMJP1 = INDEX_DIAMJ+1
+            XINTERPJ = arrxinterp(J)
+            !--------------------------------------------------------------------------------------------------------
+            ! For each of the four points needed for bilinear interpolation in Dg(I) and Dg(J), get the 
+            ! mode-average coagulation coefficients at each of the four temperature-pressure points.
+            !
+            ! In KBAR0IJ_AB_CD, A indicates the upper or lower value of Dg(I)
+            !                   B indicates the upper or lower value of Dg(J)
+            !                   C indicates the upper or lower value of temperature: T1 > T2 > T3
+            !                   D indicates the upper or lower value of pressure:    p1 > p2 > p3
+            !--------------------------------------------------------------------------------------------------------
+            IF( ITRANGE .EQ. 12 .AND. IPRANGE .EQ. 12 ) THEN
+
+              KBAR0IJ_LL_LL = K0IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_LU_LL = K0IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR0IJ_UL_LL = K0IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_UU_LL = K0IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_LL_LL = K3IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_LU_LL = K3IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_UL_LL = K3IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_UU_LL = K3IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+
+              KBAR0IJ_LL_LU = K0IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_LU_LU = K0IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR0IJ_UL_LU = K0IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_UU_LU = K0IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_LL_LU = K3IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_LU_LU = K3IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_UL_LU = K3IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_UU_LU = K3IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+
+              KBAR0IJ_LL_UL = K0IJ_TEMP1PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_LU_UL = K0IJ_TEMP1PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR0IJ_UL_UL = K0IJ_TEMP1PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_UU_UL = K0IJ_TEMP1PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_LL_UL = K3IJ_TEMP1PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_LU_UL = K3IJ_TEMP1PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_UL_UL = K3IJ_TEMP1PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_UU_UL = K3IJ_TEMP1PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+
+              KBAR0IJ_LL_UU = K0IJ_TEMP1PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_LU_UU = K0IJ_TEMP1PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR0IJ_UL_UU = K0IJ_TEMP1PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_UU_UU = K0IJ_TEMP1PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_LL_UU = K3IJ_TEMP1PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_LU_UU = K3IJ_TEMP1PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_UL_UU = K3IJ_TEMP1PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_UU_UU = K3IJ_TEMP1PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+
+            ELSEIF( ITRANGE .EQ. 12 .AND. IPRANGE .EQ. 23 ) THEN
+
+              KBAR0IJ_LL_LL = K0IJ_TEMP2PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_LU_LL = K0IJ_TEMP2PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR0IJ_UL_LL = K0IJ_TEMP2PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_UU_LL = K0IJ_TEMP2PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_LL_LL = K3IJ_TEMP2PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_LU_LL = K3IJ_TEMP2PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_UL_LL = K3IJ_TEMP2PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_UU_LL = K3IJ_TEMP2PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+
+              KBAR0IJ_LL_LU = K0IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_LU_LU = K0IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR0IJ_UL_LU = K0IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_UU_LU = K0IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_LL_LU = K3IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_LU_LU = K3IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_UL_LU = K3IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_UU_LU = K3IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+
+              KBAR0IJ_LL_UL = K0IJ_TEMP1PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_LU_UL = K0IJ_TEMP1PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR0IJ_UL_UL = K0IJ_TEMP1PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_UU_UL = K0IJ_TEMP1PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_LL_UL = K3IJ_TEMP1PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_LU_UL = K3IJ_TEMP1PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_UL_UL = K3IJ_TEMP1PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_UU_UL = K3IJ_TEMP1PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+
+              KBAR0IJ_LL_UU = K0IJ_TEMP1PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_LU_UU = K0IJ_TEMP1PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR0IJ_UL_UU = K0IJ_TEMP1PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_UU_UU = K0IJ_TEMP1PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_LL_UU = K3IJ_TEMP1PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_LU_UU = K3IJ_TEMP1PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_UL_UU = K3IJ_TEMP1PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_UU_UU = K3IJ_TEMP1PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+
+            ELSEIF( ITRANGE .EQ. 23 .AND. IPRANGE .EQ. 12 ) THEN
+
+              KBAR0IJ_LL_LL = K0IJ_TEMP3PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_LU_LL = K0IJ_TEMP3PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR0IJ_UL_LL = K0IJ_TEMP3PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_UU_LL = K0IJ_TEMP3PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_LL_LL = K3IJ_TEMP3PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_LU_LL = K3IJ_TEMP3PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_UL_LL = K3IJ_TEMP3PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_UU_LL = K3IJ_TEMP3PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+
+              KBAR0IJ_LL_LU = K0IJ_TEMP3PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_LU_LU = K0IJ_TEMP3PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR0IJ_UL_LU = K0IJ_TEMP3PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_UU_LU = K0IJ_TEMP3PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_LL_LU = K3IJ_TEMP3PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_LU_LU = K3IJ_TEMP3PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_UL_LU = K3IJ_TEMP3PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_UU_LU = K3IJ_TEMP3PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+
+              KBAR0IJ_LL_UL = K0IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_LU_UL = K0IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR0IJ_UL_UL = K0IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_UU_UL = K0IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_LL_UL = K3IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_LU_UL = K3IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_UL_UL = K3IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_UU_UL = K3IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+
+              KBAR0IJ_LL_UU = K0IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_LU_UU = K0IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR0IJ_UL_UU = K0IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_UU_UU = K0IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_LL_UU = K3IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_LU_UU = K3IJ_TEMP2PRES1( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_UL_UU = K3IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_UU_UU = K3IJ_TEMP2PRES1( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+
+            ELSEIF( ITRANGE .EQ. 23 .AND. IPRANGE .EQ. 23 ) THEN
+
+              KBAR0IJ_LL_LL = K0IJ_TEMP3PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_LU_LL = K0IJ_TEMP3PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR0IJ_UL_LL = K0IJ_TEMP3PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_UU_LL = K0IJ_TEMP3PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_LL_LL = K3IJ_TEMP3PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_LU_LL = K3IJ_TEMP3PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_UL_LL = K3IJ_TEMP3PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_UU_LL = K3IJ_TEMP3PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+
+              KBAR0IJ_LL_LU = K0IJ_TEMP3PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_LU_LU = K0IJ_TEMP3PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR0IJ_UL_LU = K0IJ_TEMP3PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_UU_LU = K0IJ_TEMP3PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_LL_LU = K3IJ_TEMP3PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_LU_LU = K3IJ_TEMP3PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_UL_LU = K3IJ_TEMP3PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_UU_LU = K3IJ_TEMP3PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+
+              KBAR0IJ_LL_UL = K0IJ_TEMP2PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_LU_UL = K0IJ_TEMP2PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR0IJ_UL_UL = K0IJ_TEMP2PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_UU_UL = K0IJ_TEMP2PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_LL_UL = K3IJ_TEMP2PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_LU_UL = K3IJ_TEMP2PRES3( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_UL_UL = K3IJ_TEMP2PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_UU_UL = K3IJ_TEMP2PRES3( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+
+              KBAR0IJ_LL_UU = K0IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_LU_UU = K0IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR0IJ_UL_UU = K0IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR0IJ_UU_UU = K0IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_LL_UU = K3IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_LU_UU = K3IJ_TEMP2PRES2( INDEX_DIAMI,  INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+              KBAR3IJ_UL_UU = K3IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJ,  INDEX_SIGG(J) )
+              KBAR3IJ_UU_UU = K3IJ_TEMP2PRES2( INDEX_DIAMIP1,INDEX_SIGG(I),INDEX_DIAMJP1,INDEX_SIGG(J) )
+
+            ELSE
+
+              WRITE(*,*)'Error in GET_KBARNIJ: ITRANGE, IPRANGE = ', ITRANGE, IPRANGE
+              STOP
+
+            ENDIF
+            !--------------------------------------------------------------------------------------------------------
+            ! Interpolate in T and p for each of the four points needed for the Dg(I) and Dg(J) interpolation.
+            !--------------------------------------------------------------------------------------------------------
+            KBAR0IJ_LL = TPINTERP_LL*KBAR0IJ_LL_LL + TPINTERP_LU*KBAR0IJ_LL_LU &
+                       + TPINTERP_UL*KBAR0IJ_LL_UL + TPINTERP_UU*KBAR0IJ_LL_UU 
+            KBAR0IJ_LU = TPINTERP_LL*KBAR0IJ_LU_LL + TPINTERP_LU*KBAR0IJ_LU_LU &
+                       + TPINTERP_UL*KBAR0IJ_LU_UL + TPINTERP_UU*KBAR0IJ_LU_UU
+            KBAR0IJ_UL = TPINTERP_LL*KBAR0IJ_UL_LL + TPINTERP_LU*KBAR0IJ_UL_LU &
+                       + TPINTERP_UL*KBAR0IJ_UL_UL + TPINTERP_UU*KBAR0IJ_UL_UU 
+            KBAR0IJ_UU = TPINTERP_LL*KBAR0IJ_UU_LL + TPINTERP_LU*KBAR0IJ_UU_LU &
+                       + TPINTERP_UL*KBAR0IJ_UU_UL + TPINTERP_UU*KBAR0IJ_UU_UU
+
+            KBAR3IJ_LL = TPINTERP_LL*KBAR3IJ_LL_LL + TPINTERP_LU*KBAR3IJ_LL_LU &
+                       + TPINTERP_UL*KBAR3IJ_LL_UL + TPINTERP_UU*KBAR3IJ_LL_UU
+            KBAR3IJ_LU = TPINTERP_LL*KBAR3IJ_LU_LL + TPINTERP_LU*KBAR3IJ_LU_LU &
+                       + TPINTERP_UL*KBAR3IJ_LU_UL + TPINTERP_UU*KBAR3IJ_LU_UU
+            KBAR3IJ_UL = TPINTERP_LL*KBAR3IJ_UL_LL + TPINTERP_LU*KBAR3IJ_UL_LU &
+                       + TPINTERP_UL*KBAR3IJ_UL_UL + TPINTERP_UU*KBAR3IJ_UL_UU
+            KBAR3IJ_UU = TPINTERP_LL*KBAR3IJ_UU_LL + TPINTERP_LU*KBAR3IJ_UU_LU &
+                       + TPINTERP_UL*KBAR3IJ_UU_UL + TPINTERP_UU*KBAR3IJ_UU_UU
+!--------------------------------------------------------------------------------------------------------------------
+!           WRITE(AUNIT2,'(A40,4E13.5)')'KBAR0IJ_LL, KBAR0IJ_LU, KBAR0IJ_UL, KBAR0IJ_UU = ',
+!    &                                   KBAR0IJ_LL, KBAR0IJ_LU, KBAR0IJ_UL, KBAR0IJ_UU
+!           WRITE(AUNIT2,'(A40,4E13.5)')'KBAR3IJ_LL, KBAR3IJ_LU, KBAR3IJ_UL, KBAR3IJ_UU = ',
+!    &                                   KBAR3IJ_LL, KBAR3IJ_LU, KBAR3IJ_UL, KBAR3IJ_UU
+!--------------------------------------------------------------------------------------------------------------------
+            ! Interpolate in Dg(I) and Dg(J) for modes I and J.
+            !--------------------------------------------------------------------------------------------------------
+            TMP0         = KBAR0IJ_LL*(1.0-XINTERPI)*(1.0-XINTERPJ) &
+                         + KBAR0IJ_LU*(1.0-XINTERPI)*(    XINTERPJ) &
+                         + KBAR0IJ_UL*(    XINTERPI)*(1.0-XINTERPJ) &
+                         + KBAR0IJ_UU*(    XINTERPI)*(    XINTERPJ)
+            TMP3         = KBAR3IJ_LL*(1.0-XINTERPI)*(1.0-XINTERPJ) &
+                         + KBAR3IJ_LU*(1.0-XINTERPI)*(    XINTERPJ) &
+                         + KBAR3IJ_UL*(    XINTERPI)*(1.0-XINTERPJ) &
+                         + KBAR3IJ_UU*(    XINTERPI)*(    XINTERPJ)
+            KBAR0IJ(I,J) = DBLE( TMP0 )
+            KBAR3IJ(I,J) = DBLE( TMP3 )
+            !--------------------------------------------------------------------------------------------------------
+            ! For narrow distributions, KBAR0IJ and KBAR3IJ should be nearly equal, and were found to be so
+            ! with Sigmag = 1.1 for all modes.
+            !--------------------------------------------------------------------------------------------------------
+            !if (KBAR0IJ(I,J) < 0 .or. KBAR3IJ(I,J) < 0) then
+            !  WRITE(*,*) 'interpolation negative, I,J,KBAR0IJ,KBAR3IJ, TK, PRES, NPOP, SIG0, DIAM =',I,J,KBAR0IJ(I,J),KBAR3IJ(I,J), &
+            !          TK, PRES, NPOP, SIG0(1), SIG0(2),  DIAM(1), DIAM(2)
+            !endif
+             !--------------------------------------------------------------------------------------------------------
+          ENDDO
+        ENDDO
+      ENDIF
+
+      RETURN
+      END SUBROUTINE GET_KBARNIJ
 !
 
       SUBROUTINE BROWNIAN_COAG_COEF( DI, DJ, TEMPK, PRES, BETAIJ )

@@ -128,7 +128,7 @@ contains
 ! this subroutine calculates tendencies for all dust tracers, and reports
 ! total fields, like total dust emission and settling
 subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
-       zhalf, pfull, w10m, t, rh, tracer, dsinku, rdt, hno3d_setl, all_so4d_setl, Time, is,ie,js,je, kbot)
+       zhalf, pfull, w10m, t, rh, tracer, dsinku, rdt, hno3d_setl, all_so4d_setl, Time, Time_next, is,ie,js,je, kbot)
 
   real, intent(in) :: lon(:,:), lat(:,:) ! geographical coordinates, units?
   real, intent(in) :: frac_land(:,:) ! fraction of land in the grid cell
@@ -144,7 +144,7 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
   real, intent(inout) :: rdt(:,:,:,:) ! tendency of tracers, to be updated for dust tracers
   real, intent(out)   :: hno3d_setl(:,:)
   real, intent(out)   :: all_so4d_setl(:,:)
-  type(time_type), intent(in) :: Time ! current model time
+  type(time_type), intent(in) :: Time, Time_next ! current model time
   integer, intent(in) :: is, ie, js, je ! boundaries of physical window
   integer, intent(in), optional :: kbot(:,:) ! index of bottom level
   ! NOTE that operations are done on physics window; in particular the sizes
@@ -161,7 +161,7 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
      all_dust_emis    ! total dust emission flux at the bottom of the atmos
   real, dimension(size(tracer,1),size(tracer,2),size(tracer,3)) :: &
      dust_dt           ! calculated dust tendency
-
+  real, dimension(size(tracer,1),size(tracer,2)) :: dust_emis_acc, dust_emis_coars
   integer :: i
   integer :: kd    ! vertical size of our arrays
   integer :: ndust ! atmos tracer number that corresponds to the current dust tracer
@@ -171,6 +171,8 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
   
   ! initialize accumulated deposition and emission fields
   all_dust_emis(:,:) = 0.0
+  dust_emis_acc(:,:) = 0.0
+  dust_emis_coars(:,:) = 0.0
   all_dust_setl(:,:) = 0.0
   all_dust_conc(:,:) = 0.0
   all_hno3d_setl(:,:)  = 0.0
@@ -198,6 +200,12 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
         dust_tracers(i)%dust_setl(is:ie,js:je), dust_tracers(i)%dsetl_dtr(is:ie,js:je), &
         dust_tracers(i)%do_surf_exch, dust_tracers(i)%is_dust, &
         is,ie,js,je, kbot)
+     if (i .le. 1) then
+        dust_emis_acc = dust_emis_acc + dust_emis
+     else
+        dust_emis_coars = dust_emis_coars + dust_emis
+     endif
+
      ! update dust tendencies
      rdt(:,:,:,ndust)=rdt(:,:,:,ndust)+dust_dt(:,:,:)
  
@@ -244,7 +252,9 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
      endif
   enddo
   !hook to matrix
-  !call set_matrix_source(MATRIX_SOURCE_TYPE%E_DUST,all_dust_emis,MATRIX_SOURCE_TYPE%U_KG_M2_S,pwt,zhalf) !unit: Kg/m2/s
+  
+  call set_matrix_source(MATRIX_SOURCE_TYPE%E_DUST_acc,dust_emis_acc,MATRIX_SOURCE_TYPE%U_KG_M2_S,pwt,zhalf,time,time_next,is,js) !unit: Kg/m2/s
+  call set_matrix_source(MATRIX_SOURCE_TYPE%E_DUST_coars,dust_emis_coars,MATRIX_SOURCE_TYPE%U_KG_M2_S,pwt,zhalf,time,time_next,is,js) !unit: Kg/m2/s
   call atmos_dust_solFe_frac_set(all_dust_conc, is,ie,js,je) !This must be called before dry and wet dep flux set
   call atmos_dust_solP_frac_set(all_dust_conc, is,ie,js,je)  
   call atmos_dust_drydep_flux_set(all_dust_setl, is,ie,js,je)

@@ -31,7 +31,7 @@ use interpolator_mod,           only:  interpolate_type, interpolator_init, &
                                        CONSTANT, INTERP_WEIGHTED_P
 use constants_mod,              only : PI, GRAV, RDGAS, WTMAIR
 
-!use matrix_gfdl, only : set_matrix_source, matrix_source_type
+use matrix_gfdl, only : set_matrix_source, matrix_source_type
 
 implicit none
 private
@@ -354,7 +354,7 @@ subroutine atmos_carbon_aerosol_driver(lon, lat, ocn_flx_fraction,  &
                                omphil, omphil_dt, &
                                oh_conc,&
                                moa_emis, &
-                               diag_time, is, ie, js, je )
+                               time, diag_time, is, ie, js, je ) !XL manually adding time here
 
 !-----------------------------------------------------------------------
    real, intent(in),  dimension(:,:)   :: lon, lat
@@ -369,7 +369,7 @@ subroutine atmos_carbon_aerosol_driver(lon, lat, ocn_flx_fraction,  &
    real, intent(in),  dimension(:,:)   :: moa_emis
    real, intent(out), dimension(:,:,:) :: bcphob_dt,bcphil_dt
    real, intent(out), dimension(:,:,:) :: omphob_dt,omphil_dt
-type(time_type), intent(in)            :: diag_time
+type(time_type), intent(in)            :: diag_time, time
 integer, intent(in)                    :: is, ie, js, je
 !-----------------------------------------------------------------------
 
@@ -827,7 +827,7 @@ real, parameter                            :: yield_soa = 0.1
     endif
 
 !hook to matrix
-!call set_matrix_source(MATRIX_SOURCE_TYPE%E_OC, (omphil_emis+omphob_emis)/1.5, MATRIX_SOURCE_TYPE%U_MMR_S, pwt, z_half)!3d, mmr
+!call set_matrix_source(MATRIX_SOURCE_TYPE%E_OC, (omphil_emis+omphob_emis), MATRIX_SOURCE_TYPE%U_MMR_S, pwt, z_half)!3d, mmr
 !call set_matrix_source(MATRIX_SOURCE_TYPE%E_BC, bcphil_emis+bcphob_emis, MATRIX_SOURCE_TYPE%U_MMR_S, pwt, z_half)!3d, mmr
 
 !------- compute black carbon phobic sink --------------
@@ -907,6 +907,12 @@ real, parameter                            :: yield_soa = 0.1
 
       omphob_dt = omphob_emis - omphob_sink
       omphil_dt = omphil_emis + omphob_sink
+
+!hook to matrix
+call set_matrix_source(MATRIX_SOURCE_TYPE%E_OC_phob, omphob_emis, MATRIX_SOURCE_TYPE%U_MMR_S, pwt, z_half, time, diag_time, is,js)!3d, mmr pwt,zhalf,diag_time, is,js
+call set_matrix_source(MATRIX_SOURCE_TYPE%E_OC_phil, omphil_emis, MATRIX_SOURCE_TYPE%U_MMR_S, pwt, z_half, time, diag_time, is,js)
+call set_matrix_source(MATRIX_SOURCE_TYPE%E_BC_phob, bcphob_emis, MATRIX_SOURCE_TYPE%U_MMR_S, pwt, z_half, time, diag_time, is,js)!3d, mmr
+call set_matrix_source(MATRIX_SOURCE_TYPE%E_BC_phil, bcphil_emis, MATRIX_SOURCE_TYPE%U_MMR_S, pwt, z_half, time, diag_time, is,js)
 
 !-----------------------------------------------------------------
 !

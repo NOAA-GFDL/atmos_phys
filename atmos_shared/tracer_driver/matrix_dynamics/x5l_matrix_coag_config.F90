@@ -1,11 +1,11 @@
-MODULE AERO_COAG_CONFIG
+module aero_coag_config
 
     !----------------------------------------------------------
-    ! TWO STEPS (x5l): 
-    !1. construct Production/Loss 1/0 coefficient
-    !             Production -GIKLQ(I,K,L,Q): K+L -> I, increase mass specie Q in pop I, K/L symmetric
-    !             Production -DIKL(I,K,L)   : K+L -> I, increase particle number in pop I, K/L symmetric
-    !             Loss       -DIJ(I,J)      : Loss of I from I+J, not symmetric
+    ! two steps (x5l): 
+    !1. construct production/loss 1/0 coefficient
+    !             production -giklq(i,k,l,q): k+l -> i, increase mass specie q in pop i, k/l symmetric
+    !             production -dikl(i,k,l)   : k+l -> i, increase particle number in pop i, k/l symmetric
+    !             loss       -dij(i,j)      : loss of i from i+j, not symmetric
     !
     !2. calculate dyanmical coagulation coefficient
     !
@@ -15,7 +15,7 @@ MODULE AERO_COAG_CONFIG
         open_namelist_file, check_nml_error, &
         write_version_number, &
         error_mesg, &
-        FATAL, NOTE, &
+        fatal, note, &
         lowercase, &
         mpp_pe, &
         mpp_root_pe, &
@@ -23,105 +23,105 @@ MODULE AERO_COAG_CONFIG
         mpp_clock_id, &
         mpp_clock_begin, &
         mpp_clock_end, &
-        CLOCK_MODULE, &
+        clock_module, &
         uppercase
     implicit none
     private
-    public  SETUP_COAG_TENSORS
-    character(len=3), allocatable,public, protected :: MODE_NAME(:), CITABLE(:,:)
-    integer, public, protected :: NMASS_SPCS 
-    integer, allocatable, public, protected :: NM(:), PROD_INDEX(:,:), GIKLQ(:,:,:,:), DIKL(:,:,:), DIJ(:,:), nDIKL
-    character(len=4), allocatable :: NM_SPC_NAME(:,:)
-    integer :: NMODES, NWEIGHTS
+    public  setup_coag_tensors
+    character(len=3), allocatable,public, protected :: mode_name(:), citable(:,:)
+    integer, public, protected :: nmass_spcs 
+    integer, allocatable, public, protected :: nm(:), prod_index(:,:), giklq(:,:,:,:), dikl(:,:,:), dij(:,:), ndikl
+    character(len=4), allocatable :: nm_spc_name(:,:)
+    integer :: nmodes, nweights
 
-    type GIKLQ_type
+    type giklq_type
         integer :: n
         integer, allocatable :: l(:), k(:)
         integer, allocatable :: qq(:)
-     end type GIKLQ_type
+     end type giklq_type
 
-    type DIKL_type
+    type dikl_type
         integer :: i
         integer :: k
         integer :: l
-    end type DIKL_type
+    end type dikl_type
 
-    type (GIKLQ_type), allocatable, public, protected :: GIKLQ_control(:)
-    type (DIKL_type), allocatable, public, protected :: DIKL_control(:)
+    type (giklq_type), allocatable, public, protected :: giklq_control(:)
+    type (dikl_type), allocatable, public, protected :: dikl_control(:)
 
     integer :: ierr, io, logunit, verbose, unit
     character(len=7), parameter :: module_name = 'matrix'
     contains
 
-    SUBROUTINE SETUP_COAG_TENSORS(coag_configuration)
-            !NMODES=npop-1=11, NMASS=5
+    subroutine setup_coag_tensors(coag_configuration)
+            !nmodes=npop-1=11, nmass=5
         !!-------------------------------------------------------------------------------------------------------------------
-        !     Step 1: Production/Loss 1/0 coefficient: Production-GIKLQ(I,K,L,Q), Production-DIKL(I,K,L), Loss-DIJ(I,J)
-        !      Routine to define the g_ikl,q, the d_ikl, and the d_ij.
-        !      All elements GIKLQ(I,K,L,Q), DIKL(I,K,L), and DIJ(I,J) were checked through printouts available below.
-        !     NM_SPC_NAME(I,:) contains the names of the mass species defined for mode I.
+        !     step 1: production/loss 1/0 coefficient: production-giklq(i,k,l,q), production-dikl(i,k,l), loss-dij(i,j)
+        !      routine to define the g_ikl,q, the d_ikl, and the d_ij.
+        !      all elements giklq(i,k,l,q), dikl(i,k,l), and dij(i,j) were checked through printouts available below.
+        !     nm_spc_name(i,:) contains the names of the mass species defined for mode i.
         !-------------------------------------------------------------------------------------------------------------------
-        IMPLICIT NONE
+        implicit none
         character(len=32), intent(in) :: coag_configuration
-        INTEGER :: I,J,K,L,Q,QQ, ntot, n
+        integer :: i,j,k,l,q,qq, ntot, n
         integer :: ikl, ip, klq !debug output
 
         !-------------------------------------------------------------
         !configuration set-up based on matrix_nml
         !------------------------------------------------------
         if (lowercase(trim(coag_configuration)) .eq. "full") then
-                NMODES = 12
-                NWEIGHTS = NMODES
-                allocate(MODE_NAME(NMODES)) !in total 12 modes
-                !integer :: I_AKK = 1, I_ACC = 2, I_DD1 = 3, I_DD2 = 4 ! index of population in matrix
-                !integer :: I_SSA = 5, I_SSC = 6, I_OC1 = 7, I_OC2 = 8 ! if exit, index >= 1, otherwise = -1
-                !integer :: I_BC1 = 9, I_BC2 = 10, I_MXA = 11, I_MXC = 12, I_EXT = 13
-                !MXA:MXX in accumulation mode, MXC: MXX in coarse mode
-                MODE_NAME(1:NMODES) = (/'AKK','ACC','DD1','DD2','SSA','SSC','OC1','OC2','BC1','BC2','MXA','MXC'/)
-                allocate(CITABLE(NMODES,NMODES))
-                CITABLE(1:NMODES, 1)=(/'AKK','ACC','DD1','DD2','SSA','SSC','OC1','OC2','BC1','BC2','MXA','MXC'/) ! AKK
-                CITABLE(1:NMODES, 2)=(/'ACC','ACC','DD1','DD2','SSA','SSC','OC1','OC2','BC1','BC2','MXA','MXC'/) ! ACC
-                CITABLE(1:NMODES, 3)=(/'DD1','DD1','DD1','DD2','MXA','MXC','MXA','MXA','MXA','MXA','MXA','MXC'/) ! DD1
-                CITABLE(1:NMODES, 4)=(/'DD2','DD2','DD2','DD2','MXC','MXC','MXC','MXC','MXC','MXC','MXC','MXC'/) ! DD2
-                CITABLE(1:NMODES, 5)=(/'SSA','SSA','MXA','MXC','SSA','SSC','MXA','MXA','MXA','MXA','MXA','MXC'/) ! SSA
-                CITABLE(1:NMODES, 6)=(/'SSC','SSC','MXC','MXC','SSC','SSC','MXC','MXC','MXC','MXC','MXC','MXC'/) ! SSC
-                CITABLE(1:NMODES, 7)=(/'OC1','OC1','MXA','MXC','MXA','MXC','OC1','OC2','MXA','MXA','MXA','MXC'/) ! OC1
-                CITABLE(1:NMODES, 8)=(/'OC2','OC2','MXA','MXC','MXA','MXC','OC2','OC2','MXA','MXA','MXA','MXC'/) ! OC2
-                CITABLE(1:NMODES, 9)=(/'BC1','BC1','MXA','MXC','MXA','MXC','MXA','MXA','BC1','BC2','MXA','MXC'/) ! BC1
-                CITABLE(1:NMODES,10)=(/'BC2','BC2','MXA','MXC','MXA','MXC','MXA','MXA','BC2','BC2','MXA','MXC'/) ! BC2
-                CITABLE(1:NMODES,11)=(/'MXA','MXA','MXA','MXC','MXA','MXC','MXA','MXA','MXA','MXA','MXA','MXC'/) ! MXA
-                CITABLE(1:NMODES,12)=(/'MXC','MXC','MXC','MXC','MXC','MXC','MXC','MXC','MXC','MXC','MXC','MXC'/) ! MXC
-                allocate( NM(NMODES)) !number of mass species in each mode
-                NMASS_SPCS = 5 !sulf, dust, seas, ocar, bcar 
-                NM(1:NMODES)=(/1,1,2,2,2,2,2,2,2,2,5,5/)
-                allocate(NM_SPC_NAME(NMODES,NMASS_SPCS))
-                NM_SPC_NAME(1, 1:NMASS_SPCS)=(/'SULF','    ','    ','    ','    '/) !AKK
-                NM_SPC_NAME(2, 1:NMASS_SPCS)=(/'SULF','    ','    ','    ','    '/) !ACC
-                NM_SPC_NAME(3, 1:NMASS_SPCS)=(/'SULF','DUST','    ','    ','    '/) !DD1
-                NM_SPC_NAME(4, 1:NMASS_SPCS)=(/'SULF','DUST','    ','    ','    '/) !DD2
-                NM_SPC_NAME(5, 1:NMASS_SPCS)=(/'SULF','SEAS','    ','    ','    '/) !SSA
-                NM_SPC_NAME(6, 1:NMASS_SPCS)=(/'SULF','SEAS','    ','    ','    '/) !SSC
-                NM_SPC_NAME(7, 1:NMASS_SPCS)=(/'SULF','OCAR','    ','    ','    '/) !OC1
-                NM_SPC_NAME(8, 1:NMASS_SPCS)=(/'SULF','OCAR','    ','    ','    '/) !OC2
-                NM_SPC_NAME(9, 1:NMASS_SPCS)=(/'SULF','BCAR','    ','    ','    '/) !BC1
-                NM_SPC_NAME(10,1:NMASS_SPCS)=(/'SULF','BCAR','    ','    ','    '/) !BC2
-                NM_SPC_NAME(11,1:NMASS_SPCS)=(/'SULF','DUST','SEAS','OCAR','BCAR'/) !MXA
-                NM_SPC_NAME(12,1:NMASS_SPCS)=(/'SULF','DUST','SEAS','OCAR','BCAR'/) !MXC
-                allocate(PROD_INDEX(NMODES,NMASS_SPCS))
-                PROD_INDEX(1, 1:NMASS_SPCS)=(/1,0,0,0,0/) !AKK
-                PROD_INDEX(2, 1:NMASS_SPCS)=(/1,0,0,0,0/) !ACC
-                PROD_INDEX(3, 1:NMASS_SPCS)=(/1,2,0,0,0/) !DD1
-                PROD_INDEX(4, 1:NMASS_SPCS)=(/1,2,0,0,0/) !DD2
-                PROD_INDEX(5, 1:NMASS_SPCS)=(/1,3,0,0,0/) !SSA
-                PROD_INDEX(6, 1:NMASS_SPCS)=(/1,3,0,0,0/) !SSC
-                PROD_INDEX(7, 1:NMASS_SPCS)=(/1,4,0,0,0/) !OC1
-                PROD_INDEX(8, 1:NMASS_SPCS)=(/1,4,0,0,0/) !OC2
-                PROD_INDEX(9, 1:NMASS_SPCS)=(/1,5,0,0,0/) !BC1
-                PROD_INDEX(10,1:NMASS_SPCS)=(/1,5,0,0,0/) !BC2
-                PROD_INDEX(11,1:NMASS_SPCS)=(/1,2,3,4,5/) !MXA
-                PROD_INDEX(12,1:NMASS_SPCS)=(/1,2,3,4,5/) !MXC 
+                nmodes = 12
+                nweights = nmodes
+                allocate(mode_name(nmodes)) !in total 12 modes
+                !integer :: i_akk = 1, i_acc = 2, i_dd1 = 3, i_dd2 = 4 ! index of population in matrix
+                !integer :: i_ssa = 5, i_ssc = 6, i_oc1 = 7, i_oc2 = 8 ! if exit, index >= 1, otherwise = -1
+                !integer :: i_bc1 = 9, i_bc2 = 10, i_mxa = 11, i_mxc = 12, i_ext = 13
+                !mxa:mxx in accumulation mode, mxc: mxx in coarse mode
+                mode_name(1:nmodes) = (/'akk','acc','dd1','dd2','ssa','ssc','oc1','oc2','bc1','bc2','mxa','mxc'/)
+                allocate(citable(nmodes,nmodes))
+                citable(1:nmodes, 1)=(/'akk','acc','dd1','dd2','ssa','ssc','oc1','oc2','bc1','bc2','mxa','mxc'/) ! akk
+                citable(1:nmodes, 2)=(/'acc','acc','dd1','dd2','ssa','ssc','oc1','oc2','bc1','bc2','mxa','mxc'/) ! acc
+                citable(1:nmodes, 3)=(/'dd1','dd1','dd1','dd2','mxa','mxc','mxa','mxa','mxa','mxa','mxa','mxc'/) ! dd1
+                citable(1:nmodes, 4)=(/'dd2','dd2','dd2','dd2','mxc','mxc','mxc','mxc','mxc','mxc','mxc','mxc'/) ! dd2
+                citable(1:nmodes, 5)=(/'ssa','ssa','mxa','mxc','ssa','ssc','mxa','mxa','mxa','mxa','mxa','mxc'/) ! ssa
+                citable(1:nmodes, 6)=(/'ssc','ssc','mxc','mxc','ssc','ssc','mxc','mxc','mxc','mxc','mxc','mxc'/) ! ssc
+                citable(1:nmodes, 7)=(/'oc1','oc1','mxa','mxc','mxa','mxc','oc1','oc1','mxa','mxa','mxa','mxc'/) ! oc1
+                citable(1:nmodes, 8)=(/'oc2','oc2','mxa','mxc','mxa','mxc','oc1','oc2','mxa','mxa','mxa','mxc'/) ! oc2
+                citable(1:nmodes, 9)=(/'bc1','bc1','mxa','mxc','mxa','mxc','mxa','mxa','bc1','bc1','mxa','mxc'/) ! bc1
+                citable(1:nmodes,10)=(/'bc2','bc2','mxa','mxc','mxa','mxc','mxa','mxa','bc1','bc2','mxa','mxc'/) ! bc2
+                citable(1:nmodes,11)=(/'mxa','mxa','mxa','mxc','mxa','mxc','mxa','mxa','mxa','mxa','mxa','mxc'/) ! mxa
+                citable(1:nmodes,12)=(/'mxc','mxc','mxc','mxc','mxc','mxc','mxc','mxc','mxc','mxc','mxc','mxc'/) ! mxc
+                allocate( nm(nmodes)) !number of mass species in each mode
+                nmass_spcs = 5 !order: sulf, bcar, ocar, dust, seas 
+                nm(1:nmodes)=(/1,1,2,2,2,2,2,2,2,2,5,5/)
+                allocate(nm_spc_name(nmodes,nmass_spcs))
+                nm_spc_name(1, 1:nmass_spcs)=(/'sulf','    ','    ','    ','    '/) !akk
+                nm_spc_name(2, 1:nmass_spcs)=(/'sulf','    ','    ','    ','    '/) !acc
+                nm_spc_name(3, 1:nmass_spcs)=(/'sulf','dust','    ','    ','    '/) !dd1
+                nm_spc_name(4, 1:nmass_spcs)=(/'sulf','dust','    ','    ','    '/) !dd2
+                nm_spc_name(5, 1:nmass_spcs)=(/'sulf','seas','    ','    ','    '/) !ssa
+                nm_spc_name(6, 1:nmass_spcs)=(/'sulf','seas','    ','    ','    '/) !ssc
+                nm_spc_name(7, 1:nmass_spcs)=(/'sulf','ocar','    ','    ','    '/) !oc1
+                nm_spc_name(8, 1:nmass_spcs)=(/'sulf','ocar','    ','    ','    '/) !oc2
+                nm_spc_name(9, 1:nmass_spcs)=(/'sulf','bcar','    ','    ','    '/) !bc1
+                nm_spc_name(10,1:nmass_spcs)=(/'sulf','bcar','    ','    ','    '/) !bc2
+                nm_spc_name(11,1:nmass_spcs)=(/'sulf','dust','seas','ocar','bcar'/) !mxa
+                nm_spc_name(12,1:nmass_spcs)=(/'sulf','dust','seas','ocar','bcar'/) !mxc
+                allocate(prod_index(nmodes,nmass_spcs))
+                prod_index(1, 1:nmass_spcs)=(/1,0,0,0,0/) !akk
+                prod_index(2, 1:nmass_spcs)=(/1,0,0,0,0/) !acc
+                prod_index(3, 1:nmass_spcs)=(/1,4,0,0,0/) !dd1
+                prod_index(4, 1:nmass_spcs)=(/1,4,0,0,0/) !dd2
+                prod_index(5, 1:nmass_spcs)=(/1,5,0,0,0/) !ssa
+                prod_index(6, 1:nmass_spcs)=(/1,5,0,0,0/) !ssc
+                prod_index(7, 1:nmass_spcs)=(/1,3,0,0,0/) !oc1
+                prod_index(8, 1:nmass_spcs)=(/1,3,0,0,0/) !oc2
+                prod_index(9, 1:nmass_spcs)=(/1,2,0,0,0/) !bc1
+                prod_index(10,1:nmass_spcs)=(/1,2,0,0,0/) !bc2
+                prod_index(11,1:nmass_spcs)=(/1,4,5,3,2/) !mxa
+                prod_index(12,1:nmass_spcs)=(/1,4,5,3,2/) !mxc 
         else
-               call ERROR_MESG('matrix coagulation configuration not properly defined','check nml for coag_configuration ', FATAL) 
+               call error_mesg('matrix coagulation configuration not properly defined','check nml for coag_configuration ', fatal) 
         endif
 
 !----------------------------------------------
@@ -129,77 +129,77 @@ MODULE AERO_COAG_CONFIG
 !----------------------------------------------
 !     if (mpp_root_pe().eq.mpp_pe()) then
 !        write(*,*) 'inside'
-!        write(*,*) "MODE_NAME", MODE_NAME
-!        write(*,*) "CITABLE"
-!        write(*,*) size(CITABLE, 1)
+!        write(*,*) "mode_name", mode_name
+!        write(*,*) "citable"
+!        write(*,*) size(citable, 1)
 !        do n=1,12
-!                write(*,*) n,  CITABLE(n,1)
-!                write(*,*) n,  CITABLE(n,:)
+!                write(*,*) n,  citable(n,1)
+!                write(*,*) n,  citable(n,:)
 !        enddo
-!        write(*,*) "NM"
-!        write(*, *) NM
-!        write(*,*) "PROD_INDEX"
+!        write(*,*) "nm"
+!        write(*, *) nm
+!        write(*,*) "prod_index"
 !        do n=1,12
-!                write(*,*) n,  PROD_INDEX(n, 1:NMASS_SPCS)
+!                write(*,*) n,  prod_index(n, 1:nmass_spcs)
 !        enddo
 !        write(*,*) 'end_of_inside'
 !    endif        
 !
 
 
-         allocate(GIKLQ(NMODES,NMODES,NMODES,NMASS_SPCS))
-         allocate(DIKL(NMODES,NMODES, NMODES))
-         allocate(DIJ(NMODES,NMODES))
-         GIKLQ(:,:,:,:) = 0
-         DIKL(:,:,:) = 0
-         DIJ(:,:) = 0
+         allocate(giklq(nmodes,nmodes,nmodes,nmass_spcs))
+         allocate(dikl(nmodes,nmodes, nmodes))
+         allocate(dij(nmodes,nmodes))
+         giklq(:,:,:,:) = 0
+         dikl(:,:,:) = 0
+         dij(:,:) = 0
          !-------------------------------------------------------------------------------------------------------------
-         ! The tensors g_ikl,q and d_ikl are symmetric in K and L.
+         ! the tensors g_ikl,q and d_ikl are symmetric in k and l.
          !
-         ! GIKLQ is unity if coagulation of modes K and L produce mass of species Q
-         !       in mode I, and zero otherwise.
+         ! giklq is unity if coagulation of modes k and l produce mass of species q
+         !       in mode i, and zero otherwise.
          !
-         ! DIKL is unity if coagulation of modes K and L produce particles
-         !      in mode I, and zero otherwise.
-         !      Neither mode K nor mode L can be mode I for a nonzero DIKL:
-         !      all three modes I, K, L must be different modes.
+         ! dikl is unity if coagulation of modes k and l produce particles
+         !      in mode i, and zero otherwise.
+         !      neither mode k nor mode l can be mode i for a nonzero dikl:
+         !      all three modes i, k, l must be different modes.
          !-------------------------------------------------------------------------------------------------------------
-         DO I=1, NMODES
-         DO K=1, NMODES
-         DO L=K+1, NMODES                              ! Mode L is the same as mode K.
-         IF ( CITABLE(K,L) .EQ. MODE_NAME(I) ) THEN  ! modes K and L produce mode I
-                 IF ( I .NE. K  .AND. I .NE. L ) THEN      ! omit intramodal coagulation
-                         DIKL(I,K,L) = 1
-                         DIKL(I,L,K) = 1
-                 ENDIF
-                 DO Q=1, NM(I)                             ! loop over all mass species in mode I
-                 DO QQ=1, NMASS_SPCS                     ! loop over all principal mass species
+         do i=1, nmodes
+         do k=1, nmodes
+         do l=k+1, nmodes                              ! mode l is the same as mode k.
+         if ( citable(k,l) .eq. mode_name(i) ) then  ! modes k and l produce mode i
+                 if ( i .ne. k  .and. i .ne. l ) then      ! omit intramodal coagulation
+                         dikl(i,k,l) = 1
+                         dikl(i,l,k) = 1
+                 endif
+                 do q=1, nm(i)                             ! loop over all mass species in mode i
+                 do qq=1, nmass_spcs                     ! loop over all principal mass species
                  !-----------------------------------------------------------------------------------------------------
-                 ! Compare the name of mass species Q in mode I with that of mass species QQ in mode K (or L).
-                 ! The inner loop is over all principal mass species since all species must be checked for
-                 !   mode K (or L) for a potential match with species Q in mode I.
+                 ! compare the name of mass species q in mode i with that of mass species qq in mode k (or l).
+                 ! the inner loop is over all principal mass species since all species must be checked for
+                 !   mode k (or l) for a potential match with species q in mode i.
                  !-----------------------------------------------------------------------------------------------------
-                 IF( NM_SPC_NAME(K,QQ) .EQ. NM_SPC_NAME(I,Q) ) THEN   ! mode K contains Q
-                         IF( I .NE. K ) GIKLQ(I,K,L,Q) = 1   ! I and K must be different modes
-                         IF( I .NE. K ) GIKLQ(I,L,K,Q) = 1   ! I and K must be different modes
-                 ENDIF
-                 IF( NM_SPC_NAME(L,QQ) .EQ. NM_SPC_NAME(I,Q) ) THEN   ! mode L contains Q
-                         IF( I .NE. L ) GIKLQ(I,K,L,Q) = 1   ! I and L must be different modes
-                         IF( I .NE. L ) GIKLQ(I,L,K,Q) = 1   ! I and L must be different modes
-                 ENDIF
-                 ENDDO
-                 ENDDO
-         ENDIF
-         ENDDO
-         ENDDO
-         ENDDO
+                 if( nm_spc_name(k,qq) .eq. nm_spc_name(i,q) ) then   ! mode k contains q
+                         if( i .ne. k ) giklq(i,k,l,q) = 1   ! i and k must be different modes
+                         if( i .ne. k ) giklq(i,l,k,q) = 1   ! i and k must be different modes
+                 endif
+                 if( nm_spc_name(l,qq) .eq. nm_spc_name(i,q) ) then   ! mode l contains q
+                         if( i .ne. l ) giklq(i,k,l,q) = 1   ! i and l must be different modes
+                         if( i .ne. l ) giklq(i,l,k,q) = 1   ! i and l must be different modes
+                 endif
+                 enddo
+                 enddo
+         endif
+         enddo
+         enddo
+         enddo
 
          if (allocated(dikl_control)) then
                  deallocate(dikl_control)
          end if
-         allocate(dikl_control(count(dikl /= 0))) !XL note: count(dikl /= 0) = 2*nDIKL, control only record half od DIKL
+         allocate(dikl_control(count(dikl /= 0))) !xl note: count(dikl /= 0) = 2*ndikl, control only record half od dikl
 
-         call initializeDiklControl(dikl_control, DIKL)
+         call initializediklcontrol(dikl_control, dikl)
 
          if (allocated(giklq_control)) then
                  do i = 1, nweights
@@ -208,70 +208,70 @@ MODULE AERO_COAG_CONFIG
                  deallocate(giklq_control(i)%qq)
                  end do
          else
-                 allocate(GIKLQ_control(NWEIGHTS))
+                 allocate(giklq_control(nweights))
          end if
 
-         call initializeGiklqControl(GIKLQ_control, GIKLQ)  
+         call initializegiklqcontrol(giklq_control, giklq)  
          !-------------------------------------------------------------------------------------------------------------
-         ! The tensor d_ij is not symmetric in I,J.
+         ! the tensor d_ij is not symmetric in i,j.
          !
-         ! DIJ(I,J) is unity if coagulation of mode I with mode J results!
-         !   in the removal of particles from mode I, and zero otherwise.
+         ! dij(i,j) is unity if coagulation of mode i with mode j results!
+         !   in the removal of particles from mode i, and zero otherwise.
          !-------------------------------------------------------------------------------------------------------------
-         DO I=1, NMODES
-         DO J=1, NMODES
-         DO K=1, NMODES                               ! Find the product mode of the I-J coagulation.
-         IF( I .EQ. J ) CYCLE                       ! Omit intramodal interactions: --> I .NE. J .
-         IF( CITABLE(I,J) .EQ. MODE_NAME(K) ) THEN  ! I-particles and J-particles are lost; K-particles are formed.
-                 IF( I .NE. K ) DIJ(I,J) = 1              ! The K-particles are not I-particles (but may be J-particles),
-         ENDIF                                      !   so I-particles are lost by this I-J interaction.
-         ENDDO
-         ENDDO
-         ENDDO
+         do i=1, nmodes
+         do j=1, nmodes
+         do k=1, nmodes                               ! find the product mode of the i-j coagulation.
+         if( i .eq. j ) cycle                       ! omit intramodal interactions: --> i .ne. j .
+         if( citable(i,j) .eq. mode_name(k) ) then  ! i-particles and j-particles are lost; k-particles are formed.
+                 if( i .ne. k ) dij(i,j) = 1              ! the k-particles are not i-particles (but may be j-particles),
+         endif                                      !   so i-particles are lost by this i-j interaction.
+         enddo
+         enddo
+         enddo
 
         ! !----------------------------------------------
         ! !               debug tested
         ! !----------------------------------------------
         ! if (mpp_root_pe().eq.mpp_pe()) then
         !         write(*,*) 'inside'
-        !         !        write(*,*) 'nDIKL', nDIKL
-        !         !        do ikl = 1, nDIKL !ikl is 1-12, exclude ext already
+        !         !        write(*,*) 'ndikl', ndikl
+        !         !        do ikl = 1, ndikl !ikl is 1-12, exclude ext already
         !         !        write(*,*) 'i,k,l', dikl_control(ikl)%i, dikl_control(ikl)%k, dikl_control(ikl)%l
         !         !        enddo
         !         write(*,*) 'giklq'
-        !         DO I=1, NMODES
-        !         DO K=1, NMODES
-        !         DO L=K+1, NMODES                              ! Mode L is the same as mode K.
-        !         DO Q=1, NMASS_SPCS                             ! loop over all mass species in mode I
+        !         do i=1, nmodes
+        !         do k=1, nmodes
+        !         do l=k+1, nmodes                              ! mode l is the same as mode k.
+        !         do q=1, nmass_spcs                             ! loop over all mass species in mode i
         !         !-----------------------------------------------------------------------------------------------------
-        !         ! Compare the name of mass species Q in mode I with that of mass species QQ in mode K (or L).
-        !         ! The inner loop is over all principal mass species since all species must be checked for
-        !         !   mode K (or L) for a potential match with species Q in mode I.
+        !         ! compare the name of mass species q in mode i with that of mass species qq in mode k (or l).
+        !         ! the inner loop is over all principal mass species since all species must be checked for
+        !         !   mode k (or l) for a potential match with species q in mode i.
         !         !-----------------------------------------------------------------------------------------------------
-        !         IF (GIKLQ(I,K,L,Q) > 0) THEN
-        !                 write(*,*) 'I,K,L,Q,QQ, *', I,K,L,Q,QQ
-        !                 write(*,*) 'GIKLQ(I,K,L,Q)', GIKLQ(I,K,L,Q)
-        !         ENDIF
-        !         IF (GIKLQ(I,L,K,Q) > 0) THEN
-        !                 write(*,*) 'I,L,K,Q,QQ, *', I,L,K,Q, QQ
-        !                 write(*,*) 'GIKLQ(I,L,K,Q)', GIKLQ(I,L,K,Q)
-        !         ENDIF
-        !         ENDDO
-        !         ENDDO
-        !         ENDDO
-        !         ENDDO
-        !         do ip = 1, NMODES
+        !         if (giklq(i,k,l,q) > 0) then
+        !                 write(*,*) 'i,k,l,q,qq, *', i,k,l,q,qq
+        !                 write(*,*) 'giklq(i,k,l,q)', giklq(i,k,l,q)
+        !         endif
+        !         if (giklq(i,l,k,q) > 0) then
+        !                 write(*,*) 'i,l,k,q,qq, *', i,l,k,q, qq
+        !                 write(*,*) 'giklq(i,l,k,q)', giklq(i,l,k,q)
+        !         endif
+        !         enddo
+        !         enddo
+        !         enddo
+        !         enddo
+        !         do ip = 1, nmodes
         !         write(*,*) 'ipop', ip
         !         do klq = 1, giklq_control(ip)%n
         !         write(*,*) 'klq', klq
         !         write(*,*) 'k,l,qq',  giklq_control(ip)%k(klq), giklq_control(ip)%l(klq), giklq_control(ip)%qq(klq)
         !         enddo
         !         enddo        
-        !         write(*,*) 'DIJ'
-        !         do I=1, NMODES
-        !         DO J=1, NMODES
-        !         if (DIJ(I,J)>0) then
-        !                 write(*,*) 'i,j', I, J
+        !         write(*,*) 'dij'
+        !         do i=1, nmodes
+        !         do j=1, nmodes
+        !         if (dij(i,j)>0) then
+        !                 write(*,*) 'i,j', i, j
         !         endif
         !         enddo
         !         enddo
@@ -279,27 +279,27 @@ MODULE AERO_COAG_CONFIG
 
 
 
- END SUBROUTINE
+ end subroutine
 
 
 
 
     !--------------------------------------------------------------------
-    !record the pair with non-zero D_ikl
-    !type DIKL_type
+    !record the pair with non-zero d_ikl
+    !type dikl_type
     !        integer :: i
     !        integer :: k
     !        integer :: l
-    !end type DIKL_type
+    !end type dikl_type
     !---------------------------------------------------------------------
-    subroutine initializeDiklControl(control, mask)
+    subroutine initializediklcontrol(control, mask)
             type (dikl_type) :: control(:)
             integer, intent(in) :: mask(:,:,:)
             integer :: i, k, l, n
             n = 0
-            do k = 1, NWEIGHTS
-            do l = k+1, NWEIGHTS
-            do i = 1, NWEIGHTS
+            do k = 1, nweights
+            do l = k+1, nweights
+            do i = 1, nweights
             if (mask(i,k,l) /= 0) then
                     n = n + 1
                     control(n)%i = i
@@ -309,25 +309,25 @@ MODULE AERO_COAG_CONFIG
             end do
             end do
             end do
-            nDIKL = n
-    end subroutine initializeDiklControl
+            ndikl = n
+    end subroutine initializediklcontrol
     !--------------------------------------------------------------------
-    !record the pair with non-zero Giklq
-    !   type GIKLQ_type
+    !record the pair with non-zero giklq
+    !   type giklq_type
     !    integer :: n
     !    integer, allocatable :: l(:), k(:)
     !    integer, allocatable :: qq(:)
-    !  end type GIKLQ_type
+    !  end type giklq_type
     !---------------------------------------------------------------------
-    subroutine initializeGiklqControl(control, mask)
-            type (GIKLQ_type) :: control(:)
+    subroutine initializegiklqcontrol(control, mask)
+            type (giklq_type) :: control(:)
             integer, intent(in) :: mask(:,:,:,:)
-            integer :: i, q, k, l, n, qq, ip,  nTotal
+            integer :: i, q, k, l, n, qq, ip,  ntotal
 
-        do i = 1, NWEIGHTS
+        do i = 1, nweights
             ! 1) count contributing cases for mode i
             n = 0
-            do q = 1, NM(i) !mass species in each mode
+            do q = 1, nm(i) !mass species in each mode
             do k = 1, nmodes
             do l = k+1, nmodes
             if (mask(i,k,l,q) /= 0) then
@@ -341,12 +341,12 @@ MODULE AERO_COAG_CONFIG
             end do
             end do
             end do
-            nTotal = n
-            ! 2) allocate nTotal entries
-            control(i)%n = nTotal
-            allocate(control(i)%k(nTotal))
-            allocate(control(i)%l(nTotal))
-            allocate(control(i)%qq(nTotal))
+            ntotal = n
+            ! 2) allocate ntotal entries
+            control(i)%n = ntotal
+            allocate(control(i)%k(ntotal))
+            allocate(control(i)%l(ntotal))
+            allocate(control(i)%qq(ntotal))
             ! 3) repeat sweep, but now assign k,l,qq
             n = 0
             do q = 1, nm(i)
@@ -373,7 +373,7 @@ MODULE AERO_COAG_CONFIG
             end do
             control(i)%n = n
 
-            !!GIKL_control printout
+            !!gikl_control printout
             !if (mpp_root_pe().eq.mpp_pe()) then
             !     write(*,*) 'gikl_control'
             !     write(*,*) 'pop_num', i
@@ -388,65 +388,65 @@ MODULE AERO_COAG_CONFIG
 
         end do
 
-    end subroutine initializeGiklqControl
+    end subroutine initializegiklqcontrol
 
 
 
 
-END MODULE
+end module
 
 
 
 
 !
 !      !-------------------------------------------------------------------------------------------------------------
-!      ! The tensors g_ikl,q and d_ikl are symmetric in K and L.
+!      ! the tensors g_ikl,q and d_ikl are symmetric in k and l.
 !      !
-!      ! GIKLQ is unity if coagulation of modes K and L produce mass of species Q
-!      !       in mode I, and zero otherwise.
+!      ! giklq is unity if coagulation of modes k and l produce mass of species q
+!      !       in mode i, and zero otherwise.
 !      !
-!      ! DIKL is unity if coagulation of modes K and L produce particles
-!      !      in mode I, and zero otherwise.
-!      !      Neither mode K nor mode L can be mode I for a nonzero DIKL:
-!      !      all three modes I, K, L must be different modes.
+!      ! dikl is unity if coagulation of modes k and l produce particles
+!      !      in mode i, and zero otherwise.
+!      !      neither mode k nor mode l can be mode i for a nonzero dikl:
+!      !      all three modes i, k, l must be different modes.
 !      !-------------------------------------------------------------------------------------------------------------
-!      DO I=1, NMODES
-!      DO K=1, NMODES
-!      DO L=K+1, NMODES                              ! Mode L is the same as mode K.
-!        IF ( CITABLE(K,L) .EQ. MODE_NAME(I) ) THEN  ! modes K and L produce mode I
-!          ! WRITE(36,*)'MODE_NAME(I) = ', MODE_NAME(I)
-!          IF ( I .NE. K  .AND. I .NE. L ) THEN      ! omit intramodal coagulation
-!            DIKL(I,K,L) = 1
-!            DIKL(I,L,K) = 1
-!          ENDIF
-!          DO Q=1, NM(I)                             ! loop over all mass species in mode I
-!            DO QQ=1, NMASS_SPCS                     ! loop over all principal mass species
+!      do i=1, nmodes
+!      do k=1, nmodes
+!      do l=k+1, nmodes                              ! mode l is the same as mode k.
+!        if ( citable(k,l) .eq. mode_name(i) ) then  ! modes k and l produce mode i
+!          ! write(36,*)'mode_name(i) = ', mode_name(i)
+!          if ( i .ne. k  .and. i .ne. l ) then      ! omit intramodal coagulation
+!            dikl(i,k,l) = 1
+!            dikl(i,l,k) = 1
+!          endif
+!          do q=1, nm(i)                             ! loop over all mass species in mode i
+!            do qq=1, nmass_spcs                     ! loop over all principal mass species
 !              !-----------------------------------------------------------------------------------------------------
-!              ! Compare the name of mass species Q in mode I with that of mass species QQ in mode K (or L).
-!              ! The inner loop is over all principal mass species since all species must be checked for
-!              !   mode K (or L) for a potential match with species Q in mode I.
+!              ! compare the name of mass species q in mode i with that of mass species qq in mode k (or l).
+!              ! the inner loop is over all principal mass species since all species must be checked for
+!              !   mode k (or l) for a potential match with species q in mode i.
 !              !-----------------------------------------------------------------------------------------------------
-!              IF( NM_SPC_NAME(K,QQ) .EQ. NM_SPC_NAME(I,Q) ) THEN   ! mode K contains Q
-!                IF( I .NE. K ) GIKLQ(I,K,L,Q) = 1   ! I and K must be different modes
-!                IF( I .NE. K ) GIKLQ(I,L,K,Q) = 1   ! I and K must be different modes
-!              ENDIF
-!              IF( NM_SPC_NAME(L,QQ) .EQ. NM_SPC_NAME(I,Q) ) THEN   ! mode L contains Q
-!                IF( I .NE. L ) GIKLQ(I,K,L,Q) = 1   ! I and L must be different modes
-!                IF( I .NE. L ) GIKLQ(I,L,K,Q) = 1   ! I and L must be different modes
-!              ENDIF
-!            ENDDO
-!          ENDDO
-!        ENDIF
-!      ENDDO
-!      ENDDO
-!      ENDDO
+!              if( nm_spc_name(k,qq) .eq. nm_spc_name(i,q) ) then   ! mode k contains q
+!                if( i .ne. k ) giklq(i,k,l,q) = 1   ! i and k must be different modes
+!                if( i .ne. k ) giklq(i,l,k,q) = 1   ! i and k must be different modes
+!              endif
+!              if( nm_spc_name(l,qq) .eq. nm_spc_name(i,q) ) then   ! mode l contains q
+!                if( i .ne. l ) giklq(i,k,l,q) = 1   ! i and l must be different modes
+!                if( i .ne. l ) giklq(i,l,k,q) = 1   ! i and l must be different modes
+!              endif
+!            enddo
+!          enddo
+!        endif
+!      enddo
+!      enddo
+!      enddo
 !
 !      if (allocated(dikl_control)) then
 !        deallocate(dikl_control)
 !      end if
 !      allocate(dikl_control(count(dikl /= 0)))
 !
-!      call initializeDiklControl(dikl_control, DIKL)
+!      call initializediklcontrol(dikl_control, dikl)
 !
 !      if (allocated(giklq_control)) then
 !        do i = 1, nweights
@@ -455,82 +455,82 @@ END MODULE
 !          deallocate(giklq_control(i)%qq)
 !        end do
 !      else
-!        allocate(GIKLQ_control(NWEIGHTS))
+!        allocate(giklq_control(nweights))
 !      end if
 !
-!      call initializeGiklqControl(GIKLQ_control, GIKLQ)
+!      call initializegiklqcontrol(giklq_control, giklq)
 !
 !      !-------------------------------------------------------------------------------------------------------------
-!      ! The tensor d_ij is not symmetric in I,J.
+!      ! the tensor d_ij is not symmetric in i,j.
 !      !
-!      ! DIJ(I,J) is unity if coagulation of mode I with mode J results
-!      !   in the removal of particles from mode I, and zero otherwise.
+!      ! dij(i,j) is unity if coagulation of mode i with mode j results
+!      !   in the removal of particles from mode i, and zero otherwise.
 !      !-------------------------------------------------------------------------------------------------------------
-!      DO I=1, NMODES
-!      DO J=1, NMODES
-!        DO K=1, NMODES                               ! Find the product mode of the I-J coagulation.
-!          IF( I .EQ. J ) CYCLE                       ! Omit intramodal interactions: --> I .NE. J .
-!          IF( CITABLE(I,J) .EQ. MODE_NAME(K) ) THEN  ! I-particles and J-particles are lost; K-particles are formed.
-!            IF( I .NE. K ) DIJ(I,J) = 1              ! The K-particles are not I-particles (but may be J-particles),
-!          ENDIF                                      !   so I-particles are lost by this I-J interaction.
-!        ENDDO
-!      ENDDO
-!      ENDDO
-!      xDIJ = DIJ
+!      do i=1, nmodes
+!      do j=1, nmodes
+!        do k=1, nmodes                               ! find the product mode of the i-j coagulation.
+!          if( i .eq. j ) cycle                       ! omit intramodal interactions: --> i .ne. j .
+!          if( citable(i,j) .eq. mode_name(k) ) then  ! i-particles and j-particles are lost; k-particles are formed.
+!            if( i .ne. k ) dij(i,j) = 1              ! the k-particles are not i-particles (but may be j-particles),
+!          endif                                      !   so i-particles are lost by this i-j interaction.
+!        enddo
+!      enddo
+!      enddo
+!      xdij = dij
 !
-!      IF( .NOT. WRITE_TENSORS ) RETURN
-!
-!      !-------------------------------------------------------------------------
-!      ! Write the g_ikl,q.
-!      !-------------------------------------------------------------------------
-!      DO I=1, NMODES
-!        WRITE(AUNIT1,'(/2A)') 'g_iklq for MODE ', MODE_NAME(I)
-!        DO Q=1, NM(I)
-!          WRITE(AUNIT1,'(/A,I3,3X,3A5/)') 'Q, NM_SPC_NAME(I,Q), MODE',
-!     &                        Q, NM_SPC_NAME(I,Q), '-->', MODE_NAME(I)
-!          IF ( SUM( GIKLQ(I,1:NMODES,1:NMODES,Q) ) .EQ. 0 ) CYCLE
-!          WRITE(AUNIT1,'(5X,16A5)') MODE_NAME(1:NMODES)
-!          DO K=1, NMODES
-!            WRITE(AUNIT1,'(A5,16I5)') MODE_NAME(K),GIKLQ(I,K,1:NMODES,Q)
-!          ENDDO
-!        ENDDO
-!      ENDDO
+!      if( .not. write_tensors ) return
 !
 !      !-------------------------------------------------------------------------
-!      ! Write the d_ikl.
+!      ! write the g_ikl,q.
 !      !-------------------------------------------------------------------------
-!      DO I=1, NMODES
-!        WRITE(AUNIT1,'(/2A)') 'd_ikl for MODE ', MODE_NAME(I)
-!        IF ( SUM( DIKL(I,1:NMODES,1:NMODES) ) .EQ. 0 ) CYCLE
-!        WRITE(AUNIT1,'(5X,16A5)') MODE_NAME(1:NMODES)
-!        DO K=1, NMODES
-!          WRITE(AUNIT1,'(A5,16I5)') MODE_NAME(K),DIKL(I,K,1:NMODES)
-!        ENDDO
-!      ENDDO
+!      do i=1, nmodes
+!        write(aunit1,'(/2a)') 'g_iklq for mode ', mode_name(i)
+!        do q=1, nm(i)
+!          write(aunit1,'(/a,i3,3x,3a5/)') 'q, nm_spc_name(i,q), mode',
+!     &                        q, nm_spc_name(i,q), '-->', mode_name(i)
+!          if ( sum( giklq(i,1:nmodes,1:nmodes,q) ) .eq. 0 ) cycle
+!          write(aunit1,'(5x,16a5)') mode_name(1:nmodes)
+!          do k=1, nmodes
+!            write(aunit1,'(a5,16i5)') mode_name(k),giklq(i,k,1:nmodes,q)
+!          enddo
+!        enddo
+!      enddo
 !
 !      !-------------------------------------------------------------------------
-!      ! Write the d_ij.
+!      ! write the d_ikl.
 !      !-------------------------------------------------------------------------
-!      WRITE(AUNIT1,'(/2A)') 'd_ij'
-!      WRITE(AUNIT1,'(5X,16A5)') MODE_NAME(1:NMODES)
-!      DO I=1, NMODES
-!        WRITE(AUNIT1,'(A5,16I5)') MODE_NAME(I),DIJ(I,1:NMODES)
-!      ENDDO
+!      do i=1, nmodes
+!        write(aunit1,'(/2a)') 'd_ikl for mode ', mode_name(i)
+!        if ( sum( dikl(i,1:nmodes,1:nmodes) ) .eq. 0 ) cycle
+!        write(aunit1,'(5x,16a5)') mode_name(1:nmodes)
+!        do k=1, nmodes
+!          write(aunit1,'(a5,16i5)') mode_name(k),dikl(i,k,1:nmodes)
+!        enddo
+!      enddo
 !
-!90000 FORMAT(14A4)
-!      RETURN
+!      !-------------------------------------------------------------------------
+!      ! write the d_ij.
+!      !-------------------------------------------------------------------------
+!      write(aunit1,'(/2a)') 'd_ij'
+!      write(aunit1,'(5x,16a5)') mode_name(1:nmodes)
+!      do i=1, nmodes
+!        write(aunit1,'(a5,16i5)') mode_name(i),dij(i,1:nmodes)
+!      enddo
+!
+!90000 format(14a4)
+!      return
 !
 !      contains
 !
-!      subroutine initializeDiklControl(control, mask)
+!      subroutine initializediklcontrol(control, mask)
 !      type (dikl_type) :: control(:)
 !      integer, intent(in) :: mask(:,:,:)
 !      integer :: i, k, l, n
 !
 !      n = 0
-!      do k = 1, NWEIGHTS
-!        do l = k+1, NWEIGHTS
-!          do i = 1, NWEIGHTS
+!      do k = 1, nweights
+!        do l = k+1, nweights
+!          do i = 1, nweights
 !            if (mask(i,k,l) /= 0) then
 !              n = n + 1
 !              control(n)%i = i
@@ -540,16 +540,16 @@ END MODULE
 !          end do
 !        end do
 !      end do
-!      NDIKL = n
-!      end subroutine initializeDiklControl
+!      ndikl = n
+!      end subroutine initializediklcontrol
 !
-!      subroutine initializeGiklqControl(control, mask)
-!      type (GIKLQ_type) :: control(:)
+!      subroutine initializegiklqcontrol(control, mask)
+!      type (giklq_type) :: control(:)
 !      integer, intent(in) :: mask(:,:,:,:)
 !
-!      integer :: i, q, k, l, n, nTotal
+!      integer :: i, q, k, l, n, ntotal
 !
-!      do i = 1, NWEIGHTS
+!      do i = 1, nweights
 !        ! 1) count contributing cases for mode i
 !        n = 0
 !        do q = 1, nm(i)
@@ -566,12 +566,12 @@ END MODULE
 !            end do
 !          end do
 !        end do
-!        nTotal = n
-!        ! 2) allocate nTotal entries
-!        control(i)%n = nTotal
-!        allocate(control(i)%k(nTotal))
-!        allocate(control(i)%l(nTotal))
-!        allocate(control(i)%qq(nTotal))
+!        ntotal = n
+!        ! 2) allocate ntotal entries
+!        control(i)%n = ntotal
+!        allocate(control(i)%k(ntotal))
+!        allocate(control(i)%l(ntotal))
+!        allocate(control(i)%qq(ntotal))
 !
 !        ! 3) repeat sweep, but now assign k,l,qq
 !        n = 0
@@ -600,8 +600,8 @@ END MODULE
 !        control(i)%n = n
 !      end do
 !
-!      end subroutine initializeGiklqControl
+!      end subroutine initializegiklqcontrol
 !
 !
-!      END SUBROUTINE SETUP_COAG_TENSORS
+!      end subroutine setup_coag_tensors
 !

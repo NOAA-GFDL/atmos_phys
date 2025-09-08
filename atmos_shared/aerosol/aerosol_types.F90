@@ -28,6 +28,7 @@ type aerosol_type
      !matrix_Dg_dry(x,y,z,npop)
      real,       dimension(:,:,:,:), pointer :: matrix_Dg_dry=>NULL() !dry geometric diameter for each population
      !matrix_MSPCS (x,y,z,npop,NSPCS), NSPCS=5: sulf, bcar, ocar, dust, seas
+     real,       dimension(:,:,:,:), pointer :: matrix_kappa=>NULL()
      real,       dimension(:,:,:,:,:), pointer :: matrix_MSPCS=>NULL()!mass concentration of each of the 5 species for each mode
      !matrix_sigma(npop)
      real,       dimension(:), pointer :: matrix_sigma=>NULL()!geometric standard deviation of size distribution

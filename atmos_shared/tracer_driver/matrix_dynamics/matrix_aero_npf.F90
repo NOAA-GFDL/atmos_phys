@@ -113,7 +113,7 @@ CONTAINS
     !------------------------------------------------------------------------------ 
     !CALL NPFRATE(PRS,RH,TEMP,FLAND,XH2SO4_SS_WNPF,SO4RATE,XNH3,KC,DNDT,DMDT_SO4,ICALLNPFRATE)
     !SUBROUTINE NPFRATE(PRS,RH,TEMP,XH2SO4,SO4RATE,KC,DNDT,DMDT_SO4,ICALL)!XL
-    SUBROUTINE NPFRATE(PRS,RH,TEMP,FLAND,XH2SO4,SO4RATE,XNH3,KC,DNDT,DMDT_SO4,ICALL)
+    SUBROUTINE NPFRATE(PRS,RH,TEMP,FLAND,XH2SO4,H2SO4RATE,XNH3,KC,DNDT,DMDT_H2SO4,ICALL)
         !-------------------------------------------------------------------------------------------------------------------
         !     DLW 2006.           
         !     Routine to calculate the rate of production of new particles and the 
@@ -127,7 +127,7 @@ CONTAINS
          REAL, INTENT(IN)   :: RH        ! fractional relative humidity [1]
          REAL, INTENT(IN)   :: TEMP      ! ambient temperature [K]
          REAL, INTENT(IN)   :: XH2SO4    ! sulfuric acid (as SO4) concentration [ugSO4/m^3]
-         REAL, INTENT(IN)   :: SO4RATE   ! gas-phase H2SO4 (as SO4) production rate [ugSO4/m^3 s]
+         REAL, INTENT(IN)   :: H2SO4RATE   ! gas-phase H2SO4 (as SO4) production rate [ugSO4/m^3 s]
          REAL, INTENT(IN)   :: XNH3      ! ammonia mixing ratio [ppmV]
          REAL, INTENT(IN)   :: KC        ! condensational sink [1/s]
          REAL, INTENT(IN)   :: FLAND     ! land fraction
@@ -136,7 +136,7 @@ CONTAINS
         ! Output arguments.
 
         REAL, INTENT(OUT)  :: DNDT      ! particle number production rate [m^-3 s^-1]
-        REAL, INTENT(OUT)  :: DMDT_SO4  ! SO4 mass production rate        [ugH2SO4/m^3 s]
+        REAL, INTENT(OUT)  :: DMDT_H2SO4  ! SO4 mass production rate        [ugH2SO4/m^3 s]
 
         ! Scratch local variables.
 
@@ -152,7 +152,7 @@ CONTAINS
         ! acid (SO4) concentration is converted from ugSO4/m^3 to molecules/cm^3,
         ! and ammonia is converted from ppm to ppt.
         !-------------------------------------------------------------------------------------------------------------
-        REAL, PARAMETER :: MW_H2SO4 = 98
+        REAL, PARAMETER :: MW_H2SO4 = 98.07848
         REAL, PARAMETER :: AVO = AVOGNO
         REAL, PARAMETER :: UGM3_NCM3   = 1.0D-12 * AVO / MW_H2SO4   ! [ugSO4/m^3] to [#/cm^3]
         H2SO4_TMP = UGM3_NCM3 * MAX ( XH2SO4, 1.0D-30 )     ! [molecule/cm^3]
@@ -221,13 +221,13 @@ CONTAINS
         !   (3) sulfuric acid      --> second index set to 0 -->  NPFMASS_REGIME = 0
         !-------------------------------------------------------------------------------------------------------------
 !        SO4MASS = NPFMASS( NINT( 100.0D+00*RH ), NPFMASS_REGIME )   ! [ugSO4]
-        SO4MASS = (PI6*(DNPF_NM*1E-9)**3*1770*1E9)*98.0/96.0 !XL: [ugSO4], scale MSO4 -> MH2SO4
-        DMDT_SO4 = SO4MASS * DNDT                                   ! [ugSO4/m^3/s]
+        SO4MASS = (PI6*(DNPF_NM*1.0E-9)**3*1770.0*1.0E9)                      !XL: [ugSO4], scale MSO4 -> MH2SO4
+        DMDT_H2SO4 = SO4MASS * DNDT * MW_H2SO4/96.0                         ! [ugSO4/m^3/s] TO [ugH2SO4/m3/s]
 !        IF( ICALL .GT. 0 ) RETURN                                   ! do not impose mass limitation for this call
-        IF ( DMDT_SO4 .GT. SO4RATE ) THEN                           ! [ugSO4/m^3/s]
+        IF ( DMDT_H2SO4 .GT. H2SO4RATE ) THEN                           ! [ugSO4/m^3/s]
             ! IF ( DMDT_SO4 .GT. 1.0D-10 ) WRITE(34,*)'NPFRATE MASS-LIMIT IMPOSED: DMDT_SO4, SO4RATE=',DMDT_SO4,SO4RATE
-            DMDT_SO4 = MAX(SO4RATE, 0.0)                                        !XL, [ugSO4/m^3/s]
-            DNDT = DMDT_SO4 / SO4MASS ! [   # /m^3/s]
+            DMDT_H2SO4 = MAX(H2SO4RATE, 0.0)                                        !XL, [ugSO4/m^3/s]
+            DNDT = DMDT_H2SO4 * 96.0/MW_H2SO4 / SO4MASS ! [   # /m^3/s]
             !Yu+
 !            !      ELSE
 !            !       IF (INUC.EQ.5) THEN

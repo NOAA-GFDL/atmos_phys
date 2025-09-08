@@ -3,7 +3,7 @@ module matrix_actv
         open_namelist_file, check_nml_error, &
         write_version_number, &
         error_mesg, &
-        FATAL, NOTE, &
+        fatal, note, &
         lowercase, &
         mpp_pe, &
         mpp_root_pe, &
@@ -11,616 +11,616 @@ module matrix_actv
         mpp_clock_id, &
         mpp_clock_begin, &
         mpp_clock_end, &
-        CLOCK_MODULE, &
+        clock_module, &
         uppercase
 
-        public GETACTFRAC
+        public getactfrac
 
 !#include "rundeck_opts.h"
-!      MODULE AERO_ACTV
-!      USE AERO_PARAM,  ONLY: NLAYS, AUNIT1
-!      USE AERO_CONFIG, ONLY: NMODES
+!      module aero_actv
+!      use aero_param,  only: nlays, aunit1
+!      use aero_config, only: nmodes
 !!-------------------------------------------------------------------------------------------------------------------------
-!!@auth    Susanne Bauer/Doug Wright
+!!@auth    susanne bauer/doug wright
 !!
 !!-------------------------------------------------------------------------------------------------------------------------
 !      
-      REAL(8), PARAMETER :: DENS_SULF = 1.77D+03    ! [kg/m^3] NH42SO4
-      REAL(8), PARAMETER :: DENS_BCAR = 1.70D+03    ! [kg/m^3] Ghan et al. (2001) - MIRAGE
-      REAL(8), PARAMETER :: DENS_OCAR = 1.00D+03    ! [kg/m^3] Ghan et al. (2001) - MIRAGE
-      REAL(8), PARAMETER :: DENS_DUST = 2.60D+03    ! [kg/m^3] Ghan et al. (2001) - MIRAGE
-      REAL(8), PARAMETER :: DENS_SEAS = 2.165D+03   ! [kg/m^3] NaCl, Ghan et al. (2001) used 1.90D+03
-!#ifdef TRACERS_AMP_M9
-!      REAL(8), PARAMETER :: DENS_OCM2 = 1.00D+03
-!      REAL(8), PARAMETER :: DENS_OCM1 = 1.00D+03
-!      REAL(8), PARAMETER :: DENS_OCM0 = 1.00D+03
-!      REAL(8), PARAMETER :: DENS_OCP1 = 1.00D+03
-!      REAL(8), PARAMETER :: DENS_OCP2 = 1.00D+03
-!      REAL(8), PARAMETER :: DENS_OCP3 = 1.00D+03
-!      REAL(8), PARAMETER :: DENS_OCP4 = 1.00D+03
-!      REAL(8), PARAMETER :: DENS_OCP5 = 1.00D+03
-!      REAL(8), PARAMETER :: DENS_OCP6 = 1.00D+03
+      real(8), parameter :: dens_sulf = 1.77d+03    ! [kg/m^3] nh42so4
+      real(8), parameter :: dens_bcar = 1.70d+03    ! [kg/m^3] ghan et al. (2001) - mirage
+      real(8), parameter :: dens_ocar = 1.00d+03    ! [kg/m^3] ghan et al. (2001) - mirage
+      real(8), parameter :: dens_dust = 2.60d+03    ! [kg/m^3] ghan et al. (2001) - mirage
+      real(8), parameter :: dens_seas = 2.165d+03   ! [kg/m^3] nacl, ghan et al. (2001) used 1.90d+03
+!#ifdef tracers_amp_m9
+!      real(8), parameter :: dens_ocm2 = 1.00d+03
+!      real(8), parameter :: dens_ocm1 = 1.00d+03
+!      real(8), parameter :: dens_ocm0 = 1.00d+03
+!      real(8), parameter :: dens_ocp1 = 1.00d+03
+!      real(8), parameter :: dens_ocp2 = 1.00d+03
+!      real(8), parameter :: dens_ocp3 = 1.00d+03
+!      real(8), parameter :: dens_ocp4 = 1.00d+03
+!      real(8), parameter :: dens_ocp5 = 1.00d+03
+!      real(8), parameter :: dens_ocp6 = 1.00d+03
 !#endif
-!      REAL(8) :: NACTIV(NMODES)       ! for use in other subroutines
+!      real(8) :: nactiv(nmodes)       ! for use in other subroutines
 
-      CONTAINS
+      contains
 
 
-      SUBROUTINE GETACTFRAC(NMODEX,XNAP,XMAP5,RG,SIGMAG,TKELVIN,PTOT,WUPDRAFT, NACT, MACT)
-                           !AC,FRACACTN,FRACACTM,NACT,MACT)
+      subroutine getactfrac(nmodex,xnap,xmap5,rg,sigmag,tkelvin,ptot,wupdraft, nact, mact)
+                           !ac,fracactn,fracactm,nact,mact)
 !----------------------------------------------------------------------------------------------------------------------
-!     12-12-06, DLW: Routine to set up the call to subr. ACTFRAC_MAT to calculate the 
+!     12-12-06, dlw: routine to set up the call to subr. actfrac_mat to calculate the 
 !                    activated fraction of the number and mass concentrations, 
 !                    as well as the number and mass concentrations activated 
-!                    for each of NMODEX modes. The minimum dry radius for activation 
+!                    for each of nmodex modes. the minimum dry radius for activation 
 !                    for each mode is also returned. 
 !
-!     Each mode is assumed to potentially contains 5 chemical species:
+!     each mode is assumed to potentially contains 5 chemical species:
 !         (1) sulfate 
-!         (2) BC 
-!         (3) OC
+!         (2) bc 
+!         (3) oc
 !         (4) mineral dust
 !         (5) sea salt 
 !
-!     The aerosol activation parameterizations are described in 
+!     the aerosol activation parameterizations are described in 
 !
-!         1. Abdul-Razzak et al.   1998, JGR, vol.103, p.6123-6131.
-!         2. Abdul-Razzak and Ghan 2000, JGR, vol.105, p.6837-6844. 
+!         1. abdul-razzak et al.   1998, jgr, vol.103, p.6123-6131.
+!         2. abdul-razzak and ghan 2000, jgr, vol.105, p.6837-6844. 
 !
 !     and values for many of the required parameters were taken from 
 !
-!         3. Ghan et al. 2001, JGR vol 106, p.5295-5316.
+!         3. ghan et al. 2001, jgr vol 106, p.5295-5316.
 !
-!     With the density of sea salt set to the value used in ref. 3 (1900 kg/m^3), this routine 
-!     yields values for the hygroscopicity parameters Bi in agreement with ref. 3. 
+!     with the density of sea salt set to the value used in ref. 3 (1900 kg/m^3), this routine 
+!     yields values for the hygroscopicity parameters bi in agreement with ref. 3. 
 !----------------------------------------------------------------------------------------------------------------------
-      IMPLICIT NONE
+      implicit none
 !
-!#ifdef TRACERS_AMP_M9
-!      INTEGER, PARAMETER :: NCOMPS = 14
+!#ifdef tracers_amp_m9
+!      integer, parameter :: ncomps = 14
 !#else
-      INTEGER, PARAMETER :: NCOMPS = 5
+      integer, parameter :: ncomps = 5
 !#endif
 
-      ! Arguments.
+      ! arguments.
       
-      INTEGER :: NMODEX               ! number of modes [1]/population (npop)      
-      REAL(8), intent(in) :: XNAP(NMODEX)         ! number concentration for each mode [#/m^3]
-      REAL(8), intent(in) :: XMAP5(NMODEX,NCOMPS) ! mass concentration of each of the 5 species for each mode [ug/m^3]
-      REAL(8), intent(in) :: RG(NMODEX)           ! geometric mean dry radius for each mode [um]
-      REAL(8), intent(in) :: SIGMAG(NMODEX)       ! geometric standard deviation for each mode [um]
-      REAL(8) :: TKELVIN              ! absolute temperature [K]
-      REAL(8) :: PTOT                 ! ambient pressure [Pa]
-      REAL(8) :: WUPDRAFT             ! updraft velocity [m/s]
-      REAL(8) :: AC(NMODEX)           ! minimum dry radius for activation for each mode [um]
-      REAL(8) :: FRACACTN(NMODEX)     ! activating fraction of number conc. for each mode [1]
-      REAL(8) :: FRACACTM(NMODEX)     ! activating fraction of mass   conc. for each mode [1]
-      REAL(8), intent(out) :: NACT(NMODEX)         ! activating number concentration for each mode [#/m^3]
-      REAL(8) :: MACT(NMODEX)         ! activating mass   concentration for each mode [ug/m^3]
-      ! Local variables. 
-      INTEGER :: I, J                 ! loop counters 
-      REAL(8) :: XMAP(NMODEX)         ! total mass concentration for each mode [ug/m^3]
-      REAL(8) :: BIBAR(NMODEX)        ! hygroscopicity parameter for each mode [1]
+      integer :: nmodex               ! number of modes [1]/population (npop)      
+      real(8), intent(in) :: xnap(nmodex)         ! number concentration for each mode [#/m^3]
+      real(8), intent(in) :: xmap5(nmodex,ncomps) ! mass concentration of each of the 5 species for each mode [ug/m^3]
+      real(8), intent(in) :: rg(nmodex)           ! geometric mean dry radius for each mode [um]
+      real(8), intent(in) :: sigmag(nmodex)       ! geometric standard deviation for each mode [um]
+      real(8) :: tkelvin              ! absolute temperature [k]
+      real(8) :: ptot                 ! ambient pressure [pa]
+      real(8) :: wupdraft             ! updraft velocity [m/s]
+      real(8) :: ac(nmodex)           ! minimum dry radius for activation for each mode [um]
+      real(8) :: fracactn(nmodex)     ! activating fraction of number conc. for each mode [1]
+      real(8) :: fracactm(nmodex)     ! activating fraction of mass   conc. for each mode [1]
+      real(8), intent(out) :: nact(nmodex)         ! activating number concentration for each mode [#/m^3]
+      real(8) :: mact(nmodex)         ! activating mass   concentration for each mode [ug/m^3]
+      ! local variables. 
+      integer :: i, j                 ! loop counters 
+      real(8) :: xmap(nmodex)         ! total mass concentration for each mode [ug/m^3]
+      real(8) :: bibar(nmodex)        ! hygroscopicity parameter for each mode [1]
 
-      REAL(8) :: SUMNUMER, SUMDENOM         ! scratch variables 
+      real(8) :: sumnumer, sumdenom         ! scratch variables 
 
-      REAL(8), PARAMETER :: NION_SULF = 3.00D+00    ! [1]
-      REAL(8), PARAMETER :: NION_BCAR = 1.00D+00    ! [1]
-      REAL(8), PARAMETER :: NION_OCAR = 1.00D+00    ! [1]
-      REAL(8), PARAMETER :: NION_DUST = 2.30D+00    ! [1]
-      REAL(8), PARAMETER :: NION_SEAS = 2.00D+00    ! [1] NaCl
-!#ifdef TRACERS_AMP_M9
-!      REAL(8), PARAMETER :: NION_OCM2 = 1.00D+00    ! [1]
-!      REAL(8), PARAMETER :: NION_OCM1 = 1.00D+00    ! [1]
-!      REAL(8), PARAMETER :: NION_OCM0 = 1.00D+00    ! [1]
-!      REAL(8), PARAMETER :: NION_OCP1 = 1.00D+00    ! [1]
-!      REAL(8), PARAMETER :: NION_OCP2 = 1.00D+00    ! [1]
-!      REAL(8), PARAMETER :: NION_OCP3 = 1.00D+00    ! [1]
-!      REAL(8), PARAMETER :: NION_OCP4 = 1.00D+00    ! [1]
-!      REAL(8), PARAMETER :: NION_OCP5 = 1.00D+00    ! [1]
-!      REAL(8), PARAMETER :: NION_OCP6 = 1.00D+00    ! [1]
+      real(8), parameter :: nion_sulf = 3.00d+00    ! [1]
+      real(8), parameter :: nion_bcar = 1.00d+00    ! [1]
+      real(8), parameter :: nion_ocar = 1.00d+00    ! [1]
+      real(8), parameter :: nion_dust = 2.30d+00    ! [1]
+      real(8), parameter :: nion_seas = 2.00d+00    ! [1] nacl
+!#ifdef tracers_amp_m9
+!      real(8), parameter :: nion_ocm2 = 1.00d+00    ! [1]
+!      real(8), parameter :: nion_ocm1 = 1.00d+00    ! [1]
+!      real(8), parameter :: nion_ocm0 = 1.00d+00    ! [1]
+!      real(8), parameter :: nion_ocp1 = 1.00d+00    ! [1]
+!      real(8), parameter :: nion_ocp2 = 1.00d+00    ! [1]
+!      real(8), parameter :: nion_ocp3 = 1.00d+00    ! [1]
+!      real(8), parameter :: nion_ocp4 = 1.00d+00    ! [1]
+!      real(8), parameter :: nion_ocp5 = 1.00d+00    ! [1]
+!      real(8), parameter :: nion_ocp6 = 1.00d+00    ! [1]
 !#endif
 
-      REAL(8), PARAMETER :: XPHI_SULF = 0.70D+00    ! [1], osmotic coefficient
-      REAL(8), PARAMETER :: XPHI_BCAR = 1.00D+00    ! [1]
-      REAL(8), PARAMETER :: XPHI_OCAR = 1.00D+00    ! [1]
-      REAL(8), PARAMETER :: XPHI_DUST = 1.00D+00    ! [1]
-      REAL(8), PARAMETER :: XPHI_SEAS = 1.00D+00    ! [1] NaCl
-!#ifdef TRACERS_AMP_M9
-!      REAL(8), PARAMETER :: XPHI_OCM2 = 1.00D+00    ! [1]
-!      REAL(8), PARAMETER :: XPHI_OCM1 = 1.00D+00    ! [1]
-!      REAL(8), PARAMETER :: XPHI_OCM0 = 1.00D+00    ! [1]
-!      REAL(8), PARAMETER :: XPHI_OCP1 = 1.00D+00    ! [1]
-!      REAL(8), PARAMETER :: XPHI_OCP2 = 1.00D+00    ! [1]
-!      REAL(8), PARAMETER :: XPHI_OCP3 = 1.00D+00    ! [1]
-!      REAL(8), PARAMETER :: XPHI_OCP4 = 1.00D+00    ! [1]
-!      REAL(8), PARAMETER :: XPHI_OCP5 = 1.00D+00    ! [1]
-!      REAL(8), PARAMETER :: XPHI_OCP6 = 1.00D+00    ! [1]
+      real(8), parameter :: xphi_sulf = 0.70d+00    ! [1], osmotic coefficient
+      real(8), parameter :: xphi_bcar = 1.00d+00    ! [1]
+      real(8), parameter :: xphi_ocar = 1.00d+00    ! [1]
+      real(8), parameter :: xphi_dust = 1.00d+00    ! [1]
+      real(8), parameter :: xphi_seas = 1.00d+00    ! [1] nacl
+!#ifdef tracers_amp_m9
+!      real(8), parameter :: xphi_ocm2 = 1.00d+00    ! [1]
+!      real(8), parameter :: xphi_ocm1 = 1.00d+00    ! [1]
+!      real(8), parameter :: xphi_ocm0 = 1.00d+00    ! [1]
+!      real(8), parameter :: xphi_ocp1 = 1.00d+00    ! [1]
+!      real(8), parameter :: xphi_ocp2 = 1.00d+00    ! [1]
+!      real(8), parameter :: xphi_ocp3 = 1.00d+00    ! [1]
+!      real(8), parameter :: xphi_ocp4 = 1.00d+00    ! [1]
+!      real(8), parameter :: xphi_ocp5 = 1.00d+00    ! [1]
+!      real(8), parameter :: xphi_ocp6 = 1.00d+00    ! [1]
 !#endif
 
-      REAL(8), PARAMETER :: MOLW_SULF = 132.0D-03   ! [kg/mol]
-      REAL(8), PARAMETER :: MOLW_BCAR = 100.0D-03   ! [kg/mol]
-      REAL(8), PARAMETER :: MOLW_OCAR = 100.0D-03   ! [kg/mol]
-      REAL(8), PARAMETER :: MOLW_DUST = 100.0D-03   ! [kg/mol]
-      REAL(8), PARAMETER :: MOLW_SEAS = 58.44D-03   ! [kg/m^3] NaCl
-!#ifdef TRACERS_AMP_M9
-!      REAL(8), PARAMETER :: MOLW_OCM2 = 100.0D-03   ! [kg/mol]
-!      REAL(8), PARAMETER :: MOLW_OCM1 = 100.0D-03   ! [kg/mol]
-!      REAL(8), PARAMETER :: MOLW_OCM0 = 100.0D-03   ! [kg/mol]
-!      REAL(8), PARAMETER :: MOLW_OCP1 = 100.0D-03   ! [kg/mol]
-!      REAL(8), PARAMETER :: MOLW_OCP2 = 100.0D-03   ! [kg/mol]
-!      REAL(8), PARAMETER :: MOLW_OCP3 = 100.0D-03   ! [kg/mol]
-!      REAL(8), PARAMETER :: MOLW_OCP4 = 100.0D-03   ! [kg/mol]
-!      REAL(8), PARAMETER :: MOLW_OCP5 = 100.0D-03   ! [kg/mol]
-!      REAL(8), PARAMETER :: MOLW_OCP6 = 100.0D-03   ! [kg/mol]
+      real(8), parameter :: molw_sulf = 132.0d-03   ! [kg/mol]
+      real(8), parameter :: molw_bcar = 100.0d-03   ! [kg/mol]
+      real(8), parameter :: molw_ocar = 100.0d-03   ! [kg/mol]
+      real(8), parameter :: molw_dust = 100.0d-03   ! [kg/mol]
+      real(8), parameter :: molw_seas = 58.44d-03   ! [kg/m^3] nacl
+!#ifdef tracers_amp_m9
+!      real(8), parameter :: molw_ocm2 = 100.0d-03   ! [kg/mol]
+!      real(8), parameter :: molw_ocm1 = 100.0d-03   ! [kg/mol]
+!      real(8), parameter :: molw_ocm0 = 100.0d-03   ! [kg/mol]
+!      real(8), parameter :: molw_ocp1 = 100.0d-03   ! [kg/mol]
+!      real(8), parameter :: molw_ocp2 = 100.0d-03   ! [kg/mol]
+!      real(8), parameter :: molw_ocp3 = 100.0d-03   ! [kg/mol]
+!      real(8), parameter :: molw_ocp4 = 100.0d-03   ! [kg/mol]
+!      real(8), parameter :: molw_ocp5 = 100.0d-03   ! [kg/mol]
+!      real(8), parameter :: molw_ocp6 = 100.0d-03   ! [kg/mol]
 !#endif
 
-      REAL(8), PARAMETER :: XEPS_SULF = 1.00D+00    ! [1], soluble fraction
-      REAL(8), PARAMETER :: XEPS_BCAR = 1.67D-06    ! [1]
-      REAL(8), PARAMETER :: XEPS_OCAR = 0.78D+00    ! [1]
-      REAL(8), PARAMETER :: XEPS_DUST = 0.13D+00    ! [1]
-      REAL(8), PARAMETER :: XEPS_SEAS = 1.00D+00    ! [1] NaCl
-!#ifdef TRACERS_AMP_M9
-!      REAL(8), PARAMETER :: XEPS_OCM2 = 1.D+00      ! [1]
-!      REAL(8), PARAMETER :: XEPS_OCM1 = 0.875D+00   ! [1]
-!      REAL(8), PARAMETER :: XEPS_OCM0 = 0.75D+00    ! [1]
-!      REAL(8), PARAMETER :: XEPS_OCP1 = 0.625D+00   ! [1]
-!      REAL(8), PARAMETER :: XEPS_OCP2 = 0.5+00      ! [1]
-!      REAL(8), PARAMETER :: XEPS_OCP3 = 0.375D+00   ! [1]
-!      REAL(8), PARAMETER :: XEPS_OCP4 = 0.25D+00    ! [1]
-!      REAL(8), PARAMETER :: XEPS_OCP5 = 0.125D+00   ! [1]
-!      REAL(8), PARAMETER :: XEPS_OCP6 = 0.D+00      ! [1]
+      real(8), parameter :: xeps_sulf = 1.00d+00    ! [1], soluble fraction
+      real(8), parameter :: xeps_bcar = 1.67d-06    ! [1]
+      real(8), parameter :: xeps_ocar = 0.78d+00    ! [1]
+      real(8), parameter :: xeps_dust = 0.13d+00    ! [1]
+      real(8), parameter :: xeps_seas = 1.00d+00    ! [1] nacl
+!#ifdef tracers_amp_m9
+!      real(8), parameter :: xeps_ocm2 = 1.d+00      ! [1]
+!      real(8), parameter :: xeps_ocm1 = 0.875d+00   ! [1]
+!      real(8), parameter :: xeps_ocm0 = 0.75d+00    ! [1]
+!      real(8), parameter :: xeps_ocp1 = 0.625d+00   ! [1]
+!      real(8), parameter :: xeps_ocp2 = 0.5+00      ! [1]
+!      real(8), parameter :: xeps_ocp3 = 0.375d+00   ! [1]
+!      real(8), parameter :: xeps_ocp4 = 0.25d+00    ! [1]
+!      real(8), parameter :: xeps_ocp5 = 0.125d+00   ! [1]
+!      real(8), parameter :: xeps_ocp6 = 0.d+00      ! [1]
 !#endif
 
-      REAL(8), PARAMETER :: WMOLMASS = 18.01528D-03 ! molar mass of H2O     [kg/mol]
-      REAL(8), PARAMETER :: DENH2O   =  1.00D+03    ! density of water [kg/m^3]
+      real(8), parameter :: wmolmass = 18.01528d-03 ! molar mass of h2o     [kg/mol]
+      real(8), parameter :: denh2o   =  1.00d+03    ! density of water [kg/m^3]
 
-      ! Variables for mode-average hygroscopicity parameters.
-      REAL(8)       :: XR  (NMODEX,NCOMPS)  ! mass fraction for component J in mode I [1]
+      ! variables for mode-average hygroscopicity parameters.
+      real(8)       :: xr  (nmodex,ncomps)  ! mass fraction for component j in mode i [1]
 
-!#ifdef TRACERS_AMP_M9
-!      ! # of ions formed per formula unit solute for component J in mode I [1]
-!      REAL(8), DIMENSION(NCOMPS), PARAMETER :: XNU=(/NION_SULF,NION_BCAR,
-!     &                                               NION_OCAR,NION_DUST,
-!     &                                               NION_SEAS,NION_OCM2,
-!     &                                               NION_OCM1,NION_OCM0,
-!     &                                               NION_OCP1,NION_OCP2,
-!     &                                               NION_OCP3,NION_OCP4,
-!     &                                               NION_OCP5,NION_OCP6/)
-!      ! osmotic coefficient for component J in mode I [1]
-!      REAL(8), DIMENSION(NCOMPS), PARAMETER :: XPHI=(/XPHI_SULF,XPHI_BCAR,
-!     &                                                XPHI_OCAR,XPHI_DUST,
-!     &                                                XPHI_SEAS,XPHI_OCM2,
-!     &                                                XPHI_OCM1,XPHI_OCM0,
-!     &                                                XPHI_OCP1,XPHI_OCP2,
-!     &                                                XPHI_OCP3,XPHI_OCP4,
-!     &                                                XPHI_OCP5,XPHI_OCP6/)
-!      ! density of component J in mode I [kg/m^3]
-!      REAL(8), DIMENSION(NCOMPS), PARAMETER :: XRHO=(/DENS_SULF,DENS_BCAR,
-!     &                                                DENS_OCAR,DENS_DUST,
-!     &                                                DENS_SEAS,DENS_OCM2,
-!     &                                                DENS_OCM1,DENS_OCM0,
-!     &                                                DENS_OCP1,DENS_OCP2,
-!     &                                                DENS_OCP3,DENS_OCP4,
-!     &                                                DENS_OCP5,DENS_OCP6/)
-!      ! soluble fraction of component J in mode I [1]
-!      REAL(8), DIMENSION(NCOMPS), PARAMETER :: XEPS=(/XEPS_SULF,XEPS_BCAR,
-!     &                                                XEPS_OCAR,XEPS_DUST,
-!     &                                                XEPS_SEAS,XEPS_OCM2,
-!     &                                                XEPS_OCM1,XEPS_OCM0,
-!     &                                                XEPS_OCP1,XEPS_OCP2,
-!     &                                                XEPS_OCP3,XEPS_OCP4,
-!     &                                                XEPS_OCP5,XEPS_OCP6/)
-!      ! molecular weight for component J in mode I [kg/mol]
-!      REAL(8), DIMENSION(NCOMPS), PARAMETER :: XMW=(/MOLW_SULF,MOLW_BCAR,
-!     &                                               MOLW_OCAR,MOLW_DUST,
-!     &                                               MOLW_SEAS,MOLW_OCM2,
-!     &                                               MOLW_OCM1,MOLW_OCM0,
-!     &                                               MOLW_OCP1,MOLW_OCP2,
-!     &                                               MOLW_OCP3,MOLW_OCP4,
-!     &                                               MOLW_OCP5,MOLW_OCP6/)
+!#ifdef tracers_amp_m9
+!      ! # of ions formed per formula unit solute for component j in mode i [1]
+!      real(8), dimension(ncomps), parameter :: xnu=(/nion_sulf,nion_bcar,
+!     &                                               nion_ocar,nion_dust,
+!     &                                               nion_seas,nion_ocm2,
+!     &                                               nion_ocm1,nion_ocm0,
+!     &                                               nion_ocp1,nion_ocp2,
+!     &                                               nion_ocp3,nion_ocp4,
+!     &                                               nion_ocp5,nion_ocp6/)
+!      ! osmotic coefficient for component j in mode i [1]
+!      real(8), dimension(ncomps), parameter :: xphi=(/xphi_sulf,xphi_bcar,
+!     &                                                xphi_ocar,xphi_dust,
+!     &                                                xphi_seas,xphi_ocm2,
+!     &                                                xphi_ocm1,xphi_ocm0,
+!     &                                                xphi_ocp1,xphi_ocp2,
+!     &                                                xphi_ocp3,xphi_ocp4,
+!     &                                                xphi_ocp5,xphi_ocp6/)
+!      ! density of component j in mode i [kg/m^3]
+!      real(8), dimension(ncomps), parameter :: xrho=(/dens_sulf,dens_bcar,
+!     &                                                dens_ocar,dens_dust,
+!     &                                                dens_seas,dens_ocm2,
+!     &                                                dens_ocm1,dens_ocm0,
+!     &                                                dens_ocp1,dens_ocp2,
+!     &                                                dens_ocp3,dens_ocp4,
+!     &                                                dens_ocp5,dens_ocp6/)
+!      ! soluble fraction of component j in mode i [1]
+!      real(8), dimension(ncomps), parameter :: xeps=(/xeps_sulf,xeps_bcar,
+!     &                                                xeps_ocar,xeps_dust,
+!     &                                                xeps_seas,xeps_ocm2,
+!     &                                                xeps_ocm1,xeps_ocm0,
+!     &                                                xeps_ocp1,xeps_ocp2,
+!     &                                                xeps_ocp3,xeps_ocp4,
+!     &                                                xeps_ocp5,xeps_ocp6/)
+!      ! molecular weight for component j in mode i [kg/mol]
+!      real(8), dimension(ncomps), parameter :: xmw=(/molw_sulf,molw_bcar,
+!     &                                               molw_ocar,molw_dust,
+!     &                                               molw_seas,molw_ocm2,
+!     &                                               molw_ocm1,molw_ocm0,
+!     &                                               molw_ocp1,molw_ocp2,
+!     &                                               molw_ocp3,molw_ocp4,
+!     &                                               molw_ocp5,molw_ocp6/)
 !#else
-      ! # of ions formed per formula unit solute for component J in mode I [1]
-      REAL(8), DIMENSION(NCOMPS), PARAMETER :: XNU=(/NION_SULF,NION_BCAR, &
-                                                    NION_OCAR,NION_DUST, &
-                                                    NION_SEAS/)
-      ! osmotic coefficient for component J in mode I [1]
-      REAL(8), DIMENSION(NCOMPS), PARAMETER :: XPHI=(/XPHI_SULF,XPHI_BCAR,&
-                                                     XPHI_OCAR,XPHI_DUST, &
-                                                     XPHI_SEAS/)
-      ! density of component J in mode I [kg/m^3]
-      REAL(8), DIMENSION(NCOMPS), PARAMETER :: XRHO=(/DENS_SULF,DENS_BCAR, &
-                                                     DENS_OCAR,DENS_DUST, &
-                                                     DENS_SEAS/)
-      ! soluble fraction of component J in mode I [1]
-      REAL(8), DIMENSION(NCOMPS), PARAMETER :: XEPS=(/XEPS_SULF,XEPS_BCAR, &
-                                                     XEPS_OCAR,XEPS_DUST, &
-                                                     XEPS_SEAS/)
-      ! molecular weight for component J in mode I [kg/mol]
-      REAL(8), DIMENSION(NCOMPS), PARAMETER :: XMW=(/MOLW_SULF,MOLW_BCAR, &
-                                                    MOLW_OCAR,MOLW_DUST, &
-                                                    MOLW_SEAS/)
+      ! # of ions formed per formula unit solute for component j in mode i [1]
+      real(8), dimension(ncomps), parameter :: xnu=(/nion_sulf,nion_bcar, &
+                                                    nion_ocar,nion_dust, &
+                                                    nion_seas/)
+      ! osmotic coefficient for component j in mode i [1]
+      real(8), dimension(ncomps), parameter :: xphi=(/xphi_sulf,xphi_bcar,&
+                                                     xphi_ocar,xphi_dust, &
+                                                     xphi_seas/)
+      ! density of component j in mode i [kg/m^3]
+      real(8), dimension(ncomps), parameter :: xrho=(/dens_sulf,dens_bcar, &
+                                                     dens_ocar,dens_dust, &
+                                                     dens_seas/)
+      ! soluble fraction of component j in mode i [1]
+      real(8), dimension(ncomps), parameter :: xeps=(/xeps_sulf,xeps_bcar, &
+                                                     xeps_ocar,xeps_dust, &
+                                                     xeps_seas/)
+      ! molecular weight for component j in mode i [kg/mol]
+      real(8), dimension(ncomps), parameter :: xmw=(/molw_sulf,molw_bcar, &
+                                                    molw_ocar,molw_dust, &
+                                                    molw_seas/)
 !#endif
 
       !--------------------------------------------------------------------------------------------------------------
-      ! Calculate the mass fraction component J for each mode I. 
+      ! calculate the mass fraction component j for each mode i. 
       !--------------------------------------------------------------------------------------------------------------
-      DO I=1, NMODEX
-        XMAP(I) = 0.0D+00
-        DO J=1, NCOMPS
-                  XMAP(I) = XMAP(I) + XMAP5(I,J)
-        ENDDO
-        XR(I,:) = XMAP5(I,:) / MAX( XMAP(I), 1.0D-30 )   
-        !WRITE(*,'(I4,5F12.6)') I,XR(I,:)
-      ENDDO
+      do i=1, nmodex
+        xmap(i) = 0.0d+00
+        do j=1, ncomps
+                  xmap(i) = xmap(i) + xmap5(i,j)
+        enddo
+        xr(i,:) = xmap5(i,:) / max( xmap(i), 1.0d-30 )   
+        !write(*,'(i4,5f12.6)') i,xr(i,:)
+      enddo
 
       !--------------------------------------------------------------------------------------------------------------
-      ! Calculate the hygroscopicity parameter for each mode. 
+      ! calculate the hygroscopicity parameter for each mode. 
       !--------------------------------------------------------------------------------------------------------------
-      DO I=1, NMODEX
-        SUMNUMER = 0.0D+00
-        SUMDENOM = 0.0D+00
-        DO J=1, NCOMPS
-          SUMNUMER = SUMNUMER + XR(I,J)*XNU(J)*XPHI(J)*XEPS(J)/XMW(J)     ! [mol/kg] 
-          SUMDENOM = SUMDENOM + XR(I,J)/XRHO(J)                           ! [m^3/kg] 
-        ENDDO
-        !WRITE(*,*) 'I,XR(I,:)=', I,XR(I,:), 'SUMNUMER, SUMDENOM = ', SUMNUMER, SUMDENOM
-        BIBAR(I) = ( WMOLMASS*SUMNUMER ) / MAX( DENH2O*SUMDENOM, 1.0D-30 )            ! [1] XL for zero treatment 
-      ENDDO
+      do i=1, nmodex
+        sumnumer = 0.0d+00
+        sumdenom = 0.0d+00
+        do j=1, ncomps
+          sumnumer = sumnumer + xr(i,j)*xnu(j)*xphi(j)*xeps(j)/xmw(j)     ! [mol/kg] 
+          sumdenom = sumdenom + xr(i,j)/xrho(j)                           ! [m^3/kg] 
+        enddo
+        !write(*,*) 'i,xr(i,:)=', i,xr(i,:), 'sumnumer, sumdenom = ', sumnumer, sumdenom
+        bibar(i) = ( wmolmass*sumnumer ) / max( denh2o*sumdenom, 1.0d-30 )            ! [1] xl for zero treatment 
+      enddo
 
-      ! WRITE(*,'(8D15.6)') BIBAR(:)
+      ! write(*,'(8d15.6)') bibar(:)
 
       !--------------------------------------------------------------------------------------------------------------
-      ! Calculate the droplet activation parameters for each mode. 
+      ! calculate the droplet activation parameters for each mode. 
       !--------------------------------------------------------------------------------------------------------------
-!      write(mpp_pe()+100, *) "ACTFRAC_MAT_before", "NMODEX,XNAP,XMAP,RG,SIGMAG,BIBAR,TKELVIN,PTOT,WUPDRAFT, &
-!                      AC,FRACACTN,FRACACTM,NACT,MACT", NMODEX,XNAP,XMAP,RG,SIGMAG,BIBAR,TKELVIN,PTOT,WUPDRAFT, &
-!                      AC,FRACACTN,FRACACTM,NACT,MACT
+!      write(mpp_pe()+100, *) "actfrac_mat_before", "nmodex,xnap,xmap,rg,sigmag,bibar,tkelvin,ptot,wupdraft, &
+!                      ac,fracactn,fracactm,nact,mact", nmodex,xnap,xmap,rg,sigmag,bibar,tkelvin,ptot,wupdraft, &
+!                      ac,fracactn,fracactm,nact,mact
 !       if (mpp_root_pe().eq.mpp_pe()) then
-!                 write(*,*) "ACTFRAC_MAT_before", "NMODEX,XNAP,XMAP,RG,SIGMAG,BIBAR,TKELVIN,PTOT,WUPDRAFT, &
-!                      AC,FRACACTN,FRACACTM,NACT,MACT", NMODEX,XNAP,XMAP,RG,SIGMAG,BIBAR,TKELVIN,PTOT,WUPDRAFT, &
-!                      AC,FRACACTN,FRACACTM,NACT,MACT
+!                 write(*,*) "actfrac_mat_before", "nmodex,xnap,xmap,rg,sigmag,bibar,tkelvin,ptot,wupdraft, &
+!                      ac,fracactn,fracactm,nact,mact", nmodex,xnap,xmap,rg,sigmag,bibar,tkelvin,ptot,wupdraft, &
+!                      ac,fracactn,fracactm,nact,mact
 !      endif
-              CALL ACTFRAC_MAT(NMODEX,XNAP,XMAP,RG,SIGMAG,BIBAR,TKELVIN,PTOT,WUPDRAFT, &
-                      AC,FRACACTN,FRACACTM,NACT,MACT)
+              call actfrac_mat(nmodex,xnap,xmap,rg,sigmag,bibar,tkelvin,ptot,wupdraft, &
+                      ac,fracactn,fracactm,nact,mact)
 !      if (mpp_root_pe().eq.mpp_pe()) then
-!                                 write(*,*) "ACTFRAC_MAT_after", "NMODEX,XNAP,XMAP,RG,SIGMAG,BIBAR,TKELVIN,PTOT,WUPDRAFT, &
-!                      AC,FRACACTN,FRACACTM,NACT,MACT", NMODEX,XNAP,XMAP,RG,SIGMAG,BIBAR,TKELVIN,PTOT,WUPDRAFT, &
-!                      AC,FRACACTN,FRACACTM,NACT,MACT
+!                                 write(*,*) "actfrac_mat_after", "nmodex,xnap,xmap,rg,sigmag,bibar,tkelvin,ptot,wupdraft, &
+!                      ac,fracactn,fracactm,nact,mact", nmodex,xnap,xmap,rg,sigmag,bibar,tkelvin,ptot,wupdraft, &
+!                      ac,fracactn,fracactm,nact,mact
 !      endif
-!        write(mpp_pe()+100, *) "ACTFRAC_MAT_after", "NMODEX,XNAP,XMAP,RG,SIGMAG,BIBAR,TKELVIN,PTOT,WUPDRAFT, &
-!                      AC,FRACACTN,FRACACTM,NACT,MACT", NMODEX,XNAP,XMAP,RG,SIGMAG,BIBAR,TKELVIN,PTOT,WUPDRAFT, &
-!                      AC,FRACACTN,FRACACTM,NACT,MACT
-        !write(*,*) "ACTFRAC_MAT_after", "NMODEX,XNAP,XMAP,RG,SIGMAG,BIBAR,TKELVIN,PTOT,WUPDRAFT, &
-        !              AC,FRACACTN,FRACACTM,NACT,MACT", NMODEX,XNAP,XMAP,RG,SIGMAG,BIBAR,TKELVIN,PTOT,WUPDRAFT, &
-        !              AC,FRACACTN,FRACACTM,NACT,MACT
+!        write(mpp_pe()+100, *) "actfrac_mat_after", "nmodex,xnap,xmap,rg,sigmag,bibar,tkelvin,ptot,wupdraft, &
+!                      ac,fracactn,fracactm,nact,mact", nmodex,xnap,xmap,rg,sigmag,bibar,tkelvin,ptot,wupdraft, &
+!                      ac,fracactn,fracactm,nact,mact
+        !write(*,*) "actfrac_mat_after", "nmodex,xnap,xmap,rg,sigmag,bibar,tkelvin,ptot,wupdraft, &
+        !              ac,fracactn,fracactm,nact,mact", nmodex,xnap,xmap,rg,sigmag,bibar,tkelvin,ptot,wupdraft, &
+        !              ac,fracactn,fracactm,nact,mact
       
-      DO I=1, NMODEX
-        IF(XNAP(I) .LT. 1.0D-06 ) FRACACTN(I) = 1.0D-30
-      ENDDO
+      do i=1, nmodex
+        if(xnap(i) .lt. 1.0d-06 ) fracactn(i) = 1.0d-30
+      enddo
 
-      END SUBROUTINE GETACTFRAC
+      end subroutine getactfrac
 
 
-      SUBROUTINE ACTFRAC_MAT(NMODEX,XNAP,XMAP,RG,SIGMAG,BIBAR,TKELVIN,PTOT,WUPDRAFT, &
-                            AC,FRACACTN,FRACACTM,NACT,MACT)
+      subroutine actfrac_mat(nmodex,xnap,xmap,rg,sigmag,bibar,tkelvin,ptot,wupdraft, &
+                            ac,fracactn,fracactm,nact,mact)
 !----------------------------------------------------------------------------------------------------------------------
-!     12-12-06, DLW: Routine to calculate the activated fraction of the number 
+!     12-12-06, dlw: routine to calculate the activated fraction of the number 
 !                    and mass concentrations, as well as the number and mass 
-!                    concentrations activated for each of NMODEX modes. The 
+!                    concentrations activated for each of nmodex modes. the 
 !                    minimum dry radius for activation for each mode is also returned. 
 !
-!     The aerosol activation parameterizations are described in 
+!     the aerosol activation parameterizations are described in 
 !
-!         1. Abdul-Razzak et al.   1998, JGR, vol.103, p.6123-6131.
-!         2. Abdul-Razzak and Ghan 2000, JGR, vol.105, p.6837-6844. 
+!         1. abdul-razzak et al.   1998, jgr, vol.103, p.6123-6131.
+!         2. abdul-razzak and ghan 2000, jgr, vol.105, p.6837-6844. 
 ! 
-!     This routine is for the multiple-aerosol type parameterization. 
+!     this routine is for the multiple-aerosol type parameterization. 
 !----------------------------------------------------------------------------------------------------------------------
-!      USE DOMAIN_DECOMP_ATM,only: am_i_root
-      IMPLICIT NONE
+!      use domain_decomp_atm,only: am_i_root
+      implicit none
 
-      ! Arguments.
+      ! arguments.
       
-      INTEGER, intent(in) :: NMODEX            ! number of modes [1]      
-      REAL(8), intent(in) :: XNAP(NMODEX)      ! number concentration for each mode [#/m^3]
-      REAL(8), intent(in) :: XMAP(NMODEX)      ! mass   concentration for each mode [ug/m^3]
-      REAL(8), intent(in) :: RG(NMODEX)        ! geometric mean radius for each mode [um]
-      REAL(8), intent(in) :: SIGMAG(NMODEX)    ! geometric standard deviation for each mode [um]
-      REAL(8), intent(in) :: BIBAR(NMODEX)     ! hygroscopicity parameter for each mode [1]
-      REAL(8), intent(in) :: TKELVIN           ! absolute temperature [K]
-      REAL(8), intent(in) :: PTOT              ! ambient pressure [Pa]
-      REAL(8), intent(in) :: WUPDRAFT          ! updraft velocity [m/s]
-      REAL(8), intent(out) :: AC(NMODEX)        ! minimum dry radius for activation for each mode [um]
-      REAL(8) :: AC_2(NMODEX)        ! minimum dry radius for activation for each mode [um]
-      REAL(8) :: AC_3(NMODEX)        ! minimum dry radius for activation for each mode [um]
-      REAL(8) :: AC_5(NMODEX)        ! minimum dry radius for activation for each mode [um]
-      REAL(8), intent(out) :: FRACACTN(NMODEX)  ! activating fraction of number conc. for each mode [1]
-      REAL(8) :: FRACACTN_2(NMODEX)  ! activating fraction of number conc. for each mode [1]
-      REAL(8) :: FRACACTN_3(NMODEX)  ! activating fraction of number conc. for each mode [1]
-      REAL(8) :: FRACACTN_5(NMODEX)  ! activating fraction of number conc. for each mode [1]
-      REAL(8), intent(out) :: FRACACTM(NMODEX)  ! activating fraction of mass   conc. for each mode [1]
-      REAL(8), intent(out) :: NACT(NMODEX)      ! activating number concentration for each mode [#/m^3]
-      REAL(8), intent(out) :: MACT(NMODEX)      ! activating mass   concentration for each mode [ug/m^3]
+      integer, intent(in) :: nmodex            ! number of modes [1]      
+      real(8), intent(in) :: xnap(nmodex)      ! number concentration for each mode [#/m^3]
+      real(8), intent(in) :: xmap(nmodex)      ! mass   concentration for each mode [ug/m^3]
+      real(8), intent(in) :: rg(nmodex)        ! geometric mean radius for each mode [um]
+      real(8), intent(in) :: sigmag(nmodex)    ! geometric standard deviation for each mode [um]
+      real(8), intent(in) :: bibar(nmodex)     ! hygroscopicity parameter for each mode [1]
+      real(8), intent(in) :: tkelvin           ! absolute temperature [k]
+      real(8), intent(in) :: ptot              ! ambient pressure [pa]
+      real(8), intent(in) :: wupdraft          ! updraft velocity [m/s]
+      real(8), intent(out) :: ac(nmodex)        ! minimum dry radius for activation for each mode [um]
+      real(8) :: ac_2(nmodex)        ! minimum dry radius for activation for each mode [um]
+      real(8) :: ac_3(nmodex)        ! minimum dry radius for activation for each mode [um]
+      real(8) :: ac_5(nmodex)        ! minimum dry radius for activation for each mode [um]
+      real(8), intent(out) :: fracactn(nmodex)  ! activating fraction of number conc. for each mode [1]
+      real(8) :: fracactn_2(nmodex)  ! activating fraction of number conc. for each mode [1]
+      real(8) :: fracactn_3(nmodex)  ! activating fraction of number conc. for each mode [1]
+      real(8) :: fracactn_5(nmodex)  ! activating fraction of number conc. for each mode [1]
+      real(8), intent(out) :: fracactm(nmodex)  ! activating fraction of mass   conc. for each mode [1]
+      real(8), intent(out) :: nact(nmodex)      ! activating number concentration for each mode [#/m^3]
+      real(8), intent(out) :: mact(nmodex)      ! activating mass   concentration for each mode [ug/m^3]
 
-      ! Parameters.
+      ! parameters.
       
-      REAL(8), PARAMETER :: PI            = 3.141592653589793D+00
-      REAL(8), PARAMETER :: TWOPI         = 2.0D+00 * PI
-      REAL(8), PARAMETER :: SQRT2         = 1.414213562D+00
-      REAL(8), PARAMETER :: THREESQRT2BY2 = 1.5D+00 * SQRT2
+      real(8), parameter :: pi            = 3.141592653589793d+00
+      real(8), parameter :: twopi         = 2.0d+00 * pi
+      real(8), parameter :: sqrt2         = 1.414213562d+00
+      real(8), parameter :: threesqrt2by2 = 1.5d+00 * sqrt2
 
-      REAL(8), PARAMETER :: AVGNUM   = 6.0221367D+23       ! [1/mol]
-      REAL(8), PARAMETER :: RGASJMOL = 8.31451D+00         ! [J/mol/K]
-      REAL(8), PARAMETER :: WMOLMASS = 18.01528D-03        ! molar mass of H2O     [kg/mol]
-      REAL(8), PARAMETER :: AMOLMASS = 28.966D-03          ! molar mass of air     [kg/mol]
-      REAL(8), PARAMETER :: ASMOLMSS = 132.1406D-03        ! molar mass of NH42SO4 [kg/mol]
-      REAL(8), PARAMETER :: DENH2O   = 1.00D+03            ! density of water [kg/m^3]
-      REAL(8), PARAMETER :: DENAMSUL = 1.77D+03            ! density of pure ammonium sulfate [kg/m^3]
-      REAL(8), PARAMETER :: XNUAMSUL = 3.00D+00            ! # of ions formed when the salt is dissolved in water [1]
-      REAL(8), PARAMETER :: PHIAMSUL = 1.000D+00           ! osmotic coefficient value in A-R 1998. [1] 
-      REAL(8), PARAMETER :: GRAVITY  = 9.81D+00            ! grav. accel. at the Earth's surface [m/s/s] 
-      REAL(8), PARAMETER :: HEATVAP  = 40.66D+03/WMOLMASS  ! latent heat of vap. for water and Tnbp [J/kg] 
-      REAL(8), PARAMETER :: CPAIR    = 1006.0D+00          ! heat capacity of air [J/kg/K] 
-      REAL(8), PARAMETER :: T0DIJ    = 273.15D+00          ! reference temp. for DV [K] 
-      REAL(8), PARAMETER :: P0DIJ    = 101325.0D+00        ! reference pressure for DV [Pa] 
-      REAL(8), PARAMETER :: DIJH2O0  = 0.211D-04           ! reference value of DV [m^2/s] (P&K,2nd ed., p.503)
+      real(8), parameter :: avgnum   = 6.0221367d+23       ! [1/mol]
+      real(8), parameter :: rgasjmol = 8.31451d+00         ! [j/mol/k]
+      real(8), parameter :: wmolmass = 18.01528d-03        ! molar mass of h2o     [kg/mol]
+      real(8), parameter :: amolmass = 28.966d-03          ! molar mass of air     [kg/mol]
+      real(8), parameter :: asmolmss = 132.1406d-03        ! molar mass of nh42so4 [kg/mol]
+      real(8), parameter :: denh2o   = 1.00d+03            ! density of water [kg/m^3]
+      real(8), parameter :: denamsul = 1.77d+03            ! density of pure ammonium sulfate [kg/m^3]
+      real(8), parameter :: xnuamsul = 3.00d+00            ! # of ions formed when the salt is dissolved in water [1]
+      real(8), parameter :: phiamsul = 1.000d+00           ! osmotic coefficient value in a-r 1998. [1] 
+      real(8), parameter :: gravity  = 9.81d+00            ! grav. accel. at the earth's surface [m/s/s] 
+      real(8), parameter :: heatvap  = 40.66d+03/wmolmass  ! latent heat of vap. for water and tnbp [j/kg] 
+      real(8), parameter :: cpair    = 1006.0d+00          ! heat capacity of air [j/kg/k] 
+      real(8), parameter :: t0dij    = 273.15d+00          ! reference temp. for dv [k] 
+      real(8), parameter :: p0dij    = 101325.0d+00        ! reference pressure for dv [pa] 
+      real(8), parameter :: dijh2o0  = 0.211d-04           ! reference value of dv [m^2/s] (p&k,2nd ed., p.503)
       !----------------------------------------------------------------------------------------------------------------    
-      ! REAL(8), PARAMETER :: T0DIJ    = 283.15D+00          ! reference temp. for DV [K] 
-      ! REAL(8), PARAMETER :: P0DIJ    = 80000.0D+00         ! reference pressure for DV [Pa] 
-      ! REAL(8), PARAMETER :: DIJH2O0  = 0.300D-04           ! reference value of DV [m^2/s] (P&K,2nd ed., p.503)
+      ! real(8), parameter :: t0dij    = 283.15d+00          ! reference temp. for dv [k] 
+      ! real(8), parameter :: p0dij    = 80000.0d+00         ! reference pressure for dv [pa] 
+      ! real(8), parameter :: dijh2o0  = 0.300d-04           ! reference value of dv [m^2/s] (p&k,2nd ed., p.503)
       !----------------------------------------------------------------------------------------------------------------
-      REAL(8), PARAMETER :: DELTAV   = 1.096D-07           ! vapor jump length [m]  
-      REAL(8), PARAMETER :: DELTAT   = 2.160D-07           ! thermal jump length [m]  
-      REAL(8), PARAMETER :: ALPHAC   = 1.000D+00           ! condensation mass accommodation coefficient [1]  
-      REAL(8), PARAMETER :: ALPHAT   = 0.960D+00           ! thermal accommodation coefficient [1]  
+      real(8), parameter :: deltav   = 1.096d-07           ! vapor jump length [m]  
+      real(8), parameter :: deltat   = 2.160d-07           ! thermal jump length [m]  
+      real(8), parameter :: alphac   = 1.000d+00           ! condensation mass accommodation coefficient [1]  
+      real(8), parameter :: alphat   = 0.960d+00           ! thermal accommodation coefficient [1]  
 
-      ! Local variables. 
+      ! local variables. 
 
-      INTEGER            :: I                              ! loop counter 
-      REAL(8)            :: DV                             ! diffusion coefficient for water [m^2/s] 
-      REAL(8)            :: DVPRIME                        ! modified diffusion coefficient for water [m^2/s] 
-      REAL(8)            :: DUMW, DUMA                     ! scratch variables [s/m] 
-      REAL(8)            :: WPE                            ! saturation vapor pressure of water [Pa]  
-      REAL(8)            :: SURTEN                         ! surface tension of air-water interface [J/m^2] 
-      REAL(8)            :: XKA                            ! thermal conductivity of air [J/m/s/K]  
-      REAL(8)            :: XKAPRIME                       ! modified thermal conductivity of air [J/m/s/K]  
-      REAL(8)            :: ETA(NMODEX)                    ! model parameter [1]  
-      REAL(8)            :: ZETA                           ! model parameter [1]  
-      REAL(8)            :: XLOGSIGM(NMODEX)               ! ln(sigmag) [1]   
-      REAL(8)            :: A                              ! [m]
-      REAL(8)            :: G                              ! [m^2/s]   
-      REAL(8)            :: RDRP                           ! [m]   
-      REAL(8)            :: F1                             ! [1]   
-      REAL(8)            :: F2                             ! [1]
-      REAL(8)            :: ALPHA                          ! [1/m]
-      REAL(8)            :: GAMMAV                          ! [m^3/kg]   
-      REAL(8)            :: SM(NMODEX)                     ! [1]   
-      REAL(8)            :: DUM                            ! [1/m]    
-      REAL(8)            :: U                              ! argument to error function [1]
-      REAL(8)            :: SMAX                           ! maximum supersaturation [1]
+      integer            :: i                              ! loop counter 
+      real(8)            :: dv                             ! diffusion coefficient for water [m^2/s] 
+      real(8)            :: dvprime                        ! modified diffusion coefficient for water [m^2/s] 
+      real(8)            :: dumw, duma                     ! scratch variables [s/m] 
+      real(8)            :: wpe                            ! saturation vapor pressure of water [pa]  
+      real(8)            :: surten                         ! surface tension of air-water interface [j/m^2] 
+      real(8)            :: xka                            ! thermal conductivity of air [j/m/s/k]  
+      real(8)            :: xkaprime                       ! modified thermal conductivity of air [j/m/s/k]  
+      real(8)            :: eta(nmodex)                    ! model parameter [1]  
+      real(8)            :: zeta                           ! model parameter [1]  
+      real(8)            :: xlogsigm(nmodex)               ! ln(sigmag) [1]   
+      real(8)            :: a                              ! [m]
+      real(8)            :: g                              ! [m^2/s]   
+      real(8)            :: rdrp                           ! [m]   
+      real(8)            :: f1                             ! [1]   
+      real(8)            :: f2                             ! [1]
+      real(8)            :: alpha                          ! [1/m]
+      real(8)            :: gammav                          ! [m^3/kg]   
+      real(8)            :: sm(nmodex)                     ! [1]   
+      real(8)            :: dum                            ! [1/m]    
+      real(8)            :: u                              ! argument to error function [1]
+      real(8)            :: smax                           ! maximum supersaturation [1]
       real :: tmp, tmp2
-      real :: BIBAR_I
+      real :: bibar_i
       tmp = 0
      tmp2 = 0 
 !----------------------------------------------------------------------------------------------------------------------
-!     RDRP is the radius value used in Eqs.(17) & (18) and was adjusted to yield eta and zeta 
-!     values close to those given in A-Z et al. 1998 Figure 5. 
+!     rdrp is the radius value used in eqs.(17) & (18) and was adjusted to yield eta and zeta 
+!     values close to those given in a-z et al. 1998 figure 5. 
 !----------------------------------------------------------------------------------------------------------------------
-      RDRP = 0.105D-06   ! [m] Tuned to approximate the results in Figures 1-5 in A-Z et al. 1998.  
+      rdrp = 0.105d-06   ! [m] tuned to approximate the results in figures 1-5 in a-z et al. 1998.  
 !----------------------------------------------------------------------------------------------------------------------
-!     These variables are common to all modes and need only be computed once. 
+!     these variables are common to all modes and need only be computed once. 
 !----------------------------------------------------------------------------------------------------------------------
-      DV = DIJH2O0*(P0DIJ/PTOT)*(TKELVIN/T0DIJ)**1.94D+00                 ! [m^2/s] (P&K,2nd ed., p.503)
-      SURTEN = 76.10D-03 - 0.155D-03 * (TKELVIN-273.15D+00)               ! [J/m^2] 
-      WPE = EXP( 77.34491296D+00 - 7235.424651D+00/TKELVIN - 8.2D+00*LOG(TKELVIN) + TKELVIN*5.7113D-03 )  ! [Pa] 
-      DUMW = SQRT(TWOPI*WMOLMASS/RGASJMOL/TKELVIN)                        ! [s/m] 
-      DVPRIME = DV / ( (RDRP/(RDRP+DELTAV)) + (DV*DUMW/(RDRP*ALPHAC)) )   ! [m^2/s] - Eq. (17) 
-      XKA = (5.69D+00+0.017D+00*(TKELVIN-273.15D+00))*418.4D-05           ! [J/m/s/K] (0.0238 J/m/s/K at 273.15 K)
-      DUMA = SQRT(TWOPI*AMOLMASS/RGASJMOL/TKELVIN)                        ! [s/m]
-      XKAPRIME = XKA / ( ( RDRP/(RDRP+DELTAT) ) + ( XKA*DUMA/(RDRP*ALPHAT*DENH2O*CPAIR) ) )   ! [J/m/s/K]
-      G = 1.0D+00 / ( (DENH2O*RGASJMOL*TKELVIN) / (WPE*DVPRIME*WMOLMASS) &
-                     + ( (HEATVAP*DENH2O) / (XKAPRIME*TKELVIN) ) &
-                     * ( (HEATVAP*WMOLMASS) / (RGASJMOL*TKELVIN) - 1.0D+00 ) )               ! [m^2/s]
-      A = (2.0D+00*SURTEN*WMOLMASS)/(DENH2O*RGASJMOL*TKELVIN)                                 ! [m] 
-      ALPHA = (GRAVITY/(RGASJMOL*TKELVIN))*((WMOLMASS*HEATVAP)/(CPAIR*TKELVIN) - AMOLMASS)    ! [1/m] 
-      GAMMAV = (RGASJMOL*TKELVIN)/(WPE*WMOLMASS) &
-           + (WMOLMASS*HEATVAP*HEATVAP)/(CPAIR*PTOT*AMOLMASS*TKELVIN)                        ! [m^3/kg]
+      dv = dijh2o0*(p0dij/ptot)*(tkelvin/t0dij)**1.94d+00                 ! [m^2/s] (p&k,2nd ed., p.503)
+      surten = 76.10d-03 - 0.155d-03 * (tkelvin-273.15d+00)               ! [j/m^2] 
+      wpe = exp( 77.34491296d+00 - 7235.424651d+00/tkelvin - 8.2d+00*log(tkelvin) + tkelvin*5.7113d-03 )  ! [pa] 
+      dumw = sqrt(twopi*wmolmass/rgasjmol/tkelvin)                        ! [s/m] 
+      dvprime = dv / ( (rdrp/(rdrp+deltav)) + (dv*dumw/(rdrp*alphac)) )   ! [m^2/s] - eq. (17) 
+      xka = (5.69d+00+0.017d+00*(tkelvin-273.15d+00))*418.4d-05           ! [j/m/s/k] (0.0238 j/m/s/k at 273.15 k)
+      duma = sqrt(twopi*amolmass/rgasjmol/tkelvin)                        ! [s/m]
+      xkaprime = xka / ( ( rdrp/(rdrp+deltat) ) + ( xka*duma/(rdrp*alphat*denh2o*cpair) ) )   ! [j/m/s/k]
+      g = 1.0d+00 / ( (denh2o*rgasjmol*tkelvin) / (wpe*dvprime*wmolmass) &
+                     + ( (heatvap*denh2o) / (xkaprime*tkelvin) ) &
+                     * ( (heatvap*wmolmass) / (rgasjmol*tkelvin) - 1.0d+00 ) )               ! [m^2/s]
+      a = (2.0d+00*surten*wmolmass)/(denh2o*rgasjmol*tkelvin)                                 ! [m] 
+      alpha = (gravity/(rgasjmol*tkelvin))*((wmolmass*heatvap)/(cpair*tkelvin) - amolmass)    ! [1/m] 
+      gammav = (rgasjmol*tkelvin)/(wpe*wmolmass) &
+           + (wmolmass*heatvap*heatvap)/(cpair*ptot*amolmass*tkelvin)                        ! [m^3/kg]
      
              !write(*,*) "matrix_activation"
-             !write(*,*) "DV=", DV
-             !write(*,*) "SURTEN=",SURTEN
-             !write(*,*) "WPE=", WPE
-             !write(*,*) "DUMW=",DUMW
-             !write(*,*) "DVPRIME=",DVPRIME
-             !write(*,*) "XKA=", XKA
-             !write(*,*) "DUMA=",DUMA
-             !write(*,*) "XKAPRIME=",XKAPRIME
-             !!write(*,*) "ALPHA=",ALPHA
-             !write(*,*) "WUPDRAFT=",WUPDRAFT
-             !write(*,*) "G=", G
-      DUM = SQRT(ALPHA*WUPDRAFT/G)                  ! [1/m] 
-      ZETA = 2.D+00*A*DUM/3.D+00                    ! [1] 
+             !write(*,*) "dv=", dv
+             !write(*,*) "surten=",surten
+             !write(*,*) "wpe=", wpe
+             !write(*,*) "dumw=",dumw
+             !write(*,*) "dvprime=",dvprime
+             !write(*,*) "xka=", xka
+             !write(*,*) "duma=",duma
+             !write(*,*) "xkaprime=",xkaprime
+             !!write(*,*) "alpha=",alpha
+             !write(*,*) "wupdraft=",wupdraft
+             !write(*,*) "g=", g
+      dum = sqrt(alpha*wupdraft/g)                  ! [1/m] 
+      zeta = 2.d+00*a*dum/3.d+00                    ! [1] 
       !----------------------------------------------------------------------------------------------------------------
-      ! WRITE(1,'(A27,4D15.5)')'SURTEN,WPE,A            =',SURTEN,WPE,A
-      ! WRITE(1,'(A27,4D15.5)')'XKA,XKAPRIME,DV,DVPRIME =',XKA,XKAPRIME,DV,DVPRIME
-      ! WRITE(1,'(A27,4D15.5)')'ALPHA,GAMMAV,G, ZETA     =',ALPHA,GAMMAV,G,ZETA
+      ! write(1,'(a27,4d15.5)')'surten,wpe,a            =',surten,wpe,a
+      ! write(1,'(a27,4d15.5)')'xka,xkaprime,dv,dvprime =',xka,xkaprime,dv,dvprime
+      ! write(1,'(a27,4d15.5)')'alpha,gammav,g, zeta     =',alpha,gammav,g,zeta
 !----------------------------------------------------------------------------------------------------------------------
-!     These variables must be computed for each mode. 
+!     these variables must be computed for each mode. 
 !----------------------------------------------------------------------------------------------------------------------
-      XLOGSIGM(:) = LOG(SIGMAG(:))                                                    ! [1] 
-      SMAX = 0.0D+00                                                                  ! [1]
-      DO I=1, NMODEX
-        if (BIBAR(I) .eq. 0) then
-                write(*,*) "I, BIBAR(I) = ", I, BIBAR(I)
+      xlogsigm(:) = log(sigmag(:))                                                    ! [1] 
+      smax = 0.0d+00                                                                  ! [1]
+      do i=1, nmodex
+        if (bibar(i) .eq. 0) then
+                write(*,*) "i, bibar(i) = ", i, bibar(i)
         endif
-        if (RG(I) .eq. 0) then
-                write(*,*) "I, RG(I) =", I, RG(I)
+        if (rg(i) .eq. 0) then
+                write(*,*) "i, rg(i) =", i, rg(i)
         endif
-        BIBAR_I = max(BIBAR(I), 1.0D-30)
-        SM(I) = ( 2.0D+00/SQRT(BIBAR_I) ) * ( A/(3.0D-06*RG(I)) )**1.5D+00           ! [1] 
-        if (GAMMAV .eq. 0) then
-                write(*,*) "GAMMAV = ", GAMMAV
+        bibar_i = max(bibar(i), 1.0d-30)
+        sm(i) = ( 2.0d+00/sqrt(bibar_i) ) * ( a/(3.0d-06*rg(i)) )**1.5d+00           ! [1] 
+        if (gammav .eq. 0) then
+                write(*,*) "gammav = ", gammav
         endif
-        if (XNAP(I) .eq. 0) then
-                write(*,*) "I, XNAP(I) = ", I, XNAP(I)
+        if (xnap(i) .eq. 0) then
+                write(*,*) "i, xnap(i) = ", i, xnap(i)
         endif
-        ETA(I) = DUM**3 / (TWOPI*DENH2O*GAMMAV*XNAP(I))                                ! [1] 
+        eta(i) = dum**3 / (twopi*denh2o*gammav*xnap(i))                                ! [1] 
         !--------------------------------------------------------------------------------------------------------------
-        ! WRITE(1,'(A27,I4,4D15.5)')'I,ETA(I),SM(I) =',I,ETA(I),SM(I)
+        ! write(1,'(a27,i4,4d15.5)')'i,eta(i),sm(i) =',i,eta(i),sm(i)
         !--------------------------------------------------------------------------------------------------------------
-        F1 = 0.5D+00 * EXP(2.50D+00 * XLOGSIGM(I)**2)                                 ! [1] 
-        F2 = 1.0D+00 +     0.25D+00 * XLOGSIGM(I)                                     ! [1] 
-        SMAX = SMAX + (   F1*(  ZETA  / ETA(I)              )**1.50D+00 & 
-                       + F2*(SM(I)**2/(ETA(I)+3.0D+00*ZETA))**0.75D+00 ) / SM(I)**2  ! [1] - Eq. (6)
-      ENDDO 
-      SMAX = 1.0D+00 / SQRT(SMAX)                                                     ! [1]
-      DO I=1, NMODEX
-        AC(I)       = RG(I) * ( SM(I) / SMAX )**0.66666666666666667D+00               ! [um]
-        U           = LOG(AC(I)/RG(I)) / ( SQRT2 * XLOGSIGM(I) )                      ! [1]
-        call ERFF(U, tmp)
-        FRACACTN(I) = 0.5D+00 * (1.0D+00 - tmp)        ! [1]
-        call ERFF(U - THREESQRT2BY2*XLOGSIGM(I), tmp2)
-        FRACACTM(I) = 0.5D+00 * (1.0D+00 - tmp2 )      ! [1]
-        NACT(I)     = FRACACTN(I) * XNAP(I)                                           ! [#/m^3]
-        MACT(I)     = FRACACTM(I) * XMAP(I)                                           ! [ug/m^3]
+        f1 = 0.5d+00 * exp(2.50d+00 * xlogsigm(i)**2)                                 ! [1] 
+        f2 = 1.0d+00 +     0.25d+00 * xlogsigm(i)                                     ! [1] 
+        smax = smax + (   f1*(  zeta  / eta(i)              )**1.50d+00 & 
+                       + f2*(sm(i)**2/(eta(i)+3.0d+00*zeta))**0.75d+00 ) / sm(i)**2  ! [1] - eq. (6)
+      enddo 
+      smax = 1.0d+00 / sqrt(smax)                                                     ! [1]
+      do i=1, nmodex
+        ac(i)       = rg(i) * ( sm(i) / smax )**0.66666666666666667d+00               ! [um]
+        u           = log(ac(i)/rg(i)) / ( sqrt2 * xlogsigm(i) )                      ! [1]
+        call erff(u, tmp)
+        fracactn(i) = 0.5d+00 * (1.0d+00 - tmp)        ! [1]
+        call erff(u - threesqrt2by2*xlogsigm(i), tmp2)
+        fracactm(i) = 0.5d+00 * (1.0d+00 - tmp2 )      ! [1]
+        nact(i)     = fracactn(i) * xnap(i)                                           ! [#/m^3]
+        mact(i)     = fracactm(i) * xmap(i)                                           ! [ug/m^3]
         !--------------------------------------------------------------------------------------------------------------
-      ENDDO 
+      enddo 
 
-      END SUBROUTINE ACTFRAC_MAT
+      end subroutine actfrac_mat
 
 
-      SUBROUTINE GCF(GAMMCF,A,X,GLN)
+      subroutine gcf(gammcf,a,x,gln)
 
-      IMPLICIT NONE
+      implicit none
 !-----------------------------------------------------------------------------------------------------------------------
-!     SEE NUMERICAL RECIPES, W. PRESS ET AL., 2ND EDITION.
+!     see numerical recipes, w. press et al., 2nd edition.
 !-----------------------------------------------------------------------------------------------------------------------
-      INTEGER, PARAMETER :: ITMAX=10000
-      REAL(8), PARAMETER :: EPS=3.0D-07
-      REAL(8), PARAMETER :: FPMIN=1.0D-30
-      REAL(8) :: A,GAMMCF,GLN,X
-      INTEGER :: I
-      REAL(8) :: AN,B,C,D,DEL,H
-      GLN=GAMMLN(A)
-      B=X+1.0D+00-A
-      C=1.0D+00/FPMIN
-      D=1.0D+00/B
-      H=D
-      DO I=1,ITMAX
-        AN=-I*(I-A)
-        B=B+2.0D+00
-        D=AN*D+B
-        IF(ABS(D).LT.FPMIN)D=FPMIN
-        C=B+AN/C
-        IF(ABS(C).LT.FPMIN)C=FPMIN
-        D=1.0D+00/D
-        DEL=D*C
-        H=H*DEL
-        IF(ABS(DEL-1.0D+00).LT.EPS)GOTO 1
-      ENDDO
-      WRITE(*,*)'AERO_ACTV: SUBROUTINE GCF: A TOO LARGE, ITMAX TOO SMALL', GAMMCF,A,X,GLN
-1     GAMMCF=EXP(-X+A*LOG(X)-GLN)*H
-      RETURN
-      END SUBROUTINE GCF
+      integer, parameter :: itmax=10000
+      real(8), parameter :: eps=3.0d-07
+      real(8), parameter :: fpmin=1.0d-30
+      real(8) :: a,gammcf,gln,x
+      integer :: i
+      real(8) :: an,b,c,d,del,h
+      gln=gammln(a)
+      b=x+1.0d+00-a
+      c=1.0d+00/fpmin
+      d=1.0d+00/b
+      h=d
+      do i=1,itmax
+        an=-i*(i-a)
+        b=b+2.0d+00
+        d=an*d+b
+        if(abs(d).lt.fpmin)d=fpmin
+        c=b+an/c
+        if(abs(c).lt.fpmin)c=fpmin
+        d=1.0d+00/d
+        del=d*c
+        h=h*del
+        if(abs(del-1.0d+00).lt.eps)goto 1
+      enddo
+      write(*,*)'aero_actv: subroutine gcf: a too large, itmax too small', gammcf,a,x,gln
+1     gammcf=exp(-x+a*log(x)-gln)*h
+      return
+      end subroutine gcf
 
 
-      SUBROUTINE GSER(GAMSER,A,X,GLN)
+      subroutine gser(gamser,a,x,gln)
 
-      IMPLICIT NONE
+      implicit none
 !-----------------------------------------------------------------------------------------------------------------------
-!     SEE NUMERICAL RECIPES, W. PRESS ET AL., 2ND EDITION.
+!     see numerical recipes, w. press et al., 2nd edition.
 !-----------------------------------------------------------------------------------------------------------------------
-      INTEGER, PARAMETER :: ITMAX=10000  ! was ITMAX=100   in Press et al. 
-      REAL(8), PARAMETER :: EPS=3.0D-09  ! was EPS=3.0D-07 in Press et al.
-      REAL(8) :: A,GAMSER,GLN,X
-      INTEGER :: N
-      REAL(8) :: AP,DEL,SUM
-      GLN=GAMMLN(A)
-      IF(X.LE.0.D+00)THEN
-        IF(X.LT.0.)STOP 'AERO_ACTV: SUBROUTINE GSER: X < 0 IN GSER'
-        GAMSER=0.D+00
-        RETURN
-      ENDIF
-      AP=A
-      SUM=1.D+00/A
-      DEL=SUM
-      DO N=1,ITMAX
-        AP=AP+1.D+00
-        DEL=DEL*X/AP
-        SUM=SUM+DEL
-        IF(ABS(DEL).LT.ABS(SUM)*EPS)GOTO 1
-      ENDDO
-      WRITE(*,*)'AERO_ACTV: SUBROUTINE GSER: A TOO LARGE, ITMAX TOO SMALL'
-1     GAMSER=SUM*EXP(-X+A*LOG(X)-GLN)
-      RETURN
-      END SUBROUTINE GSER
+      integer, parameter :: itmax=10000  ! was itmax=100   in press et al. 
+      real(8), parameter :: eps=3.0d-09  ! was eps=3.0d-07 in press et al.
+      real(8) :: a,gamser,gln,x
+      integer :: n
+      real(8) :: ap,del,sum
+      gln=gammln(a)
+      if(x.le.0.d+00)then
+        if(x.lt.0.)stop 'aero_actv: subroutine gser: x < 0 in gser'
+        gamser=0.d+00
+        return
+      endif
+      ap=a
+      sum=1.d+00/a
+      del=sum
+      do n=1,itmax
+        ap=ap+1.d+00
+        del=del*x/ap
+        sum=sum+del
+        if(abs(del).lt.abs(sum)*eps)goto 1
+      enddo
+      write(*,*)'aero_actv: subroutine gser: a too large, itmax too small'
+1     gamser=sum*exp(-x+a*log(x)-gln)
+      return
+      end subroutine gser
 
 
-      DOUBLE PRECISION FUNCTION GAMMLN(XX)
+      double precision function gammln(xx)
 
-      IMPLICIT NONE
+      implicit none
 !-----------------------------------------------------------------------------------------------------------------------
-!     SEE NUMERICAL RECIPES, W. PRESS ET AL., 2ND EDITION.
+!     see numerical recipes, w. press et al., 2nd edition.
 !-----------------------------------------------------------------------------------------------------------------------
-      REAL(8) :: XX
-      INTEGER J
-      DOUBLE PRECISION SER,STP,TMP,X,Y,COF(6)
-      SAVE COF,STP
-      DATA COF,STP/76.18009172947146D0,-86.50532032941677D0, &
-      24.01409824083091D0,-1.231739572450155D0,.1208650973866179D-2, &
-      -.5395239384953D-5,2.5066282746310005D0/
-      X=XX
-      Y=X
-      TMP=X+5.5D0
-      TMP=(X+0.5D0)*LOG(TMP)-TMP
-      SER=1.000000000190015D0
-      DO J=1,6
-        Y=Y+1.D0
-        SER=SER+COF(J)/Y
-      ENDDO
-      GAMMLN=TMP+LOG(STP*SER/X)
-      RETURN
-      END FUNCTION GAMMLN 
+      real(8) :: xx
+      integer j
+      double precision ser,stp,tmp,x,y,cof(6)
+      save cof,stp
+      data cof,stp/76.18009172947146d0,-86.50532032941677d0, &
+      24.01409824083091d0,-1.231739572450155d0,.1208650973866179d-2, &
+      -.5395239384953d-5,2.5066282746310005d0/
+      x=xx
+      y=x
+      tmp=x+5.5d0
+      tmp=(x+0.5d0)*log(tmp)-tmp
+      ser=1.000000000190015d0
+      do j=1,6
+        y=y+1.d0
+        ser=ser+cof(j)/y
+      enddo
+      gammln=tmp+log(stp*ser/x)
+      return
+      end function gammln 
 
 
-     subroutine ERFF(X,tmp)
-      IMPLICIT NONE
+     subroutine erff(x,tmp)
+      implicit none
 !-----------------------------------------------------------------------------------------------------------------------
-!     SEE NUMERICAL RECIPES, W. PRESS ET AL., 2ND EDITION.
+!     see numerical recipes, w. press et al., 2nd edition.
 !-----------------------------------------------------------------------------------------------------------------------
-      REAL(8), intent(in) :: X
+      real(8), intent(in) :: x
       real, intent(out) :: tmp
-!U    USES GAMMP
+!u    uses gammp
       tmp = 0.d0
-      IF(X.LT.0.0D+00)THEN
-        tmp=-GAMMP(0.5D0,X**2)
-      ELSE
-        tmp= GAMMP(0.5D0,X**2)
-      ENDIF
+      if(x.lt.0.0d+00)then
+        tmp=-gammp(0.5d0,x**2)
+      else
+        tmp= gammp(0.5d0,x**2)
+      endif
       
-      END subroutine
+      end subroutine
 
 
-      DOUBLE PRECISION FUNCTION GAMMP(A,X)
-      IMPLICIT NONE
+      double precision function gammp(a,x)
+      implicit none
 !-----------------------------------------------------------------------------------------------------------------------
-!     SEE NUMERICAL RECIPES, W. PRESS ET AL., 2ND EDITION.
+!     see numerical recipes, w. press et al., 2nd edition.
 !-----------------------------------------------------------------------------------------------------------------------
-      REAL(8) :: A,X
-      REAL(8) :: GAMMCF,GAMSER,GLN
-      IF(X.LT.0.0D+00.OR.A.LE.0.0D+00)THEN
-        WRITE(*,*)'AERO_ACTV: FUNCTION GAMMP: BAD ARGUMENTS'
-      ENDIF
-      IF(X.LT.A+1.0D+00)THEN
-        CALL GSER(GAMSER,A,X,GLN)
-        GAMMP=GAMSER
-      ELSE
-        CALL GCF(GAMMCF,A,X,GLN)
-        GAMMP=1.0D+00-GAMMCF
-      ENDIF
-      RETURN
-      END FUNCTION GAMMP
+      real(8) :: a,x
+      real(8) :: gammcf,gamser,gln
+      if(x.lt.0.0d+00.or.a.le.0.0d+00)then
+        write(*,*)'aero_actv: function gammp: bad arguments'
+      endif
+      if(x.lt.a+1.0d+00)then
+        call gser(gamser,a,x,gln)
+        gammp=gamser
+      else
+        call gcf(gammcf,a,x,gln)
+        gammp=1.0d+00-gammcf
+      endif
+      return
+      end function gammp
 
 
 end module

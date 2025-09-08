@@ -50,9 +50,9 @@ CONTAINS
         real, parameter :: third = 1./3.
         real, parameter :: ugascon = 8.314e7
 !        call mpp_sync()
-!$omp critical
-        write(mpp_pe()+100, *) ddry_in, hygro, s, tair
-!$omp end critical
+!!$omp critical
+!        write(mpp_pe()+100, *) ddry_in, hygro, s, tair
+!!$omp end critical
 
         rdry_in = ddry_in/2
         !effect of organics on surface tension is neglected
@@ -136,7 +136,7 @@ CONTAINS
         endif
 
         ! bound and convert from microns to m
-        r = min(r,30.) ! upper bound based on 1 day lifetime
+        !r = min(r,30.) ! upper bound based on 1 day lifetime
         rwet_out = r*1.e-6
         dwet_out = 2*rwet_out
 
