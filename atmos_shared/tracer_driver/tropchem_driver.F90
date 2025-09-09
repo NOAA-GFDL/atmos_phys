@@ -837,6 +837,16 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
              used = send_data(id_eminox_woL, emisz(:,:,n)*1.0e04*0.014/AVOGNO, Time_next, is_in=is,js_in=js)
            endif
          endif
+         if (tracnam(n) == 'HNO3') then
+           if (id_emihno3 > 0) then
+             used = send_data(id_emihno3, emisz(:,:,n)*1.0e04*0.014/AVOGNO, Time_next, is_in=is,js_in=js)
+           endif
+         endif
+         if (tracnam(n) == 'PAN') then
+           if (id_emipan > 0) then
+             used = send_data(id_emipan, emisz(:,:,n)*1.0e04*0.014/AVOGNO, Time_next, is_in=is,js_in=js)
+           endif
+         endif
          if (tracnam(n) == 'CO') then
            if (id_co_emis_cmip2 > 0) then
              used = send_data(id_co_emis_cmip2,emisz(:,:,n)*1.0e04*0.028/AVOGNO,Time_next, &
