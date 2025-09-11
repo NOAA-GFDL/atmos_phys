@@ -182,6 +182,8 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
   integer :: kd    ! vertical size of our arrays
   integer :: ndust ! atmos tracer number that corresponds to the current dust tracer
   logical :: used
+
+ ! real, dimension(size(tracer,1),size(tracer,2),size(tracer,3))  :: stracer
   
   kd = size(tracer,3)
   
@@ -207,6 +209,14 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
   do i = 1,n_dust_tracers
      ndust = dust_tracers(i)%tr
      ! calculate sources and sinks for each individual dust tracer
+
+   !   if (dust_tracers(i)%is_hno3d .or. dust_tracers(i)%is_so4d) then
+   !      !settling requires tracers to be in units of mmr
+   !      stracer = tracer(:,:,:,ndust)/mw_air_amb(:,:,kd)
+   !   else
+   !      stracer = tracer(:,:,:,ndust)
+   !   end if
+     
      call atmos_dust_sourcesink1(frac_land, pwt, dt, &
         dust_tracers(i)%dustden, dust_tracers(i)%dustref, dust_tracers(i)%frac_s, source, &
         pfull, w10m, t, rh, &
@@ -215,6 +225,13 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
         dust_tracers(i)%do_surf_exch, dust_tracers(i)%is_dust, &
         is,ie,js,je, kbot)
      ! update dust tendencies
+
+   !   if (dust_tracers(i)%is_hno3d .or. dust_tracers(i)%is_so4d) then
+   !         rdt(:,:,:,ndust)=rdt(:,:,:,ndust)+dust_dt(:,:,:)*mw_air_amb
+   !   else
+   !         rdt(:,:,:,ndust)=rdt(:,:,:,ndust)+dust_dt(:,:,:)
+   !   end if
+
      rdt(:,:,:,ndust)=rdt(:,:,:,ndust)+dust_dt(:,:,:)
  
      ! Send the emission data to the diag_manager for output.
@@ -233,16 +250,18 @@ subroutine atmos_dust_sourcesink ( lon, lat, frac_land, pwt, dt, &
              + dust_tracers(i)%dust_setl(is:ie,js:je) + pwt(:,:,kd)*dsinku(:,:,ndust) ! shouldnt kd be kbot?
      end if
 
+     !For HNO3d and SO4d, the dust_setl is in units of vmr*kg/m2/s 
+
      if (dust_tracers(i)%is_hno3d ) then
         ! accumulate total dust deposition flux
         all_hno3d_setl(:,:) = all_hno3d_setl(:,:) &
-               + dust_tracers(i)%dust_setl(is:ie,js:je) + 1.e3*pwt(:,:,kd)/mw_air_amb(:,:,kd)*dsinku(:,:,ndust) ! shouldnt kd be kbot?
-        hno3d_setl(:,:) = hno3d_setl(:,:) + dust_tracers(i)%dust_setl(is:ie,js:je)
+               + 1.e3/mw_air_amb(:,:,kd)*dust_tracers(i)%dust_setl(is:ie,js:je) + 1.e3*pwt(:,:,kd)/mw_air_amb(:,:,kd)*dsinku(:,:,ndust) ! shouldnt kd be kbot?
+        hno3d_setl(:,:) = hno3d_setl(:,:) + dust_tracers(i)%dust_setl(is:ie,js:je)*1e3/mw_air_amb(:,:,kd)
      endif
      if (dust_tracers(i)%is_so4d ) then
         ! accumulate total dust deposition flux
         all_so4d_setl(:,:) = all_so4d_setl(:,:) &
-               + dust_tracers(i)%dust_setl(is:ie,js:je) + 1.e3*pwt(:,:,kd)/mw_air_amb(:,:,kd)*dsinku(:,:,ndust) ! shouldnt kd be kbot?
+               + 1.e3/mw_air_amb(:,:,kd)*dust_tracers(i)%dust_setl(is:ie,js:je) + 1.e3*pwt(:,:,kd)/mw_air_amb(:,:,kd)*dsinku(:,:,ndust) ! shouldnt kd be kbot?
      endif
      
 
