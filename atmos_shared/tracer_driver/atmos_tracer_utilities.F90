@@ -33,7 +33,6 @@ module atmos_tracer_utilities_mod
   ! <---h1g,
 
   use            fms_mod, only : lowercase, uppercase, &
-       write_version_number, &
        stdlog, &
        mpp_pe, &
        mpp_root_pe, &
@@ -214,10 +213,11 @@ module atmos_tracer_utilities_mod
   real :: snow_albedo_thr = 0.45
   character*32 :: gas_reevap = 'linear'
   character*32 :: aerosol_reevap = 'step'
+  logical      :: use_Mw_air_dry = .true.  !if True Mw_air is set to the dry Mw of air. If not it is correctd for changes in sphum
 
   namelist /atmos_tracer_utilities_nml/  scale_aerosol_wetdep,  scale_aerosol_wetdep_snow, file_dry, drydep_exp, T_snow_dep, &
                          kbs_val, use_albedo_for_drydep, snow_albedo_thr, &
-                         gas_reevap,aerosol_reevap
+                         gas_reevap,aerosol_reevap, use_Mw_air_dry
   ! <---h1g,
 contains
 
@@ -555,6 +555,14 @@ contains
     logunit=stdlog()
     call write_namelist_values (logunit,ntrace)
  endif
+
+ !--------- write version and namelist to standard log ------------
+ call write_version_number(version,tagname)
+ logunit = stdlog()
+ if (mpp_pe() .eq. mpp_root_pe()) then
+    write(logunit,nml=atmos_tracer_utilities_nml)
+ endif
+
 
  module_is_initialized = .TRUE.
 
@@ -2738,21 +2746,33 @@ function calc_mw_air_0d(sum_wat) result(out)
    implicit none
    real,intent(in)                                           :: sum_wat
    real                                                      :: out
-   out = WTMAIR*WTMH2O/((1.-sum_wat)*WTMH2O+sum_wat*WTMAIR)
+   if (use_Mw_air_dry) then
+      out = WTMAIR
+   else
+      out = WTMAIR*WTMH2O/((1.-sum_wat)*WTMH2O+sum_wat*WTMAIR)
+   end if
  end function calc_mw_air_0d
 
  function calc_mw_air_2d(sum_wat) result(out)
    implicit none
    real,dimension(:,:),intent(in)                                           :: sum_wat
    real, dimension(size(sum_wat,1),size(sum_wat,2))                         :: out
-   out = WTMAIR*WTMH2O/((1.-sum_wat)*WTMH2O+sum_wat*WTMAIR)
+   if (use_Mw_air_dry) then
+      out = WTMAIR
+   else   
+      out = WTMAIR*WTMH2O/((1.-sum_wat)*WTMH2O+sum_wat*WTMAIR)
+   end if
  end function calc_mw_air_2d
 
  function calc_mw_air_3d(sum_wat) result(out)
    implicit none
    real,dimension(:,:,:),intent(in)                                           :: sum_wat
    real, dimension(size(sum_wat,1),size(sum_wat,2),size(sum_wat,3))           :: out
-   out = WTMAIR*WTMH2O/((1.-sum_wat)*WTMH2O+sum_wat*WTMAIR)
+   if (use_Mw_air_dry) then
+      out = WTMAIR
+   else      
+      out = WTMAIR*WTMH2O/((1.-sum_wat)*WTMH2O+sum_wat*WTMAIR)
+   end if
  end function calc_mw_air_3d
 
  !=========================================================================
