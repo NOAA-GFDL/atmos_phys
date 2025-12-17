@@ -1020,7 +1020,7 @@ logical,                       intent(in)    ::  do_totcld_forcing, &
            e1ctw1, e1ctw2,        &
            emisdg, flxcf, &
            heatemcf, flx, to3dg, tcfc8, &
-           flxnet_save
+           flxnet_save, convert_val
 
       real, dimension (size(pflux,1),    &
                        size(pflux,2), 2)  :: emspec
@@ -1071,7 +1071,7 @@ logical,                       intent(in)    ::  do_totcld_forcing, &
       integer                    :: ix, jx, kx
       integer                    :: is, ie, js, je
       integer                    ::  k, kp, m, j
-      integer                    :: kk, i, l
+      integer                    :: kk, i, l, kk1
       integer                    :: nprofiles, nnn
 
       logical                    :: do_ica_calcs
@@ -1238,6 +1238,8 @@ logical,                       intent(in)    ::  do_totcld_forcing, &
           Lw_diagnostics%fluxncf = 0.
         endif
         Lw_diagnostics%flx1e1f  = 0.
+        Lw_diagnostics%exctsncf  = 0.
+        Lw_diagnostics%fctsgcf  = 0.
       endif
 
 !--------------------------------------------------------------------
@@ -1285,6 +1287,8 @@ logical,                       intent(in)    ::  do_totcld_forcing, &
 
        if (do_totcld_forcing) then
          Lw_diagnostics%fluxncf(:,:,:,:) = 0.0
+         Lw_diagnostics%exctsncf  = 0.
+         Lw_diagnostics%fctsgcf  = 0.
        endif
 
        if (NBTRGE > 0) then
@@ -2121,43 +2125,89 @@ logical,                       intent(in)    ::  do_totcld_forcing, &
 !-----------------------------------------------------------------------
 !   Changed by Xianglei Huang, for AIRS-CERES comparison purpose
 !-----------------------------------------------------------------------
+    do kk=ks,ke
+      convert_val(:,:,kk) = (pflux(:,:,kk+1) - pflux(:,:,kk))/radcon_mks  
+      Do kk1 =1,40               
+        Lw_output%bdy_flx(:,:,1) = Lw_output%bdy_flx(:,:,1) - &
+        (convert_val(:,:,kk)*Lw_diagnostics%exctsn(:,:,kk,kk1)) 
+      End Do	       
+      Lw_output%bdy_flx(:,:,2) = Lw_output%bdy_flx(:,:,2) - &
+                        (convert_val(:,:,kk)*Lw_diagnostics%exctsn(:,:,kk,41)) 
+      Lw_output%bdy_flx(:,:,3) = Lw_output%bdy_flx(:,:,3) - &
+                        convert_val(:,:,kk)*Lw_diagnostics%exctsn(:,:,kk,42) 
+      Lw_output%bdy_flx(:,:,4) = Lw_output%bdy_flx(:,:,4) - &
+                         convert_val(:,:,kk)*Lw_diagnostics%exctsn(:,:,kk,43) 
+      Lw_output%bdy_flx(:,:,5) = Lw_output%bdy_flx(:,:,5) - &
+                         convert_val(:,:,kk)*Lw_diagnostics%exctsn(:,:,kk,44)
+      Lw_output%bdy_flx(:,:,6) = Lw_output%bdy_flx(:,:,6) - &
+                        convert_val(:,:,kk)*Lw_diagnostics%exctsn(:,:,kk,45)
+      Lw_output%bdy_flx(:,:,7) = Lw_output%bdy_flx(:,:,7) - &
+                         convert_val(:,:,kk)*Lw_diagnostics%exctsn(:,:,kk,46)
+      Lw_output%bdy_flx(:,:,8) = Lw_output%bdy_flx(:,:,8) - &
+                          convert_val(:,:,kk)*Lw_diagnostics%exctsn(:,:,kk,47)
+    end do 
+    Do kk1 =1,40 
     Lw_output%bdy_flx(:,:,1) = Lw_output%bdy_flx(:,:,1) + &
-                               Lw_diagnostics%fluxn(:,:,1,1) 
+                               Lw_diagnostics%fctsg(:,:,kk1)
+    End Do
     Lw_output%bdy_flx(:,:,2) = Lw_output%bdy_flx(:,:,2) + &
-                               Lw_diagnostics%fluxn(:,:,1,2) 
+                               Lw_diagnostics%fctsg(:,:,41)
     Lw_output%bdy_flx(:,:,3) = Lw_output%bdy_flx(:,:,3) + &
-                               Lw_diagnostics%fluxn(:,:,1,3) 
+                               Lw_diagnostics%fctsg(:,:,42)
     Lw_output%bdy_flx(:,:,4) = Lw_output%bdy_flx(:,:,4) + &
-                               Lw_diagnostics%fluxn(:,:,1,5) 
+                               Lw_diagnostics%fctsg(:,:,43)
     Lw_output%bdy_flx(:,:,5) = Lw_output%bdy_flx(:,:,5) + &
-                               Lw_diagnostics%fluxn(:,:,1,4)
+                               Lw_diagnostics%fctsg(:,:,44)
     Lw_output%bdy_flx(:,:,6) = Lw_output%bdy_flx(:,:,6) + &
-                               Lw_diagnostics%fluxn(:,:,1,6)
+                               Lw_diagnostics%fctsg(:,:,45)
     Lw_output%bdy_flx(:,:,7) = Lw_output%bdy_flx(:,:,7) + &
-                               Lw_diagnostics%fluxn(:,:,1,7)
-    Lw_output%bdy_flx = 1.0E-03*Lw_output%bdy_flx
+                               Lw_diagnostics%fctsg(:,:,46)
+    Lw_output%bdy_flx(:,:,8) = Lw_output%bdy_flx(:,:,8) + &
+                               Lw_diagnostics%fctsg(:,:,47)
+    Lw_output%bdy_flx(:,:,9) = 1.0E-03*Lw_diagnostics%fluxn(:,:,1,7)
 !------------------------------------------------------------------------
 !   End of modification
 !------------------------------------------------------------------------
-!   Lw_output%bdy_flx = 1.0E-03*Lw_output%bdy_flx
-
-    if (nnn == 1) then ! need do only once
-    if (do_totcld_forcing) then
-!-----------------------------------------------------------------------
-!   Changed by Xianglei Huang, for AIRS-CERES comparison purpose
-!-----------------------------------------------------------------------
-      Lw_output%bdy_flx_clr(:,:,1) = Lw_diagnostics%fluxncf(:,:,1,1)
-      Lw_output%bdy_flx_clr(:,:,2) = Lw_diagnostics%fluxncf(:,:,1,2)
-      Lw_output%bdy_flx_clr(:,:,3) = Lw_diagnostics%fluxncf(:,:,1,3)
-      Lw_output%bdy_flx_clr(:,:,4) = Lw_diagnostics%fluxncf(:,:,1,5)
-      Lw_output%bdy_flx_clr(:,:,5) = Lw_diagnostics%fluxncf(:,:,1,4)
-      Lw_output%bdy_flx_clr(:,:,6) = Lw_diagnostics%fluxncf(:,:,1,6)
-      Lw_output%bdy_flx_clr(:,:,7) = Lw_diagnostics%fluxncf(:,:,1,7)
-      Lw_output%bdy_flx_clr = 1.0E-03*Lw_output%bdy_flx_clr
-    endif
-    endif
-
-    
+    do kk=ks,ke
+      convert_val(:,:,kk) = (pflux(:,:,kk+1) - pflux(:,:,kk))/radcon_mks  
+      Do kk1 =1,40               
+        Lw_output%bdy_flx_clr(:,:,1) = Lw_output%bdy_flx_clr(:,:,1) - &
+                           (convert_val(:,:,kk)*Lw_diagnostics%exctsncf(:,:,kk,kk1)) 
+      End Do	    
+      Lw_output%bdy_flx_clr(:,:,2) = Lw_output%bdy_flx_clr(:,:,2) - &
+                        (convert_val(:,:,kk)*Lw_diagnostics%exctsncf(:,:,kk,41)) 
+      Lw_output%bdy_flx_clr(:,:,3) = Lw_output%bdy_flx_clr(:,:,3) - &
+                        convert_val(:,:,kk)*Lw_diagnostics%exctsncf(:,:,kk,42) 
+      Lw_output%bdy_flx_clr(:,:,4) = Lw_output%bdy_flx_clr(:,:,4) - &
+                         convert_val(:,:,kk)*Lw_diagnostics%exctsncf(:,:,kk,43) 
+      Lw_output%bdy_flx_clr(:,:,5) = Lw_output%bdy_flx_clr(:,:,5) - &
+                         convert_val(:,:,kk)*Lw_diagnostics%exctsncf(:,:,kk,44)
+      Lw_output%bdy_flx_clr(:,:,6) = Lw_output%bdy_flx_clr(:,:,6) - &
+                        convert_val(:,:,kk)*Lw_diagnostics%exctsncf(:,:,kk,45)
+      Lw_output%bdy_flx_clr(:,:,7) = Lw_output%bdy_flx_clr(:,:,7) - &
+                         convert_val(:,:,kk)*Lw_diagnostics%exctsncf(:,:,kk,46)
+      Lw_output%bdy_flx_clr(:,:,8) = Lw_output%bdy_flx_clr(:,:,8) - &
+                          convert_val(:,:,kk)*Lw_diagnostics%exctsncf(:,:,kk,47)
+   end do    
+   Do kk1 =1,40         
+     Lw_output%bdy_flx_clr(:,:,1) = Lw_output%bdy_flx_clr(:,:,1) + &
+                                (Lw_diagnostics%fctsgcf(:,:,kk1)) 
+   End  Do
+   Lw_output%bdy_flx_clr(:,:,2) = Lw_output%bdy_flx_clr(:,:,2) + &
+                              (Lw_diagnostics%fctsgcf(:,:,41)) 
+   Lw_output%bdy_flx_clr(:,:,3) = Lw_output%bdy_flx_clr(:,:,3) + &
+                              Lw_diagnostics%fctsgcf(:,:,42) 
+   Lw_output%bdy_flx_clr(:,:,4) = Lw_output%bdy_flx_clr(:,:,4) + &
+                              Lw_diagnostics%fctsgcf(:,:,43) 
+   Lw_output%bdy_flx_clr(:,:,5) = Lw_output%bdy_flx_clr(:,:,5) + &
+                              Lw_diagnostics%fctsgcf(:,:,44)
+   Lw_output%bdy_flx_clr(:,:,6) = Lw_output%bdy_flx_clr(:,:,6) + &
+                              Lw_diagnostics%fctsgcf(:,:,45)
+   Lw_output%bdy_flx_clr(:,:,7) = Lw_output%bdy_flx_clr(:,:,7) + &
+                              Lw_diagnostics%fctsgcf(:,:,46)
+   Lw_output%bdy_flx_clr(:,:,8) = Lw_output%bdy_flx_clr(:,:,8) + &
+                              Lw_diagnostics%fctsgcf(:,:,47)
+   Lw_output%bdy_flx_clr(:,:,9) = 1E-3*Lw_diagnostics%fluxncf(:,:,1,7)	 
 !-----------------------------------------------------------------------
 !     compute emissivity heating rates.
 !-----------------------------------------------------------------------
@@ -3600,6 +3650,7 @@ end do
            do i = 1,size(Lw_diagnostics%fctsg(:,:,:),1)
               Lw_diagnostics%fctsg(i,j,n) = 1.0e-03*   &
                                       Lw_diagnostics%fctsg(i,j,n)
+              Lw_diagnostics%fctsgcf(i,j,n) = 1E-3*fctsgcf(i,j,n)
            end do
         end do
 
@@ -3726,6 +3777,7 @@ end do
                   do i = 1,size(exctsncf(:,:,:,:),1)
                      exctsncf(i,j,kk,n) = 1.0e-03*(exctsncf(i,j,kk,n)*radcon_mks*    &
                                     pdfinv(i,j,kk) )
+                     Lw_diagnostics%exctsncf(i,j,kk,n) =  exctsncf(i,j,kk,n)
                   end do
                end do
             end do

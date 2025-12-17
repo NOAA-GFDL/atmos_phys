@@ -164,7 +164,7 @@ module atmos_tracer_utilities_mod
   type chem_param_type
       logical :: is_vmr
       real    :: mw
-      real    :: nb_N_ox, nb_N_red, nb_N
+      real    :: nb_N_ox, nb_N_red, nb_N, nb_C
       real    :: frac_pm1, frac_pm10, frac_pm25
       logical :: is_aerosol
   end type chem_param_type
@@ -2230,6 +2230,7 @@ subroutine read_chem_param (n, tprop)
     tprop%mw=-999.
     tprop%nb_N_red=0.
     tprop%nb_N_ox =0.
+    tprop%nb_C =0.
     tprop%nb_N =0.
     tprop%frac_pm1 =0.
     tprop%frac_pm10=0.
@@ -2248,7 +2249,7 @@ subroutine read_chem_param (n, tprop)
    write(outunit,'(a,i3)') 'n=',n
    write(outunit,'(7a)') 'tracer_name="',trim(tracer_name)
    write(outunit,'(4(a,g14.6))') 'mwt=',tprop%mw, &
-                                 ', nb_N=',tprop%nb_N,', nb_N_ox=',tprop%nb_N_ox,', nb_N_red=',tprop%nb_N_red
+                                 ', nb_C=',tprop%nb_C,', nb_N=',tprop%nb_N,', nb_N_ox=',tprop%nb_N_ox,', nb_N_red=',tprop%nb_N_red
    write(outunit,'(3(a,f7.4))') 'frac_pm1=',tprop%frac_pm1, ', frac_pm25=',tprop%frac_pm25, ', frac_pm10=',tprop%frac_pm10
    write(outunit,*) 'is_vmr',tprop%is_vmr
 
@@ -2258,15 +2259,16 @@ end subroutine read_chem_param
 
 !#######################################################################
 
-subroutine get_chem_param (n, mw, nb_N, nb_N_ox, nb_N_red, is_aerosol, is_vmr, &
+subroutine get_chem_param (n, mw, nb_C, nb_N, nb_N_ox, nb_N_red, is_aerosol, is_vmr, &
    frac_pm1, frac_pm25, frac_pm10)
 
 integer, intent(in)            :: n
-real,    intent(out), optional :: mw,nb_N,nb_N_ox,nb_N_red
+real,    intent(out), optional :: mw,nb_C,nb_N,nb_N_ox,nb_N_red
 real,    intent(out), optional :: frac_pm1,frac_pm10,frac_pm25
 logical, intent(out), optional :: is_aerosol, is_vmr
 
 if (present(mw))         mw         = tracer_prop(n)%mw
+if (present(nb_C))       nb_C       = tracer_prop(n)%nb_C
 if (present(nb_N))       nb_N       = tracer_prop(n)%nb_N
 if (present(nb_N_ox))    nb_N_ox    = tracer_prop(n)%nb_N_ox
 if (present(nb_N_red))   nb_N_red   = tracer_prop(n)%nb_N_red

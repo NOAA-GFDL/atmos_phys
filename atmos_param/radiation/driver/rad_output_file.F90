@@ -140,7 +140,7 @@ integer, dimension(2)              :: id_absopdep_vlcno_column, &
                                       id_swext_vlcno, id_swssa_vlcno, &
                                       id_swasy_vlcno, id_sw_xcoeff_vlcno
 ! change by Xianglei Huang
-integer, dimension(7)              :: id_lw_bdyflx_clr, id_lw_bdyflx
+integer, dimension(9)              :: id_lw_bdyflx_clr, id_lw_bdyflx
 integer                            :: id_bT_Aqua31
 ! end of change
 integer, dimension(4)              :: id_sw_bdyflx_clr, id_sw_bdyflx
@@ -1329,23 +1329,12 @@ type(aerosolrad_diag_type),   intent(in), optional  ::  Aerosolrad_diags
         endif
      end do
 ! change by Xianglei Huang, output more lw_bdyflx
-     do n=1, 7
+     do n=1, 9
         if (id_lw_bdyflx(n) > 0 ) then
           used = send_data (id_lw_bdyflx(n) , Lw_output%bdy_flx(:,:,n),&
                             Time_diag, is,js)
         endif
      end do
-     if (id_bT_Aqua31 > 0) then
-        !Assumes band 3 is 800--900
-        !Aqua31 recieves between 885 and 925 cm**-1, using band 3
-        !Computation from http://pds-atmospheres.nmsu.edu/education_and_outreach/encyclopedia/planck_function.htm
-        !Note their planck function is in mW and bdy_flx is is W
-        !850 cm**-1 gives a characteristic wavenumber for this band, which is 100 cm**-1 wide
-        !Also, we divide by pi to convert the omni-directional flux into intensity
-        bT = 0.0000119*(850.**3)/((Lw_output%bdy_flx(:,:,3)/100.)*1000./pi + 1.)
-        bT = 1.438833*850./log(bT)
-        used = send_data ( id_bT_Aqua31, bT, Time_diag, is, js ) 
-     endif
 
         if (Rad_control%do_totcld_forcing) then
      do n=1, 4
@@ -1356,7 +1345,7 @@ type(aerosolrad_diag_type),   intent(in), optional  ::  Aerosolrad_diags
         endif
      end do
 ! change by Xianglei Huang, output more lw_bdyflx_clr
-     do n=1, 7
+     do n=1, 9
         if (id_lw_bdyflx_clr(n) > 0 ) then
           used = send_data (id_lw_bdyflx_clr(n) ,   &
                             Lw_output%bdy_flx_clr(:,:,n),&
@@ -2187,43 +2176,49 @@ logical,                        intent(in) :: volcanic_sw_aerosols
 ! Change by Xianglei Huang
 !-----------------------------------------------------------------------
        id_lw_bdyflx(1) = &
-         register_diag_field (mod_name, 'olr_0_560', axes(1:2), Time, &
-                       'olr in 0_560  band', &
+         register_diag_field (mod_name, 'olr_160_560', axes(1:2), Time, &
+                       'olr in 160_560 band', &
                       'W/m**2', missing_value=missing_value)
 
        id_lw_bdyflx(2) = &
-         register_diag_field (mod_name, 'olr_560_800', axes(1:2), Time, &
-                       'olr in 560_800  band', &
+         register_diag_field (mod_name, 'olr_560_630', axes(1:2), Time, &
+                       'olr in 560_630 band', &
                       'W/m**2', missing_value=missing_value)
 
        id_lw_bdyflx(3) = &
-         register_diag_field (mod_name, 'olr_800_900', axes(1:2),&
-                             Time, 'olr in 800_900 band', &
+         register_diag_field (mod_name, 'olr_630_700', axes(1:2),&
+                             Time, 'olr in 630_700 band', &
                       'W/m**2', missing_value=missing_value)
 
        id_lw_bdyflx(4) = &
-         register_diag_field (mod_name, 'olr_990_1070', axes(1:2), &
-                              Time, 'olr in 990_1070 band', &
+         register_diag_field (mod_name, 'olr_700_800', axes(1:2), &
+                              Time, 'olr in 700_800 band', &
                       'W/m**2', missing_value=missing_value)
 
        id_lw_bdyflx(5) = &
+         register_diag_field  (mod_name, 'olr_800_900', axes(1:2), &
+                               Time, 'olr in 800_900 band', &
+                      'W/m**2', missing_value=missing_value)
+
+       id_lw_bdyflx(6) = &
          register_diag_field  (mod_name, 'olr_900_990', axes(1:2), &
                                Time, 'olr in 900_990 band', &
                       'W/m**2', missing_value=missing_value)
 
-       id_lw_bdyflx(6) = &
+       id_lw_bdyflx(7) = &
+         register_diag_field  (mod_name, 'olr_990_1070', axes(1:2), &
+                               Time, 'olr in 990_1070 band', &
+                      'W/m**2', missing_value=missing_value)
+
+       id_lw_bdyflx(8) = &
          register_diag_field  (mod_name, 'olr_1070_1200', axes(1:2), &
                                Time, 'olr in 1070_1200 band', &
                       'W/m**2', missing_value=missing_value)
 
-       id_lw_bdyflx(7) = &
+       id_lw_bdyflx(9) = &
          register_diag_field  (mod_name, 'olr_1200_1400', axes(1:2), &
                                Time, 'olr in 1200_1400 band', &
                       'W/m**2', missing_value=missing_value)
-      id_bT_Aqua31 = register_diag_field ( mod_name, 'bT_Aqua31', axes(1:2), &
-           Time, 'brightness temperature in Aqua 31 885_925 band', 'K', &
-           missing_value=missing_value)
-
 !-----------------------------------------------------------------------
 ! End of Change 
 !-----------------------------------------------------------------------
@@ -2290,40 +2285,49 @@ logical,                        intent(in) :: volcanic_sw_aerosols
 !--------------------------------------------------------------------------
 
        id_lw_bdyflx_clr(1) = &
-         register_diag_field (mod_name, 'olr_0_560_cf', axes(1:2), Time, &
-                       'clr sky olr in 0_560  band', &
+         register_diag_field (mod_name, 'olr_160_560_clr', axes(1:2), Time, &
+                       'olr in 160_560 band clear-sky', &
                       'W/m**2', missing_value=missing_value)
 
        id_lw_bdyflx_clr(2) = &
-         register_diag_field (mod_name, 'olr_560_800_cf', axes(1:2), Time, &
-                       'clr sky olr in 560_800  band', &
+         register_diag_field (mod_name, 'olr_560_630_clr', axes(1:2), Time, &
+                       'olr in 560_630 band clear-sky', &
                       'W/m**2', missing_value=missing_value)
 
        id_lw_bdyflx_clr(3) = &
-         register_diag_field (mod_name, 'olr_800_900_cf', axes(1:2),&
-                             Time, 'clr sky olr in 800_900 band', &
+         register_diag_field (mod_name, 'olr_630_700_clr', axes(1:2),&
+                             Time, 'olr in 630_700 band clear-sky', &
                       'W/m**2', missing_value=missing_value)
 
        id_lw_bdyflx_clr(4) = &
-         register_diag_field (mod_name, 'olr_990_1070_cf', axes(1:2), &
-                              Time, 'clr sky olr in 990_1070 band', &
+         register_diag_field (mod_name, 'olr_700_800_clr', axes(1:2), &
+                              Time, 'olr in 700_800 band clear-sky', &
                       'W/m**2', missing_value=missing_value)
 
        id_lw_bdyflx_clr(5) = &
-         register_diag_field (mod_name, 'olr_900_990_cf', axes(1:2), Time, &
-                       'clr sky olr in 900_990  band', &
+         register_diag_field  (mod_name, 'olr_800_900_clr', axes(1:2), &
+                               Time, 'olr in 800_900 band clear-sky', &
                       'W/m**2', missing_value=missing_value)
 
        id_lw_bdyflx_clr(6) = &
-         register_diag_field (mod_name, 'olr_1070_1200_cf', axes(1:2),&
-                             Time, 'clr sky olr in 1070_1200 band', &
+         register_diag_field  (mod_name, 'olr_900_990_clr', axes(1:2), &
+                               Time, 'olr in 900_990 band clear-sky', &
                       'W/m**2', missing_value=missing_value)
 
        id_lw_bdyflx_clr(7) = &
-         register_diag_field (mod_name, 'olr_1200_1400_cf', axes(1:2), &
-                              Time, 'clr sky olr in 1200_1400 band', &
+         register_diag_field  (mod_name, 'olr_990_1070_clr', axes(1:2), &
+                               Time, 'olr in 990_1070 band clear-sky', &
                       'W/m**2', missing_value=missing_value)
 
+       id_lw_bdyflx_clr(8) = &
+         register_diag_field  (mod_name, 'olr_1070_1200_clr', axes(1:2), &
+                               Time, 'olr in 1070_1200 band clear-sky', &
+                      'W/m**2', missing_value=missing_value)
+
+       id_lw_bdyflx_clr(9) = &
+         register_diag_field  (mod_name, 'olr_1200_1400_clr', axes(1:2), &
+                               Time, 'olr in 1200_1400 band clear-sky', &
+                      'W/m**2', missing_value=missing_value)
 !---------------------------------------------------------------------------
 ! End of Change 
 !---------------------------------------------------------------------------

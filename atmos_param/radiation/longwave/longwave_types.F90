@@ -31,12 +31,14 @@ type lw_diagnostics_type
                                           gxcts=>NULL()
      real, dimension(:,:,:), pointer   :: flx1e1f=>NULL(),  &
                                           excts=>NULL(),&
-                                          fctsg=>NULL()
+                                          fctsg=>NULL(),&
+                                          fctsgcf=>NULL()
      real, dimension(:,:,:,:), pointer :: fluxn=>NULL(),   &
                                           fluxncf=>NULL(),   &
                                           exctsn=>NULL(),  &
                                           cts_out=>NULL(), &
-                                          cts_outcf=>NULL()
+                                          cts_outcf=>NULL(),&
+                                          exctsncf=>NULL()
 
      contains
         procedure :: alloc => longwave_diag_alloc
@@ -132,14 +134,14 @@ logical,                   intent(in)    :: do_totcld_forcing
 !-------------------------------------------------------------------
       allocate (Lw_output%flxnet ( ix, jx, kx+1) )
       allocate (Lw_output%heatra ( ix, jx, kx  ) )
-      allocate (Lw_output%bdy_flx( ix, jx, 7) )    ! change by Xianglei Huang
+      allocate (Lw_output%bdy_flx( ix, jx, 9) )    ! change by Xianglei Huang
       Lw_output%flxnet(:,:,:) = 0.0
       Lw_output%heatra(:,:,:) = 0.0
       Lw_output%bdy_flx (:,:,:) = 0.0      
       if (do_totcld_forcing)  then
         allocate (Lw_output%flxnetcf   ( ix, jx, kx+1) )
         allocate (Lw_output%heatracf   ( ix, jx, kx  ) )
-        allocate (Lw_output%bdy_flx_clr( ix, jx, 7) )   ! change by Xianglei Huang
+        allocate (Lw_output%bdy_flx_clr( ix, jx, 9) )   ! change by Xianglei Huang
         Lw_output%flxnetcf(:,:,:) = 0.0
         Lw_output%heatracf(:,:,:) = 0.0
         Lw_output%bdy_flx_clr (:,:,:) = 0.0      
@@ -259,6 +261,8 @@ class(lw_diagnostics_type),  intent(inout)  :: Lw_diagnostics
         deallocate (Lw_diagnostics%flx1e1f)
       if (ASSOCIATED(Lw_diagnostics%fluxncf)) then
         deallocate (Lw_diagnostics%fluxncf)
+        deallocate (Lw_diagnostics%exctsncf)
+        deallocate (Lw_diagnostics%fctsgcf)
       endif
 
 !--------------------------------------------------------------------
@@ -347,7 +351,11 @@ logical,                    intent(in)    :: do_totcld_forcing
 
       if (do_totcld_forcing) then
         allocate ( Lw_diagnostics%fluxncf (ix, jx, kx+1, 6+NBTRGE) )
+        allocate (Lw_diagnostics%fctsgcf     (ix, jx,       NBLY    ) )
         Lw_diagnostics%fluxncf(:,:,:,:) = 0.0
+        allocate (Lw_diagnostics%exctsncf    (ix, jx, kx,   NBLY    ) )
+        Lw_diagnostics%exctsncf   = 0.
+        Lw_diagnostics%fctsgcf   = 0.
       endif
 
       allocate( Lw_diagnostics%flx1e1f  (ix, jx,       NBTRGE  ) )
@@ -395,7 +403,9 @@ subroutine lw_diagnostics_type_eq (Lw_diagnostics_out, Lw_diagnostics_in)
    Lw_diagnostics_out%cts_outcf = Lw_diagnostics_in%cts_outcf
    
    if (ASSOCIATED(Lw_diagnostics_in%fluxncf)) then
-      Lw_diagnostics_out%fluxncf = Lw_diagnostics_in%fluxncf
+      Lw_diagnostics_out%fluxncf  = Lw_diagnostics_in%fluxncf
+      Lw_diagnostics_out%exctsncf = Lw_diagnostics_in%exctsncf
+      Lw_diagnostics_out%fctsgcf  = Lw_diagnostics_in%fctsgcf
    end if
 
 end subroutine lw_diagnostics_type_eq

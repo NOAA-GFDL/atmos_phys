@@ -59,7 +59,7 @@ use         tracer_manager_mod, only : get_tracer_index,     &
                                        check_if_prognostic,  &
                                        NO_TRACER
 use          field_manager_mod, only : MODEL_ATMOS, MODEL_LAND, parse
-use atmos_tracer_utilities_mod, only : dry_deposition, get_chem_param
+use atmos_tracer_utilities_mod, only : dry_deposition, get_chem_param, get_cmip_param
 use              constants_mod, only : grav, rdgas, WTMAIR, WTMH2O, AVOGNO, &
                                        PI, DEG_TO_RAD, SECONDS_PER_DAY
 use                    mpp_mod, only : mpp_clock_id,         &
@@ -416,11 +416,15 @@ logical :: use_lsc_in_fastjx
 type(cmip_diag_id_type) :: ID_pso4_aq_kg_m2_s, ID_pso4_gas_kg_m2_s, &
                            ID_jno2, ID_jo1d, &
                            ID_lossch4, ID_lossco, ID_lossn2o, ID_o3loss, ID_o3prod
+
+type(cmip_diag_id_type), dimension(pcnstm1) :: id_chem_prod_kg_m3_s, id_chem_loss_kg_m3_s, id_chem_prod_mol_m3_s, id_chem_loss_mol_m3_s
+
 integer :: jno2_ndx, jo1d_ndx
 
 integer, dimension(pcnstm1) :: indices, id_prod, id_loss, id_chem_tend, &
                                id_emis, id_emis3d, id_emis2dbb, id_emis3dbb, id_xactive_emis, &
-                               id_ub, id_lb, id_airc
+                               id_ub, id_lb, id_airc, id_emis_kg_m2_s
+real, dimension(pcnstm1) :: tracer_mw, tracer_nb_C
 !new diagnostics (f1p)
 integer, parameter :: max_dust = 5
 integer, dimension(pcnstm1) :: id_prod_mol, id_loss_mol
@@ -1316,6 +1320,35 @@ subroutine tropchem_driver( lon, lat, land, ocn_flx_fraction, pwt, r, chem_dt, &
            Time_next, is_in=is, js_in=js, ks_in=1)
    end if
 
+   do i = 1,pcnstm1
+      !NOTE THAT THE FOLLOWING CONVERSION FROM VMR TO KG SHOULD BE FIXED WHEN MERGED IN ESM4.5 TO ACCOUNT FOR H2O (use MW_air not WTMAIR)
+      if (query_cmip_diag_id(id_chem_prod_kg_m3_s(i))) then
+         used = send_cmip_data_3d (id_chem_prod_kg_m3_s(i),   &
+              prod(:,:,:,i)*pwt(:,:,:)*tracer_mw(i)/(WTMAIR*dz(:,:,:)), &                 
+              Time_next, is_in=is, js_in=js, ks_in=1)
+      end if
+      if (query_cmip_diag_id(id_chem_loss_kg_m3_s(i))) then
+         used = send_cmip_data_3d (id_chem_loss_kg_m3_s(i),   &
+              loss(:,:,:,i)*pwt(:,:,:)*tracer_mw(i)/(WTMAIR*dz(:,:,:)), &                 
+              Time_next, is_in=is, js_in=js, ks_in=1)
+      end if
+      if (query_cmip_diag_id(id_chem_prod_mol_m3_s(i))) then
+         used = send_cmip_data_3d (id_chem_prod_mol_m3_s(i),   &
+              prod(:,:,:,i)*pwt(:,:,:)*1e3/(WTMAIR*dz(:,:,:)), &                 
+              Time_next, is_in=is, js_in=js, ks_in=1)
+      end if
+      if (query_cmip_diag_id(id_chem_loss_mol_m3_s(i))) then
+         used = send_cmip_data_3d (id_chem_loss_mol_m3_s(i),   &
+              loss(:,:,:,i)*pwt(:,:,:)*1.e3/(WTMAIR*dz(:,:,:)), &                 
+              Time_next, is_in=is, js_in=js, ks_in=1)
+      end if
+      if (id_emis_kg_m2_s(i).gt.0) then
+         used = send_data (id_emis_kg_m2_s(i),   &
+              emisz(:,:,i)*1.e4*tracer_mw(i)*1e-3/AVOGNO, &
+              Time_next, is_in=is,js_in=js)
+      end if
+   end do
+
 !-----------------------------------------------------------------------
 !     ... surface concentration diagnostics
 !-----------------------------------------------------------------------
@@ -1780,6 +1813,8 @@ function tropchem_driver_init( domain, r, mask, axes, Time, &
    real :: input_time
    real :: scale_factor, extra_seconds, fixed_year
    type(time_type) :: Year_t
+
+   character(len=256) :: cmip_name,cmip_longname, cmip_longname2
 !
 !-----------------------------------------------------------------------
 !
@@ -2703,7 +2738,43 @@ end if
                      'O3 production rate', 'mol m-3 s-1',  &
       standard_name='tendency_of_atmosphere_mole_concentration_of_ozone_due_to_chemical_production')
 
+   tracer_mw(:) = -1.
+   tracer_nb_C(:) = 0.
+   
    do i=1,pcnstm1
+      n = get_tracer_index(MODEL_ATMOS,tracnam(i))
+      if (i.eq.sphum_ndx) n = get_tracer_index(MODEL_ATMOS, 'sphum')
+      
+      if (n.gt.0) then
+
+         call get_cmip_param (n, cmip_name=cmip_name, cmip_longname=cmip_longname, cmip_longname2=cmip_longname2)
+         call get_chem_param(n, mw=tracer_mw(i), nb_C=tracer_nb_C(i))
+            
+         id_chem_prod_kg_m3_s(i) = register_cmip_diag_field_3d (  module_name,trim(tracnam(i))//'_chem_prod_kg_m3_s', Time, &
+              'Total chemical production of '//trim(cmip_longname), 'kg m-3 s-1',  &
+              standard_name='tendency_of_atmosphere_mass_content_of_'//trim(cmip_name)//'_due_to_chemical_production')
+         id_chem_loss_kg_m3_s(i) = register_cmip_diag_field_3d (  module_name,trim(tracnam(i))//'_chem_loss_kg_m3_s', Time, &
+              'Total chemical loss of '//trim(cmip_longname), 'kg m-3 s-1',  &
+              standard_name='tendency_of_atmosphere_mass_content_of_'//trim(cmip_name)//'_due_to_chemical_destruction')
+         id_chem_prod_mol_m3_s(i) = register_cmip_diag_field_3d (  module_name,trim(tracnam(i))//'_chem_prod_mol_m3_s', Time, &
+              'Total chemical production of '//trim(cmip_longname), 'mol m-3 s-1',  &
+              standard_name='tendency_of_atmosphere_mole_concentration_of_'//trim(cmip_name)//'_due_to_chemical_production')
+         id_chem_loss_mol_m3_s(i) = register_cmip_diag_field_3d (  module_name,trim(tracnam(i))//'_chem_loss_mol_m3_s', Time, &
+              'Total chemical loss of '//trim(cmip_longname), 'mol m-3 s-1',  &
+              standard_name='tendency_of_atmosphere_mole_concentration_of_'//trim(cmip_name)//'_due_to_chemical_destruction')
+         id_emis_kg_m2_s(i) = register_cmip_diag_field_2d (  module_name,trim(tracnam(i))//'_emis_kg_m2_s', Time, &
+              'Total emission rate of '//trim(cmip_longname), 'kg m-2 s-1',  &
+              standard_name='tendency_of_atmosphere_mass_content_of_'//trim(cmip_name)//'_due_to_emission')
+         
+         if ( query_cmip_diag_id(id_chem_prod_kg_m3_s(i)) .or. &
+              query_cmip_diag_id(id_chem_loss_kg_m3_s(i)) .or. &
+              (id_emis_kg_m2_s(i).gt.0) )    then
+            !we need mw for conversion
+            if (tracer_mw(i) .lt. 0) then
+               call error_mesg ('Tropchem driver', 'One of the requested diagnostics needs mw for tracer: '//trim(tracnam(i)), FATAL)
+            end if
+         end if
+      end if
       id_chem_tend(i) = register_diag_field( module_name, trim(tracnam(i))//'_chem_dt', axes(1:3), &
                                              Time, trim(tracnam(i))//'_chem_dt','VMR/s' )
       id_prod(i) = register_diag_field( module_name, trim(tracnam(i))//'_prod', axes(1:3), &
