@@ -596,7 +596,8 @@ subroutine fire_fbb(fbbl,z_plume,bvf2,f_scheme,kd,id,jd,pfull_pt,temp_pt, &
    real            :: Z0, Z1, Z2, del, fbb_tot
 !   real            :: bvf2=0.   !!! SQUARED Brunt-Vaisala freq [s-2] at twice the height of the PBL
 
-   real :: FRPi=2.e2
+   real :: FRPi
+   FRPi=2.e2
 
 !!!       changed Z1 and Z2 to be the height above the ground level,
 !!!       not the height above the lowest level since this should be
