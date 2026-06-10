@@ -1384,7 +1384,7 @@ end subroutine atmos_sulfate_endts
         call interpolator_end (ship_emission_interp) 
         call interpolator_end (aircraft_emission_interp)
 
-        deallocate(ocn_depth)
+        if(allocated(ocn_depth)) deallocate(ocn_depth)
         
         module_is_initialized = .FALSE.
 
